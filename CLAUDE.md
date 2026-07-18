@@ -241,3 +241,4 @@ No values are ever stored here or in the repo. Variable **names** live in [`.env
 5. Before starting new work, confirm the working tree is clean (`git status`) and there's nothing uncommitted from a prior session.
 6. After every meaningful step: update this file's Changelog, Completed/Remaining Tasks, and Current Implementation Status, then commit and push. Do not batch multiple days of undocumented work.
 7. Never mark a phase complete in this file unless its tests pass and its Definition of Done (plan §23) is actually met.
+8. Also update [`progress-checklist.html`](./progress-checklist.html) whenever a phase's status changes (started / completed) — a compact visual tracker for the user, major steps only, not the full detail that belongs here. Update its summary count/track, the relevant phase's badge/marker/steps, and the "next" pointer; commit alongside the CLAUDE.md update.

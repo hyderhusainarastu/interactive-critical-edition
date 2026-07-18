@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interactive Critical Edition — Progress Checklist</title>
+<style>
+  :root {
+    --color-background: #faf6ee;
+    --color-surface: #f3ecdd;
+    --color-surface-raised: #fbf8f0;
+    --color-text: #2a241c;
+    --color-text-muted: #5c5344;
+    --color-border: #e3d9c4;
+    --color-accent-ink: #2e4057;
+    --color-accent-green: #3b5d42;
+    --color-accent-burgundy: #7a2e3a;
+    --color-accent-umber: #5c4632;
+    --color-highlight: #c9a227;
+    --shadow-card: 0 1px 2px rgba(42, 36, 28, 0.06);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background: #211d17;
+      --color-surface: #2b2620;
+      --color-surface-raised: #322c24;
+      --color-text: #f2ead9;
+      --color-text-muted: #c3b8a3;
+      --color-border: #43392c;
+      --color-accent-ink: #8fa8c9;
+      --color-accent-green: #7ea988;
+      --color-accent-burgundy: #c2707c;
+      --color-accent-umber: #b99c7a;
+      --color-highlight: #e0bb4d;
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+    }
+  }
+  :root[data-theme="dark"] {
+    --color-background: #211d17;
+    --color-surface: #2b2620;
+    --color-surface-raised: #322c24;
+    --color-text: #f2ead9;
+    --color-text-muted: #c3b8a3;
+    --color-border: #43392c;
+    --color-accent-ink: #8fa8c9;
+    --color-accent-green: #7ea988;
+    --color-accent-burgundy: #c2707c;
+    --color-accent-umber: #b99c7a;
+    --color-highlight: #e0bb4d;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+  }
+  :root[data-theme="light"] {
+    --color-background: #faf6ee;
+    --color-surface: #f3ecdd;
+    --color-surface-raised: #fbf8f0;
+    --color-text: #2a241c;
+    --color-text-muted: #5c5344;
+    --color-border: #e3d9c4;
+    --color-accent-ink: #2e4057;
+    --color-accent-green: #3b5d42;
+    --color-accent-burgundy: #7a2e3a;
+    --color-accent-umber: #5c4632;
+    --color-highlight: #c9a227;
+    --shadow-card: 0 1px 2px rgba(42, 36, 28, 0.06);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--color-background);
+    color: var(--color-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 3.5rem 1.5rem 6rem;
+  }
+
+  header.masthead {
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0 0 0.6rem;
+  }
+
+  h1 {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.7rem, 4vw, 2.15rem);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.98rem;
+    max-width: 60ch;
+    margin: 0 0 1.6rem;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.2rem;
+    font-size: 0.85rem;
+    margin-bottom: 1.8rem;
+  }
+  .links a {
+    color: var(--color-accent-ink);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+  }
+  .links a:hover, .links a:focus-visible {
+    border-bottom-color: currentColor;
+  }
+  .links a:focus-visible {
+    outline: 2px solid var(--color-accent-ink);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .summary {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 1.1rem 1.3rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  .summary-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .summary-count {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95rem;
+    color: var(--color-text);
+  }
+  .summary-count strong {
+    font-weight: 700;
+  }
+
+  .summary-label {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .track {
+    display: flex;
+    gap: 3px;
+    height: 8px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: var(--color-border);
+  }
+  .track > span {
+    display: block;
+    height: 100%;
+  }
+  .track .done { background: var(--color-accent-green); }
+  .track .active { background: var(--color-highlight); }
+  .track .todo { background: transparent; }
+
+  /* Timeline */
+  .timeline {
+    margin-top: 2.4rem;
+    position: relative;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 15px;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: var(--color-border);
+  }
+
+  .phase {
+    position: relative;
+    padding-left: 42px;
+    margin-bottom: 1.4rem;
+  }
+  .phase:last-child { margin-bottom: 0; }
+
+  .phase-marker {
+    position: absolute;
+    left: 0;
+    top: 1.35rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-background);
+    border: 1.5px solid var(--color-border);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    z-index: 1;
+  }
+  .phase.done .phase-marker {
+    border-color: var(--color-accent-green);
+    color: var(--color-accent-green);
+    background: var(--color-background);
+  }
+  .phase.active .phase-marker {
+    border-color: var(--color-highlight);
+    color: var(--color-highlight);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-highlight) 18%, transparent);
+  }
+
+  .phase-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+  }
+  .phase.active .phase-card {
+    border-color: color-mix(in srgb, var(--color-highlight) 55%, var(--color-border));
+  }
+
+  .phase-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.95rem 1.15rem;
+  }
+
+  .phase-title {
+    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+    font-size: 1.08rem;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.005em;
+  }
+  .phase-title .num {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    margin-right: 0.4em;
+  }
+
+  .badge {
+    flex-shrink: 0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.28em 0.6em;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .badge.done {
+    color: var(--color-accent-green);
+    background: color-mix(in srgb, var(--color-accent-green) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-accent-green) 30%, transparent);
+  }
+  .badge.active {
+    color: color-mix(in srgb, var(--color-highlight) 75%, var(--color-text));
+    background: color-mix(in srgb, var(--color-highlight) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-highlight) 40%, transparent);
+  }
+  .badge.todo {
+    color: var(--color-text-muted);
+    background: transparent;
+    border-color: var(--color-border);
+  }
+
+  .steps {
+    list-style: none;
+    margin: 0;
+    padding: 0 1.15rem 1.05rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.92rem;
+  }
+
+  .step-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin-top: 0.1rem;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .phase.done .step-icon {
+    background: var(--color-accent-green);
+  }
+  .phase.done .step-icon svg { stroke: var(--color-surface); }
+  .phase.active .step-icon {
+    border: 1.5px solid var(--color-highlight);
+  }
+  .phase.todo .step-icon {
+    border: 1.5px solid var(--color-border);
+  }
+
+  .phase.done .step-text { color: var(--color-text); }
+  .phase.active .step-text { color: var(--color-text); }
+  .phase.todo .step-text { color: var(--color-text-muted); }
+
+  .phase-meta {
+    padding: 0 1.15rem 1.05rem;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  .phase-meta a {
+    color: inherit;
+  }
+
+  footer.note {
+    margin-top: 2.6rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--color-border);
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Interactive Critical Edition · Build Log</p>
+    <h1>Progress Checklist</h1>
+    <p class="subtitle">Start-to-end tracker across every implementation phase. Updated as work lands — see CLAUDE.md in the repo for the full detailed log behind each item here.</p>
+    <div class="links">
+      <a href="https://github.com/hyderhusainarastu/interactive-critical-edition" target="_blank" rel="noopener">Repository ↗</a>
+      <a href="https://interactive-critical-edition.vercel.app" target="_blank" rel="noopener">Live app ↗</a>
+    </div>
+
+    <div class="summary">
+      <div class="summary-top">
+        <span class="summary-count"><strong>3</strong> of 9 phases complete</span>
+        <span class="summary-label">Phase 3 next</span>
+      </div>
+      <div class="track" role="img" aria-label="3 of 9 phases complete">
+        <span class="done" style="flex:3"></span>
+        <span class="todo" style="flex:6"></span>
+      </div>
+    </div>
+  </header>
+
+  <ol class="timeline" style="list-style:none; margin:0; padding:0;">
+
+    <!-- Phase 0 -->
+    <li class="phase done">
+      <span class="phase-marker">✓</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">0</span>Research &amp; Planning</h2>
+          <span class="badge done">Complete</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full implementation plan researched and approved</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Reference project inspected, license verdict recorded</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Private GitHub repo created, CLAUDE.md governance established</span></li>
+        </ul>
+        <div class="phase-meta">tag: phase-0-complete</div>
+      </div>
+    </li>
+
+    <!-- Phase 1 -->
+    <li class="phase done">
+      <span class="phase-marker">✓</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">1</span>Foundation</h2>
+          <span class="badge done">Complete</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Monorepo scaffolded, local dev environment bootstrapped</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Auth built: signup, email verification, login, password reset, session revocation</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Supabase + Vercel provisioned, CI configured</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full auth flow verified end-to-end in production</span></li>
+        </ul>
+        <div class="phase-meta">tags: phase-1a-complete, phase-1-complete</div>
+      </div>
+    </li>
+
+    <!-- Phase 2 -->
+    <li class="phase done">
+      <span class="phase-marker">✓</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">2</span>Upload &amp; Library</h2>
+          <span class="badge done">Complete</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Upload flow with validation, quota, and secure storage</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Ingestion pipeline: PDF/text parsing, metadata detection, confirm step</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Background worker built and deployed to Render</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full pipeline verified live in production, end to end</span></li>
+        </ul>
+        <div class="phase-meta">tags: phase-2a-complete, phase-2-complete</div>
+      </div>
+    </li>
+
+    <!-- Phase 3 -->
+    <li class="phase active">
+      <span class="phase-marker">→</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">3</span>Reader</h2>
+          <span class="badge active">In progress</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Document viewer with chapter/section navigation</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Reading-position persistence, footnote rendering</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Highlights, notes, bookmarks</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Work tabs and split-pane view</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 4 -->
+    <li class="phase todo">
+      <span class="phase-marker">4</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">4</span>Scholarly Analysis</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Citation and bibliography extraction</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">AI relationship classification with provenance and confidence</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Annotation UI with user correction workflow</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 5 -->
+    <li class="phase todo">
+      <span class="phase-marker">5</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">5</span>Reading Roadmap &amp; Knowledge Profile</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Prerequisite graph and priority-ranking algorithm</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Personal knowledge profile and understanding ratings</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">3D knowledge-graph visualizer</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 6 -->
+    <li class="phase todo">
+      <span class="phase-marker">6</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">6</span>Landing Page &amp; Onboarding</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Interactive landing page</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Onboarding flow</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 7 -->
+    <li class="phase todo">
+      <span class="phase-marker">7</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">7</span>Hardening &amp; Deployment</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Security and accessibility review</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Performance pass and AI-reliability evaluation</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Monitoring, backups, recovery drill</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 8 -->
+    <li class="phase todo">
+      <span class="phase-marker">8</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">8</span>Educational Companion Site</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Independent site teaching the whole build, start to end</span></li>
+        </ul>
+      </div>
+    </li>
+
+  </ol>
+
+  <footer class="note">
+    Maintained alongside <code>CLAUDE.md</code> in the project repo; that file carries the full detail behind each checklist item. This page tracks major milestones only.
+  </footer>
+
+</div>
+</body>
+</html>
