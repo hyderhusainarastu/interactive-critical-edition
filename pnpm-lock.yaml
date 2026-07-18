@@ -22,6 +22,9 @@ importers:
       '@ice/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion
+      '@ice/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@ice/roadmap':
         specifier: workspace:*
         version: link:../../packages/roadmap
@@ -107,6 +110,9 @@ importers:
       '@ice/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion
+      '@ice/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(pg@8.22.0)(postgres@3.4.9)
@@ -185,6 +191,15 @@ importers:
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
+
+  packages/observability:
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   packages/roadmap:
     devDependencies:
