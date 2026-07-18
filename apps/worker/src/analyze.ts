@@ -80,6 +80,39 @@ interface TextAnchor {
 const CONTEXT = 40;
 
 /**
+ * How many citations to process at once. Each citation is one live
+ * bibliographic lookup (I/O-bound, up to an 8s timeout) plus one
+ * classification call plus a few inserts — so processing them
+ * concurrently cuts wall-clock time dramatically for a large reference
+ * list. Kept modest (6) to stay polite with the free bibliographic APIs'
+ * rate limits and comfortably under the postgres.js connection pool
+ * (default 10), which the inserts share.
+ */
+const ANALYSIS_CONCURRENCY = 6;
+
+/**
+ * Runs `fn` over `items` with at most `limit` in flight at once, using a
+ * fixed pool of workers pulling from a shared cursor. Preserves the
+ * simple "process each candidate" shape while bounding concurrency — no
+ * external dependency needed.
+ */
+async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+  let cursor = 0;
+  async function worker() {
+    for (;;) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+}
+
+/**
  * Locate a needle (typically the candidate's author surname) in the
  * body and build a highlight-shaped anchor so the reader can render an
  * inline marker. Paragraph splitting mirrors TextReader exactly
@@ -202,21 +235,40 @@ export async function analyzeWork(documentId: string): Promise<void> {
 
     // Cap on citations classified per document (bounds AI spend and worker
     // time). 300 comfortably covers a full book's reference list; at the
-    // cheap-tier model that's ~4-5 cents max per analysis. Each candidate
-    // is one sequential bibliographic lookup + one classification call, so
-    // a document near the cap takes correspondingly longer to analyze.
+    // cheap-tier model that's ~4-5 cents max per analysis. Candidates are
+    // processed with bounded concurrency (see ANALYSIS_CONCURRENCY) so a
+    // large reference list finishes in a fraction of the sequential time.
     const candidates = extractCitations(doc.extractedText, 300);
     const isText = doc.mimeType === "text/plain" || doc.mimeType === "text/markdown";
     const paragraphs = isText
       ? doc.extractedText.split(/\n{2,}/).filter((p) => p.trim().length > 0)
       : [];
 
-    let annotationCount = 0;
+    // Dedup bibliographic records within this run: concurrent candidates
+    // resolving to the SAME work (same DOI/external id) would otherwise
+    // race on find-or-create and insert duplicates. Caching the *promise*
+    // by key means the first request creates the record and the rest await
+    // the same result. (findOrCreateBibRecord still reads existing rows
+    // first, so cross-run dedup is unaffected.)
+    const bibCache = new Map<string, Promise<string>>();
+    const getBibId = (record: ResolvedRecord): Promise<string> => {
+      const key = record.doi
+        ? `doi:${record.doi}`
+        : record.externalId
+          ? `ext:${record.externalId}`
+          : `title:${record.title.toLowerCase()}`;
+      let p = bibCache.get(key);
+      if (!p) {
+        p = findOrCreateBibRecord(record);
+        bibCache.set(key, p);
+      }
+      return p;
+    };
 
-    for (const candidate of candidates) {
+    await mapWithConcurrency(candidates, ANALYSIS_CONCURRENCY, async (candidate) => {
       // --- Stage 1: resolve against real bibliographic sources ---
       const record = await resolveCitation(candidate.query);
-      const bibId = record ? await findOrCreateBibRecord(record) : null;
+      const bibId = record ? await getBibId(record) : null;
 
       await db.insert(citations).values({
         documentId,
@@ -266,7 +318,6 @@ export async function analyzeWork(documentId: string): Promise<void> {
         createdBy: "system",
         verificationStatus: "unreviewed",
       });
-      annotationCount++;
 
       // Graph edge only for resolved targets (real node on both ends).
       if (bibId) {
@@ -283,14 +334,14 @@ export async function analyzeWork(documentId: string): Promise<void> {
           createdBy: "system",
         });
       }
-    }
+    });
 
     await db
       .update(documents)
       .set({ analysisStatus: "complete", updatedAt: new Date() })
       .where(eq(documents.id, documentId));
 
-    console.log(`[worker] analysis complete for document ${documentId}: ${annotationCount} annotation(s)`);
+    console.log(`[worker] analysis complete for document ${documentId}: ${candidates.length} annotation(s)`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[worker] analysis failed for document ${documentId}:`, message);
