@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -152,7 +153,7 @@ export const works = pgTable("work", {
   workType: workTypeEnum("work_type").notNull().default("primary"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("work_user_idx").on(t.userId)]);
 
 export const editions = pgTable("edition", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -207,7 +208,7 @@ export const documents = pgTable("document", {
   analysisError: text("analysis_error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("document_work_idx").on(t.workId), index("document_user_idx").on(t.userId)]);
 
 export const processingJobs = pgTable("processing_job", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -221,7 +222,7 @@ export const processingJobs = pgTable("processing_job", {
   pgBossJobId: text("pg_boss_job_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("processing_job_document_idx").on(t.documentId)]);
 
 /**
  * Phase 3 scope: the reader. `footnotes` are heuristically detected at
@@ -246,7 +247,7 @@ export const footnotes = pgTable("footnote", {
   marker: text("marker").notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [index("footnote_document_idx").on(t.documentId)]);
 
 export const highlights = pgTable("highlight", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -259,7 +260,7 @@ export const highlights = pgTable("highlight", {
   anchor: jsonb("anchor").notNull(),
   color: text("color").notNull().default("gold"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [index("highlight_document_idx").on(t.documentId)]);
 
 export const notes = pgTable("note", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -275,7 +276,7 @@ export const notes = pgTable("note", {
   body: text("body").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("note_document_idx").on(t.documentId)]);
 
 export const bookmarks = pgTable("bookmark", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -288,7 +289,7 @@ export const bookmarks = pgTable("bookmark", {
   position: jsonb("position").notNull(),
   label: text("label"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [index("bookmark_document_idx").on(t.documentId)]);
 
 /**
  * Phase 4 scope: scholarly analysis (plan §9/§11/§12). Still a
@@ -387,7 +388,7 @@ export const citations = pgTable("citation", {
   // "crossref" | "openalex" | "openlibrary" | "unresolved"
   resolutionSource: text("resolution_source").notNull().default("unresolved"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [index("citation_document_idx").on(t.documentId)]);
 
 export const annotations = pgTable("annotation", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -429,7 +430,7 @@ export const annotations = pgTable("annotation", {
   hidden: boolean("hidden").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("annotation_document_idx").on(t.documentId)]);
 
 /**
  * Generic typed edge table (plan §9) — a lightweight polymorphic graph
@@ -456,7 +457,10 @@ export const graphEdges = pgTable("graph_edge", {
     .default("unreviewed"),
   createdBy: provenanceEnum("created_by").notNull().default("system"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("graph_edge_source_idx").on(t.userId, t.sourceId),
+  index("graph_edge_target_idx").on(t.userId, t.targetId),
+]);
 
 /**
  * plan §11/§22: every AI call logged with token counts and an estimated
@@ -527,7 +531,7 @@ export const readingRecords = pgTable("reading_record", {
   finishedAt: timestamp("finished_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("reading_record_user_idx").on(t.userId)]);
 
 export const understandingRatings = pgTable("understanding_rating", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -540,7 +544,7 @@ export const understandingRatings = pgTable("understanding_rating", {
   // understanding" → the roadmap deprioritizes it (personalization pass).
   score: integer("score").notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("understanding_rating_user_idx").on(t.userId)]);
 
 /**
  * Per-user, per-root-work manual adjustments applied on top of the
@@ -565,4 +569,4 @@ export const roadmapOverrides = pgTable("roadmap_override", {
   manualPosition: integer("manual_position"),
   addedManually: boolean("added_manually").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [index("roadmap_override_root_idx").on(t.userId, t.rootWorkId)]);

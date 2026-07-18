@@ -16,6 +16,7 @@ import {
 } from "@ice/ai-adapters";
 import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
 import { extractCitations, type RawCitation } from "@ice/ingestion";
+import { reportError } from "@ice/observability";
 import { and, eq } from "drizzle-orm";
 
 /**
@@ -344,7 +345,7 @@ export async function analyzeWork(documentId: string): Promise<void> {
     console.log(`[worker] analysis complete for document ${documentId}: ${candidates.length} annotation(s)`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[worker] analysis failed for document ${documentId}:`, message);
+    reportError(err, { scope: "worker.analyzeWork", documentId });
     await db
       .update(documents)
       .set({ analysisStatus: "failed", analysisError: message, updatedAt: new Date() })

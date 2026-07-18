@@ -3,6 +3,7 @@ import { enqueueExtractText } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { uploadDocumentFile } from "@ice/ingestion";
+import { reportError } from "@ice/observability";
 import { getApiUserId } from "@/lib/auth";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "text/plain", "text/markdown"]);
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     await db.delete(works).where(eq(works.id, work.id));
-    console.error("[upload] storage upload failed", err);
+    reportError(err, { scope: "api.upload", workId: work.id, userId });
     return NextResponse.json(
       { error: "Upload failed — please try again." },
       { status: 500 },

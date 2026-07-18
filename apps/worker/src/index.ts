@@ -10,6 +10,7 @@ import {
   QUEUE_EXTRACT_TEXT,
 } from "@ice/db";
 import { detectFootnotes, downloadDocumentFile, parseDocument } from "@ice/ingestion";
+import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
 import { analyzeWork } from "./analyze";
 
@@ -87,7 +88,7 @@ async function handleExtractText(documentId: string) {
     console.log(`[worker] extracted text for document ${documentId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[worker] failed to process document ${documentId}:`, message);
+    reportError(err, { scope: "worker.extractText", documentId });
 
     await db
       .update(documents)

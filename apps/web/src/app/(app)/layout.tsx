@@ -1,6 +1,9 @@
 import Link from "next/link";
+import { db, users } from "@ice/db";
+import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
+import { isAdminEmail } from "@/lib/admin";
 
 /**
  * Single, centralized auth check for every route under (app) — replaces
@@ -15,6 +18,8 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await requireSession();
+  const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, session.user.id)).limit(1);
+  const admin = isAdminEmail(me?.email);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -29,6 +34,14 @@ export default async function AppLayout({
           <Link href="/upload" className="text-[var(--color-text-muted)]">
             Upload
           </Link>
+          <Link href="/graph" className="text-[var(--color-text-muted)]">
+            Graph
+          </Link>
+          {admin && (
+            <Link href="/admin" className="text-[var(--color-text-muted)]">
+              Admin
+            </Link>
+          )}
         </nav>
         <div className="flex items-center gap-4 text-sm text-[var(--color-text-muted)]">
           <span>{session.user.email}</span>
