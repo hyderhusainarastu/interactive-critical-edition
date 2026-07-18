@@ -45,19 +45,24 @@ TypeScript throughout. Next.js (App Router) on Vercel (web UI + CRUD API routes 
 | ScholarLens (github.com/aakashshahani/ScholarLens) — ideas only, zero code reuse | No LICENSE file exists in that repo (`gh api .../license` → 404, `license: null`) despite an MIT badge image with no actual license text; treated as all-rights-reserved |
 | 3D knowledge-graph visualizer added, reconciled with "avoid excessive 3D" | That instruction targeted decorative landing-page chrome (explicit contrast with ScholarLens); this is one deliberate, opt-in, restrained data-viz tool behind login, with a mandatory non-3D accessible fallback |
 | AI routing defaults to cheapest tier for every task, promoted only on eval-harness evidence | Explicit cost constraint — stricter than a generic cheap/expensive split |
+| JWT session strategy + `users.sessionVersion` counter, not database sessions | Auth.js v5's Credentials provider requires JWT sessions — DB sessions only auto-wire for OAuth-adapter flows. Revocability (deviation from plan §14's literal wording) is achieved by checking `sessionVersion` in the `jwt` callback on every request and incrementing it to invalidate all outstanding JWTs (used on password reset); verified working end-to-end in Phase 1a testing. |
+| Colima + Docker CLI for local Postgres, not Docker Desktop | No GUI first-run dialogs to accept — this session/sandbox can't interact with them |
+| Node 24 (Active LTS), not the Homebrew-default Node 26 (Current) | More predictable support on Vercel/Render; explicit `brew uninstall node && brew install node@24` swap, pinned via `.node-version` and `package.json#engines` |
+| `packages/ai-adapters`, `ingestion`, `bibliographic`, `ui` not yet scaffolded | Deliberate deviation from the plan's Phase-1 "empty-but-wired" wording — creating unused stub packages ahead of the phase that needs them is premature scaffolding; each is created when its phase starts (ui in Phase 3, the rest in Phase 4) |
 
 Full rationale for every stack choice, including rejected alternatives: plan §4–§6.
 
 ## Current Implementation Status
 
-**Phase 0 — Research & Planning: complete.** Repo created, initial commit pushed, checkpoint tagged. No application code exists yet — Phase 1 has not started.
+**Phase 0 — Research & Planning: complete.** **Phase 1a — Foundation (local): complete.** Phase 1b (real Supabase + Vercel deployment) not started — needs the user's accounts. Phases 2–8 not started.
 
 - Repo: https://github.com/hyderhusainarastu/interactive-critical-edition (private)
-- Initial commit: `0b148b6` — "Initial project governance: CLAUDE.md, README, env template, plan"
-- Checkpoint tag: `phase-0-complete`
+- Checkpoint tags: `phase-0-complete`, `phase-1a-complete`
+- Auth (signup → email verification → login → protected route → password reset → session revocation) verified working end-to-end against local Postgres, including the actual HTTP flow (not just unit-level), on 2026-07-17.
 
 ## Completed Tasks
 
+**Phase 0:**
 - [x] Full implementation plan written and approved (`docs/architecture/plan.md`).
 - [x] ScholarLens inspected via GitHub API; license verdict recorded (no LICENSE file found).
 - [x] Filesystem case-sensitivity constraint on `CLAUDE.md`/`Claude.md` verified and documented.
@@ -65,44 +70,83 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 - [x] Private GitHub repo created (`gh repo create --private --source=. --push`), initial commit pushed to `main`.
 - [x] `phase-0-complete` tag created and pushed.
 
+**Phase 1a (local foundation):**
+- [x] Toolchain bootstrapped on this machine: Node 24 LTS, pnpm via Corepack, Colima + Docker CLI + `docker-compose` plugin (see Known Problems for setup gotchas).
+- [x] Repo-local git identity set (`git config --local`, not `--global`).
+- [x] pnpm monorepo scaffold: root `package.json`/`pnpm-workspace.yaml`, `apps/web` (Next.js App Router + Tailwind v4 + warm-palette design tokens per plan §19), `packages/db` (Drizzle ORM).
+- [x] Local Postgres + pgvector via `docker-compose.yml` (Colima runtime).
+- [x] Drizzle schema (Phase 1 scope: `user`/`account`/`session`/`verification_token`/`password_reset_token`) + 2 migrations applied locally.
+- [x] Auth.js v5 wired: Credentials provider, bcrypt hashing, `DrizzleAdapter`, JWT sessions + `sessionVersion` revocation (see Design Decisions).
+- [x] Signup, email verification, login, password reset flows — pages + server actions + API routes, all tested live against the local dev server (not just typechecked).
+- [x] `MailProvider` adapter: `ResendMailProvider` / `ConsoleMailProvider` fallback (verified the console fallback logs a working link when `RESEND_API_KEY` is unset).
+- [x] Protected `/dashboard` page (server-side `auth()` check, verified redirects unauthenticated requests to `/login`).
+- [x] GitHub Actions CI (`.github/workflows/ci.yml`): lint, typecheck, test, build, against an ephemeral Postgres service container — no external secrets required.
+- [x] `phase-1a-complete` tag.
+
 ## Remaining Tasks (near-term)
 
-- [ ] Phase 1: Next.js scaffold, Tailwind + design tokens, Drizzle schema + first migration, Auth.js credentials + email verification + reset flow, Supabase provisioning, Storage bucket, Sentry, CI.
-- [ ] Phases 2–8 per `docs/architecture/plan.md` §23.
+- [ ] **Phase 1b** (needs the user): create a real Supabase project, point `DATABASE_URL`/Storage config at it; create a Vercel project (`vercel link`) and deploy; re-verify the auth flow in production; tag `phase-1-complete`.
+- [ ] Phase 2 (Upload and Library) per `docs/architecture/plan.md` §23.
+- [ ] Phases 3–8 per `docs/architecture/plan.md` §23.
+- [ ] Not yet built, deferred to their owning phase: `packages/ai-adapters`, `packages/ingestion`, `packages/bibliographic`, `packages/ui`, `apps/worker`, Sentry wiring, centralized middleware-based route protection (currently per-page `auth()` checks — fine for the one protected page that exists, revisit once Phase 2 adds several).
 
 ## Known Problems and Technical Debt
 
-- None in application code yet — no code exists. This section will track real issues starting Phase 1.
 - Documented (not a bug): `CLAUDE.md`/`Claude.md` cannot coexist as separate files on this machine (case-insensitive filesystem) — see the note at the top of this file.
-- **Environment gotcha (recorded so it isn't rediscovered the hard way):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely in this environment because the local `osxkeychain` git credential helper waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: prefix git network commands with `-c credential.helper='!gh auth git-credential'` (uses the already-authenticated `gh` CLI's token instead), e.g. `git -c credential.helper='!gh auth git-credential' push origin main`. `gh` commands themselves (e.g. `gh repo create --push`) are unaffected and work normally.
+- **Git push hangs (environment gotcha):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely because the local `osxkeychain` git credential helper waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: prefix git network commands with `-c credential.helper='!gh auth git-credential'`, e.g. `git -c credential.helper='!gh auth git-credential' push origin main`. `gh` commands (e.g. `gh repo create --push`) are unaffected.
+- **`docker compose` plugin isn't found by default after `brew install docker-compose`:** Homebrew's Docker CLI doesn't look in `/opt/homebrew/lib/docker/cli-plugins` unless told to. Fix (already applied, `~/.docker/config.json`): add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`.
+- **pnpm blocks postinstall scripts by default:** new dependencies with native/build postinstall steps (seen so far: `sharp`, `unrs-resolver`, `esbuild`) need explicit approval or `pnpm install` aborts with `ERR_PNPM_IGNORED_BUILDS`. Approve in `pnpm-workspace.yaml` under `allowBuilds:` (not `package.json#pnpm` — that field is no longer read by this pnpm version). Review each new one on its merits before approving; all three approved so far are well-known, trusted build tools.
+- **No middleware-based route protection yet** — Edge middleware can't use our Postgres-backed `sessionVersion` check (`postgres.js` needs Node's TCP stack, unavailable at the Edge). Current mitigation: every protected page calls `auth()` server-side directly (Server Components run in the Node runtime). Fine for the single protected page that exists now; revisit (likely a route-group layout, or a Node-runtime middleware config) once Phase 2 adds more.
+- No AI-provider or bibliographic-API integrations exist yet (Phase 4).
 
 ## Database and API Decisions
 
 - **ORM:** Drizzle ORM + `drizzle-kit` (native `pgvector` column support).
-- **Schema:** see plan §9 for the full table list (`users`, `works`, `editions`, `documents`, `authors`, `chapters`/`sections`, `passages`, `footnotes`, `concepts`, `annotations`, `citations`, `bibliographic_records`, `reading_records`, `understanding_ratings`, `reading_roadmaps`, `roadmap_items`, `notes`/`bookmarks`/`highlights`, `collections`, `processing_jobs`, `audit_logs`, `admin_actions`, plus the generic `graph_edges` table). No migrations exist yet.
-- **External APIs planned:** OpenAlex (primary bibliographic source), Crossref (DOI resolution), Open Library / Google Books (book metadata), OpenAI + Anthropic (LLM + embeddings), Resend (email), Sentry (errors). None integrated yet.
+- **Full domain schema:** see plan §9 for the eventual table list — rolls in incrementally, one migration set per phase, never all at once.
+- **Phase 1 schema (built, migrated locally):** `user` (includes `password_hash`, `session_version` beyond the Auth.js default shape), `account`, `session`, `verification_token`, `password_reset_token`. Two migrations: `0000_luxuriant_risque.sql` (initial tables), `0001_mighty_kylun.sql` (added `session_version`).
+- **`@auth/drizzle-adapter` quirk (recorded so it isn't rediscovered):** its `AdapterAccount` type requires specific snake_case JS object keys on the `account` table definition (`refresh_token`, `access_token`, `expires_at`, `token_type`, `id_token`, `session_state` — matching OAuth2 spec field names), not the camelCase Drizzle convention used elsewhere. This is a TS-level object-key requirement only; the actual DB column names are unaffected either way.
+- **External APIs planned:** OpenAlex, Crossref, Open Library/Google Books, OpenAI + Anthropic, Resend, Sentry. None integrated yet beyond Resend (mail adapter built, untested against a real API key — console fallback verified instead).
 
 ## Commands
 
-Not yet available — will be filled in as each is implemented in Phase 1 onward. Placeholders:
+```sh
+# Local dev environment (one-time)
+brew install node@24 && brew link --overwrite node@24
+corepack enable && corepack prepare pnpm@latest --activate
+brew install colima docker docker-compose && colima start
+# then add "cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"] to ~/.docker/config.json
+
+# Day to day
+pnpm install
+docker compose up -d postgres
+pnpm --filter @ice/db db:migrate
+pnpm dev                       # apps/web on http://localhost:3000
+
+pnpm -r lint
+pnpm -r typecheck
+pnpm -r test                   # no-ops until Phase 4 adds Vitest
+pnpm --filter web build
+
+pnpm --filter @ice/db db:generate   # after editing packages/db/src/schema.ts
+pnpm --filter @ice/db db:migrate
+pnpm --filter @ice/db db:studio
+
+# Push (see Known Problems re: osxkeychain hang)
+git -c credential.helper='!gh auth git-credential' push origin main
 ```
-# Install       (Phase 1) pnpm install
-# Run (web)     (Phase 1) pnpm --filter web dev
-# Run (worker)  (Phase 2) pnpm --filter worker dev
-# Test          (Phase 1) pnpm test
-# Migrate       (Phase 1) pnpm --filter db migrate
-# Build         (Phase 1) pnpm build
-# Deploy        (Phase 7) automatic via Vercel/Render on push to main
-```
+Deploy: not yet configured — Phase 1b.
 
 ## Credentials, Environment Variables, and External Services
 
-No values are ever stored here or in the repo. Variable **names** live in [`.env.example`](./.env.example): `DATABASE_URL`, `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENALEX_POLITE_POOL_EMAIL`, `CROSSREF_POLITE_POOL_EMAIL`, `GOOGLE_BOOKS_API_KEY`, `RESEND_API_KEY`, `SENTRY_DSN`. External services required by Phase 1: Supabase project, Vercel project, GitHub repo (created). Required later: Render service (Phase 2), OpenAI/Anthropic API keys (Phase 4), Resend/Sentry accounts (Phase 1).
+No values are ever stored here or in the repo. Variable **names** live in [`.env.example`](./.env.example): `DATABASE_URL`, `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENALEX_POLITE_POOL_EMAIL`, `CROSSREF_POLITE_POOL_EMAIL`, `GOOGLE_BOOKS_API_KEY`, `RESEND_API_KEY`, `SENTRY_DSN`. Local dev values (non-secret, local-only) live in `apps/web/.env.local` and `packages/db/.env`, both gitignored. External services still needed: Supabase project, Vercel project (Phase 1b), Render service (Phase 2), OpenAI/Anthropic API keys (Phase 4), a real Resend account (optional — console fallback works without it), Sentry (not yet wired at all).
 
 ## Changelog
 
 - **2026-07-17** — Plan approved. Repo scaffolding started: `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example`, `docs/architecture/plan.md` created.
-- **2026-07-17** — Phase 0 complete: private GitHub repo `hyderhusainarastu/interactive-critical-edition` created, initial commit `0b148b6` pushed to `main`, checkpoint tag `phase-0-complete` pushed. Discovered and documented the `osxkeychain` credential-helper hang workaround (see Known Problems). Next: begin Phase 1 (Next.js scaffold, auth, CI).
+- **2026-07-17** — Phase 0 complete: private GitHub repo `hyderhusainarastu/interactive-critical-edition` created, initial commit `0b148b6` pushed to `main`, checkpoint tag `phase-0-complete` pushed. Discovered and documented the `osxkeychain` credential-helper hang workaround.
+- **2026-07-17** — User requested a 3D knowledge-graph visualizer and an independent educational companion site (Phase 8); both folded into the plan (`docs/architecture/plan.md` §9/§16/§17/§19/§20/§23/§31) before implementation began.
+- **2026-07-17** — User set an explicit cost constraint (optimize both infra and AI-token spend equally at single-user scale, managed services over self-hosting); folded into plan §3/§5/§11.
+- **2026-07-17** — Phase 1a complete: bootstrapped a bare machine (Node, pnpm, Colima/Docker) from scratch; scaffolded the pnpm monorepo; built and live-tested the full auth flow (signup/verify/login/reset/session-revocation/logout) against local Postgres; added CI. Repo-local git identity set. Several environment gotchas discovered and documented (see Known Problems). Next: Phase 1b (Supabase + Vercel, needs the user) or proceed to Phase 2 locally first.
 
 ## Resuming Work After a New Claude Code Session
 

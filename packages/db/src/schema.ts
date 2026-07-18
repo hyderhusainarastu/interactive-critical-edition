@@ -27,6 +27,15 @@ export const users = pgTable("user", {
   emailVerified: timestamp("email_verified", { mode: "date" }),
   image: text("image"),
   passwordHash: text("password_hash"),
+  /**
+   * Auth.js v5's Credentials provider requires the JWT session strategy —
+   * database sessions only auto-wire for OAuth-style adapter flows (plan
+   * §14 assumed DB sessions; this is a recorded deviation, see CLAUDE.md).
+   * Incrementing this invalidates every outstanding JWT for the user
+   * (checked in the `jwt` callback), giving server-side "sign out
+   * everywhere" / revocation-on-deletion without needing DB sessions.
+   */
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -40,13 +49,16 @@ export const accounts = pgTable(
     type: text("type").notNull(),
     provider: text("provider").notNull(),
     providerAccountId: text("provider_account_id").notNull(),
-    refreshToken: text("refresh_token"),
-    accessToken: text("access_token"),
-    expiresAt: integer("expires_at"),
-    tokenType: text("token_type"),
+    // @auth/drizzle-adapter's AdapterAccount type requires these specific
+    // snake_case JS keys (matching OAuth2 spec field names) — DB column
+    // names are unaffected, so this needed no new migration.
+    refresh_token: text("refresh_token"),
+    access_token: text("access_token"),
+    expires_at: integer("expires_at"),
+    token_type: text("token_type"),
     scope: text("scope"),
-    idToken: text("id_token"),
-    sessionState: text("session_state"),
+    id_token: text("id_token"),
+    session_state: text("session_state"),
   },
   (account) => [
     primaryKey({
