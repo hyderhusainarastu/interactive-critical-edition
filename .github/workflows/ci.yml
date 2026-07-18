@@ -11,6 +11,12 @@ env:
   AUTH_SECRET: ci-only-not-a-real-secret-do-not-reuse
   AUTH_URL: http://localhost:3000
   NEXT_PUBLIC_APP_URL: http://localhost:3000
+  # Dummy Supabase values so @ice/ingestion's storage client constructs at
+  # import time (the CI-safe E2E specs never actually hit Storage; teardown
+  # storage deletes are best-effort and swallowed).
+  SUPABASE_URL: http://localhost:54321
+  SUPABASE_SERVICE_ROLE_KEY: ci-only-dummy-service-role-key
+  SUPABASE_STORAGE_BUCKET: documents
 
 jobs:
   build-and-test:
@@ -63,3 +69,23 @@ jobs:
 
       - name: Build
         run: pnpm --filter web build
+
+      # E2E: only the specs that need web + Postgres (no worker, no live
+      # bibliographic APIs) run in CI — landing/onboarding (a11y) and the
+      # authorization matrix. The analysis/reader/roadmap specs still run
+      # manually against the full local stack (documented in CLAUDE.md).
+      - name: Install Playwright browser
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: E2E (CI-safe specs)
+        run: |
+          pnpm --filter web start &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/login > /dev/null && break
+            sleep 2
+          done
+          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts
+          STATUS=$?
+          kill $SERVER_PID 2>/dev/null || true
+          exit $STATUS
