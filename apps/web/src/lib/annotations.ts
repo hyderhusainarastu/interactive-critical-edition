@@ -1,5 +1,5 @@
 import { annotations, bibliographicRecords, db } from "@ice/db";
-import { desc, eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 /**
  * Loads a document's annotations joined to their resolved bibliographic
@@ -37,7 +37,10 @@ export async function getAnnotationsForDocument(documentId: string) {
     .from(annotations)
     .leftJoin(bibliographicRecords, eq(bibliographicRecords.id, annotations.targetBibId))
     .where(eq(annotations.documentId, documentId))
-    .orderBy(desc(annotations.confidence));
+    // Stable order: confidence first, then id as a deterministic
+    // tiebreaker so the list (and "first" card) don't reshuffle across
+    // reloads when several annotations share a confidence.
+    .orderBy(desc(annotations.confidence), asc(annotations.id));
 
   return rows.map((r) => ({
     id: r.id,

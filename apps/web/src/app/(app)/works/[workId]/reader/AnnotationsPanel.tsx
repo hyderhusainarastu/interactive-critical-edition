@@ -32,9 +32,10 @@ export function AnnotationsPanel({
   const [showHidden, setShowHidden] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
 
-  const visible = annotations
-    .filter((a) => (showHidden ? true : !a.hidden))
-    .sort((a, b) => b.confidence - a.confidence);
+  // Server already returns a stable confidence-desc order (see
+  // getAnnotationsForDocument); just filter, don't re-sort — re-sorting
+  // here would reintroduce tie instability across reloads.
+  const visible = annotations.filter((a) => (showHidden ? true : !a.hidden));
 
   const anyHeuristic = annotations.some((a) => a.isHeuristic);
 

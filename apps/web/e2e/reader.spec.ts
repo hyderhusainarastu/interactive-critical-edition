@@ -33,7 +33,10 @@ async function uploadAndConfirm(page: import("@playwright/test").Page, filePath:
   await page.goto("/upload");
   await page.locator('input[type="file"]').setInputFiles(filePath);
   await page.waitForURL(/\/works\/[a-f0-9-]+$/);
-  await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 15000 });
+  // Generous timeout: since Phase 4, confirming a work also enqueues an
+  // analysis job, so the single local worker can be busy with live
+  // bibliographic lookups and the extract-text job may queue behind them.
+  await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 30000 });
   const titleInput = page.locator('input[name="title"]');
   await titleInput.fill(title);
   await page.getByRole("button", { name: "Confirm and add to library" }).click();

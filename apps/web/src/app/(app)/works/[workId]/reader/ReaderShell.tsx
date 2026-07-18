@@ -192,11 +192,15 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
     await fetch(`/api/works/${workId}/analyze`, { method: "POST" });
   }, [workId]);
 
-  // Poll while analysis is running (auto-enqueued on confirm, or manually
-  // re-triggered) so results stream in without a manual refresh.
+  // Poll while analysis is in a non-terminal state so results stream in
+  // without a manual refresh. "not_started" is included because there's a
+  // brief window right after confirm where the job is queued but the
+  // worker hasn't yet flipped the status to "analyzing" — without this the
+  // reader would sit on a stale status until reload.
   useEffect(() => {
-    if (data?.analysisStatus !== "analyzing") return;
-    const timer = setInterval(() => void refreshAnnotations(), 4000);
+    const status = data?.analysisStatus;
+    if (status !== "analyzing" && status !== "not_started") return;
+    const timer = setInterval(() => void refreshAnnotations(), 3000);
     return () => clearInterval(timer);
   }, [data?.analysisStatus, refreshAnnotations]);
 
