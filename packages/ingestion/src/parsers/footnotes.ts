@@ -11,6 +11,9 @@ const NOTE_LINE = /^\s*\[?(\d{1,3})\]?[.)]\s+(.+)$/;
  * only keeps entries whose number also appears as an in-body [N] or (N)
  * marker earlier in the text — this filters out unrelated numbered
  * lists (e.g. a table of contents) that happen to sit near the end.
+ * A single trailing numbered line counts too (many real documents have
+ * just one or two footnotes) — the in-body-marker cross-check below is
+ * what actually guards against false positives, not the run length.
  *
  * Documented limitation (see schema.ts): this is pattern matching, not
  * layout-aware extraction. It won't catch footnotes in every citation
@@ -19,7 +22,7 @@ const NOTE_LINE = /^\s*\[?(\d{1,3})\]?[.)]\s+(.+)$/;
 export function detectFootnotes(text: string): DetectedFootnote[] {
   const lines = text.split("\n");
 
-  // Find the longest trailing run of consecutive numbered lines.
+  // Find the trailing run of consecutive numbered lines.
   let blockStart = -1;
   let run: { start: number; end: number } | null = null;
   for (let i = 0; i < lines.length; i++) {
@@ -34,7 +37,7 @@ export function detectFootnotes(text: string): DetectedFootnote[] {
     }
   }
 
-  if (!run || run.end - run.start < 1) return [];
+  if (!run) return [];
 
   const bodyText = lines.slice(0, run.start).join("\n");
   const candidates: DetectedFootnote[] = [];
