@@ -34,12 +34,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Must precede setup-node: its packageManager-based caching tries to
+      # invoke pnpm to compute a cache key, so pnpm needs to already be on
+      # PATH before that step runs.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.14.0
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: ".node-version"
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

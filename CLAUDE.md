@@ -93,7 +93,8 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 ## Known Problems and Technical Debt
 
 - Documented (not a bug): `CLAUDE.md`/`Claude.md` cannot coexist as separate files on this machine (case-insensitive filesystem) — see the note at the top of this file.
-- **Git push hangs (environment gotcha):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely because the local `osxkeychain` git credential helper waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: prefix git network commands with `-c credential.helper='!gh auth git-credential'`, e.g. `git -c credential.helper='!gh auth git-credential' push origin main`. `gh` commands (e.g. `gh repo create --push`) are unaffected.
+- **Git push hangs (environment gotcha):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely because the system-level `osxkeychain` git credential helper (`/opt/homebrew/etc/gitconfig`) waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: `git -c credential.helper= -c credential.helper='!gh auth git-credential' push origin main` — **both** `-c` flags are required: `credential.helper` is a cumulative list-type config, so `-c credential.helper='!gh auth git-credential'` alone just *adds* a helper without removing the system-level `osxkeychain` entry, which still runs first and hangs (or returns a stale/wrong token). The first `-c credential.helper=` (empty value) clears the inherited list; the second one then adds only the `gh`-backed helper. `gh` commands (e.g. `gh repo create --push`) are unaffected by any of this.
+- **Pushing changes to `.github/workflows/*.yml` needs the `workflow` OAuth scope**, which `gh`'s default token doesn't have. One-time fix: `gh auth refresh -h github.com -s workflow` (interactive — opens a device-code browser approval). Without it, the push is rejected with "refusing to allow an OAuth App to create or update workflow ... without workflow scope", even though the same push works for every other file.
 - **`docker compose` plugin isn't found by default after `brew install docker-compose`:** Homebrew's Docker CLI doesn't look in `/opt/homebrew/lib/docker/cli-plugins` unless told to. Fix (already applied, `~/.docker/config.json`): add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`.
 - **pnpm blocks postinstall scripts by default:** new dependencies with native/build postinstall steps (seen so far: `sharp`, `unrs-resolver`, `esbuild`) need explicit approval or `pnpm install` aborts with `ERR_PNPM_IGNORED_BUILDS`. Approve in `pnpm-workspace.yaml` under `allowBuilds:` (not `package.json#pnpm` — that field is no longer read by this pnpm version). Review each new one on its merits before approving; all three approved so far are well-known, trusted build tools.
 - **No middleware-based route protection yet** — Edge middleware can't use our Postgres-backed `sessionVersion` check (`postgres.js` needs Node's TCP stack, unavailable at the Edge). Current mitigation: every protected page calls `auth()` server-side directly (Server Components run in the Node runtime). Fine for the single protected page that exists now; revisit (likely a route-group layout, or a Node-runtime middleware config) once Phase 2 adds more.
@@ -131,8 +132,8 @@ pnpm --filter @ice/db db:generate   # after editing packages/db/src/schema.ts
 pnpm --filter @ice/db db:migrate
 pnpm --filter @ice/db db:studio
 
-# Push (see Known Problems re: osxkeychain hang)
-git -c credential.helper='!gh auth git-credential' push origin main
+# Push (see Known Problems re: osxkeychain hang — both -c flags required)
+git -c credential.helper= -c credential.helper='!gh auth git-credential' push origin main
 ```
 Deploy: not yet configured — Phase 1b.
 
