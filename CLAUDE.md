@@ -99,6 +99,7 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 - **pnpm blocks postinstall scripts by default:** new dependencies with native/build postinstall steps (seen so far: `sharp`, `unrs-resolver`, `esbuild`) need explicit approval or `pnpm install` aborts with `ERR_PNPM_IGNORED_BUILDS`. Approve in `pnpm-workspace.yaml` under `allowBuilds:` (not `package.json#pnpm` — that field is no longer read by this pnpm version). Review each new one on its merits before approving; all three approved so far are well-known, trusted build tools.
 - **No middleware-based route protection yet** — Edge middleware can't use our Postgres-backed `sessionVersion` check (`postgres.js` needs Node's TCP stack, unavailable at the Edge). Current mitigation: every protected page calls `auth()` server-side directly (Server Components run in the Node runtime). Fine for the single protected page that exists now; revisit (likely a route-group layout, or a Node-runtime middleware config) once Phase 2 adds more.
 - No AI-provider or bibliographic-API integrations exist yet (Phase 4).
+- Trivial, non-blocking CI annotation: `pnpm/action-setup@v4` is flagged by GitHub as targeting a deprecated Node 20 runner internally (it still runs fine, forced onto Node 24). Bump to a newer major when one addresses this.
 
 ## Database and API Decisions
 
@@ -147,7 +148,7 @@ No values are ever stored here or in the repo. Variable **names** live in [`.env
 - **2026-07-17** — Phase 0 complete: private GitHub repo `hyderhusainarastu/interactive-critical-edition` created, initial commit `0b148b6` pushed to `main`, checkpoint tag `phase-0-complete` pushed. Discovered and documented the `osxkeychain` credential-helper hang workaround.
 - **2026-07-17** — User requested a 3D knowledge-graph visualizer and an independent educational companion site (Phase 8); both folded into the plan (`docs/architecture/plan.md` §9/§16/§17/§19/§20/§23/§31) before implementation began.
 - **2026-07-17** — User set an explicit cost constraint (optimize both infra and AI-token spend equally at single-user scale, managed services over self-hosting); folded into plan §3/§5/§11.
-- **2026-07-17** — Phase 1a complete: bootstrapped a bare machine (Node, pnpm, Colima/Docker) from scratch; scaffolded the pnpm monorepo; built and live-tested the full auth flow (signup/verify/login/reset/session-revocation/logout) against local Postgres; added CI. Repo-local git identity set. Several environment gotchas discovered and documented (see Known Problems). Next: Phase 1b (Supabase + Vercel, needs the user) or proceed to Phase 2 locally first.
+- **2026-07-17** — Phase 1a complete: bootstrapped a bare machine (Node, pnpm, Colima/Docker) from scratch; scaffolded the pnpm monorepo; built and live-tested the full auth flow (signup/verify/login/reset/session-revocation/logout) against local Postgres; added CI, fixed a `setup-node`/pnpm step-ordering bug, confirmed green on GitHub (run `29629412095`). Repo-local git identity set. Several environment gotchas discovered and documented (see Known Problems), including a correction to the credential-helper workaround itself and the `workflow` OAuth scope requirement for pushing CI files. Next: Phase 1b (Supabase + Vercel, needs the user) or proceed to Phase 2 locally first.
 
 ## Resuming Work After a New Claude Code Session
 
