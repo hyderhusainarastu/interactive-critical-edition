@@ -135,19 +135,33 @@ export function WorkStatusPanel({
   }
 
   return (
-    <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-4 py-3">
       <div>
         <p className="font-medium text-[var(--color-accent-green)]">Ready</p>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           {data.authorName ? `${data.title} — ${data.authorName}` : data.title}
         </p>
       </div>
-      <Link
-        href={`/works/${workId}/reader`}
-        className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
-      >
-        Open reader
-      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={`/works/${workId}/roadmap`}
+          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+        >
+          Reading roadmap
+        </Link>
+        <Link
+          href={`/works/${workId}/graph`}
+          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+        >
+          Knowledge graph
+        </Link>
+        <Link
+          href={`/works/${workId}/reader`}
+          className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
+        >
+          Open reader
+        </Link>
+      </div>
     </div>
   );
 }

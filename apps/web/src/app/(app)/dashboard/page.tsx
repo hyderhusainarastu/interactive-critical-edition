@@ -27,12 +27,20 @@ export default async function DashboardPage() {
         <h1 className="text-3xl font-semibold text-[var(--color-text)]">
           Your library
         </h1>
-        <Link
-          href="/upload"
-          className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
-        >
-          Upload a work
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/graph"
+            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+          >
+            Knowledge graph
+          </Link>
+          <Link
+            href="/upload"
+            className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
+          >
+            Upload a work
+          </Link>
+        </div>
       </div>
 
       {library.length === 0 ? (
