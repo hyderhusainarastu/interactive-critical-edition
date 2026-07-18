@@ -369,12 +369,12 @@
 
     <div class="summary">
       <div class="summary-top">
-        <span class="summary-count"><strong>4</strong> of 9 phases complete</span>
-        <span class="summary-label">Phase 4 next</span>
+        <span class="summary-count"><strong>5</strong> of 9 phases complete</span>
+        <span class="summary-label">Phase 5 next</span>
       </div>
-      <div class="track" role="img" aria-label="4 of 9 phases complete">
-        <span class="done" style="flex:4"></span>
-        <span class="todo" style="flex:5"></span>
+      <div class="track" role="img" aria-label="5 of 9 phases complete">
+        <span class="done" style="flex:5"></span>
+        <span class="todo" style="flex:4"></span>
       </div>
     </div>
   </header>
@@ -453,28 +453,30 @@
     </li>
 
     <!-- Phase 4 -->
-    <li class="phase active">
-      <span class="phase-marker">→</span>
+    <li class="phase done">
+      <span class="phase-marker">✓</span>
       <div class="phase-card">
         <div class="phase-head">
           <h2 class="phase-title"><span class="num">4</span>Scholarly Analysis</h2>
-          <span class="badge active">In progress</span>
+          <span class="badge done">Complete</span>
         </div>
         <ul class="steps">
-          <li class="step"><span class="step-icon"></span><span class="step-text">Citation and bibliography extraction</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">AI relationship classification with provenance and confidence</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Annotation UI with user correction workflow</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Citation extraction + keyless bibliographic resolution (Crossref/OpenAlex/Open Library)</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Two-stage relationship classification (OpenAI/Anthropic adapters, heuristic fallback) with full provenance and confidence</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Reader annotation layer (category-coded markers + panel) with approve/reject/edit/hide workflow</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Verified end-to-end through the deployed system (Vercel + Render worker + Supabase)</span></li>
         </ul>
+        <div class="phase-meta">tag: phase-4-complete</div>
       </div>
     </li>
 
     <!-- Phase 5 -->
-    <li class="phase todo">
-      <span class="phase-marker">5</span>
+    <li class="phase active">
+      <span class="phase-marker">→</span>
       <div class="phase-card">
         <div class="phase-head">
           <h2 class="phase-title"><span class="num">5</span>Reading Roadmap &amp; Knowledge Profile</h2>
-          <span class="badge todo">Not started</span>
+          <span class="badge active">In progress</span>
         </div>
         <ul class="steps">
           <li class="step"><span class="step-icon"></span><span class="step-text">Prerequisite graph and priority-ranking algorithm</span></li>
