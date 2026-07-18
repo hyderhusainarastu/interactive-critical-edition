@@ -50,25 +50,31 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 
 ## Current Implementation Status
 
-**Phase 0 — Research & Planning: in progress (governance files being committed now).** No application code exists yet. Nothing is deployed.
+**Phase 0 — Research & Planning: complete.** Repo created, initial commit pushed, checkpoint tagged. No application code exists yet — Phase 1 has not started.
+
+- Repo: https://github.com/hyderhusainarastu/interactive-critical-edition (private)
+- Initial commit: `0b148b6` — "Initial project governance: CLAUDE.md, README, env template, plan"
+- Checkpoint tag: `phase-0-complete`
 
 ## Completed Tasks
 
 - [x] Full implementation plan written and approved (`docs/architecture/plan.md`).
 - [x] ScholarLens inspected via GitHub API; license verdict recorded (no LICENSE file found).
 - [x] Filesystem case-sensitivity constraint on `CLAUDE.md`/`Claude.md` verified and documented.
-- [x] `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example` created.
+- [x] `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example` created and committed (`0b148b6`).
+- [x] Private GitHub repo created (`gh repo create --private --source=. --push`), initial commit pushed to `main`.
+- [x] `phase-0-complete` tag created and pushed.
 
 ## Remaining Tasks (near-term)
 
-- [ ] Create private GitHub repo `hyderhusainarastu/interactive-critical-edition`, push initial commit, tag `phase-0-complete`.
 - [ ] Phase 1: Next.js scaffold, Tailwind + design tokens, Drizzle schema + first migration, Auth.js credentials + email verification + reset flow, Supabase provisioning, Storage bucket, Sentry, CI.
 - [ ] Phases 2–8 per `docs/architecture/plan.md` §23.
 
 ## Known Problems and Technical Debt
 
-- None yet — no code exists. This section will track real issues starting Phase 1.
+- None in application code yet — no code exists. This section will track real issues starting Phase 1.
 - Documented (not a bug): `CLAUDE.md`/`Claude.md` cannot coexist as separate files on this machine (case-insensitive filesystem) — see the note at the top of this file.
+- **Environment gotcha (recorded so it isn't rediscovered the hard way):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely in this environment because the local `osxkeychain` git credential helper waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: prefix git network commands with `-c credential.helper='!gh auth git-credential'` (uses the already-authenticated `gh` CLI's token instead), e.g. `git -c credential.helper='!gh auth git-credential' push origin main`. `gh` commands themselves (e.g. `gh repo create --push`) are unaffected and work normally.
 
 ## Database and API Decisions
 
@@ -95,7 +101,8 @@ No values are ever stored here or in the repo. Variable **names** live in [`.env
 
 ## Changelog
 
-- **2026-07-17** — Plan approved. Repo scaffolding started: `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example`, `docs/architecture/plan.md` created. GitHub repo creation and initial push next.
+- **2026-07-17** — Plan approved. Repo scaffolding started: `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example`, `docs/architecture/plan.md` created.
+- **2026-07-17** — Phase 0 complete: private GitHub repo `hyderhusainarastu/interactive-critical-edition` created, initial commit `0b148b6` pushed to `main`, checkpoint tag `phase-0-complete` pushed. Discovered and documented the `osxkeychain` credential-helper hang workaround (see Known Problems). Next: begin Phase 1 (Next.js scaffold, auth, CI).
 
 ## Resuming Work After a New Claude Code Session
 
