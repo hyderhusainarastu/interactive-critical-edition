@@ -4,7 +4,7 @@ A web application that helps readers understand difficult scholarly works — ph
 
 Upload a primary text (e.g. Heidegger's *Being and Time*) and the system helps answer the questions a reader is otherwise left to guess at: what background material is actually necessary, where to start, in what order, how much of each work to read, and which references are explicit versus scholarly inference. A personal knowledge profile means the system stops recommending what you already know.
 
-**Status:** Phase 2a (Upload and Library) complete, live at https://interactive-critical-edition.vercel.app — auth and upload→extract→confirm→library both verified working end to end. Background processing runs locally only for now (Phase 2b: Render worker deployment, not yet done). See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
+**Status:** Phase 2 (Upload and Library) complete, fully deployed — web app on Vercel, background worker on Render, database/storage on Supabase. Auth and upload→extract→confirm→library both verified end to end in production. See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
 
 ## Project memory
 
