@@ -54,11 +54,13 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 
 ## Current Implementation Status
 
-**Phase 0 — Research & Planning: complete.** **Phase 1a — Foundation (local): complete.** Phase 1b (real Supabase + Vercel deployment) not started — needs the user's accounts. Phases 2–8 not started.
+**Phase 0 — Research & Planning: complete. Phase 1 (Foundation, local + deployed): complete.** Phases 2–8 not started.
 
 - Repo: https://github.com/hyderhusainarastu/interactive-critical-edition (private)
-- Checkpoint tags: `phase-0-complete`, `phase-1a-complete`
-- Auth (signup → email verification → login → protected route → password reset → session revocation) verified working end-to-end against local Postgres, including the actual HTTP flow (not just unit-level), on 2026-07-17.
+- Checkpoint tags: `phase-0-complete`, `phase-1a-complete`, `phase-1-complete`
+- **Production:** https://interactive-critical-edition.vercel.app (Vercel project `interactive-critical-edition` under team `interactive-critical-edition-cli`, `orgId: team_YkskgkZCyT0CUnxpL2ScKrvE`, `projectId: prj_WagoBYEk4PNHN4AusHklxIok0FCR`)
+- **Database:** Supabase project `interactive-critical-edition` (ref `vlrzvwswippuaitmrujz`, org `jkcecpjinqwpwxfvuylf`, region `us-east-1`), `pgvector` enabled, Phase 1 migrations applied.
+- Auth (signup → email verification → login → protected route → password reset → session revocation) verified working end-to-end **twice**: against local Postgres (2026-07-17) and again against the real production deployment + real Supabase DB (2026-07-18) — both via actual HTTP requests, not just typecheck.
 
 ## Completed Tasks
 
@@ -83,12 +85,21 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 - [x] GitHub Actions CI (`.github/workflows/ci.yml`): lint, typecheck, test, build, against an ephemeral Postgres service container — no external secrets required.
 - [x] `phase-1a-complete` tag.
 
+**Phase 1b (real Supabase + Vercel):**
+- [x] Supabase org + project created via CLI (personal access token), `pgvector` enabled, Phase 1 migrations applied and verified against the real DB.
+- [x] Vercel project created and linked; **Root Directory set to `apps/web`** via the API (see Known Problems — this is required for a pnpm monorepo, `vercel link`/`vercel --prod` from the subdirectory alone silently uploads only that subtree and loses pnpm-workspace context).
+- [x] Production env vars set (`DATABASE_URL` = Supabase transaction pooler :6543, `DIRECT_URL` = Supabase direct :5432, `AUTH_SECRET` = freshly generated, distinct from the local dev one, `AUTH_URL`/`NEXT_PUBLIC_APP_URL` = the assigned `*.vercel.app` domain).
+- [x] Deployed to production; full auth flow (signup/verify/login/dashboard) re-verified live against https://interactive-critical-edition.vercel.app and the real Supabase DB.
+- [x] Test user cleaned up from the production DB after verification.
+- [x] `phase-1-complete` tag.
+
 ## Remaining Tasks (near-term)
 
-- [ ] **Phase 1b** (needs the user): create a real Supabase project, point `DATABASE_URL`/Storage config at it; create a Vercel project (`vercel link`) and deploy; re-verify the auth flow in production; tag `phase-1-complete`.
 - [ ] Phase 2 (Upload and Library) per `docs/architecture/plan.md` §23.
 - [ ] Phases 3–8 per `docs/architecture/plan.md` §23.
 - [ ] Not yet built, deferred to their owning phase: `packages/ai-adapters`, `packages/ingestion`, `packages/bibliographic`, `packages/ui`, `apps/worker`, Sentry wiring, centralized middleware-based route protection (currently per-page `auth()` checks — fine for the one protected page that exists, revisit once Phase 2 adds several).
+- [ ] Supabase Storage bucket not yet created (needed starting Phase 2 for uploads).
+- [ ] GitHub↔Vercel Git integration not yet connected — current deploys are CLI-triggered (`vercel --prod`), not automatic on push. Connect via the Vercel dashboard (Project Settings → Git) when convenient, or continue deploying manually per phase checkpoint.
 
 ## Known Problems and Technical Debt
 
@@ -96,6 +107,11 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 - **Git push hangs (environment gotcha):** plain `git push`/`git ls-remote` over HTTPS hangs indefinitely because the system-level `osxkeychain` git credential helper (`/opt/homebrew/etc/gitconfig`) waits on a GUI keychain-unlock prompt that never appears in this sandbox. Workaround: `git -c credential.helper= -c credential.helper='!gh auth git-credential' push origin main` — **both** `-c` flags are required: `credential.helper` is a cumulative list-type config, so `-c credential.helper='!gh auth git-credential'` alone just *adds* a helper without removing the system-level `osxkeychain` entry, which still runs first and hangs (or returns a stale/wrong token). The first `-c credential.helper=` (empty value) clears the inherited list; the second one then adds only the `gh`-backed helper. `gh` commands (e.g. `gh repo create --push`) are unaffected by any of this.
 - **Pushing changes to `.github/workflows/*.yml` needs the `workflow` OAuth scope**, which `gh`'s default token doesn't have. One-time fix: `gh auth refresh -h github.com -s workflow` (interactive — opens a device-code browser approval). Without it, the push is rejected with "refusing to allow an OAuth App to create or update workflow ... without workflow scope", even though the same push works for every other file.
 - **`docker compose` plugin isn't found by default after `brew install docker-compose`:** Homebrew's Docker CLI doesn't look in `/opt/homebrew/lib/docker/cli-plugins` unless told to. Fix (already applied, `~/.docker/config.json`): add `"cliPluginsExtraDirs": ["/opt/homebrew/lib/docker/cli-plugins"]`.
+- **`supabase login` / `vercel login` need a TTY this sandbox doesn't have** (device-code/browser callback flows fail with e.g. `LegacyLoginMissingTokenError`). Workaround used: generate a personal access token from each dashboard (Supabase: Account Settings → Access Tokens; Vercel: Account Settings → Tokens) and pass it per-command as `SUPABASE_ACCESS_TOKEN=... supabase ...` / `VERCEL_TOKEN=... vercel ...`, never via an interactive login step.
+- **pnpm's global bin dir isn't on PATH by default** (`pnpm add -g` fails with "configured global bin directory ... is not in PATH"). One-time fix: `pnpm setup` (writes `~/.zshrc`), but since this environment's Bash tool doesn't source shell rc files between commands, every command needing a pnpm-global binary (e.g. `vercel`) must still `export PNPM_HOME="$HOME/Library/pnpm"; export PATH="$PNPM_HOME/bin:$PATH"` inline.
+- **Vercel + pnpm monorepo: deploying from the app subdirectory silently breaks the build.** Running `vercel link`/`vercel --prod` from inside `apps/web` uploads only that subtree, so Vercel never sees the root `pnpm-lock.yaml`/`pnpm-workspace.yaml` and falls back to `npm install` (which then fails on the workspace-only `@ice/db` dependency). Fix: set the Vercel project's **Root Directory** to `apps/web` (no CLI flag for this — used `vercel project update` first, which lacks a root-directory option, then the REST API: `PATCH /v9/projects/:id?teamId=...` with `{"rootDirectory":"apps/web"}`), then deploy **from the repo root** so the whole monorepo — including the root lockfile — gets uploaded and Vercel `cd`s into Root Directory to build.
+- **Vercel REST API calls need the *actual* `orgId`, not a value hand-transcribed from a JWT.** A `PATCH` to `/v9/projects/:id?teamId=...` returned "Not authorized" using a `teamId` misread from the `VERCEL_OIDC_TOKEN` payload (visually similar-looking ID, one character off). The authoritative value is in `.vercel/project.json` (`orgId`) written locally by `vercel link` — use that, not a manually parsed token.
+- **The Supabase DB password is auto-generated and not recoverable** — it was generated with `openssl rand` during project creation and passed straight to `supabase projects create --db-password`; Supabase never displays a project's DB password again after creation (by design). It was surfaced to the user once, out-of-band, right after creation. If it's ever needed again and lost, reset it via Supabase Dashboard → Project Settings → Database → Reset Database Password, then update `DATABASE_URL`/`DIRECT_URL` in Vercel (`vercel env rm` + `vercel env add`) and redeploy.
 - **pnpm blocks postinstall scripts by default:** new dependencies with native/build postinstall steps (seen so far: `sharp`, `unrs-resolver`, `esbuild`) need explicit approval or `pnpm install` aborts with `ERR_PNPM_IGNORED_BUILDS`. Approve in `pnpm-workspace.yaml` under `allowBuilds:` (not `package.json#pnpm` — that field is no longer read by this pnpm version). Review each new one on its merits before approving; all three approved so far are well-known, trusted build tools.
 - **No middleware-based route protection yet** — Edge middleware can't use our Postgres-backed `sessionVersion` check (`postgres.js` needs Node's TCP stack, unavailable at the Edge). Current mitigation: every protected page calls `auth()` server-side directly (Server Components run in the Node runtime). Fine for the single protected page that exists now; revisit (likely a route-group layout, or a Node-runtime middleware config) once Phase 2 adds more.
 - No AI-provider or bibliographic-API integrations exist yet (Phase 4).
@@ -107,7 +123,8 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 - **Full domain schema:** see plan §9 for the eventual table list — rolls in incrementally, one migration set per phase, never all at once.
 - **Phase 1 schema (built, migrated locally):** `user` (includes `password_hash`, `session_version` beyond the Auth.js default shape), `account`, `session`, `verification_token`, `password_reset_token`. Two migrations: `0000_luxuriant_risque.sql` (initial tables), `0001_mighty_kylun.sql` (added `session_version`).
 - **`@auth/drizzle-adapter` quirk (recorded so it isn't rediscovered):** its `AdapterAccount` type requires specific snake_case JS object keys on the `account` table definition (`refresh_token`, `access_token`, `expires_at`, `token_type`, `id_token`, `session_state` — matching OAuth2 spec field names), not the camelCase Drizzle convention used elsewhere. This is a TS-level object-key requirement only; the actual DB column names are unaffected either way.
-- **External APIs planned:** OpenAlex, Crossref, Open Library/Google Books, OpenAI + Anthropic, Resend, Sentry. None integrated yet beyond Resend (mail adapter built, untested against a real API key — console fallback verified instead).
+- **External APIs planned:** OpenAlex, Crossref, Open Library/Google Books, OpenAI + Anthropic, Resend, Sentry. None integrated yet beyond Resend (mail adapter built, untested against a real API key — console fallback verified in both local and production testing instead).
+- **Production database is live**: Supabase project `interactive-critical-edition` (ref `vlrzvwswippuaitmrujz`), Phase 1 migrations applied and verified. Local dev intentionally still targets local Docker Postgres, not Supabase, to avoid burning free-tier quota/connections on routine dev work — this is a deliberate separation, not an oversight.
 
 ## Commands
 
@@ -133,14 +150,24 @@ pnpm --filter @ice/db db:generate   # after editing packages/db/src/schema.ts
 pnpm --filter @ice/db db:migrate
 pnpm --filter @ice/db db:studio
 
+# Deploy (manual — Git integration not yet connected, see Remaining Tasks)
+export PNPM_HOME="$HOME/Library/pnpm" && export PATH="$PNPM_HOME/bin:$PATH"   # if `vercel` isn't found
+cd apps/web && VERCEL_TOKEN=<token> vercel link --yes --project interactive-critical-edition   # one-time per machine
+cd ../..  # deploy must run from repo ROOT, not apps/web — see Known Problems
+VERCEL_TOKEN=<token> vercel --prod --yes
+
+# Run a migration against the real production DB (direct connection, not the pooler)
+# get the DB password from your own records / reset via Supabase dashboard if lost
+cd packages/db && DATABASE_URL="postgresql://postgres:<url-encoded-password>@db.vlrzvwswippuaitmrujz.supabase.co:5432/postgres" pnpm db:migrate
+
 # Push (see Known Problems re: osxkeychain hang — both -c flags required)
 git -c credential.helper= -c credential.helper='!gh auth git-credential' push origin main
 ```
-Deploy: not yet configured — Phase 1b.
+Deploy: live at https://interactive-critical-edition.vercel.app, currently via manual `vercel --prod` (see above) — GitHub↔Vercel Git integration not yet connected, so pushes to `main` do not auto-deploy yet.
 
 ## Credentials, Environment Variables, and External Services
 
-No values are ever stored here or in the repo. Variable **names** live in [`.env.example`](./.env.example): `DATABASE_URL`, `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENALEX_POLITE_POOL_EMAIL`, `CROSSREF_POLITE_POOL_EMAIL`, `GOOGLE_BOOKS_API_KEY`, `RESEND_API_KEY`, `SENTRY_DSN`. Local dev values (non-secret, local-only) live in `apps/web/.env.local` and `packages/db/.env`, both gitignored. External services still needed: Supabase project, Vercel project (Phase 1b), Render service (Phase 2), OpenAI/Anthropic API keys (Phase 4), a real Resend account (optional — console fallback works without it), Sentry (not yet wired at all).
+No values are ever stored here or in the repo. Variable **names** live in [`.env.example`](./.env.example): `DATABASE_URL`, `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`, `AUTH_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENALEX_POLITE_POOL_EMAIL`, `CROSSREF_POLITE_POOL_EMAIL`, `GOOGLE_BOOKS_API_KEY`, `RESEND_API_KEY`, `SENTRY_DSN`. Local dev values (non-secret, local-only) live in `apps/web/.env.local` and `packages/db/.env`, both gitignored; production values live only in Vercel's encrypted env var store (`vercel env ls production` to review, values not retrievable in plaintext via CLI once set). External services now provisioned: GitHub repo, Supabase project, Vercel project. Still needed: Render service (Phase 2), OpenAI/Anthropic API keys (Phase 4), a real Resend account (optional — console fallback works without it), Sentry (not yet wired at all), a Supabase Storage bucket (Phase 2).
 
 ## Changelog
 
@@ -148,7 +175,8 @@ No values are ever stored here or in the repo. Variable **names** live in [`.env
 - **2026-07-17** — Phase 0 complete: private GitHub repo `hyderhusainarastu/interactive-critical-edition` created, initial commit `0b148b6` pushed to `main`, checkpoint tag `phase-0-complete` pushed. Discovered and documented the `osxkeychain` credential-helper hang workaround.
 - **2026-07-17** — User requested a 3D knowledge-graph visualizer and an independent educational companion site (Phase 8); both folded into the plan (`docs/architecture/plan.md` §9/§16/§17/§19/§20/§23/§31) before implementation began.
 - **2026-07-17** — User set an explicit cost constraint (optimize both infra and AI-token spend equally at single-user scale, managed services over self-hosting); folded into plan §3/§5/§11.
-- **2026-07-17** — Phase 1a complete: bootstrapped a bare machine (Node, pnpm, Colima/Docker) from scratch; scaffolded the pnpm monorepo; built and live-tested the full auth flow (signup/verify/login/reset/session-revocation/logout) against local Postgres; added CI, fixed a `setup-node`/pnpm step-ordering bug, confirmed green on GitHub (run `29629412095`). Repo-local git identity set. Several environment gotchas discovered and documented (see Known Problems), including a correction to the credential-helper workaround itself and the `workflow` OAuth scope requirement for pushing CI files. Next: Phase 1b (Supabase + Vercel, needs the user) or proceed to Phase 2 locally first.
+- **2026-07-17** — Phase 1a complete: bootstrapped a bare machine (Node, pnpm, Colima/Docker) from scratch; scaffolded the pnpm monorepo; built and live-tested the full auth flow (signup/verify/login/reset/session-revocation/logout) against local Postgres; added CI, fixed a `setup-node`/pnpm step-ordering bug, confirmed green on GitHub (run `29629412095`). Repo-local git identity set. Several environment gotchas discovered and documented (see Known Problems), including a correction to the credential-helper workaround itself and the `workflow` OAuth scope requirement for pushing CI files.
+- **2026-07-18** — Phase 1b complete (with the user providing Supabase/Vercel personal access tokens, since both CLIs' interactive login flows need a TTY this environment doesn't have): created the Supabase org+project via CLI, enabled `pgvector`, applied and verified Phase 1 migrations against the real DB. Created and linked the Vercel project; hit and fixed a real monorepo deploy bug (deploying from `apps/web` alone loses the pnpm-workspace root context and Vercel falls back to `npm install`, which fails) by setting Root Directory via the REST API and redeploying from the repo root. Set production env vars (fresh `AUTH_SECRET`, Supabase pooler/direct connection strings, production `AUTH_URL`). Deployed to production and re-verified the full auth flow live against https://interactive-critical-edition.vercel.app and the real Supabase DB; cleaned up the test account afterward. Tagged `phase-1-complete`. Next: Phase 2 (Upload and Library).
 
 ## Resuming Work After a New Claude Code Session
 
