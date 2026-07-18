@@ -1,4 +1,14 @@
-import { db, documents, users } from "@ice/db";
+import {
+  annotations,
+  bibliographicRecords,
+  bookmarks,
+  db,
+  documents,
+  highlights,
+  notes,
+  users,
+  works,
+} from "@ice/db";
 import { deleteDocumentFile } from "@ice/ingestion";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
@@ -41,4 +51,77 @@ export async function deleteTestUser(email: string) {
 
   await Promise.all(docs.map((d) => deleteDocumentFile(d.storagePath).catch(() => {})));
   await db.delete(users).where(eq(users.id, user.id));
+}
+
+/**
+ * Seeds a ready work + document plus one of every per-user reader/analysis
+ * record for the given user, returning the ids — so the authorization
+ * matrix (security.spec.ts) has real resources to try to reach as a
+ * different user. No Storage upload (the storage path is a placeholder;
+ * these tests never fetch the file).
+ */
+export async function seedOwnedWork(userId: string): Promise<{
+  workId: string;
+  documentId: string;
+  highlightId: string;
+  noteId: string;
+  bookmarkId: string;
+  annotationId: string;
+}> {
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: "Owner's Private Work", authorName: "Owner" })
+    .returning({ id: works.id });
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId,
+      workId: work.id,
+      storagePath: `${userId}/${work.id}/none.txt`,
+      originalFilename: "none.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: "ready",
+      analysisStatus: "complete",
+      extractedText: "Private text. Kant is referenced here.",
+    })
+    .returning({ id: documents.id });
+  const [hl] = await db
+    .insert(highlights)
+    .values({ userId, documentId: doc.id, anchor: { kind: "text", paragraphIndex: 0, quote: "Private", prefix: "", suffix: " text" }, color: "gold" })
+    .returning({ id: highlights.id });
+  const [note] = await db
+    .insert(notes)
+    .values({ userId, documentId: doc.id, body: "owner note" })
+    .returning({ id: notes.id });
+  const [bm] = await db
+    .insert(bookmarks)
+    .values({ userId, documentId: doc.id, position: { kind: "text", paragraphIndex: 0 }, label: "Paragraph 1" })
+    .returning({ id: bookmarks.id });
+  const [bib] = await db
+    .insert(bibliographicRecords)
+    .values({ source: "openalex", title: "Critique of Pure Reason", authors: "Kant", accessStatus: "open" })
+    .returning({ id: bibliographicRecords.id });
+  const [ann] = await db
+    .insert(annotations)
+    .values({
+      userId,
+      documentId: doc.id,
+      relationshipCategory: "explicit_reference",
+      targetBibId: bib.id,
+      targetLabel: "Critique of Pure Reason",
+      explanation: "owner annotation",
+      confidence: 0.6,
+      createdBy: "system",
+    })
+    .returning({ id: annotations.id });
+
+  return {
+    workId: work.id,
+    documentId: doc.id,
+    highlightId: hl.id,
+    noteId: note.id,
+    bookmarkId: bm.id,
+    annotationId: ann.id,
+  };
 }
