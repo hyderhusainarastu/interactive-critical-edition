@@ -471,3 +471,91 @@ export const aiUsageLogs = pgTable("ai_usage_log", {
   estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+/**
+ * Phase 5 scope: reading roadmap + knowledge profile (plan §7/§13).
+ *
+ * The roadmap itself is computed on demand (a graph traversal over
+ * `graphEdges` + a ranking pass — fast, no AI), NOT stored as a snapshot:
+ * a persisted `reading_roadmaps`/`roadmap_items` pair (plan §9's literal
+ * shape) would drift the moment analysis re-runs or a rating changes. So
+ * only the durable, user-authored state lives here — the knowledge
+ * profile (`readingRecords`, `understandingRatings`) and manual roadmap
+ * adjustments (`roadmapOverrides`) — and the roadmap is recomputed from
+ * those each request (recalculation-respects-overrides falls out for
+ * free). A recorded deviation from plan §9, same spirit as prior phases.
+ *
+ * A "target" throughout is either the user's own uploaded `work` or a
+ * referenced `bibliographicRecord` (a recommended reading not necessarily
+ * in the library) — exactly one of the two id columns is set on each row.
+ */
+
+export const readingStatusEnum = pgEnum("reading_status", [
+  "planned",
+  "reading",
+  "completed",
+  "abandoned",
+]);
+
+// plan §13 priority tiers, in ranked order (essential highest).
+export const priorityTierEnum = pgEnum("priority_tier", [
+  "essential",
+  "high",
+  "strongly_recommended",
+  "contextual",
+  "interpretive_aid",
+  "comparative",
+  "optional",
+]);
+
+export const readingRecords = pgTable("reading_record", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+  bibId: uuid("bib_id").references(() => bibliographicRecords.id, { onDelete: "cascade" }),
+  status: readingStatusEnum("status").notNull().default("planned"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const understandingRatings = pgTable("understanding_rating", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+  bibId: uuid("bib_id").references(() => bibliographicRecords.id, { onDelete: "cascade" }),
+  // 0..100 with a derived label in the UI (plan §7). >= 60 = "working
+  // understanding" → the roadmap deprioritizes it (personalization pass).
+  score: integer("score").notNull(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Per-user, per-root-work manual adjustments applied on top of the
+ * computed roadmap (plan §13 step 7): hide an item, pin it to a tier, or
+ * reorder it. `manualTier`/`manualPosition` are null unless the user set
+ * them. A row can also represent a manually *added* target that the auto
+ * roadmap didn't surface (`addedManually`).
+ */
+export const roadmapOverrides = pgTable("roadmap_override", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  rootWorkId: uuid("root_work_id")
+    .notNull()
+    .references(() => works.id, { onDelete: "cascade" }),
+  bibId: uuid("bib_id")
+    .notNull()
+    .references(() => bibliographicRecords.id, { onDelete: "cascade" }),
+  hidden: boolean("hidden").notNull().default(false),
+  manualTier: priorityTierEnum("manual_tier"),
+  manualPosition: integer("manual_position"),
+  addedManually: boolean("added_manually").notNull().default(false),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

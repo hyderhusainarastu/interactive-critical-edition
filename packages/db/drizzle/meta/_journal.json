@@ -36,6 +36,13 @@
       "when": 1784355411523,
       "tag": "0004_real_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784360242645,
+      "tag": "0005_lazy_black_knight",
+      "breakpoints": true
     }
   ]
 }

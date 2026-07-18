@@ -22,6 +22,9 @@ importers:
       '@ice/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion
+      '@ice/roadmap':
+        specifier: workspace:*
+        version: link:../../packages/roadmap
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.3
@@ -163,6 +166,18 @@ importers:
       unpdf:
         specifier: ^0.12.1
         version: 0.12.2
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
+
+  packages/roadmap:
     devDependencies:
       '@types/node':
         specifier: ^24
