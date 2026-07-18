@@ -2,6 +2,7 @@ import { parsePdf, type ParsedDocument } from "./parsers/pdf";
 import { parseText } from "./parsers/text";
 
 export type { ParsedDocument } from "./parsers/pdf";
+export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export * from "./storage";
 
 export async function parseDocument(

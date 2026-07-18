@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -176,6 +177,14 @@ export const documents = pgTable("document", {
   extractedTitle: text("extracted_title"),
   extractedAuthor: text("extracted_author"),
   processingError: text("processing_error"),
+  /**
+   * Phase 3: { kind: "pdf", page: number } | { kind: "text", paragraphIndex: number }.
+   * Documents are already 1:1 user-owned in this simplified schema (see
+   * Phase 2 note above), so reading position lives directly on the row
+   * rather than a separate per-user join table — one fewer table for
+   * something that can only ever have one reader.
+   */
+  lastPosition: jsonb("last_position"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -192,4 +201,71 @@ export const processingJobs = pgTable("processing_job", {
   pgBossJobId: text("pg_boss_job_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Phase 3 scope: the reader. `footnotes` are heuristically detected at
+ * ingestion time for text/markdown documents only (regex-based marker +
+ * trailing numbered-list detection — see apps/worker; a documented
+ * limitation, not full layout-aware footnote extraction). PDF footnote
+ * detection is deferred — text-layer extraction alone doesn't reliably
+ * distinguish body text from page-bottom notes without positional data.
+ *
+ * `highlights`/`bookmarks` anchor by stable quote + prefix/suffix
+ * context (a text-fingerprint approach, plan §25 risk R3), not raw
+ * page/pixel coordinates — `anchor`/`position` shapes:
+ *   PDF:  { kind: "pdf", page, quote, prefix, suffix }
+ *   text: { kind: "text", paragraphIndex, quote, prefix, suffix }
+ */
+
+export const footnotes = pgTable("footnote", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  marker: text("marker").notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const highlights = pgTable("highlight", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  anchor: jsonb("anchor").notNull(),
+  color: text("color").notNull().default("gold"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const notes = pgTable("note", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  highlightId: uuid("highlight_id").references(() => highlights.id, {
+    onDelete: "cascade",
+  }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const bookmarks = pgTable("bookmark", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  position: jsonb("position").notNull(),
+  label: text("label"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });

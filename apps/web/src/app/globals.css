@@ -70,10 +70,71 @@
 }
 
 /*
-  Distraction-reduced reading mode (Phase 3): a token overlay, not a
-  separate palette — reserved here so the reader can opt in via
-  [data-reading-mode="distraction-reduced"] without inventing new colors.
+  Distraction-reduced reading mode: a token overlay, not a separate
+  palette — muted borders/chrome, same base colors, so the reading
+  surface itself doesn't shift.
 */
+[data-reading-mode="distraction-reduced"] {
+  --color-border: transparent;
+}
+
+/*
+  User highlight colors (plan §18 reader controls) — translucent so
+  the underlying warm background/text tokens still read through in
+  both themes, rather than fixed opaque swatches that would clash with
+  dark mode.
+*/
+.reader-highlight {
+  border-radius: 2px;
+  padding: 0.02em 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.reader-highlight-gold { background: color-mix(in srgb, var(--color-highlight) 42%, transparent); }
+.reader-highlight-green { background: color-mix(in srgb, var(--color-accent-green) 32%, transparent); }
+.reader-highlight-ink { background: color-mix(in srgb, var(--color-accent-ink) 28%, transparent); }
+.reader-highlight-burgundy { background: color-mix(in srgb, var(--color-accent-burgundy) 28%, transparent); }
+.reader-highlight-active {
+  outline: 2px solid var(--color-highlight);
+  outline-offset: 1px;
+}
+
+/* Original-document footnote markers — visually distinct from user highlights/notes (plan §9/§18). */
+.reader-footnote-marker {
+  color: var(--color-accent-umber);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0.12em;
+  border-bottom: 1px dotted var(--color-accent-umber);
+}
+
+/*
+  Minimal pdf.js text-layer CSS (not importing pdf.js's own stylesheet
+  bundle — this is the small subset actually needed for selectable,
+  invisible-but-positioned text over the rendered canvas).
+*/
+.pdf-page-container {
+  position: relative;
+}
+.textLayer {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  text-align: initial;
+  transform-origin: 0 0;
+}
+.textLayer span,
+.textLayer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.textLayer ::selection {
+  background: color-mix(in srgb, var(--color-highlight) 55%, transparent);
+}
 
 @theme inline {
   --color-background: var(--color-background);

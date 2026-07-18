@@ -2,11 +2,12 @@ import {
   db,
   documents,
   type ExtractTextJob,
+  footnotes,
   getQueue,
   processingJobs,
   QUEUE_EXTRACT_TEXT,
 } from "@ice/db";
-import { downloadDocumentFile, parseDocument } from "@ice/ingestion";
+import { detectFootnotes, downloadDocumentFile, parseDocument } from "@ice/ingestion";
 import { desc, eq, sql } from "drizzle-orm";
 
 async function handleExtractText(documentId: string) {
@@ -58,6 +59,21 @@ async function handleExtractText(documentId: string) {
         updatedAt: new Date(),
       })
       .where(eq(documents.id, documentId));
+
+    // Heuristic, text/markdown only — see packages/ingestion/parsers/footnotes.ts
+    if (doc.mimeType === "text/plain" || doc.mimeType === "text/markdown") {
+      const detected = detectFootnotes(parsed.text);
+      if (detected.length > 0) {
+        await db.insert(footnotes).values(
+          detected.map((f) => ({
+            documentId,
+            marker: f.marker,
+            content: f.content,
+          })),
+        );
+        console.log(`[worker] detected ${detected.length} footnote(s) for document ${documentId}`);
+      }
+    }
 
     if (job) {
       await db

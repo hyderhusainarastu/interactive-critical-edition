@@ -22,6 +22,13 @@
       "when": 1784348419973,
       "tag": "0002_colossal_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784352213504,
+      "tag": "0003_broad_blade",
+      "breakpoints": true
     }
   ]
 }

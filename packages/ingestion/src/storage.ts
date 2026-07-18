@@ -46,3 +46,22 @@ export async function deleteDocumentFile(path: string) {
   const { error } = await supabase.storage.from(bucket()).remove([path]);
   if (error) throw error;
 }
+
+/**
+ * Short-lived signed URL for direct client-side fetch (the PDF reader
+ * loads the file straight from Storage rather than proxying bytes
+ * through a Next.js route). Ownership is checked by the caller before
+ * this is ever issued — the URL itself grants access to anyone who has
+ * it for the TTL window, same tradeoff as any signed URL.
+ */
+export async function getSignedDocumentUrl(
+  path: string,
+  expiresInSeconds = 600,
+): Promise<string> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.storage
+    .from(bucket())
+    .createSignedUrl(path, expiresInSeconds);
+  if (error) throw error;
+  return data.signedUrl;
+}

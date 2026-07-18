@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
@@ -134,12 +135,19 @@ export function WorkStatusPanel({
   }
 
   return (
-    <div className="rounded-md border border-[var(--color-border)] px-4 py-3">
-      <p className="font-medium text-[var(--color-accent-green)]">Ready</p>
-      <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-        {data.authorName ? `${data.title} — ${data.authorName}` : data.title}.
-        The reader arrives in Phase 3.
-      </p>
+    <div className="flex items-center justify-between rounded-md border border-[var(--color-border)] px-4 py-3">
+      <div>
+        <p className="font-medium text-[var(--color-accent-green)]">Ready</p>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          {data.authorName ? `${data.title} — ${data.authorName}` : data.title}
+        </p>
+      </div>
+      <Link
+        href={`/works/${workId}/reader`}
+        className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
+      >
+        Open reader
+      </Link>
     </div>
   );
 }

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
@@ -17,12 +18,14 @@
     "drizzle-orm": "^0.44.0",
     "next": "16.2.10",
     "next-auth": "5.0.0-beta.25",
+    "pdfjs-dist": "^4.7.76",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^4.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
