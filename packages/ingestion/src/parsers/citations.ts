@@ -58,7 +58,7 @@ function looksLikeCitation(line: string): boolean {
  * are preferred (they resolve best); inline author–year mentions are
  * added to fill out the set. De-duplicated by normalized query.
  */
-export function extractCitations(text: string, max = 25): RawCitation[] {
+export function extractCitations(text: string, max = 300): RawCitation[] {
   const lines = text.split("\n");
   const out: RawCitation[] = [];
   const seen = new Set<string>();

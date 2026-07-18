@@ -200,7 +200,12 @@ export async function analyzeWork(documentId: string): Promise<void> {
         ),
       );
 
-    const candidates = extractCitations(doc.extractedText, 25);
+    // Cap on citations classified per document (bounds AI spend and worker
+    // time). 300 comfortably covers a full book's reference list; at the
+    // cheap-tier model that's ~4-5 cents max per analysis. Each candidate
+    // is one sequential bibliographic lookup + one classification call, so
+    // a document near the cap takes correspondingly longer to analyze.
+    const candidates = extractCitations(doc.extractedText, 300);
     const isText = doc.mimeType === "text/plain" || doc.mimeType === "text/markdown";
     const paragraphs = isText
       ? doc.extractedText.split(/\n{2,}/).filter((p) => p.trim().length > 0)
