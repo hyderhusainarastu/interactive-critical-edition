@@ -95,7 +95,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
               WHERE w.user_id = ${userId} AND ${NORM("w.title")} = ${NORM("br.title")}
             ) AS in_library
           FROM bibliographic_record br
-          WHERE br.id = ANY(${refIds})
+          WHERE br.id IN ${refIds}
         `)) as unknown as RefRow[])
       : [];
 

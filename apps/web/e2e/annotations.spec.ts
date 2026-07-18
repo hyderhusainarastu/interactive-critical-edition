@@ -62,7 +62,7 @@ test.describe("Scholarly analysis (Phase 4)", () => {
     // Generous: the single local worker also runs analysis jobs (with live
     // bibliographic lookups) from other specs, so the extract-text job can
     // queue behind them. Extraction itself is fast.
-    await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 45000 });
     await page.locator('input[name="title"]').fill("On the Question of Being");
     await page.getByRole("button", { name: "Confirm and add to library" }).click();
     await expect(page.getByRole("link", { name: "Open reader" })).toBeVisible({ timeout: 5000 });

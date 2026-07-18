@@ -109,7 +109,7 @@ export async function computeRoadmap(
           AND ge.target_type = 'bibliographic_record' AND ge.target_id = br.id
       ) AS centrality
     FROM bibliographic_record br
-    WHERE br.id = ANY(${bibIds})
+    WHERE br.id IN ${bibIds}
   `)) as unknown as DetailRow[];
   const detailById = new Map(details.map((d) => [d.id, d]));
 

@@ -13,18 +13,20 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
-  // One retry: since Phase 4 the analysis pipeline makes live bibliographic
-  // API calls, and the whole suite shares a single local worker — under
-  // that load a flow can occasionally miss a wait. Each spec is solid in
-  // isolation; a retry absorbs external-latency variance without masking a
-  // real regression (a genuine break fails both attempts).
+  // Serial: every spec drives uploads through ONE shared local worker, and
+  // since Phase 4 each upload also enqueues analysis (live bibliographic
+  // API calls). Running spec files in parallel piled concurrent jobs on
+  // that single worker and starved text extraction; one worker at a time
+  // keeps the queue depth sane and the flows reliable.
+  workers: 1,
+  // One retry to absorb residual external-API latency variance without
+  // masking a real regression (a genuine break fails both attempts).
   retries: 1,
   reporter: "list",
-  // Raised from Playwright's 30s default: since Phase 4, confirming a work
-  // enqueues an analysis job (with live bibliographic lookups) on the same
-  // single local worker, so end-to-end flows that wait on text extraction
-  // and then analysis legitimately need more headroom than the default.
-  timeout: 90_000,
+  // Raised from Playwright's 30s default: end-to-end flows that wait on
+  // text extraction and then live-API analysis legitimately need more
+  // headroom than the default, even serialized.
+  timeout: 120_000,
   use: {
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
