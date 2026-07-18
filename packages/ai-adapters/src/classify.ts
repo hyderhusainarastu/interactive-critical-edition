@@ -1,0 +1,124 @@
+import { heuristicClassify } from "./providers/heuristic";
+import {
+  RELATIONSHIP_CATEGORIES,
+  type ClassificationInput,
+  type ClassificationResult,
+  type LLMProvider,
+  type RelationshipCategory,
+} from "./types";
+
+/**
+ * Prompt version — bumped whenever the prompt below changes, and stored
+ * on every annotation as provenance (plan §12). The eval harness
+ * (Phase 7) gates prompt changes, so a version bump is a deliberate,
+ * traceable event, not an incidental edit.
+ */
+export const CLASSIFY_PROMPT_VERSION = "relationship-classify-v1";
+
+const SYSTEM_PROMPT = `You are a scholarly research assistant classifying how a candidate work relates to a primary text a reader is studying. You must not invent bibliographic facts: reason only from the passage and titles given. Classify the relationship into exactly one of these categories:
+- explicit_reference: the primary text directly cites or quotes the candidate.
+- secondary_scholarly_recommendation: scholarship ABOUT the primary text worth reading.
+- historical_context: situates the primary text in its intellectual/historical moment.
+- prerequisite: should be read/understood before the primary text.
+- conceptual_influence: shaped the primary text's ideas without necessarily being cited.
+- disagreement_polemical_target: the primary text argues against it.
+- interpretive_aid: helps interpret a difficult part of the primary text.
+- parallel_comparison: a comparable work, neither prerequisite nor influence.
+- optional_extension: worthwhile follow-up reading, not essential.
+- ai_inferred: a plausible but uncertain connection you inferred, not stated in the text.
+Return JSON: {"category": <one category>, "explanation": <one concise sentence>, "confidence": <0..1 number>}. Set confidence honestly — low when the passage is thin evidence.`;
+
+function buildPrompt(input: ClassificationInput): string {
+  return [
+    `Primary text: "${input.primaryTitle}"${input.primaryAuthor ? ` by ${input.primaryAuthor}` : ""}.`,
+    `Candidate work: "${input.candidateTitle}"${input.candidateAuthor ? ` by ${input.candidateAuthor}` : ""}.`,
+    input.resolved
+      ? "The candidate was matched to a real bibliographic record."
+      : "The candidate is an unverified citation with no matched record.",
+    "",
+    "Passage from the primary text that mentions or relates to the candidate:",
+    `"""${input.sourceText.slice(0, 1200)}"""`,
+    "",
+    "Classify the relationship as JSON.",
+  ].join("\n");
+}
+
+function coerceCategory(value: unknown): RelationshipCategory | null {
+  if (typeof value !== "string") return null;
+  return (RELATIONSHIP_CATEGORIES as readonly string[]).includes(value)
+    ? (value as RelationshipCategory)
+    : null;
+}
+
+function clampConfidence(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 0.4;
+  return Math.min(1, Math.max(0, n));
+}
+
+/**
+ * Classify one candidate with a real LLM provider, falling back to the
+ * deterministic heuristic if the model's reply can't be parsed into a
+ * valid category (rather than fabricating a category or throwing away the
+ * candidate). The returned provenance always reflects what actually
+ * produced the verdict.
+ */
+export async function classifyWithProvider(
+  provider: LLMProvider,
+  input: ClassificationInput,
+): Promise<ClassificationResult> {
+  const result = await provider.complete({
+    task: "relationship_classification",
+    system: SYSTEM_PROMPT,
+    prompt: buildPrompt(input),
+    maxTokens: 300,
+  });
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(result.text));
+  } catch {
+    // Model returned unparseable text — degrade to the heuristic rather
+    // than dropping the candidate, but keep the real token usage so cost
+    // logging stays accurate.
+    const fallback = heuristicClassify(input);
+    return {
+      ...fallback,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+    };
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  const category = coerceCategory(obj.category);
+  if (!category) {
+    const fallback = heuristicClassify(input);
+    return { ...fallback, promptTokens: result.promptTokens, completionTokens: result.completionTokens };
+  }
+
+  const explanation =
+    typeof obj.explanation === "string" && obj.explanation.trim()
+      ? obj.explanation.trim()
+      : `Classified as ${category.replace(/_/g, " ")}.`;
+
+  return {
+    category,
+    explanation,
+    confidence: clampConfidence(obj.confidence),
+    provider: result.provider,
+    model: result.model,
+    promptTokens: result.promptTokens,
+    completionTokens: result.completionTokens,
+    heuristic: false,
+  };
+}
+
+/** Pull the first {...} block out of a possibly-chatty reply. */
+function extractJson(text: string): string {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{")) return trimmed;
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) return trimmed.slice(start, end + 1);
+  return trimmed;
+}

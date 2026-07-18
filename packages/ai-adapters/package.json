@@ -1,5 +1,5 @@
 {
-  "name": "@ice/ingestion",
+  "name": "@ice/ai-adapters",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -8,10 +8,6 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
-    "unpdf": "^0.12.1"
   },
   "devDependencies": {
     "@types/node": "^24",

@@ -3,6 +3,7 @@ import { parseText } from "./parsers/text";
 
 export type { ParsedDocument } from "./parsers/pdf";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
+export { extractCitations, type RawCitation, type CitationKind } from "./parsers/citations";
 export * from "./storage";
 
 export async function parseDocument(

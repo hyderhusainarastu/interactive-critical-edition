@@ -1,0 +1,59 @@
+import type { TaskType } from "./types";
+
+/**
+ * Cost-first routing (plan §3/§11): every task defaults to the cheapest
+ * viable model tier. A stronger/pricier model is only ever promoted for
+ * a task on eval-harness evidence (Phase 7), as a deliberate, documented
+ * config change here — not silently at call time. Model IDs are
+ * env-overridable so a catalog change doesn't require a code edit
+ * (CLAUDE.md notes exact IDs get pinned at implementation time).
+ */
+
+export type ProviderName = "openai" | "anthropic";
+
+export interface RouteConfig {
+  provider: ProviderName;
+  model: string;
+}
+
+// Cheap-tier defaults per provider. Overridable via env.
+const OPENAI_CHEAP = process.env.OPENAI_MODEL_CHEAP ?? "gpt-4o-mini";
+const ANTHROPIC_CHEAP = process.env.ANTHROPIC_MODEL_CHEAP ?? "claude-haiku-4-5-20251001";
+
+/**
+ * Default per-task routing. Preference order within a task is expressed
+ * by the factory (getClassifier): it uses `preferred` when that
+ * provider's key is present, else the other provider, else the
+ * heuristic fallback. This keeps "which provider is available" out of
+ * business logic.
+ */
+export const TASK_ROUTES: Record<TaskType, { preferred: RouteConfig; alternate: RouteConfig }> = {
+  relationship_classification: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  metadata_extraction: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  citation_parse: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+};
+
+/**
+ * Rough per-1M-token USD prices for cost logging (plan §11/§22). These
+ * are approximations for the admin cost dashboard, not billing-grade —
+ * the point is a live signal of spend, not an invoice. Falls back to a
+ * conservative default for an unrecognized model.
+ */
+const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
+};
+
+export function estimateCostUsd(model: string, promptTokens: number, completionTokens: number): number {
+  const price = PRICE_PER_MTOK[model] ?? { input: 1.0, output: 3.0 };
+  return (promptTokens / 1_000_000) * price.input + (completionTokens / 1_000_000) * price.output;
+}
