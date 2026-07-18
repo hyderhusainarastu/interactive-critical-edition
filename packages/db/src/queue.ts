@@ -8,8 +8,17 @@ import PgBoss from "pg-boss";
  */
 
 export const QUEUE_EXTRACT_TEXT = "extract-text";
+// Phase 4: scholarly analysis (citation extraction → bibliographic
+// resolution → relationship classification). A separate queue from
+// extraction so a slow/failed analysis never blocks the reader from
+// opening a document whose text already extracted fine.
+export const QUEUE_ANALYZE_WORK = "analyze-work";
 
 export interface ExtractTextJob {
+  documentId: string;
+}
+
+export interface AnalyzeWorkJob {
   documentId: string;
 }
 
@@ -29,6 +38,7 @@ export function getQueue(): Promise<PgBoss> {
     bossPromise = boss
       .start()
       .then(() => boss.createQueue(QUEUE_EXTRACT_TEXT))
+      .then(() => boss.createQueue(QUEUE_ANALYZE_WORK))
       .then(() => boss);
   }
   return bossPromise;
@@ -37,4 +47,9 @@ export function getQueue(): Promise<PgBoss> {
 export async function enqueueExtractText(documentId: string) {
   const boss = await getQueue();
   return boss.send(QUEUE_EXTRACT_TEXT, { documentId } satisfies ExtractTextJob);
+}
+
+export async function enqueueAnalyzeWork(documentId: string) {
+  const boss = await getQueue();
+  return boss.send(QUEUE_ANALYZE_WORK, { documentId } satisfies AnalyzeWorkJob);
 }

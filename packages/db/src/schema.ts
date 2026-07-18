@@ -5,6 +5,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uuid,
@@ -125,6 +126,15 @@ export const jobStatusEnum = pgEnum("job_status", [
   "failed",
 ]);
 
+// Phase 4: scholarly-analysis lifecycle, tracked separately from text
+// extraction so the reader stays usable while analysis runs (or fails).
+export const analysisStatusEnum = pgEnum("analysis_status", [
+  "not_started",
+  "analyzing",
+  "complete",
+  "failed",
+]);
+
 export const works = pgTable("work", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -185,6 +195,9 @@ export const documents = pgTable("document", {
    * something that can only ever have one reader.
    */
   lastPosition: jsonb("last_position"),
+  // Phase 4 scholarly-analysis state (independent of processingStatus).
+  analysisStatus: analysisStatusEnum("analysis_status").notNull().default("not_started"),
+  analysisError: text("analysis_error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -267,5 +280,194 @@ export const bookmarks = pgTable("bookmark", {
     .references(() => documents.id, { onDelete: "cascade" }),
   position: jsonb("position").notNull(),
   label: text("label"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * Phase 4 scope: scholarly analysis (plan §9/§11/§12). Still a
+ * deliberately focused subset of plan §9 — no separate `authors`/
+ * `concepts` catalog tables yet; a resolved external work lives in
+ * `bibliographicRecords`, and an annotation's target is either such a
+ * record (`targetBibId`) or a free-text label (`targetLabel`, for an
+ * unresolved citation or a concept/tradition with no record). The
+ * generic `graphEdges` table (plan §9) is populated here so Phase 5's
+ * roadmap traversal has data; it isn't read by anything in Phase 4.
+ */
+
+// The 10 required relationship categories (plan §5/§12), verbatim.
+export const relationshipCategoryEnum = pgEnum("relationship_category", [
+  "explicit_reference",
+  "secondary_scholarly_recommendation",
+  "historical_context",
+  "prerequisite",
+  "conceptual_influence",
+  "disagreement_polemical_target",
+  "interpretive_aid",
+  "parallel_comparison",
+  "optional_extension",
+  "ai_inferred",
+]);
+
+// plan §12: users can approve/reject/edit/hide any AI annotation; this
+// is the lifecycle field that persists those decisions.
+export const verificationStatusEnum = pgEnum("verification_status", [
+  "unreviewed",
+  "user_verified",
+  "source_verified",
+  "disputed",
+  "rejected",
+]);
+
+// Where an annotation/edge came from — never silently blurred (plan §12).
+export const provenanceEnum = pgEnum("provenance_source", ["system", "user", "editor"]);
+
+// plan §11 §15: access state of a referenced work, so the UI can show
+// "not accessible; consider legitimate acquisition" rather than pretend
+// it has the text.
+export const accessStatusEnum = pgEnum("access_status", [
+  "open",
+  "subscription",
+  "metadata_only",
+  "user_uploaded",
+  "unavailable",
+]);
+
+// plan §9 graph edge_type vocabulary — a superset of the 10 annotation
+// categories, since the graph also carries structural edges (translates,
+// is_edition_of) the annotation layer doesn't surface.
+export const edgeTypeEnum = pgEnum("edge_type", [
+  "cites",
+  "quotes",
+  "influences",
+  "criticizes",
+  "responds_to",
+  "presupposes",
+  "provides_context_for",
+  "interprets",
+  "disagrees_with",
+  "translates",
+  "is_edition_of",
+  "is_prerequisite_for",
+  "is_comparable_to",
+  "is_recommended_by",
+]);
+
+export const bibliographicRecords = pgTable("bibliographic_record", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // "unresolved" when no external source matched — the citation is kept
+  // as-is rather than dropped or guessed (plan §10 step 7).
+  source: text("source").notNull(),
+  externalId: text("external_id"),
+  title: text("title").notNull(),
+  authors: text("authors"),
+  year: integer("year"),
+  doi: text("doi"),
+  url: text("url"),
+  accessStatus: accessStatusEnum("access_status").notNull().default("metadata_only"),
+  raw: jsonb("raw"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const citations = pgTable("citation", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  rawText: text("raw_text").notNull(),
+  resolvedBibId: uuid("resolved_bib_id").references(() => bibliographicRecords.id, {
+    onDelete: "set null",
+  }),
+  // "crossref" | "openalex" | "openlibrary" | "unresolved"
+  resolutionSource: text("resolution_source").notNull().default("unresolved"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const annotations = pgTable("annotation", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  relationshipCategory: relationshipCategoryEnum("relationship_category").notNull(),
+  // Exactly one target is meaningful: a resolved record OR a free-text
+  // label (unresolved citation / concept / tradition). Not enforced by a
+  // CHECK here since a label is always set as a human-readable fallback.
+  targetBibId: uuid("target_bib_id").references(() => bibliographicRecords.id, {
+    onDelete: "set null",
+  }),
+  targetLabel: text("target_label").notNull(),
+  /**
+   * Same text-fingerprint shape as `highlights.anchor` (quote + prefix +
+   * suffix, per plan §25 R3) so the reader can re-locate the triggering
+   * passage across re-render/reflow. Nullable for a work-level annotation
+   * with no single anchoring passage.
+   */
+  anchor: jsonb("anchor"),
+  // The verbatim passage that triggered this — never paraphrased away
+  // (plan §12 "preserve the extracted source text").
+  extractedSourceText: text("extracted_source_text"),
+  explanation: text("explanation").notNull(),
+  // 0..1, always shown in the UI, never hidden (plan §12).
+  confidence: real("confidence").notNull(),
+  // Provenance (plan §12): for AI annotations, which model + prompt
+  // version produced it; null for user-created ones.
+  modelUsed: text("model_used"),
+  promptVersion: text("prompt_version"),
+  createdBy: provenanceEnum("created_by").notNull().default("system"),
+  verificationStatus: verificationStatusEnum("verification_status")
+    .notNull()
+    .default("unreviewed"),
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Generic typed edge table (plan §9) — a lightweight polymorphic graph
+ * over the relational core, not a separate graph DB. `sourceType`/
+ * `targetType` are discriminators ("work" | "bibliographic_record" |
+ * "concept"); traversal is a recursive CTE in Phase 5. Per-user so each
+ * reader's graph is their own (plan §9 "unique to each user").
+ */
+export const graphEdges = pgTable("graph_edge", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(),
+  sourceId: uuid("source_id").notNull(),
+  targetType: text("target_type").notNull(),
+  targetId: uuid("target_id").notNull(),
+  edgeType: edgeTypeEnum("edge_type").notNull(),
+  weight: real("weight").notNull().default(1),
+  confidence: real("confidence").notNull().default(0.5),
+  evidence: jsonb("evidence"),
+  verificationStatus: verificationStatusEnum("verification_status")
+    .notNull()
+    .default("unreviewed"),
+  createdBy: provenanceEnum("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * plan §11/§22: every AI call logged with token counts and an estimated
+ * cost, feeding the admin cost dashboard (Phase 7). Written by the worker
+ * on each provider call — including the heuristic fallback (recorded with
+ * zero cost and model "heuristic-fallback"), so the log is complete and
+ * honest about which annotations were real-AI vs. deterministic-stub.
+ */
+export const aiUsageLogs = pgTable("ai_usage_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id").references(() => documents.id, {
+    onDelete: "set null",
+  }),
+  task: text("task").notNull(),
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  promptTokens: integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
