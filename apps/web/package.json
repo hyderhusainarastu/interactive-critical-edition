@@ -12,6 +12,7 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
     "@ice/db": "workspace:*",
+    "@ice/ingestion": "workspace:*",
     "bcryptjs": "^3.0.2",
     "drizzle-orm": "^0.44.0",
     "next": "16.2.10",

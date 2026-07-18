@@ -1,7 +1,17 @@
 packages:
   - "apps/*"
   - "packages/*"
+overrides:
+  # next-auth@5.0.0-beta.25 pins @auth/core@0.37.2 but @auth/drizzle-adapter
+  # pins @auth/core@0.41.2 — without forcing one version, pnpm installs
+  # both, and TypeScript treats them as unrelated modules, so a Session/JWT
+  # type augmentation aimed at one copy silently doesn't apply to the other
+  # (session.user.id stays `string | undefined` with no visible type error
+  # pointing at the real cause). Pinned to next-auth's version since that's
+  # the package whose runtime behavior was tested against it.
+  "@auth/core": 0.37.2
 allowBuilds:
+  canvas: false
   esbuild: true
   sharp: true
   unrs-resolver: true

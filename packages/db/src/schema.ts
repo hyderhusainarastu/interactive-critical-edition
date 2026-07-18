@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  pgEnum,
   pgTable,
   primaryKey,
   text,
@@ -95,3 +96,100 @@ export const passwordResetTokens = pgTable(
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })],
 );
+
+/**
+ * Phase 2 scope: upload and library. `works`/`editions` here are a
+ * deliberately simplified subset of the full plan §9 schema (no shared
+ * canonical-work catalog, no separate `authors` table with graph edges —
+ * that arrives with bibliographic-API integration in Phase 4). Every
+ * upload in Phase 2 is a private, user-owned work; sharing/canonical
+ * dedup is out of scope until there's a real bibliographic source to
+ * dedup against.
+ */
+
+export const workTypeEnum = pgEnum("work_type", ["primary", "secondary"]);
+
+export const processingStatusEnum = pgEnum("processing_status", [
+  "uploaded",
+  "processing",
+  "needs_review",
+  "ready",
+  "failed",
+]);
+
+export const jobStatusEnum = pgEnum("job_status", [
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+]);
+
+export const works = pgTable("work", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  authorName: text("author_name"),
+  workType: workTypeEnum("work_type").notNull().default("primary"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const editions = pgTable("edition", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workId: uuid("work_id")
+    .notNull()
+    .references(() => works.id, { onDelete: "cascade" }),
+  editionLabel: text("edition_label"),
+  translator: text("translator"),
+  publisher: text("publisher"),
+  year: integer("year"),
+  isbn: text("isbn"),
+  doi: text("doi"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const documents = pgTable("document", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  workId: uuid("work_id")
+    .notNull()
+    .references(() => works.id, { onDelete: "cascade" }),
+  editionId: uuid("edition_id").references(() => editions.id, {
+    onDelete: "set null",
+  }),
+  storagePath: text("storage_path").notNull(),
+  originalFilename: text("original_filename").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  processingStatus: processingStatusEnum("processing_status")
+    .notNull()
+    .default("uploaded"),
+  // Raw extracted text, Phase 2 scope. Structured passages/chapters
+  // (plan §9) arrive in Phase 3 when the reader needs positional data,
+  // not just full text.
+  extractedText: text("extracted_text"),
+  extractedTitle: text("extracted_title"),
+  extractedAuthor: text("extracted_author"),
+  processingError: text("processing_error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const processingJobs = pgTable("processing_job", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  jobType: text("job_type").notNull(),
+  status: jobStatusEnum("status").notNull().default("pending"),
+  error: text("error"),
+  attempts: integer("attempts").notNull().default(0),
+  pgBossJobId: text("pg_boss_job_id"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

@@ -4,7 +4,7 @@ A web application that helps readers understand difficult scholarly works — ph
 
 Upload a primary text (e.g. Heidegger's *Being and Time*) and the system helps answer the questions a reader is otherwise left to guess at: what background material is actually necessary, where to start, in what order, how much of each work to read, and which references are explicit versus scholarly inference. A personal knowledge profile means the system stops recommending what you already know.
 
-**Status:** Phase 1a (local foundation) complete — auth (signup, email verification, login, password reset, session revocation) works end to end against local Postgres. Not yet deployed anywhere. See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
+**Status:** Phase 2a (Upload and Library) complete, live at https://interactive-critical-edition.vercel.app — auth and upload→extract→confirm→library both verified working end to end. Background processing runs locally only for now (Phase 2b: Render worker deployment, not yet done). See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
 
 ## Project memory
 
@@ -27,10 +27,11 @@ pnpm install
 docker compose up -d postgres        # local Postgres + pgvector
 pnpm --filter @ice/db db:migrate     # apply migrations
 
-# create apps/web/.env.local and packages/db/.env — see .env.example at
-# repo root for the variable names; for local dev, DATABASE_URL is
-# postgres://ice:ice_dev_only@localhost:5432/interactive_critical_edition
+# create apps/web/.env.local, packages/db/.env, and apps/worker/.env —
+# see .env.example at repo root for the variable names; for local dev,
+# DATABASE_URL is postgres://ice:ice_dev_only@localhost:5432/interactive_critical_edition
 pnpm dev                             # apps/web on http://localhost:3000
+cd apps/worker && pnpm dev           # separate terminal — background job processing
 ```
 
 Other commands:

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 const credentialsSchema = z.object({
@@ -99,3 +100,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+/**
+ * `auth()` returns `Session | null`, and `Session["user"]["id"]` — despite
+ * the module augmentation in auth.d.ts — was still inferred as possibly
+ * `undefined` at several call sites for reasons that weren't worth fully
+ * chasing down (an isolated same-expression probe typechecked fine; real
+ * page components didn't). Centralizing one non-null assertion here,
+ * backed by a real runtime check, is more robust than relying on the
+ * augmentation at every call site.
+ */
+export async function requireSession() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  return session as typeof session & { user: { id: string } };
+}
+
+/** Same narrowing as requireSession(), for API routes — returns null instead of redirecting, so the caller can respond with a 401. */
+export async function getApiUserId(): Promise<string | null> {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
