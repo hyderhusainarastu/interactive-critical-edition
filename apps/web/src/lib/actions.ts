@@ -2,8 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { signIn, signOut } from "@/lib/auth";
+import { getApiUserId, signIn, signOut } from "@/lib/auth";
 import { registerUser, requestPasswordReset, resetPassword } from "@/lib/auth-service";
+import { updateUserPreferences } from "@/lib/preferences";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -45,6 +46,31 @@ export async function registerAction(formData: FormData) {
 
   await registerUser(parsed.data);
   redirect("/verify-email?sent=1");
+}
+
+/**
+ * Onboarding completion (Phase 6): records the chosen expertise (which the
+ * roadmap uses as its default level) and stamps `onboardedAt` so the
+ * dashboard stops routing the user through /welcome. "Skip" submits with no
+ * expertise but still stamps onboardedAt. Then sends them to their first
+ * upload.
+ */
+const expertiseSchema = z.enum(["beginner", "intermediate", "advanced"]).optional();
+
+export async function completeOnboardingAction(formData: FormData) {
+  const userId = await getApiUserId();
+  if (!userId) redirect("/login");
+
+  const raw = formData.get("expertise");
+  const parsed = expertiseSchema.safeParse(raw === "" || raw == null ? undefined : raw);
+  const expertise = parsed.success ? parsed.data : undefined;
+
+  await updateUserPreferences(userId, {
+    ...(expertise ? { expertise } : {}),
+    onboardedAt: new Date().toISOString(),
+  });
+
+  redirect(formData.get("skip") ? "/dashboard" : "/upload");
 }
 
 export async function requestResetAction(formData: FormData) {

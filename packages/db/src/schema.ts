@@ -39,6 +39,13 @@ export const users = pgTable("user", {
    * everywhere" / revocation-on-deletion without needing DB sessions.
    */
   sessionVersion: integer("session_version").notNull().default(0),
+  /**
+   * Phase 6: user preferences (plan §9). Currently { expertise?:
+   * "beginner"|"intermediate"|"advanced", onboardedAt?: string } — the
+   * onboarding-completion marker and the default expertise the roadmap
+   * uses. jsonb so more preferences can be added without a migration.
+   */
+  preferences: jsonb("preferences"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -1,12 +1,19 @@
 import Link from "next/link";
 import { db, documents, works } from "@ice/db";
 import { desc, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
+import { getUserPreferences } from "@/lib/preferences";
 import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
 
 export default async function DashboardPage() {
   const session = await requireSession();
   const userId = session.user.id;
+
+  // First-run onboarding: route new users through /welcome until they've
+  // completed (or skipped) it. One extra query, only until onboarded.
+  const prefs = await getUserPreferences(userId);
+  if (!prefs.onboardedAt) redirect("/welcome");
 
   const library = await db
     .select({

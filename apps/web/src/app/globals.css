@@ -187,6 +187,9 @@
   --color-highlight: var(--color-highlight);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* Warm, contemporary-scholarly serif for display headings (plan §19):
+     a real book face, not faux-antique. System stack — no webfont fetch. */
+  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
 }
 
 @media (prefers-reduced-motion: reduce) {

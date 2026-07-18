@@ -33,11 +33,19 @@ const TIER_COLOR: Record<PriorityTier, string> = {
 
 const READING_STATUSES: ReadingStatus[] = ["planned", "reading", "completed", "abandoned"];
 
-export function RoadmapView({ workId, title }: { workId: string; title: string }) {
+export function RoadmapView({
+  workId,
+  title,
+  initialExpertise = "advanced",
+}: {
+  workId: string;
+  title: string;
+  initialExpertise?: Expertise;
+}) {
   const [data, setData] = useState<RoadmapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RoadmapMode>("comprehensive");
-  const [expertise, setExpertise] = useState<Expertise>("advanced");
+  const [expertise, setExpertise] = useState<Expertise>(initialExpertise);
   const [maxMinutes, setMaxMinutes] = useState<string>("");
 
   // Used by `mutate` to refetch after a change. Not called from the effect
