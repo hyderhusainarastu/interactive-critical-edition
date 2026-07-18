@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ice/ai-adapters": "workspace:*",
+    "@ice/bibliographic": "workspace:*",
     "@ice/db": "workspace:*",
     "@ice/ingestion": "workspace:*",
     "drizzle-orm": "^0.44.0"

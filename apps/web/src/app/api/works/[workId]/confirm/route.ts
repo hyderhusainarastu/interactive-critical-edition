@@ -1,4 +1,4 @@
-import { db, documents, works } from "@ice/db";
+import { db, documents, enqueueAnalyzeWork, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -43,12 +43,25 @@ export async function POST(
     })
     .where(eq(works.id, workId));
 
-  await db
+  const readied = await db
     .update(documents)
-    .set({ processingStatus: "ready", updatedAt: new Date() })
+    .set({ processingStatus: "ready", analysisStatus: "not_started", updatedAt: new Date() })
     .where(
       and(eq(documents.workId, workId), eq(documents.processingStatus, "needs_review")),
-    );
+    )
+    .returning({ id: documents.id });
+
+  // Kick off scholarly analysis now that the work is ready and its
+  // metadata is user-confirmed (plan §23 Phase 4). Best-effort: a queue
+  // hiccup must not fail the confirm itself — the user can re-trigger
+  // analysis from the work page.
+  if (readied[0]) {
+    try {
+      await enqueueAnalyzeWork(readied[0].id);
+    } catch (err) {
+      console.error("[confirm] failed to enqueue analysis", err);
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

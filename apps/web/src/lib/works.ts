@@ -14,9 +14,12 @@ export async function getOwnedDocument(workId: string, userId: string) {
       documentId: documents.id,
       workId: works.id,
       title: works.title,
+      authorName: works.authorName,
       mimeType: documents.mimeType,
       storagePath: documents.storagePath,
       processingStatus: documents.processingStatus,
+      analysisStatus: documents.analysisStatus,
+      analysisError: documents.analysisError,
       extractedText: documents.extractedText,
       lastPosition: documents.lastPosition,
     })

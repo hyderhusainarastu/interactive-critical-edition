@@ -83,6 +83,12 @@ importers:
 
   apps/worker:
     dependencies:
+      '@ice/ai-adapters':
+        specifier: workspace:*
+        version: link:../../packages/ai-adapters
+      '@ice/bibliographic':
+        specifier: workspace:*
+        version: link:../../packages/bibliographic
       '@ice/db':
         specifier: workspace:*
         version: link:../../packages/db

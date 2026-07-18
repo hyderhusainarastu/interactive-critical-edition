@@ -2,6 +2,7 @@ import { bookmarks, db, footnotes, highlights, notes } from "@ice/db";
 import { getSignedDocumentUrl } from "@ice/ingestion";
 import { desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { getAnnotationsForDocument } from "@/lib/annotations";
 import { getApiUserId } from "@/lib/auth";
 import { getOwnedDocument } from "@/lib/works";
 
@@ -26,7 +27,7 @@ export async function GET(
     );
   }
 
-  const [docFootnotes, docHighlights, docNotes, docBookmarks] = await Promise.all([
+  const [docFootnotes, docHighlights, docNotes, docBookmarks, docAnnotations] = await Promise.all([
     db.select().from(footnotes).where(eq(footnotes.documentId, doc.documentId)),
     db
       .select()
@@ -35,6 +36,7 @@ export async function GET(
       .orderBy(desc(highlights.createdAt)),
     db.select().from(notes).where(eq(notes.documentId, doc.documentId)),
     db.select().from(bookmarks).where(eq(bookmarks.documentId, doc.documentId)),
+    getAnnotationsForDocument(doc.documentId),
   ]);
 
   const isPdf = doc.mimeType === "application/pdf";
@@ -46,9 +48,12 @@ export async function GET(
     extractedText: isPdf ? null : doc.extractedText,
     fileUrl: isPdf ? await getSignedDocumentUrl(doc.storagePath) : null,
     lastPosition: doc.lastPosition,
+    analysisStatus: doc.analysisStatus,
+    analysisError: doc.analysisError,
     footnotes: docFootnotes,
     highlights: docHighlights,
     notes: docNotes,
     bookmarks: docBookmarks,
+    annotations: docAnnotations,
   });
 }

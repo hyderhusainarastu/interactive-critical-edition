@@ -1,14 +1,17 @@
 import {
+  type AnalyzeWorkJob,
   db,
   documents,
   type ExtractTextJob,
   footnotes,
   getQueue,
   processingJobs,
+  QUEUE_ANALYZE_WORK,
   QUEUE_EXTRACT_TEXT,
 } from "@ice/db";
 import { detectFootnotes, downloadDocumentFile, parseDocument } from "@ice/ingestion";
 import { desc, eq, sql } from "drizzle-orm";
+import { analyzeWork } from "./analyze";
 
 async function handleExtractText(documentId: string) {
   const [job] = await db
@@ -119,7 +122,16 @@ async function main() {
     }
   });
 
-  console.log(`[worker] listening for "${QUEUE_EXTRACT_TEXT}" jobs`);
+  await boss.work<AnalyzeWorkJob>(QUEUE_ANALYZE_WORK, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) {
+      // analyzeWork records its own failure state on the document; it
+      // rethrows so pg-boss also marks the job failed for retry/visibility.
+      await analyzeWork(job.data.documentId);
+    }
+  });
+
+  console.log(`[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs`);
 }
 
 main().catch((err) => {

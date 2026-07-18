@@ -1,0 +1,298 @@
+import {
+  aiUsageLogs,
+  annotations,
+  bibliographicRecords,
+  citations,
+  db,
+  documents,
+  graphEdges,
+  works,
+} from "@ice/db";
+import {
+  classifyRelationship,
+  CLASSIFY_PROMPT_VERSION,
+  estimateCostUsd,
+  type RelationshipCategory,
+} from "@ice/ai-adapters";
+import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
+import { extractCitations, type RawCitation } from "@ice/ingestion";
+import { and, eq } from "drizzle-orm";
+
+/**
+ * Scholarly-analysis pipeline (plan §10–§12), the two-stage design:
+ *   Stage 1 (cheap, deterministic, no AI): extract candidate citations
+ *     from the text and resolve each against real bibliographic sources.
+ *   Stage 2 (expensive): classify each candidate's relationship to the
+ *     primary work into one of the 10 categories, with a real model when
+ *     a key is configured, else the deterministic heuristic fallback.
+ *
+ * Every annotation is written with full provenance (model, prompt
+ * version, extracted source text, confidence) and starts `unreviewed` so
+ * the user can approve/reject/edit/hide it (plan §12). Re-running is
+ * idempotent: prior *system* annotations/citations/edges for the
+ * document are cleared first, but user-created annotations are preserved.
+ */
+
+// relationship_category → graph edge_type (plan §9 vocabulary). Only
+// resolved candidates (with a real target record) get a graph edge, so
+// Phase 5's roadmap traversal never points at a phantom node.
+const CATEGORY_TO_EDGE: Record<RelationshipCategory, Parameters<typeof edgeValue>[0]> = {
+  explicit_reference: "cites",
+  secondary_scholarly_recommendation: "is_recommended_by",
+  historical_context: "provides_context_for",
+  prerequisite: "is_prerequisite_for",
+  conceptual_influence: "influences",
+  disagreement_polemical_target: "disagrees_with",
+  interpretive_aid: "interprets",
+  parallel_comparison: "is_comparable_to",
+  optional_extension: "is_recommended_by",
+  ai_inferred: "provides_context_for",
+};
+
+function edgeValue(
+  t:
+    | "cites"
+    | "quotes"
+    | "influences"
+    | "criticizes"
+    | "responds_to"
+    | "presupposes"
+    | "provides_context_for"
+    | "interprets"
+    | "disagrees_with"
+    | "translates"
+    | "is_edition_of"
+    | "is_prerequisite_for"
+    | "is_comparable_to"
+    | "is_recommended_by",
+) {
+  return t;
+}
+
+interface TextAnchor {
+  kind: "text";
+  paragraphIndex: number;
+  quote: string;
+  prefix: string;
+  suffix: string;
+}
+
+const CONTEXT = 40;
+
+/**
+ * Locate a needle (typically the candidate's author surname) in the
+ * body and build a highlight-shaped anchor so the reader can render an
+ * inline marker. Paragraph splitting mirrors TextReader exactly
+ * (split on blank lines) so paragraphIndex aligns. Text/Markdown only —
+ * PDF page anchoring needs positional data the merged-text extraction
+ * doesn't carry, so PDF annotations are created work-level (anchor null)
+ * and shown in the sidebar, not as inline markers (documented limitation).
+ */
+function buildTextAnchor(
+  paragraphs: string[],
+  needle: string,
+): { anchor: TextAnchor; sourceText: string } | null {
+  if (!needle) return null;
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
+    const idx = p.indexOf(needle);
+    if (idx === -1) continue;
+    const quote = p.slice(idx, idx + needle.length);
+    const prefix = p.slice(Math.max(0, idx - CONTEXT), idx);
+    const suffix = p.slice(idx + needle.length, idx + needle.length + CONTEXT);
+    return {
+      anchor: { kind: "text", paragraphIndex: i, quote, prefix, suffix },
+      sourceText: p.trim().slice(0, 600),
+    };
+  }
+  return null;
+}
+
+/** First capitalized word of a citation — a usable anchoring needle
+ *  (author surname) and target label seed. */
+function leadingSurname(query: string): string {
+  const m = query.match(/^([A-Z][A-Za-zÀ-ÿ'’-]{2,})/);
+  return m ? m[1] : "";
+}
+
+/** A concise human-readable target label for the annotation, even when
+ *  unresolved (plan §12: never drop the citation). */
+function targetLabel(candidate: RawCitation, record: ResolvedRecord | null): string {
+  if (record) {
+    return record.authors ? `${record.title} — ${record.authors}` : record.title;
+  }
+  return candidate.text.slice(0, 200);
+}
+
+async function findOrCreateBibRecord(record: ResolvedRecord): Promise<string> {
+  // Reuse an existing catalog entry by DOI or external id (plan §9
+  // shared-catalog direction) so re-analysis doesn't duplicate records.
+  if (record.doi) {
+    const [existing] = await db
+      .select({ id: bibliographicRecords.id })
+      .from(bibliographicRecords)
+      .where(eq(bibliographicRecords.doi, record.doi))
+      .limit(1);
+    if (existing) return existing.id;
+  } else if (record.externalId) {
+    const [existing] = await db
+      .select({ id: bibliographicRecords.id })
+      .from(bibliographicRecords)
+      .where(eq(bibliographicRecords.externalId, record.externalId))
+      .limit(1);
+    if (existing) return existing.id;
+  }
+
+  const [created] = await db
+    .insert(bibliographicRecords)
+    .values({
+      source: record.source,
+      externalId: record.externalId,
+      title: record.title,
+      authors: record.authors,
+      year: record.year,
+      doi: record.doi,
+      url: record.url,
+      accessStatus: record.accessStatus,
+      raw: record.raw,
+    })
+    .returning({ id: bibliographicRecords.id });
+  return created.id;
+}
+
+export async function analyzeWork(documentId: string): Promise<void> {
+  const [doc] = await db
+    .select({
+      id: documents.id,
+      userId: documents.userId,
+      workId: documents.workId,
+      mimeType: documents.mimeType,
+      extractedText: documents.extractedText,
+      title: works.title,
+      authorName: works.authorName,
+    })
+    .from(documents)
+    .innerJoin(works, eq(works.id, documents.workId))
+    .where(eq(documents.id, documentId))
+    .limit(1);
+
+  if (!doc) throw new Error(`Document ${documentId} not found for analysis`);
+  if (!doc.extractedText?.trim()) throw new Error("No extracted text to analyze");
+
+  await db
+    .update(documents)
+    .set({ analysisStatus: "analyzing", analysisError: null, updatedAt: new Date() })
+    .where(eq(documents.id, documentId));
+
+  try {
+    // Idempotent re-run: clear prior *system* output, keep user edits.
+    await db
+      .delete(annotations)
+      .where(and(eq(annotations.documentId, documentId), eq(annotations.createdBy, "system")));
+    await db.delete(citations).where(eq(citations.documentId, documentId));
+    await db
+      .delete(graphEdges)
+      .where(
+        and(
+          eq(graphEdges.sourceType, "work"),
+          eq(graphEdges.sourceId, doc.workId),
+          eq(graphEdges.createdBy, "system"),
+        ),
+      );
+
+    const candidates = extractCitations(doc.extractedText, 25);
+    const isText = doc.mimeType === "text/plain" || doc.mimeType === "text/markdown";
+    const paragraphs = isText
+      ? doc.extractedText.split(/\n{2,}/).filter((p) => p.trim().length > 0)
+      : [];
+
+    let annotationCount = 0;
+
+    for (const candidate of candidates) {
+      // --- Stage 1: resolve against real bibliographic sources ---
+      const record = await resolveCitation(candidate.query);
+      const bibId = record ? await findOrCreateBibRecord(record) : null;
+
+      await db.insert(citations).values({
+        documentId,
+        rawText: candidate.text,
+        resolvedBibId: bibId,
+        resolutionSource: record?.source ?? "unresolved",
+      });
+
+      // --- Anchoring (text docs only) ---
+      const located = isText ? buildTextAnchor(paragraphs, leadingSurname(candidate.query)) : null;
+      const sourceText = located?.sourceText ?? candidate.text;
+
+      // --- Stage 2: classify the relationship ---
+      const classification = await classifyRelationship({
+        primaryTitle: doc.title,
+        primaryAuthor: doc.authorName,
+        candidateTitle: record?.title ?? candidate.text.slice(0, 160),
+        candidateAuthor: record?.authors ?? null,
+        sourceText,
+        resolved: Boolean(record),
+      });
+
+      await db.insert(aiUsageLogs).values({
+        documentId,
+        task: "relationship_classification",
+        provider: classification.provider,
+        model: classification.model,
+        promptTokens: classification.promptTokens,
+        completionTokens: classification.completionTokens,
+        estimatedCostUsd: classification.heuristic
+          ? 0
+          : estimateCostUsd(classification.model, classification.promptTokens, classification.completionTokens),
+      });
+
+      await db.insert(annotations).values({
+        userId: doc.userId,
+        documentId,
+        relationshipCategory: classification.category,
+        targetBibId: bibId,
+        targetLabel: targetLabel(candidate, record),
+        anchor: located?.anchor ?? null,
+        extractedSourceText: sourceText,
+        explanation: classification.explanation,
+        confidence: classification.confidence,
+        modelUsed: classification.model,
+        promptVersion: classification.heuristic ? "heuristic" : CLASSIFY_PROMPT_VERSION,
+        createdBy: "system",
+        verificationStatus: "unreviewed",
+      });
+      annotationCount++;
+
+      // Graph edge only for resolved targets (real node on both ends).
+      if (bibId) {
+        await db.insert(graphEdges).values({
+          userId: doc.userId,
+          sourceType: "work",
+          sourceId: doc.workId,
+          targetType: "bibliographic_record",
+          targetId: bibId,
+          edgeType: edgeValue(CATEGORY_TO_EDGE[classification.category]),
+          weight: 1,
+          confidence: classification.confidence,
+          evidence: { extractedSourceText: sourceText, category: classification.category },
+          createdBy: "system",
+        });
+      }
+    }
+
+    await db
+      .update(documents)
+      .set({ analysisStatus: "complete", updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+
+    console.log(`[worker] analysis complete for document ${documentId}: ${annotationCount} annotation(s)`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[worker] analysis failed for document ${documentId}:`, message);
+    await db
+      .update(documents)
+      .set({ analysisStatus: "failed", analysisError: message, updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+    throw err;
+  }
+}
