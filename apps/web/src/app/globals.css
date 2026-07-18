@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/*
+  Design tokens per docs/architecture/plan.md §19: warm, calm, scholarly —
+  not faux-antique. Light is the default identity; dark and
+  distraction-reduced are token overrides of the same system, not
+  separate designs. Default via prefers-color-scheme, explicit override
+  via [data-theme] once a user-facing toggle exists (Phase 3).
+*/
+:root {
+  --color-background: #faf6ee; /* warm ivory / parchment */
+  --color-surface: #f3ecdd; /* soft cream, elevated surfaces */
+  --color-text: #2a241c; /* deep charcoal/umber, >=7:1 on background */
+  --color-text-muted: #5c5344;
+  --color-border: #e3d9c4;
+
+  --color-accent-burgundy: #7a2e3a;
+  --color-accent-green: #3b5d42;
+  --color-accent-ink: #2e4057;
+  --color-accent-umber: #5c4632;
+  --color-highlight: #c9a227; /* subdued gold/ochre, selection & highlight */
+
+  --color-focus-ring: #2e4057;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #211d17;
+    --color-surface: #2b2620;
+    --color-text: #f2ead9;
+    --color-text-muted: #c3b8a3;
+    --color-border: #43392c;
+
+    --color-accent-burgundy: #c2707c;
+    --color-accent-green: #7ea988;
+    --color-accent-ink: #8fa8c9;
+    --color-accent-umber: #b99c7a;
+    --color-highlight: #e0bb4d;
+
+    --color-focus-ring: #8fa8c9;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-background: #211d17;
+  --color-surface: #2b2620;
+  --color-text: #f2ead9;
+  --color-text-muted: #c3b8a3;
+  --color-border: #43392c;
+  --color-accent-burgundy: #c2707c;
+  --color-accent-green: #7ea988;
+  --color-accent-ink: #8fa8c9;
+  --color-accent-umber: #b99c7a;
+  --color-highlight: #e0bb4d;
+  --color-focus-ring: #8fa8c9;
+}
+
+:root[data-theme="light"] {
+  --color-background: #faf6ee;
+  --color-surface: #f3ecdd;
+  --color-text: #2a241c;
+  --color-text-muted: #5c5344;
+  --color-border: #e3d9c4;
+  --color-accent-burgundy: #7a2e3a;
+  --color-accent-green: #3b5d42;
+  --color-accent-ink: #2e4057;
+  --color-accent-umber: #5c4632;
+  --color-highlight: #c9a227;
+  --color-focus-ring: #2e4057;
+}
+
+/*
+  Distraction-reduced reading mode (Phase 3): a token overlay, not a
+  separate palette — reserved here so the reader can opt in via
+  [data-reading-mode="distraction-reduced"] without inventing new colors.
+*/
+
+@theme inline {
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-text: var(--color-text);
+  --color-text-muted: var(--color-text-muted);
+  --color-border: var(--color-border);
+  --color-accent-burgundy: var(--color-accent-burgundy);
+  --color-accent-green: var(--color-accent-green);
+  --color-accent-ink: var(--color-accent-ink);
+  --color-accent-umber: var(--color-accent-umber);
+  --color-highlight: var(--color-highlight);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans), Georgia, serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}

@@ -36,6 +36,3 @@ test-results/
 .vscode/*
 !.vscode/extensions.json
 .idea/
-
-# Drizzle
-apps/web/drizzle/meta/

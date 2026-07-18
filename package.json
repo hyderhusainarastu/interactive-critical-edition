@@ -1,0 +1,16 @@
+{
+  "name": "interactive-critical-edition",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@11.14.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

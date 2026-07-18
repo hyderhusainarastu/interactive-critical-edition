@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ice
+      POSTGRES_PASSWORD: ice_dev_only
+      POSTGRES_DB: interactive_critical_edition
+    ports:
+      - "5432:5432"
+    volumes:
+      - ice_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  ice_postgres_data:
