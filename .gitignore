@@ -36,3 +36,7 @@ test-results/
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# CLI-local project links (machine-specific, not app config)
+.vercel/
+supabase/.temp/
