@@ -120,6 +120,63 @@ export function applyHighlights(container: HTMLElement, list: HighlightAnchor[])
   }
 }
 
+export interface AnnotationMarkerAnchor {
+  id: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  /** Category token used to color the marker (see annotationMeta). */
+  category: string;
+  /** Short glyph shown inside the marker. */
+  glyph: string;
+}
+
+/**
+ * Renders AI annotations as single-point clickable superscript markers
+ * inserted at the start of each anchored passage — deliberately NOT
+ * range-wrapping like highlights, so this layer can coexist with the
+ * user-highlight layer on the same text without the two fighting over
+ * overlapping DOM ranges. The marker is visually distinct from both the
+ * original-footnote markers and user highlights (plan §9/§18 four-way
+ * distinction): a colored, glyph-bearing superscript. Idempotent —
+ * clears its own markers first, then reapplies.
+ */
+export function applyAnnotationMarkers(
+  container: HTMLElement,
+  list: AnnotationMarkerAnchor[],
+) {
+  clearAnnotationMarkers(container);
+  for (const a of list) {
+    const spans = getTextNodeSpans(container);
+    const fullText = spans.map((s) => s.node.textContent).join("");
+    const offset = findQuoteOffset(fullText, a.quote, a.prefix, a.suffix);
+    if (offset === null) continue;
+
+    // Find the text node containing `offset` and split it there.
+    const span = spans.find((s) => offset >= s.start && offset < s.end);
+    if (!span) continue;
+    const localOffset = offset - span.start;
+    const node = span.node;
+    const insertionPoint = localOffset === 0 ? node : node.splitText(localOffset);
+
+    const marker = document.createElement("button");
+    marker.type = "button";
+    marker.dataset.annotationId = a.id;
+    marker.className = `reader-annotation-marker reader-annotation-${a.category}`;
+    marker.textContent = a.glyph;
+    marker.setAttribute("aria-label", "AI annotation — open details");
+    node.parentNode?.insertBefore(marker, insertionPoint);
+  }
+}
+
+export function clearAnnotationMarkers(container: HTMLElement) {
+  container.querySelectorAll("button[data-annotation-id]").forEach((m) => {
+    const parent = m.parentNode;
+    m.remove();
+    parent?.normalize();
+  });
+}
+
 /**
  * Captures the current browser selection within `container` as a
  * stable anchor. Returns null if there's no selection or it falls

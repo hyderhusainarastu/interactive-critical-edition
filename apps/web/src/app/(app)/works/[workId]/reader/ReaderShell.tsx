@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HIGHLIGHT_COLORS, type FootnoteRecord, type HighlightColor, type Position, type ReaderData } from "./types";
+import {
+  HIGHLIGHT_COLORS,
+  type AnnotationRecord,
+  type FootnoteRecord,
+  type HighlightColor,
+  type Position,
+  type ReaderData,
+} from "./types";
+import { AnnotationsPanel } from "./AnnotationsPanel";
 import { PdfReader } from "./PdfReader";
 import { TextReader } from "./TextReader";
 import { NotesSidebar } from "./NotesSidebar";
@@ -30,6 +38,8 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
   const [pendingColor, setPendingColor] = useState<HighlightColor>("gold");
   const [activeFootnote, setActiveFootnote] = useState<FootnoteRecord | null>(null);
   const [showNotes, setShowNotes] = useState(true);
+  const [showAnalysis, setShowAnalysis] = useState(true);
+  const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -147,6 +157,54 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
     [workId],
   );
 
+  const updateAnnotation = useCallback(
+    async (id: string, patch: Partial<Pick<AnnotationRecord, "verificationStatus" | "hidden" | "explanation">>) => {
+      // Optimistic — reflect the correction immediately; the PATCH persists it.
+      setData((d) =>
+        d
+          ? {
+              ...d,
+              annotations: d.annotations.map((a) =>
+                a.id === id ? { ...a, ...patch, ...(patch.explanation ? { createdBy: "user" as const } : {}) } : a,
+              ),
+            }
+          : d,
+      );
+      await fetch(`/api/works/${workId}/reader/annotations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+    },
+    [workId],
+  );
+
+  const refreshAnnotations = useCallback(async () => {
+    const res = await jsonFetch<Pick<ReaderData, "analysisStatus" | "analysisError" | "annotations">>(
+      `/api/works/${workId}/reader/annotations`,
+    );
+    setData((d) => (d ? { ...d, ...res } : d));
+  }, [workId]);
+
+  const reanalyze = useCallback(async () => {
+    setData((d) => (d ? { ...d, analysisStatus: "analyzing", analysisError: null } : d));
+    setShowAnalysis(true);
+    await fetch(`/api/works/${workId}/analyze`, { method: "POST" });
+  }, [workId]);
+
+  // Poll while analysis is running (auto-enqueued on confirm, or manually
+  // re-triggered) so results stream in without a manual refresh.
+  useEffect(() => {
+    if (data?.analysisStatus !== "analyzing") return;
+    const timer = setInterval(() => void refreshAnnotations(), 4000);
+    return () => clearInterval(timer);
+  }, [data?.analysisStatus, refreshAnnotations]);
+
+  const openAnnotation = useCallback((id: string) => {
+    setShowAnalysis(true);
+    setActiveAnnotationId(id);
+  }, []);
+
   const initialPosition = useMemo(() => data?.lastPosition ?? null, [data]);
 
   if (error) {
@@ -222,8 +280,18 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
                 onClear={() => setSplitWorkId(null)}
               />
             )}
-            <button type="button" className="ml-auto" onClick={() => setShowNotes((v) => !v)}>
-              {showNotes ? "Hide sidebar" : "Show sidebar"}
+            <button
+              type="button"
+              className="ml-auto"
+              onClick={() => setShowAnalysis((v) => !v)}
+              aria-pressed={showAnalysis}
+            >
+              {showAnalysis ? "Hide analysis" : "Analysis"}
+              {data.annotations.filter((a) => !a.hidden).length > 0 &&
+                ` (${data.annotations.filter((a) => !a.hidden).length})`}
+            </button>
+            <button type="button" onClick={() => setShowNotes((v) => !v)}>
+              {showNotes ? "Hide notes" : "Notes"}
             </button>
           </div>
 
@@ -254,6 +322,7 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
                 text={data.extractedText ?? ""}
                 footnotes={data.footnotes}
                 highlights={data.highlights}
+                annotations={data.annotations}
                 activeParagraph={initialPosition?.kind === "text" ? initialPosition.paragraphIndex : null}
                 onParagraphInView={(paragraphIndex) => {
                   currentPositionRef.current = { paragraphIndex };
@@ -261,6 +330,7 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
                 }}
                 onCreateHighlight={(a) => createHighlight({ kind: "text", ...a })}
                 onOpenFootnote={setActiveFootnote}
+                onOpenAnnotation={openAnnotation}
               />
             )}
           </div>
@@ -277,6 +347,17 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
           </div>
         )}
       </div>
+
+      {showAnalysis && !embedded && (
+        <AnnotationsPanel
+          annotations={data.annotations}
+          analysisStatus={data.analysisStatus}
+          analysisError={data.analysisError}
+          activeId={activeAnnotationId}
+          onUpdate={updateAnnotation}
+          onReanalyze={reanalyze}
+        />
+      )}
 
       {showNotes && (
         <NotesSidebar

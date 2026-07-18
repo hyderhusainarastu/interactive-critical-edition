@@ -109,6 +109,44 @@
 }
 
 /*
+  AI annotation markers (plan §9/§18): a fourth, distinct treatment from
+  authorial footnotes, user highlights, and user notes — a small colored
+  superscript glyph the reader clicks to open the analysis panel. Category
+  color comes from the shared palette (see annotationMeta.ts); the glyph
+  carries the meaning so it never relies on color alone (WCAG, plan §20).
+*/
+.reader-annotation-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: super;
+  font-size: 0.62em;
+  line-height: 1;
+  min-width: 1.15em;
+  height: 1.15em;
+  margin: 0 0.06em;
+  padding: 0 0.15em;
+  border-radius: 999px;
+  color: var(--color-background);
+  cursor: pointer;
+  font-weight: 700;
+  transition: transform 0.08s ease;
+}
+.reader-annotation-marker:hover {
+  transform: scale(1.15);
+}
+.reader-annotation-explicit_reference,
+.reader-annotation-interpretive_aid { background: var(--color-accent-ink); }
+.reader-annotation-secondary_scholarly_recommendation,
+.reader-annotation-conceptual_influence,
+.reader-annotation-optional_extension { background: var(--color-accent-green); }
+.reader-annotation-historical_context,
+.reader-annotation-parallel_comparison,
+.reader-annotation-ai_inferred { background: var(--color-accent-umber); }
+.reader-annotation-prerequisite,
+.reader-annotation-disagreement_polemical_target { background: var(--color-accent-burgundy); }
+
+/*
   Minimal pdf.js text-layer CSS (not importing pdf.js's own stylesheet
   bundle — this is the small subset actually needed for selectable,
   invisible-but-positioned text over the rendered canvas).

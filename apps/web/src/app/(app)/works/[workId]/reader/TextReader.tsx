@@ -1,8 +1,9 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { applyHighlights, captureSelectionAnchor } from "./highlightDom";
-import type { FootnoteRecord, HighlightRecord } from "./types";
+import { CATEGORY_META } from "./annotationMeta";
+import { applyAnnotationMarkers, applyHighlights, captureSelectionAnchor } from "./highlightDom";
+import type { AnnotationRecord, FootnoteRecord, HighlightRecord } from "./types";
 
 const FOOTNOTE_MARKER = /[[(](\d{1,3})[\])]/g;
 
@@ -41,18 +42,22 @@ export function TextReader({
   text,
   footnotes,
   highlights,
+  annotations,
   activeParagraph,
   onParagraphInView,
   onCreateHighlight,
   onOpenFootnote,
+  onOpenAnnotation,
 }: {
   text: string;
   footnotes: FootnoteRecord[];
   highlights: HighlightRecord[];
+  annotations: AnnotationRecord[];
   activeParagraph: number | null;
   onParagraphInView: (index: number) => void;
   onCreateHighlight: (anchor: { paragraphIndex: number; quote: string; prefix: string; suffix: string }) => void;
   onOpenFootnote: (f: FootnoteRecord) => void;
+  onOpenAnnotation: (id: string) => void;
 }) {
   const paragraphs = text.split(/\n{2,}/).filter((p) => p.trim().length > 0);
   const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
@@ -62,25 +67,50 @@ export function TextReader({
     y: number;
   } | null>(null);
 
-  // Re-apply highlights whenever they change or the text changes.
+  // Re-apply highlights, then annotation markers, whenever either set or
+  // the text changes. Highlights first (range-wrapping), markers second
+  // (single-point insertion) — the two layers are independent, each
+  // clearing only its own DOM on reapply.
   useEffect(() => {
-    const byParagraph = new Map<number, HighlightRecord[]>();
+    const hByParagraph = new Map<number, HighlightRecord[]>();
     for (const h of highlights) {
       if (h.anchor.kind !== "text") continue;
-      const list = byParagraph.get(h.anchor.paragraphIndex) ?? [];
+      const list = hByParagraph.get(h.anchor.paragraphIndex) ?? [];
       list.push(h);
-      byParagraph.set(h.anchor.paragraphIndex, list);
+      hByParagraph.set(h.anchor.paragraphIndex, list);
     }
+
+    const aByParagraph = new Map<number, AnnotationRecord[]>();
+    for (const a of annotations) {
+      if (a.hidden || a.verificationStatus === "rejected" || !a.anchor || a.anchor.kind !== "text") continue;
+      const list = aByParagraph.get(a.anchor.paragraphIndex) ?? [];
+      list.push(a);
+      aByParagraph.set(a.anchor.paragraphIndex, list);
+    }
+
     paragraphRefs.current.forEach((el, i) => {
       if (!el) return;
-      const list = (byParagraph.get(i) ?? []).map((h) => ({
-        id: h.id,
-        color: h.color,
-        ...(h.anchor as { quote: string; prefix: string; suffix: string }),
-      }));
-      applyHighlights(el, list);
+      applyHighlights(
+        el,
+        (hByParagraph.get(i) ?? []).map((h) => ({
+          id: h.id,
+          color: h.color,
+          ...(h.anchor as { quote: string; prefix: string; suffix: string }),
+        })),
+      );
+      applyAnnotationMarkers(
+        el,
+        (aByParagraph.get(i) ?? []).map((a) => ({
+          id: a.id,
+          quote: a.anchor!.quote,
+          prefix: a.anchor!.prefix,
+          suffix: a.anchor!.suffix,
+          category: a.relationshipCategory,
+          glyph: CATEGORY_META[a.relationshipCategory].glyph,
+        })),
+      );
     });
-  }, [highlights, text]);
+  }, [highlights, annotations, text]);
 
   // Track which paragraph is in view for reading-position persistence.
   useEffect(() => {
@@ -144,6 +174,10 @@ export function TextReader({
         style={{
           maxWidth: "var(--reader-line-width, 66ch)",
           fontSize: "var(--reader-font-size, 1.05rem)",
+        }}
+        onClick={(e) => {
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+          if (marker) onOpenAnnotation((marker as HTMLElement).dataset.annotationId!);
         }}
       >
         {paragraphs.map((p, i) => (
