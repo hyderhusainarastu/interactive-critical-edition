@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
-const ACCEPTED_TYPES = ["application/pdf", "text/plain", "text/markdown"];
+const ACCEPTED_TYPES = ["application/pdf", "application/epub+zip", "text/plain", "text/markdown"];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 
 export default function UploadPage() {
@@ -28,23 +28,35 @@ export default function UploadPage() {
     }
 
     setSubmitting(true);
-    const formData = new FormData();
-    formData.append("file", file);
 
     try {
-      const res = await fetch("/api/works/upload", {
+      const init = await fetch("/api/works/upload/init", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
       });
-      const body = await res.json();
-      if (!res.ok) {
+      const body = await init.json().catch(() => ({}));
+      if (!init.ok) {
         setError(body.error ?? "Upload failed.");
         setSubmitting(false);
         return;
       }
+      const stored = await fetch(body.uploadUrl, {
+        method: "PUT",
+        headers: { "content-type": file.type, "x-upsert": "false" },
+        body: file,
+      });
+      if (!stored.ok) throw new Error("Storage upload failed.");
+      const complete = await fetch("/api/works/upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workId: body.workId, documentId: body.documentId }),
+      });
+      const completed = await complete.json().catch(() => ({}));
+      if (!complete.ok) throw new Error(completed.error ?? "Upload could not be queued.");
       router.push(`/works/${body.workId}`);
-    } catch {
-      setError("Upload failed — check your connection and try again.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Upload failed — check your connection and try again.");
       setSubmitting(false);
     }
   }
@@ -87,7 +99,7 @@ export default function UploadPage() {
             : "Drop a file here, or click to choose one"}
         </p>
         <p className="text-sm text-[var(--color-text-muted)]">
-          PDF (text-layer), TXT, or Markdown — up to 50MB
+          PDF, EPUB, TXT, or Markdown — up to 50MB
         </p>
         <input
           ref={inputRef}

@@ -21,6 +21,32 @@ Notes
 2. This formulation echoes the hermeneutic circle.
 `;
 
+/** A minimal, valid text-layer PDF generated in-process so the upload suite
+ * covers the direct-to-Storage PDF path without carrying a binary fixture. */
+function createPdf(text: string) {
+  const escaped = text.replace(/([\\()])/g, "\\$1");
+  const content = `BT\n/F1 18 Tf\n72 720 Td\n(${escaped}) Tj\nET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Title (Direct Upload PDF) /Author (E2E) >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  pdf += offsets.slice(1).map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`).join("");
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  return pdf;
+}
+
 async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(EMAIL);
@@ -112,6 +138,18 @@ test.describe("Reader (Phase 3)", () => {
 
     // Highlight is still there after the reload too (re-anchored by quote, not by transient state).
     await expect(page.locator('[data-paragraph-index="1"] mark[data-highlight-id]')).toBeVisible();
+  });
+
+  test("a PDF uploads directly to private storage and reaches a terminal processing state", async ({ page }) => {
+    const filePath = join(tmpdir(), `e2e-direct-upload-${Date.now()}.pdf`);
+    writeFileSync(filePath, createPdf("Direct upload PDF verification"));
+
+    await login(page);
+    await page.goto("/upload");
+    await page.locator('input[type="file"]').setInputFiles(filePath);
+    await page.waitForURL(/\/works\/[a-f0-9-]+$/);
+    await expect(page.getByText(/Confirm or correct the detected metadata before this work is added to your library\.|Ready/)).toBeVisible({ timeout: 45000 });
+    await expect(page.getByText("Processing failed")).toHaveCount(0);
   });
 
   test("split view opens a second work alongside the first", async ({ page }) => {

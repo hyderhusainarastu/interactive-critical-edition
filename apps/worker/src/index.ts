@@ -14,7 +14,7 @@ import {
   textBlocks,
   works,
 } from "@ice/db";
-import { detectFootnotes, downloadDocumentFile, parseDocument } from "@ice/ingestion";
+import { detectFootnotes, downloadDocumentFile, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
@@ -50,6 +50,10 @@ async function handleExtractText(documentId: string) {
     if (!doc) throw new Error(`Document ${documentId} not found`);
 
     const buffer = await downloadDocumentFile(doc.storagePath);
+    const validation = validateUploadContent(buffer, doc.mimeType);
+    if (!validation.valid) throw new Error(validation.error);
+    const scan = await scanWithOptionalClamAv(buffer);
+    if (!scan.valid) throw new Error(scan.error);
     const parsed = await parseDocument(buffer, doc.mimeType);
 
     if (!parsed.text.trim()) {
@@ -151,7 +155,12 @@ async function handleEditionExtraction(documentId: string) {
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
   if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   try {
-    const parsed = await parseDocument(await downloadDocumentFile(doc.storagePath), doc.mimeType);
+    const buffer = await downloadDocumentFile(doc.storagePath);
+    const validation = validateUploadContent(buffer, doc.mimeType);
+    if (!validation.valid) throw new Error(validation.error);
+    const scan = await scanWithOptionalClamAv(buffer);
+    if (!scan.valid) throw new Error(scan.error);
+    const parsed = await parseDocument(buffer, doc.mimeType);
     if (!parsed.text.trim()) throw new Error("No extractable text found. OCR was unavailable or produced no text.");
 
     // Keep the established interactive reader functional while v2 is enabled:

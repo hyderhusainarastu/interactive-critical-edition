@@ -34,6 +34,20 @@ export async function uploadDocumentFile(params: {
   if (error) throw error;
 }
 
+/** A one-time upload URL keeps large private files off the Vercel request
+ * body. The service role creates it; the browser receives only this narrow,
+ * short-lived object capability. */
+export async function createSignedUploadUrl(path: string) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.storage.from(bucket()).createSignedUploadUrl(path);
+  if (error) throw error;
+  return {
+    // storage-js returns a fully-qualified, token-bearing PUT URL. Do not
+    // prepend SUPABASE_URL here: doing so corrupts the signed capability.
+    url: data.signedUrl,
+  };
+}
+
 export async function downloadDocumentFile(path: string): Promise<Buffer> {
   const supabase = getSupabase();
   const { data, error } = await supabase.storage.from(bucket()).download(path);

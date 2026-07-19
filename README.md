@@ -4,7 +4,7 @@ A web application that helps readers understand difficult scholarly works — ph
 
 Upload a primary text (e.g. Heidegger's *Being and Time*) and the system helps answer the questions a reader is otherwise left to guess at: what background material is actually necessary, where to start, in what order, how much of each work to read, and which references are explicit versus scholarly inference. A personal knowledge profile means the system stops recommending what you already know.
 
-**Status:** Phases 0–6 complete and deployed; Phase 7 (hardening) underway. Live in production — web app on Vercel, background worker on Render, database/storage on Supabase. See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
+**Status:** Phases 0–8 are deployed. The web app runs on Vercel, its background worker on Render, and its database/private document storage on Supabase. Production uses an honest `structure-limited` fallback when private GROBID is unavailable; local GROBID provides the full structured-extraction acceptance path. See [CLAUDE.md](./CLAUDE.md) for current implementation status and the full build log.
 
 ## What it does
 
