@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { getGoogleIdToken } from "./gcpIdToken";
 
 export interface GrobidBbox {
   page: number; // 1-based (as GROBID emits)
@@ -240,12 +241,22 @@ export async function processWithGrobid(buffer: Buffer): Promise<GrobidResult | 
   for (const el of ["p", "head", "note", "biblStruct", "persName", "s"]) {
     body.append("teiCoordinates", el);
   }
+  // Authenticate to a private Cloud Run GROBID with a Google ID token (audience
+  // = the service URL). Unset SA key → no header (local unauthenticated GROBID).
+  const headers: Record<string, string> = {};
+  try {
+    const idToken = await getGoogleIdToken(baseUrl);
+    if (idToken) headers.Authorization = `Bearer ${idToken}`;
+  } catch {
+    // Auth failure → fall through unauthenticated; a 401 becomes null (fallback).
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Number(process.env.GROBID_TIMEOUT_MS ?? 120_000));
   try {
     const response = await fetch(`${baseUrl}/api/processFulltextDocument`, {
       method: "POST",
       body,
+      headers,
       signal: controller.signal,
     });
     if (!response.ok) return null;
