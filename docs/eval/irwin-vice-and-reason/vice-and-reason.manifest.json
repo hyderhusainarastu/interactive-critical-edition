@@ -1,0 +1,309 @@
+{
+  "$comment": "Machine-readable expected coverage for the Irwin gold eval. This is a FLOOR, not a fixed answer key: a run may exceed or reorder it when evidence supports doing so, but must explain every deviation. Scoring is semantic — a run is judged on whether it explains these things, never on whether it reproduces the brief's sentences.",
+  "fixture": "irwin-vice-and-reason-2001",
+  "version": 1,
+  "createdAt": "2026-07-19",
+
+  "identity": {
+    "mustResolve": {
+      "title": "Vice and Reason",
+      "author": "Terence Irwin",
+      "container": "The Journal of Ethics",
+      "volume": "5", "issue": "1", "pages": "73-97", "year": 2001,
+      "doi": "10.1023/A:1011416908374"
+    },
+    "failIf": [
+      "Identity is resolved from the LLM rather than from a real bibliographic lookup.",
+      "Any of the fields above is guessed when the lookup did not return it."
+    ]
+  },
+
+  "expectedStructure": {
+    "pages": 26,
+    "minBlocks": 120,
+    "minAuthorialFootnotes": 4,
+    "requiresFullStructureState": true,
+    "expectedSectionTitles": [
+      "A Gap in Aristotle's Moral Psychology",
+      "Vice and Decision",
+      "Types of Decision",
+      "Pursuing the Fine",
+      "Pursuing the Expedient without the Fine",
+      "Vice and Pleasure",
+      "The Vicious Person's Regret",
+      "The Instability of the Vicious Person",
+      "The Adequacy of Aristotle's Account"
+    ],
+    "note": "Section titles were recovered from the fixture's own text layer (see verification.sectionStructure). A degraded/structure-limited run FAILS this fixture."
+  },
+
+  "expectedArguments": [
+    { "id": "arg-puzzle", "must": "State the puzzle: the vicious act on decision (prohairesis), which implies rational guidance, yet are said to live according to passion rather than reason.", "anchorHint": "abstract" },
+    { "id": "arg-not-akrasia", "must": "Distinguish vice from akrasia: the vicious act ON decision, the akratic AGAINST decision.", "anchorHint": "sections 4-5" },
+    { "id": "arg-instrumental-reason", "must": "Explain Irwin's solution: reason remains active in vice but is subordinated to antecedent inclination — strategic/instrumental rather than authoritative over ends.", "anchorHint": "sections 5-7" },
+    { "id": "arg-kalon", "must": "Explain that the virtuous agent chooses for the sake of the kalon (the fine), as against the vicious agent's orientation to the expedient/advantageous.", "anchorHint": "sections 6-7" },
+    { "id": "arg-pleasure", "must": "Connect vice to the pursuit of pleasure.", "anchorHint": "section 8" },
+    { "id": "arg-regret", "must": "Explain the particular kind of regret characteristic of the vicious person.", "anchorHint": "section 9" },
+    { "id": "arg-instability", "must": "Explain the instability of the vicious person and defective self-love.", "anchorHint": "sections 10, and EN IX.4/IX.8" },
+    { "id": "arg-self-admission", "must": "Surface Irwin's own admission that he develops Aristotle's remarks 'beyond anything he says'.", "anchorHint": "section 8 opening", "criticality": "high", "why": "This is the paper's own epistemic hedge. Presenting Irwin's reconstruction as straight Aristotle exegesis without it is a substantive failure." },
+    { "id": "arg-scope-caveat", "must": "Surface the closing scope caveat: the account fits cowardice, intemperance, AND SLOTH better than greed, vindictiveness, and the desire for power and domination.", "anchorHint": "section 11", "criticality": "high", "why": "The reference brief omits sloth. A run that also omits it is echoing the brief rather than reading the paper." },
+    { "id": "arg-objections", "must": "Present the strongest interpretive objections to Irwin's unifying account — principally that the unifying mechanism leans hard on his reading of the kalon and on a strong fine/advantageous split, which is exactly where Müller and non-intellectualist readings resist him." }
+  ],
+
+  "expectedConcepts": [
+    { "term": "prohairesis", "gloss": "decision/choice", "required": true },
+    { "term": "kalon", "gloss": "the fine, the noble", "required": true },
+    { "term": "akrasia", "gloss": "incontinence, weakness of will", "required": true },
+    { "term": "boulesis", "gloss": "wish, rational desire", "required": true },
+    { "term": "phronesis", "gloss": "practical wisdom", "required": true },
+    { "term": "certa malitia", "gloss": "deliberate badness (Aquinas' term, used in Irwin's note 1)", "required": true },
+    { "term": "sumpheron", "gloss": "the expedient/advantageous", "required": false },
+    { "term": "metameleia", "gloss": "regret", "required": false },
+    { "term": "philautia", "gloss": "self-love", "required": true },
+    { "term": "ergon", "gloss": "function (the function argument)", "required": true },
+    { "term": "mesotes", "gloss": "the mean", "required": true },
+    { "term": "hekousion", "gloss": "the voluntary", "required": true }
+  ],
+  "expectedDistinctions": [
+    "vice vs akrasia",
+    "vice vs impulse",
+    "vice vs weakness of will",
+    "instrumental/strategic reasoning vs rational authority over ends",
+    "acting for the fine vs acting for the expedient",
+    "curable vs incurable vice (via Solis 2025)"
+  ],
+
+  "expectedAristotelianBackground": {
+    "required": [
+      { "cite": "EN I.7", "for": "the function argument" },
+      { "cite": "EN I.13", "for": "division of the soul; the part having reason vs the part able to listen to reason" },
+      { "cite": "EN II.1-6", "for": "habituation, virtue as a state concerned with choice, the mean" },
+      { "cite": "EN III.1-5", "for": "the voluntary, deliberation, wish, decision" },
+      { "cite": "EN VI", "for": "practical wisdom" },
+      { "cite": "EN VII.1-10", "for": "vice, continence, incontinence, pleasure" },
+      { "cite": "EN IX.4", "for": "self-love and psychic conflict" },
+      { "cite": "EN IX.8", "for": "self-love" },
+      { "cite": "EN X", "for": "pleasure (relevant material)" }
+    ],
+    "bekkerAnchorsPresentInFixture": ["1166b6", "1166b12", "1168a31", "1169a15", "1110b28", "1110b30"],
+    "note": "The broader governing prompt's fuller Bekker-level checklist remains authoritative over this abbreviated list."
+  },
+
+  "expectedHistoricalContext": [
+    { "work": "Plato, Republic", "for": "divided soul, psychic harmony, Thrasymachus, the tyrannical soul", "required": true },
+    { "work": "Plato, Gorgias", "for": "Callicles' immoralism; Irwin explicitly uses Callicles to illustrate intemperance", "required": true },
+    { "work": "Plato, Phaedrus", "for": "reason vs desire", "required": false },
+    { "work": "Aquinas, Summa Theologiae", "for": "sin from passion, ignorance, and deliberate badness (certa malitia) — Irwin's note 1", "required": true },
+    { "tradition": "Stoic, early modern, Kantian, Greenian, Anscombean, contemporary moral psychology", "required": false, "rule": "Include only where genuinely relevant; never assert influence from thematic similarity alone." }
+  ],
+
+  "expectedScholarlyDebate": {
+    "rule": "The brief is a discovery SEED, not an answer key. For each item the run must (1) resolve canonical metadata through DOI/publisher/catalog records, (2) record whether full text, abstract, review, metadata, or citation context was actually inspected, (3) verify the characterization against accessible evidence, (4) label the relationship precisely, (5) never infer influence from similarity, (6) preserve disputed or unverifiable claims as open questions.",
+    "relationshipVocabulary": ["support", "challenge", "refinement", "explicit_engagement", "probable_influence", "parallel", "merely_related"],
+    "required": [
+      { "key": "annas-1977", "doi": "10.1093/mind/LXXXVI.344.532", "relationship": "explicit_engagement", "role": "pre-Irwin inconsistency charge; cited by name in Irwin's note 2" },
+      { "key": "hampton-immorality", "relationship": "explicit_engagement", "role": "pre-Irwin objection; Irwin cites the 1990 Blackwell chapter at pp. 29-31", "caution": "See verification: the brief's citation details are WRONG. Journal version is Social Philosophy and Policy 7(1), 1989. Do not assert 1990 for the journal." },
+      { "key": "broadie-ethics-with-aristotle", "relationship": "explicit_engagement", "role": "cited in note 2 as criticizing Annas, at p. 177n41", "caution": "The brief overstates Broadie's role as a broad sympathetic precursor. Irwin's citation is narrow." },
+      { "key": "brickhouse-2003", "relationship": "support", "role": "argues Aristotle can be given a consistent account of vice", "inspectionExpected": "at least abstract; characterization is metadata_only until full text is read" },
+      { "key": "roochnik-2007", "relationship": "challenge", "role": "treats the account as a 'forgivable inconsistency' — a direct refusal of Irwin's harmonizing ambition" },
+      { "key": "muller-2015", "doi": "10.1080/09608788.2015.1022855", "relationship": "challenge", "role": "strongest later challenge; denies the vicious soul is principled/harmonious" },
+      { "key": "elliott-2016", "doi": "10.1080/09608788.2016.1225567", "relationship": "explicit_engagement", "role": "names Irwin and Brickhouse explicitly while replying to Müller", "criticality": "high", "why": "This is the clearest verifiable evidence that Irwin's paper became a reference point. It is explicit engagement, not parallel." },
+      { "key": "nielsen-2017", "doi": "10.1163/15685284-12341317", "relationship": "refinement" },
+      { "key": "nielsen-element", "doi": "10.1017/9781108581738", "relationship": "refinement" },
+      { "key": "barney-2020", "doi": "10.1093/oso/9780198850847.003.0009", "relationship": "parallel" },
+      { "key": "solis-2025", "doi": "10.5840/ancientphil202545116", "relationship": "refinement", "role": "curable/incurable vice as a way to reconcile the VII/IX regret tension" }
+    ],
+    "expected": [
+      { "key": "cooper-1996", "doi": "10.1093/oso/9780198240440.003.0004", "relationship": "parallel" },
+      { "key": "lear-2006", "doi": "10.1002/9780470776513.ch5", "relationship": "parallel", "role": "on moral virtue and the fine" },
+      { "key": "moss-2011", "doi": "10.1163/156852811X575907", "relationship": "parallel" },
+      { "key": "marechal-2024", "doi": "10.1111/phpr.13032", "relationship": "parallel" },
+      { "key": "price-2011", "doi": "10.1093/acprof:oso/9780199609611.001.0001", "relationship": "parallel" },
+      { "key": "warren-2021", "doi": "10.1093/oso/9780198840268.001.0001", "relationship": "parallel", "role": "regret and metameleia" },
+      { "key": "hardie-1980", "relationship": "merely_related", "role": "general orientation" },
+      { "key": "kraut-2006", "doi": "10.1002/9780470776513", "relationship": "merely_related", "role": "companion" }
+    ],
+    "irwinCorpus": [
+      { "key": "irwin-first-principles", "doi": "10.1093/0198242905.001.0001" },
+      { "key": "irwin-platos-ethics", "doi": "10.1093/0195086457.001.0001" },
+      { "key": "irwin-kalon-2010", "doi": "10.1086/657027", "criticality": "high", "why": "Directly develops the kalon reading the paper leans on." },
+      { "key": "irwin-ne-translation", "note": "Hackett NE, 3rd ed. — Irwin's own translation/commentary" }
+    ],
+    "editionsAndCommentaries": ["Irwin (Hackett, 3rd ed.)", "Broadie & Rowe (OUP, 2002)", "Crisp (CUP, 2000/2014)", "Reeve (Hackett, 2014)"]
+  },
+
+  "expectedCurriculumSpine": {
+    "rule": "A floor. Reordering or extension is allowed only with a stated, evidenced reason.",
+    "items": [
+      { "order": 1, "target": "EN I.7 and I.13" },
+      { "order": 2, "target": "EN II.1-6" },
+      { "order": 3, "target": "EN III.1-5" },
+      { "order": 4, "target": "EN VII.1-10" },
+      { "order": 5, "target": "EN IX.4 and IX.8" },
+      { "order": 6, "target": "Irwin, 'Vice and Reason' (2001)" },
+      { "order": 7, "target": "Brickhouse 2003" },
+      { "order": 8, "target": "Müller 2015" },
+      { "order": 9, "target": "Nielsen 2017, then the Cambridge Element (2023)" },
+      { "order": 10, "target": "Barney 2020" },
+      { "order": 11, "target": "Solis 2025" }
+    ]
+  },
+
+  "expectedAnnotations": {
+    "everyPassageAnnotationMustHave": ["valid page+block anchor", "quote fingerprint with prefix/suffix", "summary <= 240 characters", "expandable full explanation", "annotation type", "reader level", "confidence", "source relationship", "external evidence", "credibility components"],
+    "wholeWorkGuidanceRule": "Document-wide synthesis is permitted but must be labelled 'Whole-work guidance' and must NOT carry a fabricated passage anchor.",
+    "minimumAnchoredAnnotations": 25,
+    "requiredAnchoredTargets": ["arg-puzzle", "arg-not-akrasia", "arg-instrumental-reason", "arg-kalon", "arg-pleasure", "arg-regret", "arg-self-admission", "arg-scope-caveat"]
+  },
+
+  "publicSources": {
+    "rule": "The reference brief's report that video/forum results were low-yield MUST NOT disable public-source discovery. The lanes run regardless.",
+    "mustProduce": [
+      { "id": "ps-positive", "requirement": "At least one genuinely useful expert lecture or institutional teaching resource, accepted, with a lower authority label AND an explicit 'not peer-reviewed' disclosure.", "exampleSeed": "Royal Institute of Philosophy, 'Aristotle: Ethics and the Virtues' (overview by Angie Hobbs) — a named academic under an institutional host." }
+    ],
+    "mustReject": [
+      { "id": "ps-generic", "requirement": "Generic high-view introductory media unrelated to Irwin's specific argument.", "example": "CrashCourse, 'Aristotle & Virtue Theory: Crash Course Philosophy #38' (YouTube, 2016)", "verdict": "rejected", "reason": "generic_orientation_media; not about Irwin's thesis and cannot inform any contested exegetical claim." }
+    ],
+    "constraints": [
+      "Public comments may appear only as supplementary perspectives or leads.",
+      "No public comment, blog post, or video may be the SOLE support for a contested factual claim.",
+      "Never scrape or download YouTube audiovisual content. Inspect transcripts only when lawfully available; otherwise mark the resource metadata-only."
+    ]
+  },
+
+  "negativeExamples": {
+    "$comment": "Every item below was ACTUALLY OBSERVED during verification on 2026-07-19 as a false positive returned by a real Crossref or OpenAlex query for this paper's own seeds. None are invented.",
+    "cases": [
+      {
+        "id": "neg-coolhunting",
+        "observedVia": "Crossref query.bibliographic='Does Aristotle Have a Consistent Account of Vice' — returned as the TOP hit",
+        "title": "Coolhunting, account planning and the ancient cool of Aristotle",
+        "container": "Marketing Intelligence & Planning", "volume": "21", "issue": "7", "year": 2003,
+        "doi": "10.1108/02634500310504304",
+        "requiredVerdict": "rejected",
+        "reasonCode": "unrelated_subject",
+        "why": "Lexical overlap on 'Aristotle' + 'account' only. A marketing paper. This is the single sharpest test in the fixture: it ranked FIRST for a core scholarly seed query, so any pipeline that trusts search rank over a relevance gate will surface it.",
+        "criticality": "high"
+      },
+      {
+        "id": "neg-shakespeare",
+        "observedVia": "same Crossref query, second hit",
+        "title": "Taking Excess, Exceeding Account: Aristotle Meets Shakespeare",
+        "container": "Money and the Age of Shakespeare", "year": 2003,
+        "doi": "10.1057/9781403982469_10",
+        "requiredVerdict": "rejected",
+        "reasonCode": "unrelated_subject",
+        "why": "Genuine Aristotle content but a literary-economic context with no bearing on vice, reason, or prohairesis."
+      },
+      {
+        "id": "neg-political-economy",
+        "observedVia": "same Crossref query, third hit",
+        "title": "What Does Political Economy Tell Us about Economic Development?",
+        "year": 2004, "doi": "10.1596/1813-9450-3250",
+        "requiredVerdict": "rejected", "reasonCode": "unrelated_subject"
+      },
+      {
+        "id": "neg-heidegger-equipment",
+        "observedVia": "Crossref query for Roochnik 2007",
+        "title": "Repeating Metaphysics: Heidegger's Account of Equipment",
+        "year": 2006, "doi": "10.1057/9780230625075_3",
+        "requiredVerdict": "rejected", "reasonCode": "unrelated_subject",
+        "why": "Aristotle-adjacent Continental scholarship, wrong topic entirely."
+      },
+      {
+        "id": "neg-ross-right-acts",
+        "observedVia": "Crossref query for Moss 2011",
+        "title": "W. D. Ross: What Makes Right Acts Right?",
+        "year": 2012, "doi": "10.4324/9780203723746-50",
+        "requiredVerdict": "rejected", "reasonCode": "unrelated_subject",
+        "why": "20th-century deontology, not Aristotelian moral psychology."
+      },
+      {
+        "id": "neg-hampton-mens-rea",
+        "observedVia": "Crossref query for Hampton 'The Nature of Immorality'",
+        "title": "Mens rea",
+        "author": "Hampton", "container": "Social Philosophy and Policy", "volume": "7", "issue": "2", "year": 1990,
+        "doi": "10.1017/s0265052500000741",
+        "requiredVerdict": "rejected",
+        "reasonCode": "correct_author_wrong_work",
+        "why": "Right author, right journal, adjacent volume — and still not the cited work. Tests that author+venue agreement does not by itself establish identity.",
+        "criticality": "high"
+      },
+      {
+        "id": "neg-strasser-degradation",
+        "observedVia": "same Hampton query",
+        "title": "Degradation, Pornography, and Immorality",
+        "year": 1990, "doi": "10.5840/socphiltoday1990478",
+        "requiredVerdict": "rejected", "reasonCode": "title_word_collision",
+        "why": "Matches on 'Immorality' alone."
+      },
+      {
+        "id": "neg-stem-cell",
+        "observedVia": "OpenAlex author search raw_author_name.search='Terence Irwin'",
+        "title": "Stem Cell Function, Self-Renewal, and Behavioral Heterogeneity",
+        "container": "Cell", "year": 2005,
+        "actualAuthors": ["Charlotte Collins", "Irwin Olsen"],
+        "requiredVerdict": "rejected",
+        "reasonCode": "author_collision",
+        "why": "Surfaced by an author-name search for the paper's own author. 'Irwin' matched as a GIVEN name of a different person in molecular biology. This is the canonical author-collision test.",
+        "criticality": "high"
+      },
+      {
+        "id": "neg-annas-ought",
+        "observedVia": "Crossref query for Nielsen 2017",
+        "title": "'Ought' in Aristotle's Nicomachean Ethics",
+        "author": "Annas", "year": 2018,
+        "doi": "10.1093/oso/9780198817277.003.0011",
+        "requiredVerdict": "quarantined",
+        "reasonCode": "same_field_uncertain_relevance",
+        "why": "Genuinely Aristotle's NE, by an author Irwin cites — but on deontic 'ought', not vice/reason. Must NOT be rejected outright (it is on-topic for the corpus) and must NOT be accepted as debate-relevant without an independent grounding signal. Correct handling is quarantine.",
+        "criticality": "high"
+      },
+      {
+        "id": "neg-fearful-quickly",
+        "observedVia": "OpenAlex query for Roochnik 2007",
+        "title": "On Becoming Fearful Quickly: A Reinterpretation of Aristotle['s account of courage]",
+        "container": "Journal of Ancient Philosophy", "year": 2023,
+        "doi": "10.11606/issn.1981-9471.v17i2p134-161",
+        "requiredVerdict": "quarantined",
+        "reasonCode": "adjacent_topic_uncertain_relevance",
+        "why": "Aristotelian moral psychology on courage/cowardice — plausibly relevant given Irwin's cowardice example, but with no evidenced link to this paper. Quarantine, do not silently accept."
+      },
+      {
+        "id": "neg-crashcourse",
+        "observedVia": "the reference brief's own methodology section",
+        "title": "Aristotle & Virtue Theory: Crash Course Philosophy #38",
+        "provider": "youtube", "year": 2016,
+        "requiredVerdict": "rejected",
+        "reasonCode": "generic_high_view_media",
+        "why": "High view count, zero bearing on Irwin's thesis. Popularity must never function as credibility."
+      }
+    ],
+    "metadataCorruptionCase": {
+      "id": "neg-metadata-corruption",
+      "observedVia": "OpenAlex author search 'Terence Irwin'",
+      "title": "Virtue, Love and Form: Essays in Memory of Gregory Vlastos",
+      "indexedContainer": "Medical Entomology and Zoology",
+      "requiredHandling": "The work is genuinely by Irwin and genuinely relevant, but its indexed venue is corrupt. The run must not propagate 'Medical Entomology and Zoology' as this work's venue, and must not reject the work because its venue looks absurd. Correct handling: accept the work, flag the venue as unreliable, prefer a second source for the venue field.",
+      "criticality": "high",
+      "why": "Tests that identity resolution and credibility are independent, and that the pipeline degrades a bad FIELD rather than a whole RECORD."
+    }
+  },
+
+  "acceptanceGates": {
+    "knownNegativesRejectedOrQuarantined": "all",
+    "displayedTop20Precision": 1.0,
+    "overallLabelledDisplayedPrecision": 0.95,
+    "explicitCitationRecall": 0.95,
+    "essentialSources": ["Aristotle, Nicomachean Ethics", "relevant Aristotelian scholarship (Müller 2015, Nielsen 2017, Brickhouse 2003 at minimum)"],
+    "noRejectedSourceAppearsDownstream": true,
+    "structureStateMustBe": "full",
+    "costCeilingUsd": 5,
+    "additionalGates": [
+      "Every passage-specific annotation has a valid anchor.",
+      "Reader, Library, Curriculum, and Graph share canonical IDs.",
+      "Anonymous comments never independently support a factual claim.",
+      "The three brief errors caught in verification (Hampton's date, the omitted 'sloth', Broadie's overstated role) are NOT reproduced by the run."
+    ]
+  }
+}

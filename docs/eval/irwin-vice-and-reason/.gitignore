@@ -1,0 +1,4 @@
+# The evaluation PDF is never committed. It lives only in the private
+# `eval-fixtures` Supabase Storage bucket; see vice-and-reason.fixture.json.
+*.pdf
+*.epub

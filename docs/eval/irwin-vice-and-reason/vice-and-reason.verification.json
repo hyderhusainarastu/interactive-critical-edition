@@ -1,0 +1,221 @@
+{
+  "$comment": "Independent verification of every bibliographic and substantive assertion in vice-and-reason.reference-brief.md. Nothing here was taken on the brief's authority. Where verification and brief disagree, verification wins.",
+  "verifiedAt": "2026-07-19",
+  "methods": {
+    "bibliographic": "Live Crossref (api.crossref.org) DOI resolution, polite pool. Items with thin Crossref coverage were cross-checked against OpenAlex (api.openalex.org). Truncated DOIs in the brief were re-resolved by bibliographic search, never reconstructed by guessing digits.",
+    "substantive": "Direct text extraction from the fixture PDF (unpdf/pdf.js, the project's own ingestion parser) followed by literal string search. A substantive claim counts as verified only when the paper's own wording supports it.",
+    "notVerified": "Characterizations of third-party works that were reachable only as metadata/abstract are explicitly marked 'metadata_only' and must NOT be promoted to accepted facts downstream."
+  },
+  "summary": {
+    "bibliographicAssertions": 24,
+    "resolved": 24,
+    "exactMatch": 20,
+    "discrepancies": 4,
+    "substantiveAssertions": 12,
+    "confirmedInSourceText": 12,
+    "contradicted": 0,
+    "incomplete": 1,
+    "openQuestions": 4
+  },
+
+  "fixtureIdentity": {
+    "status": "verified",
+    "evidence": "Page 1 of the extracted text reads: 'Vice and Reason Author(s): Terence Irwin Source: The Journal of Ethics, 2001, Vol. 5, No. 1, Ancient Greek Ethics (2001), pp. 73-97 Published by: Springer Stable URL: https://www.jstor.org/stable/25115679'.",
+    "crossref": "DOI 10.1023/A:1011416908374 resolved to title 'Vice and Reason', The Journal of Ethics, 5(1), 73-97, 2001 — every field matched.",
+    "jstorStableId": "25115679",
+    "extraction": { "pages": 26, "characters": 73062, "matchesExpectedBaseline": true }
+  },
+
+  "bibliographic": [
+    { "key": "irwin-2001", "brief": "Journal of Ethics 5(1) 2001, 73-97, DOI 10.1023/A:1011416908374", "status": "exact_match", "source": "crossref" },
+    { "key": "muller-2015", "brief": "BJHP 23(3) 2015, 459-477", "status": "exact_match", "source": "crossref", "actualTitle": "Aristotle on Vice" },
+    { "key": "elliott-2016", "brief": "BJHP 24(6) 2016, 1193-1203", "status": "exact_match", "source": "crossref", "actualTitle": "Reply to Müller: Aristotle on vicious choice" },
+    { "key": "barney-2020", "brief": "OSAP 57 (2020), 273-308", "status": "exact_match", "source": "crossref", "actualTitle": "Becoming Bad", "note": "The brief's entry header was lost to transmission damage; the DOI resolved cleanly and confirms the attribution to Barney's OSAP 57 chapter." },
+    { "key": "warren-2021", "brief": "Regret: A Study in Ancient Moral Psychology, OUP 2021", "status": "exact_match", "source": "crossref" },
+    { "key": "solis-2025", "brief": "Ancient Philosophy 45(1) 2025, 221-236", "status": "exact_match", "source": "crossref" },
+    { "key": "cooper-1996", "brief": "in Rationality in Greek Thought, 81-114, OUP 1996", "status": "exact_match", "source": "crossref" },
+    { "key": "annas-1977", "brief": "Mind 86(344) 1977, 532-554", "status": "exact_match", "source": "crossref", "corroboration": "Independently corroborated by Irwin's own note 2, which cites 'Julia Annas, \"Plato and Aristotle on Friendship and Altruism,\" Mind 86 (1977), pp. 532-554'." },
+    { "key": "hardie-1980", "brief": "Aristotle's Ethical Theory, 2nd ed., OUP 1980", "status": "exact_match", "source": "crossref" },
+    { "key": "kraut-2006", "brief": "Blackwell Guide to Aristotle's NE, 2006", "status": "exact_match", "source": "crossref" },
+    { "key": "price-2011", "brief": "Virtue and Reason in Plato and Aristotle, OUP 2011", "status": "exact_match", "source": "crossref" },
+    { "key": "irwin-first-principles", "brief": "Aristotle's First Principles, OUP 1988/1990", "status": "exact_match", "source": "crossref", "note": "Crossref issued year is 1990; the brief's '1988/1990' already accommodates this." },
+    { "key": "irwin-platos-ethics", "brief": "Plato's Ethics, OUP 1995", "status": "exact_match", "source": "crossref" },
+    { "key": "irwin-kalon-2010", "brief": "Classical Philology 105(4) 2010, 381-396", "status": "exact_match", "source": "crossref", "actualTitle": "The Sense and Reference of Kalon in Aristotle" },
+    { "key": "crisp-2000", "brief": "CUP 2000, DOI 10.1017/CBO9780511802058", "status": "exact_match", "source": "crossref" },
+    { "key": "crisp-2014", "brief": "2nd ed., DOI 10.1017/CBO9781139600514", "status": "exact_match", "source": "crossref" },
+
+    {
+      "key": "nielsen-2017", "brief": "Phronesis 62(1) 2017, 1-25; DOI truncated to '10.1163/15685284-12'",
+      "status": "resolved_from_truncated", "source": "crossref search",
+      "resolvedDoi": "10.1163/15685284-12341317",
+      "actual": "Nielsen, 'Vice in the Nicomachean Ethics', Phronesis 62(1), 1-25, 2017",
+      "note": "Volume, issue, pages, and year all match the brief. Only the DOI was damaged in transmission; it was re-resolved by search, not reconstructed."
+    },
+    {
+      "key": "moss-2011", "brief": "Phronesis 56(3) 2011, pages given as '204-26107' (damaged)",
+      "status": "resolved_from_truncated", "source": "crossref search",
+      "resolvedDoi": "10.1163/156852811X575907",
+      "actual": "Moss, \"'Virtue Makes the Goal Right'\", Phronesis 56(3), 204-261, 2011",
+      "note": "The damaged string was page range 204-261 run together with DOI suffix 575907."
+    },
+    {
+      "key": "brickhouse-2003", "brief": "Review of Metaphysics 57(1) 2003, 3-23; JSTOR 20131936; no DOI",
+      "status": "exact_match", "source": "openalex",
+      "note": "Absent from Crossref (Review of Metaphysics has thin Crossref coverage). OpenAlex confirms: Thomas C. Brickhouse, 'Does Aristotle Have a Consistent Account of Vice?', The Review of Metaphysics 57(1), 3-23, 2003, no registered DOI. The brief was right to give a JSTOR id instead of a DOI."
+    },
+    {
+      "key": "roochnik-2007", "brief": "History of Philosophy Quarterly 24(3) 2007, 207-220; no DOI",
+      "status": "partial_match", "source": "openalex",
+      "confirmed": "Title, author, journal, volume, issue, and year all confirmed; no registered DOI exists.",
+      "unconfirmed": "The page range 207-220 is not carried in either index and remains unverified.",
+      "action": "Cite without page numbers, or verify against the print issue, until confirmed."
+    },
+
+    {
+      "key": "hampton-immorality", "brief": "'The Nature of Immorality,' Social Philosophy and Policy (originally 1990; Cambridge online record later)",
+      "status": "DISCREPANCY", "severity": "moderate", "source": "crossref + the fixture PDF's own note 2",
+      "briefSays": "Social Philosophy and Policy, originally 1990",
+      "actual": "Two distinct publications with identical pagination: (a) the journal article — Social Philosophy and Policy 7(1), 22-44, 1989, DOI 10.1017/S026505250000100X; and (b) the book chapter Irwin himself cites — in E. F. Paul, D. Miller and J. Paul (eds.), Foundations of Moral and Political Philosophy, Oxford: Blackwell, 1990, pp. 22-44.",
+      "evidence": "Irwin's note 2 reads: 'A vigorous statement of some of these objections to Aristotle is presented by Jean Hampton, \"The Nature of Immorality,\" in E.F. Paul, D. Miller and J. Paul (eds.), Foundations of Moral and Political Philosophy (Oxford: Blackwell, 1990), pp. 22-44, at pp. 29-31.'",
+      "resolution": "The brief conflated the two. The journal version is 1989, not 1990; the 1990 date belongs to the Blackwell volume. Irwin cites the book, and pins the relevant objection to pp. 29-31 specifically.",
+      "downstreamRequirement": "A run that surfaces this source must not assert 'Social Philosophy and Policy, 1990'."
+    },
+    {
+      "key": "marechal-2024", "brief": "Philosophy and Phenomenological Research 109(1) (2024), 179-203",
+      "status": "minor_discrepancy", "source": "crossref",
+      "actual": "Volume 109(1), pages 179-203 confirmed; Crossref issued date is 2023.",
+      "resolution": "Online-first 2023, print issue 2024. Both dates are defensible; the run should not be marked wrong for using either, but should not present them as conflicting records."
+    },
+    {
+      "key": "nielsen-element", "brief": "Vice in Ancient Philosophy, CUP, '2023/2024'",
+      "status": "minor_discrepancy", "source": "crossref",
+      "actual": "Crossref issued year is 2023.",
+      "resolution": "The brief's '2023/2024' hedge is acceptable; 2023 is the registered year."
+    },
+    {
+      "key": "lear-2006", "brief": "chapter in Kraut ed. (2006), no pages given",
+      "status": "enriched", "source": "crossref",
+      "actual": "Pages 116-136.",
+      "resolution": "Not an error in the brief — a gap the verification filled."
+    }
+  ],
+
+  "substantive": [
+    {
+      "claim": "Irwin states the puzzle in the article's abstract: vicious people must be guided by reason since they act on decision (prohairesis), yet cannot be guided by reason since they are said not to live in accordance with it.",
+      "status": "confirmed",
+      "anchor": "ABSTRACT. Aristotle's account of vice presents a puzzle: (1) Vicious people must be guided by reason, since they act on decision (prohairesis)"
+    },
+    {
+      "claim": "Irwin says the puzzle is resolved by examining the pursuit of the fine and the expedient, the connexion between vice and pleasure, and the particular kind of regret of the vicious person.",
+      "status": "confirmed",
+      "anchor": "once we examine Aristotle's account of (a) the pursuit of the fine and of the expedient; (b) the connexion between vice and the pursuit of pleasure; (c) the particular kind of regret"
+    },
+    {
+      "claim": "Irwin concedes he develops Aristotle beyond Aristotle's explicit remarks.",
+      "status": "confirmed",
+      "anchor": "I have developed some of his remarks beyond anything he says",
+      "location": "Section 8, 'Vice and Pleasure'",
+      "note": "The brief says this concession comes 'near the middle of the paper'. It occurs at the head of section 8 of 11 — accurate."
+    },
+    {
+      "claim": "Irwin closes by conceding the account fits some vices better than others, working less well for greed, vindictiveness, and domination.",
+      "status": "confirmed_but_incomplete", "severity": "minor",
+      "anchor": "Cowardice, intemperance, and sloth might plausibly be understood as following one's inclinations and failing to raise some evaluative questions about them. But it is more difficult to accept this analysis for greed, or vindictiveness, or the desire for power and domination.",
+      "location": "Section 11, 'The Adequacy of Aristotle's Account'",
+      "discrepancy": "The brief lists the well-fitting vices as 'cowardice and intemperance'. Irwin's own list is three: cowardice, intemperance, AND SLOTH. A run that reproduces only the brief's two is reproducing the brief's omission, not the paper.",
+      "downstreamRequirement": "The generated edition must name all three."
+    },
+    {
+      "claim": "Irwin adapts part of his exposition from Aquinas, specifically the distinction among sin from passion, ignorance, and deliberate badness, in note 1.",
+      "status": "confirmed",
+      "anchor": "Aquinas sees that to understand sin, we must distinguish its different sources. The three that he discusses are passion, ignorance, and deliberate badness (certa malitia).",
+      "location": "Note 1",
+      "note": "Confirms both the content and the brief's claim about its placement in note 1. 'certa malitia' is the Latin term Irwin uses and should surface in the glossary module."
+    },
+    {
+      "claim": "Irwin invokes Callicles and Thrasymachus as figures who appear to choose vice on principle, then denies Aristotle treats ordinary vicious agents that way.",
+      "status": "confirmed",
+      "anchor": "This might seem to be the outlook of Callicles and Thrasymachus, as Plato presents them. In that case, virtuous and vicious people agree in deciding on actions because they are fine; they simply differ about which actions these are."
+    },
+    {
+      "claim": "Callicles in the Gorgias illustrates the vice of intemperance specifically.",
+      "status": "confirmed",
+      "anchor": "Callicles in the Gorgias illustrates this feature of vice, and specifically of intemperance."
+    },
+    {
+      "claim": "Irwin cites Jean Hampton as a forceful statement of the objection that Aristotle's account of vice is unstable.",
+      "status": "confirmed",
+      "anchor": "A vigorous statement of some of these objections to Aristotle is presented by Jean Hampton",
+      "location": "Note 2",
+      "seeAlso": "hampton-immorality — the brief's citation details for this work are wrong; the attribution itself is right."
+    },
+    {
+      "claim": "Irwin names Annas as a carefully defended statement of the inconsistency charge, and Broadie as criticizing her.",
+      "status": "confirmed",
+      "anchor": "A more carefully defended statement of the view that Aristotle is inconsistent appears in Julia Annas... Her argument is criticized by Sarah Broadie, Ethics with Aristotle (Oxford: Oxford University Press, 1991), p. 177n41.",
+      "location": "Note 2",
+      "correction": "The brief calls Broadie 'the [most sympathetic] predecessor Irwin cites, especially on self-love and friendship.' Irwin's actual note cites Broadie narrowly, as the critic of Annas at a single footnote (p. 177n41). The brief overstates the role. Treat Broadie as a cited critic of the inconsistency charge, not as a broad precursor."
+    },
+    {
+      "claim": "The paper draws on Nicomachean Ethics I, II, III, VII, and IX rather than treating Book VII and Book IX as unrelated.",
+      "status": "confirmed",
+      "evidence": "Irwin's note 3 chains EN citations across 1166b, 1168a, 1169a, and 1110b in a single note; term frequencies across the paper show sustained engagement with decision (41), the fine (35), incontinence (30), regret (25), and self-love (11)."
+    },
+    {
+      "claim": "Vice is distinguished from incontinence because the vicious act on decision.",
+      "status": "confirmed",
+      "evidence": "Stated in the abstract and developed across sections 5 ('Types of Decision') and 8; 'incontinen*' occurs 30 times."
+    },
+    {
+      "claim": "The virtuous person's orientation is to the fine, the vicious person's to the expedient.",
+      "status": "confirmed",
+      "evidence": "Sections 6 ('Pursuing the Fine') and 7 ('Pursuing the Expedient without the Fine') are dedicated to exactly this contrast."
+    }
+  ],
+
+  "sectionStructure": {
+    "status": "recovered_from_source",
+    "note": "Extracted from the fixture itself; use as the expected structural outline. Section 1 and 3 headings were not cleanly recoverable from the merged text layer and must come from GROBID.",
+    "sections": [
+      { "n": 2, "title": "A Gap in Aristotle's Moral [Psychology]" },
+      { "n": 4, "title": "Vice and [Decision]" },
+      { "n": 5, "title": "Types of Decision" },
+      { "n": 6, "title": "Pursuing the Fine" },
+      { "n": 7, "title": "Pursuing the Expedient without the Fine" },
+      { "n": 8, "title": "Vice and Pleasure" },
+      { "n": 9, "title": "The Vicious Person's Regret" },
+      { "n": 10, "title": "The Instability of the Vicious Person" },
+      { "n": 11, "title": "The Adequacy of Aristotle's Account" }
+    ]
+  },
+
+  "openQuestions": [
+    {
+      "id": "oq-roochnik-pages",
+      "question": "Are Roochnik 2007's pages really 207-220?",
+      "why": "Neither Crossref nor OpenAlex carries the page range.",
+      "handling": "Record as unverified. Do not display a page range asserted only by the brief."
+    },
+    {
+      "id": "oq-brickhouse-characterization",
+      "question": "Does Brickhouse's argument really describe vice as 'reason-guided pursuit of bodily pleasure under a false view of the good'?",
+      "why": "The brief states this from the abstract only; the full text was not inspected during verification.",
+      "handling": "metadata_only. Label the characterization as abstract-derived, not as a verified reading."
+    },
+    {
+      "id": "oq-muller-characterization",
+      "question": "Does Müller 2015 in fact argue vice is MORE disharmonious than akrasia?",
+      "why": "Abstract-level evidence only.",
+      "handling": "metadata_only until full text is inspected."
+    },
+    {
+      "id": "oq-bmcr-catalyst",
+      "question": "Does the BMCR review of 'Les philosophes face au vice' actually name Irwin 2001 as a catalyst?",
+      "why": "Asserted by the brief; not independently located during verification.",
+      "handling": "Treat as an unverified reception claim. It must not be used as evidence of influence unless the review text is retrieved and quoted."
+    }
+  ],
+
+  "influenceDisciplineNote": "Verification found NO case where the brief inferred influence from mere similarity — it consistently hedged to 'parallel, related, or part of the same debate'. That discipline is expected of the generated edition too: Elliott 2016 naming Irwin is explicit engagement and may be labelled as such; Nielsen, Barney, Marechal and Moss inhabiting the same problem-space is 'parallel/same-debate' and must NOT be labelled influence."
+}

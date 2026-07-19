@@ -1,0 +1,50 @@
+{
+  "$schema": "./fixture.schema.json",
+  "id": "irwin-vice-and-reason-2001",
+  "createdAt": "2026-07-19",
+  "artifact": {
+    "sourceFilename": "Irwin-ViceReason-2001.pdf",
+    "mimeType": "application/pdf",
+    "sizeBytes": 3102068,
+    "sha256": "e0a1172f3273f75f983af148f896c564c6ae51c25af34b7767b6795cd03c635b",
+    "storage": {
+      "provider": "supabase",
+      "bucket": "eval-fixtures",
+      "public": false,
+      "path": "irwin-vice-and-reason-2001/Irwin-ViceReason-2001.pdf"
+    },
+    "committedToGit": false,
+    "gitCommitPolicy": "The PDF must never be added to the repository. Only its hash, bibliographic identity, and short anchor excerpts are tracked here."
+  },
+  "provenance": {
+    "origin": "Uploaded by the project owner to the production application on 2026-07-18; copied byte-for-byte to the private eval bucket on 2026-07-19 before the production purge.",
+    "verifiedCopy": {
+      "method": "SHA-256 over both source and copy, plus a full byte-comparison of the downloaded buffers",
+      "identical": true
+    },
+    "accessControl": "The application only ever addresses SUPABASE_STORAGE_BUCKET=documents. The anon key returns HTTP 400 on a direct object read of this bucket and an empty list under RLS. No ordinary application user can reach it.",
+    "purpose": "Private, non-redistributed evaluation of the project's own extraction, research, and edition-generation pipeline.",
+    "redistribution": "None. The fixture is never served to users, never included in a deployment artifact, and never committed."
+  },
+  "bibliographicIdentity": {
+    "type": "journal-article",
+    "title": "Vice and Reason",
+    "authors": ["Irwin, Terence"],
+    "containerTitle": "The Journal of Ethics",
+    "volume": "5",
+    "issue": "1",
+    "pages": "73-97",
+    "year": 2001,
+    "doi": "10.1023/A:1011416908374",
+    "identityVerified": true,
+    "identityVerificationSource": "Crossref (api.crossref.org), resolved 2026-07-19; every field above matched the registered record exactly."
+  },
+  "expectedExtraction": {
+    "note": "Recorded from the last full-structure v2 production run over this exact file, as a regression baseline. A v3 run is not required to match these numbers, but a large drop indicates extraction regression.",
+    "structureState": "full",
+    "pages": 26,
+    "blocks": 156,
+    "authorialFootnotes": 4,
+    "grobidRequired": true
+  }
+}
