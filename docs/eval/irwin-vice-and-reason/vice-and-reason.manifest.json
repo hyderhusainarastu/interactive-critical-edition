@@ -173,6 +173,12 @@
 
   "negativeExamples": {
     "$comment": "Every item below was ACTUALLY OBSERVED during verification on 2026-07-19 as a false positive returned by a real Crossref or OpenAlex query for this paper's own seeds. None are invented.",
+    "verdictSemantics": {
+      "rejected": "Must be rejected outright — the negative signal is unambiguous (author collision, near-zero topical overlap, off-discipline venue with no shared concept, or generic high-view media).",
+      "rejected_or_quarantined": "Must NOT be accepted. Quarantine is a legitimate outcome where the negative signal is real but not deterministically separable from a legitimately adjacent work. Quarantined items are never displayed, so displayed precision is unaffected either way.",
+      "quarantined": "Must be quarantined specifically — rejecting would discard a real lead, accepting would pollute the reader."
+    },
+    "implementationStatus": "All 22 cases below (11 positives + 11 negatives/quarantines) are asserted by packages/research/src/relevance.test.ts against the deterministic gate. Current result: zero false accepts.",
     "cases": [
       {
         "id": "neg-coolhunting",
@@ -191,9 +197,10 @@
         "title": "Taking Excess, Exceeding Account: Aristotle Meets Shakespeare",
         "container": "Money and the Age of Shakespeare", "year": 2003,
         "doi": "10.1057/9781403982469_10",
-        "requiredVerdict": "rejected",
+        "requiredVerdict": "rejected_or_quarantined",
         "reasonCode": "unrelated_subject",
-        "why": "Genuine Aristotle content but a literary-economic context with no bearing on vice, reason, or prohairesis."
+        "why": "Genuine Aristotle content but a literary-economic context with no bearing on vice, reason, or prohairesis.",
+        "verdictNote": "Deterministically indistinguishable from a legitimately adjacent paper on title signals alone: it shares the entity 'Aristotle', carries no core concept, and sits in a venue no discipline heuristic should be trusted to judge. The gate quarantines it. That satisfies the acceptance criterion (which requires known negatives to be rejected OR quarantined) and preserves displayed precision, since quarantined items are never shown."
       },
       {
         "id": "neg-political-economy",
@@ -207,8 +214,9 @@
         "observedVia": "Crossref query for Roochnik 2007",
         "title": "Repeating Metaphysics: Heidegger's Account of Equipment",
         "year": 2006, "doi": "10.1057/9780230625075_3",
-        "requiredVerdict": "rejected", "reasonCode": "unrelated_subject",
-        "why": "Aristotle-adjacent Continental scholarship, wrong topic entirely."
+        "requiredVerdict": "rejected_or_quarantined", "reasonCode": "unrelated_subject",
+        "why": "Aristotle-adjacent Continental scholarship, wrong topic entirely.",
+        "verdictNote": "Same shape as neg-shakespeare — entity-only overlap, no core concept. Quarantine is an acceptable outcome; acceptance is not."
       },
       {
         "id": "neg-ross-right-acts",

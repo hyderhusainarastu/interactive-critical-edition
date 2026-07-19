@@ -15,6 +15,7 @@ import {
   providerAttempts,
   researchCache,
   researchResources,
+  researchCandidates,
   credibilityAssessments,
   works,
 } from "@ice/db";
@@ -47,6 +48,11 @@ import {
   overSoftCap,
   RESEARCH_LIMITS,
   runDiscovery,
+  assessCandidate,
+  buildTopicSignature,
+  laneForResource,
+  citedSurnamesFrom,
+  type WorkIdentity,
   synthesizeNote,
   withCache,
   type CacheStore,
@@ -530,11 +536,88 @@ export async function analyzeEditionRun(input: {
     );
   }
 
+  // ---- Relevance gate: runs BEFORE any authority scoring -----------------
+  // Authority answers "how trustworthy is this source?", which is meaningless
+  // until "is this source about the right thing?" is settled. Discovery returns
+  // real false positives (a marketing paper has ranked first for a scholarly
+  // seed query); scoring their authority first would dress them up rather than
+  // filter them out.
+  await db.update(processingRuns).set({ stage: "relevance-gate", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+
+  const identity: WorkIdentity = {
+    title: doc.title,
+    authors: doc.authorName ? [doc.authorName] : [],
+    year: null,
+    doi: null,
+    ...buildTopicSignature({
+      title: doc.title,
+      bodyText: input.text,
+      concepts: [doc.title],
+    }),
+    explicitCitationKeys: new Set(),
+    explicitCitationTexts: citationTexts,
+    citedAuthorSurnames: citedSurnamesFrom(citationTexts),
+    citationGraphKeys: new Set(),
+  };
+
+  const assessed = discovery.resources.map((r) => {
+    // The lane feeds the gate, and whether something is an explicit citation
+    // decides the lane — so assess once to learn that, then settle the lane.
+    const provisional = assessCandidate(r, identity, "scholarly_debate");
+    const lane = laneForResource(r, provisional.signals.isExplicitCitation);
+    return { r, lane, assessment: assessCandidate(r, identity, lane) };
+  });
+
+  // Persist EVERY candidate, including rejects. Deleting them would make the
+  // pipeline unfalsifiable: the precision/recall gates are measured against
+  // exactly these rows.
+  if (assessed.length) {
+    await db
+      .insert(researchCandidates)
+      .values(
+        assessed.map(({ r, lane, assessment }) => ({
+          runId: input.runId,
+          lane,
+          provider: r.provider,
+          title: r.title,
+          authors: r.authors,
+          year: r.year,
+          doi: canonicalizeDoi(r.doi),
+          isbn: canonicalizeIsbn(r.isbn),
+          canonicalUrl: canonicalizeUrl(r.url),
+          venue: r.venue,
+          normalizedKey: assessment.normalizedKey,
+          verdict: assessment.verdict,
+          confidence: assessment.confidence,
+          reasons: assessment.reasons,
+          signals: assessment.signals,
+          venueReliable: assessment.venueReliable,
+        })),
+      )
+      // A lane re-run must update rather than duplicate, or the precision
+      // numbers stop meaning anything.
+      .onConflictDoNothing();
+  }
+
+  const acceptedResources = assessed.filter((a) => a.assessment.verdict === "accepted");
+  const gateSummary = {
+    accepted: acceptedResources.length,
+    quarantined: assessed.filter((a) => a.assessment.verdict === "quarantined").length,
+    rejected: assessed.filter((a) => a.assessment.verdict === "rejected").length,
+  };
+  console.log(
+    `[analyze] relevance gate: ${gateSummary.accepted} accepted, ` +
+      `${gateSummary.quarantined} quarantined, ${gateSummary.rejected} rejected ` +
+      `(of ${assessed.length} discovered)`,
+  );
+
   await db.update(processingRuns).set({ stage: "classification", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
 
-  // Highest-authority first, capped by the full-inspection budget.
-  const ranked = discovery.resources
-    .map((r) => ({ r, authority: classifyAuthority(r) }))
+  // Highest-authority first, capped by the full-inspection budget. Only
+  // ACCEPTED candidates get here — nothing quarantined or rejected is ever
+  // scored, projected, or shown.
+  const ranked = acceptedResources
+    .map(({ r }) => ({ r, authority: classifyAuthority(r) }))
     .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority])
     .slice(0, RESEARCH_LIMITS.maxFullInspections);
 

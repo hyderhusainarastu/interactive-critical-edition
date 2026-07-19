@@ -932,3 +932,89 @@ export const researchCache = pgTable("research_cache", {
   uniqueIndex("research_cache_provider_key_unique").on(t.provider, t.cacheKey),
   index("research_cache_expires_idx").on(t.expiresAt),
 ]);
+
+// ---------------------------------------------------------------------------
+// Phase 8 relevance closeout — candidate verdicts
+// ---------------------------------------------------------------------------
+
+/**
+ * The lane that produced a candidate. Discovery is run per-lane so a candidate
+ * is always judged against the question that surfaced it — "did Irwin cite
+ * this?" and "is this a useful lecture?" are different bars, and collapsing
+ * them is how unrelated material reaches a reader.
+ */
+export const queryLaneEnum = pgEnum("query_lane", [
+  "explicit_citation",
+  "primary_prerequisite",
+  "historical_background",
+  "concept_doctrine",
+  "scholarly_debate",
+  "author_corpus",
+  "reception_citation",
+  "parallel_literature",
+  "lecture_course",
+  "video_podcast",
+  "blog_newsletter",
+  "public_discussion",
+]);
+
+/**
+ * Relevance verdict, assigned BEFORE any authority scoring. A DOI proves a
+ * record exists; it never proves relevance, and popularity proves less still.
+ *   accepted    — may project into annotations, Library, roadmap, and graph
+ *   quarantined — research review only; never displayed to the reader
+ *   rejected    — recorded with reasons, never projected anywhere
+ */
+export const candidateVerdictEnum = pgEnum("candidate_verdict", [
+  "accepted",
+  "quarantined",
+  "rejected",
+]);
+
+/**
+ * Every candidate discovery surfaced, with the evidence for its verdict. This
+ * table is the audit trail: a wrong inclusion (or a wrong exclusion) must be
+ * explainable after the fact, which means the signals behind the decision have
+ * to be stored, not just the decision.
+ *
+ * Rejected and quarantined rows are kept deliberately — they are what the
+ * gold-eval precision/recall gates are measured against, and deleting them
+ * would make the pipeline unfalsifiable.
+ */
+export const researchCandidates = pgTable("research_candidate", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  lane: queryLaneEnum("lane").notNull(),
+  query: text("query"),
+  provider: text("provider").notNull(),
+  // Identity as discovered (before any projection).
+  title: text("title").notNull(),
+  authors: jsonb("authors"),
+  year: integer("year"),
+  doi: text("doi"),
+  isbn: text("isbn"),
+  canonicalUrl: text("canonical_url"),
+  venue: text("venue"),
+  // Same dedup identity as research_resource, so an accepted candidate maps
+  // 1:1 onto the resource it becomes.
+  normalizedKey: text("normalized_key"),
+  verdict: candidateVerdictEnum("verdict").notNull(),
+  confidence: real("confidence").notNull().default(0),
+  /** Machine-readable reason codes (RelevanceReason[]) — never free prose. */
+  reasons: jsonb("reasons"),
+  /** Full RelevanceSignals: overlap, core matches, grounding, collisions. */
+  signals: jsonb("signals"),
+  /** False when the venue field is present but untrustworthy (mis-indexed
+   *  catalogue records are common; we degrade the field, not the record). */
+  venueReliable: boolean("venue_reliable").notNull().default(true),
+  /** Set only for accepted candidates that were projected into a resource. */
+  resourceId: uuid("resource_id").references(() => researchResources.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("research_candidate_run_idx").on(t.runId),
+  index("research_candidate_verdict_idx").on(t.runId, t.verdict),
+  index("research_candidate_lane_idx").on(t.runId, t.lane),
+  // One verdict per (run, lane, identity): re-running a lane updates rather
+  // than duplicating, so precision metrics stay meaningful.
+  uniqueIndex("research_candidate_run_lane_key_unique").on(t.runId, t.lane, t.normalizedKey),
+]);

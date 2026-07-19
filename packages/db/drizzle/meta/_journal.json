@@ -92,6 +92,13 @@
       "when": 1784556000000,
       "tag": "0012_phase_8_research_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784556001000,
+      "tag": "0013_phase_8_candidate_verdicts",
+      "breakpoints": true
     }
   ]
 }
