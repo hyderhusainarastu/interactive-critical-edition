@@ -18,7 +18,11 @@ export async function POST(request: Request) {
   // extraction. Counting it here made a failed browser request permanently
   // consume quota even though it never uploaded a document.
   const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(and(eq(documents.userId, userId), ne(documents.processingStatus, "uploaded")));
-  if (used + input.data.size > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB)." }, { status: 413 });
+  // PostgreSQL SUM(int) is bigint. Some production drivers decode bigint as
+  // a string, so normalize it before arithmetic (string + number would
+  // concatenate and falsely exceed the quota after the first upload).
+  const usedBytes = Number(used);
+  if (!Number.isFinite(usedBytes) || usedBytes + input.data.size > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB)." }, { status: 413 });
   const title = input.data.name.replace(/\.[^./]+$/, "").replace(/[_-]+/g, " ");
   const [work] = await db.insert(works).values({ userId, title, workType: "primary" }).returning({ id: works.id });
   const filename = input.data.name.replace(/[^\w.\-]+/g, "_").slice(0, 200);

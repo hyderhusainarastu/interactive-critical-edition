@@ -17,7 +17,8 @@ export async function POST(request: Request) {
   // This is the authoritative check; the init-route check is only an early
   // user-facing guard while the file is still in the browser.
   const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(and(eq(documents.userId, userId), ne(documents.processingStatus, "uploaded")));
-  if (used + document.fileSize > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB). Remove an existing work and try again." }, { status: 413 });
+  const usedBytes = Number(used);
+  if (!Number.isFinite(usedBytes) || usedBytes + document.fileSize > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB). Remove an existing work and try again." }, { status: 413 });
   const [queued] = await db.update(documents)
     .set({ processingStatus: "processing", updatedAt: new Date() })
     .where(and(eq(documents.id, document.id), eq(documents.processingStatus, "uploaded")))

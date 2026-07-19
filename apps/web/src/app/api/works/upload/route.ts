@@ -42,7 +42,9 @@ export async function POST(request: Request) {
     .select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` })
     .from(documents)
     .where(eq(documents.userId, userId));
-  if (used + file.size > USER_STORAGE_QUOTA_BYTES) {
+  // SUM(int) may arrive as a bigint string in serverless production.
+  const usedBytes = Number(used);
+  if (!Number.isFinite(usedBytes) || usedBytes + file.size > USER_STORAGE_QUOTA_BYTES) {
     return NextResponse.json(
       { error: "You've reached your storage quota (500MB)." },
       { status: 413 },
