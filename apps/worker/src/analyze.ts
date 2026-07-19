@@ -40,7 +40,7 @@ import {
   charge,
   classifyAuthority,
   computeAgreement,
-  generateQueries,
+  generateLaneQueries,
   heuristicNote,
   makeBudget,
   meetsFactualBar,
@@ -507,8 +507,10 @@ export async function analyzeEditionRun(input: {
   const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
   const citationTexts = citationCandidates.map((c) => c.text);
 
-  // Query generation (LLM cheap-tier or heuristic fallback).
-  const qg = await generateQueries(responses, {
+  // Lane-specific query generation (LLM cheap-tier or heuristic fallback).
+  // Running discovery per lane means a candidate is judged against the question
+  // that surfaced it, and each lane only queries providers that can serve it.
+  const qg = await generateLaneQueries(responses, {
     primary: { title: doc.title, author: doc.authorName },
     citationTexts,
     model: cheapModel,
@@ -516,10 +518,10 @@ export async function analyzeEditionRun(input: {
   });
   if (qg.usedModel) logUsage("query_generation", "research-discovery", cheapModel, qg.promptTokens, qg.completionTokens);
 
-  // Discovery across every adapter (disabled ones still record a `disabled`
-  // attempt), each wrapped with the persistent result cache.
+  // Discovery across every adapter (those never consulted still record an
+  // honest attempt), each wrapped with the persistent result cache.
   const adapters = allAdapters().map((a) => withCache(a, dbCacheStore));
-  const discovery = await runDiscovery({ adapters, rounds: qg.rounds, timeoutMs: 10_000 });
+  const discovery = await runDiscovery({ adapters, rounds: qg.lanes, timeoutMs: 10_000 });
 
   if (discovery.attempts.length) {
     await db.insert(providerAttempts).values(
@@ -561,10 +563,16 @@ export async function analyzeEditionRun(input: {
   };
 
   const assessed = discovery.resources.map((r) => {
-    // The lane feeds the gate, and whether something is an explicit citation
-    // decides the lane — so assess once to learn that, then settle the lane.
-    const provisional = assessCandidate(r, identity, "scholarly_debate");
-    const lane = laneForResource(r, provisional.signals.isExplicitCitation);
+    // Prefer the lane that actually surfaced the resource. `laneForResource` is
+    // the fallback for anything discovery could not attribute (cached hits,
+    // resources with no usable identity key).
+    const key = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
+    const discovered = key ? discovery.laneByKey.get(key) : undefined;
+    const provisional = assessCandidate(r, identity, discovered ?? "scholarly_debate");
+    // An explicit citation outranks whatever lane found it.
+    const lane = provisional.signals.isExplicitCitation
+      ? "explicit_citation"
+      : discovered ?? laneForResource(r, false);
     return { r, lane, assessment: assessCandidate(r, identity, lane) };
   });
 

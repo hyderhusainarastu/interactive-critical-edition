@@ -1,5 +1,6 @@
 import { RESEARCH_LIMITS } from "./config";
-import { dedupeResources } from "./normalize";
+import { dedupeResources, normalizedKey } from "./normalize";
+import type { QueryLane } from "./relevance";
 import type { ProviderAttempt, ProviderName, ProviderStatus, RawResource, SourceAdapter } from "./types";
 
 /**
@@ -72,11 +73,46 @@ function mergeAttempt(map: Map<ProviderName, ProviderAttempt>, a: ProviderAttemp
   if (SEVERITY[a.status] > SEVERITY[prior.status]) prior.status = a.status;
 }
 
+/**
+ * Which providers are worth asking for a given lane. Routing is a cost control
+ * AND a precision control: asking YouTube for a work's explicit citations
+ * spends budget to return material the lane cannot use, and every extra
+ * irrelevant result is another chance for a false positive to slip through.
+ */
+export function providersForLane(lane: QueryLane): ReadonlySet<ProviderName> {
+  switch (lane) {
+    case "lecture_course":
+    case "video_podcast":
+      return new Set<ProviderName>(["youtube", "tavily"]);
+    case "blog_newsletter":
+      return new Set<ProviderName>(["tavily"]);
+    case "public_discussion":
+      return new Set<ProviderName>(["mastodon", "bluesky", "tavily"]);
+    case "primary_prerequisite":
+      // Primary texts are catalogued as books far more often than as articles.
+      return new Set<ProviderName>(["openlibrary", "googlebooks", "crossref", "openalex"]);
+    default:
+      return new Set<ProviderName>(["crossref", "openalex", "semanticscholar", "openlibrary", "googlebooks"]);
+  }
+}
+
+/** A discovery round scoped to one lane. */
+export interface LaneRound {
+  lane: QueryLane;
+  queries: string[];
+}
+
 export interface DiscoveryResult {
   resources: RawResource[];
   attempts: ProviderAttempt[];
   saturationNote: string | null;
   rounds: number;
+  /**
+   * normalizedKey → the lane that FIRST surfaced the resource. First-wins
+   * rather than last-wins: lanes run in priority order, so the earliest lane to
+   * find something is the most specific claim about why it belongs.
+   */
+  laneByKey: Map<string, QueryLane>;
 }
 
 /**
@@ -87,32 +123,52 @@ export interface DiscoveryResult {
  */
 export async function runDiscovery(input: {
   adapters: SourceAdapter[];
-  rounds: string[][];
+  /** Plain rounds query every adapter; lane rounds route to the providers that
+   *  can actually serve the lane and tag what they find. */
+  rounds: string[][] | LaneRound[];
   isRelevant?: (r: RawResource) => boolean;
   timeoutMs?: number;
 }): Promise<DiscoveryResult> {
   const relevant = input.isRelevant ?? (() => true);
   const attempts = new Map<ProviderName, ProviderAttempt>();
+  const laneByKey = new Map<string, QueryLane>();
   let resources: RawResource[] = [];
   let lowGrowthStreak = 0;
   let saturationNote: string | null = null;
   let roundsRun = 0;
 
-  for (const queries of input.rounds) {
+  const normalized: LaneRound[] = input.rounds.map((r) =>
+    Array.isArray(r) ? ({ lane: undefined as unknown as QueryLane, queries: r }) : r,
+  );
+
+  for (const round of normalized) {
+    const { lane, queries } = round;
     if (resources.length >= RESEARCH_LIMITS.maxResourcesPreDedup) {
       saturationNote = `Reached pre-dedup resource cap (${RESEARCH_LIMITS.maxResourcesPreDedup}).`;
       break;
     }
     roundsRun++;
     const before = resources.length;
+    // A lane only queries providers that can serve it. Every adapter still
+    // records an attempt across the run as a whole, so "not consulted for this
+    // lane" never masquerades as "not consulted at all".
+    const allowed = lane ? providersForLane(lane) : null;
+    const active = allowed ? input.adapters.filter((a) => allowed.has(a.provider)) : input.adapters;
     const results = await Promise.all(
-      input.adapters.map((a) =>
+      active.map((a) =>
         a.search(queries, { maxResults: perProviderLimit(a.provider), timeoutMs: input.timeoutMs }),
       ),
     );
     for (const r of results) {
       mergeAttempt(attempts, r.attempt);
-      for (const res of r.resources) if (relevant(res)) resources.push(res);
+      for (const res of r.resources) {
+        if (!relevant(res)) continue;
+        resources.push(res);
+        if (lane) {
+          const key = normalizedKey({ doi: res.doi, isbn: res.isbn, url: res.url, title: res.title, authors: res.authors, year: res.year });
+          if (key && !laneByKey.has(key)) laneByKey.set(key, lane);
+        }
+      }
     }
     resources = dedupeResources(resources).slice(0, RESEARCH_LIMITS.maxResourcesPreDedup);
 
@@ -131,5 +187,19 @@ export async function runDiscovery(input: {
     }
   }
 
-  return { resources, attempts: [...attempts.values()], saturationNote, rounds: roundsRun };
+  // Providers that never ran in ANY lane still owe the run an honest attempt
+  // record — silence must never be mistaken for "nothing was found".
+  for (const a of input.adapters) {
+    if (attempts.has(a.provider)) continue;
+    mergeAttempt(attempts, {
+      provider: a.provider,
+      status: a.isEnabled() ? "unavailable" : "disabled",
+      queries: [],
+      resultCount: 0,
+      inspectionDepth: 0,
+      latencyMs: 0,
+    });
+  }
+
+  return { resources, attempts: [...attempts.values()], saturationNote, rounds: roundsRun, laneByKey };
 }

@@ -1,4 +1,4 @@
-import { aiUsageLogs, bibliographicRecords, db, processingJobs, processingRuns, providerAttempts, researchCache } from "@ice/db";
+import { aiUsageLogs, bibliographicRecords, db, processingJobs, processingRuns, providerAttempts, researchCache, researchCandidates } from "@ice/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
 
@@ -68,6 +68,45 @@ export default async function AdminPage() {
     .select({ provider: providerAttempts.provider, status: providerAttempts.status, count: sql<number>`count(*)` })
     .from(providerAttempts)
     .groupBy(providerAttempts.provider, providerAttempts.status);
+  // ---- Relevance gate (Phase 8 closeout) ----
+  // Rejected rows are deliberately retained: the precision figures below are
+  // measured against them, and deleting them would make the gate unfalsifiable.
+  const [candidateAgg] = await db
+    .select({
+      accepted: sql<number>`count(*) filter (where ${researchCandidates.verdict} = 'accepted')`,
+      quarantined: sql<number>`count(*) filter (where ${researchCandidates.verdict} = 'quarantined')`,
+      rejected: sql<number>`count(*) filter (where ${researchCandidates.verdict} = 'rejected')`,
+    })
+    .from(researchCandidates);
+
+  const candidatesByLane = await db
+    .select({ lane: researchCandidates.lane, verdict: researchCandidates.verdict, count: sql<number>`count(*)` })
+    .from(researchCandidates)
+    .groupBy(researchCandidates.lane, researchCandidates.verdict)
+    .orderBy(researchCandidates.lane);
+
+  const quarantined = await db
+    .select({
+      id: researchCandidates.id,
+      title: researchCandidates.title,
+      venue: researchCandidates.venue,
+      lane: researchCandidates.lane,
+      confidence: researchCandidates.confidence,
+      reasons: researchCandidates.reasons,
+      venueReliable: researchCandidates.venueReliable,
+    })
+    .from(researchCandidates)
+    .where(eq(researchCandidates.verdict, "quarantined"))
+    .orderBy(desc(researchCandidates.confidence))
+    .limit(50);
+
+  // Share of judged candidates that were actually shown. Reported as "—" rather
+  // than a fabricated 100% when nothing has been judged yet.
+  const judged =
+    Number(candidateAgg?.accepted ?? 0) + Number(candidateAgg?.quarantined ?? 0) + Number(candidateAgg?.rejected ?? 0);
+  const displayedPrecision =
+    judged > 0 ? `${((Number(candidateAgg?.accepted ?? 0) / judged) * 100).toFixed(0)}%` : "—";
+
   const recentSaturation = await db
     .select({ id: processingRuns.id, version: processingRuns.version, note: processingRuns.saturationNote, updatedAt: processingRuns.updatedAt })
     .from(processingRuns)
@@ -249,6 +288,81 @@ export default async function AdminPage() {
         <p className="mt-1 text-xs text-[var(--color-text-muted)]">
           Expired cache rows are swept on worker startup. Orphan catalogue = bibliographic records no analysis references (eventual cleanup).
         </p>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Source relevance review
+        </h2>
+        <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+          Every source discovery found is judged for relevance <em>before</em> its authority is scored — a DOI proves a
+          record exists, never that it belongs. Only <strong>accepted</strong> sources reach the reader, Library,
+          roadmap, or graph. Quarantined ones are held here for review; rejected ones are kept as the record of what was
+          excluded and why.
+        </p>
+
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Accepted" value={Number(candidateAgg?.accepted ?? 0)} />
+          <Stat label="Quarantined" value={Number(candidateAgg?.quarantined ?? 0)} />
+          <Stat label="Rejected" value={Number(candidateAgg?.rejected ?? 0)} />
+          <Stat label="Displayed precision" value={displayedPrecision} />
+        </div>
+
+        {candidatesByLane.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2 text-xs">
+            {candidatesByLane.map((r) => (
+              <span
+                key={`${r.lane}/${r.verdict}`}
+                className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-muted)]"
+              >
+                {r.lane.replace(/_/g, " ")} · {r.verdict}:{" "}
+                <span className="tabular-nums text-[var(--color-text)]">{Number(r.count)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {quarantined.length > 0 ? (
+          <div className="overflow-x-auto">
+            <h3 className="mb-1 text-sm font-medium text-[var(--color-accent-ink)]">
+              Quarantined — uncertain, not shown to readers
+            </h3>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
+                  <th className="py-1 pr-4 font-medium">Title</th>
+                  <th className="py-1 pr-4 font-medium">Lane</th>
+                  <th className="py-1 pr-4 font-medium">Confidence</th>
+                  <th className="py-1 pr-4 font-medium">Why</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quarantined.map((c) => (
+                  <tr key={c.id} className="border-b border-[var(--color-border)] align-top">
+                    <td className="max-w-[22rem] py-1 pr-4 text-[var(--color-text)]">
+                      <span className="line-clamp-2">{c.title}</span>
+                      {c.venue && (
+                        <span className="block text-xs text-[var(--color-text-muted)]">
+                          {c.venue}
+                          {!c.venueReliable && " — venue metadata looks unreliable"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1 pr-4 text-[var(--color-text-muted)]">{c.lane.replace(/_/g, " ")}</td>
+                    <td className="py-1 pr-4 tabular-nums text-[var(--color-text-muted)]">
+                      {Number(c.confidence).toFixed(2)}
+                    </td>
+                    <td className="py-1 pr-4 text-xs text-[var(--color-text-muted)]">
+                      {(Array.isArray(c.reasons) ? (c.reasons as string[]) : []).join(", ").replace(/_/g, " ") || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--color-text-muted)]">No quarantined sources.</p>
+        )}
       </section>
     </div>
   );

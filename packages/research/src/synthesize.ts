@@ -1,3 +1,5 @@
+import type { LaneRound } from "./discover";
+import { QUERY_LANES } from "./relevance";
 import type { RawResource } from "./types";
 
 /**
@@ -43,6 +45,143 @@ export function heuristicQueries(primary: PrimaryWork, citationTexts: string[]):
     .filter((c) => c.length > 6)
     .slice(0, 8);
   return [round1, round2].filter((r) => r.length > 0);
+}
+
+/**
+ * Deterministic per-lane query rounds. Lanes are emitted in priority order:
+ * explicit citations first (the strongest claim a source can have on a work),
+ * then scholarly context, then public/media lanes. Discovery consumes them in
+ * that order, so the earliest lane to surface a resource is the most specific
+ * explanation of why it belongs.
+ *
+ * Lanes with nothing useful to ask are omitted rather than padded with a vague
+ * query — an empty lane costs nothing, a bad query costs budget and precision.
+ */
+export function heuristicLaneQueries(
+  primary: PrimaryWork,
+  citationTexts: string[],
+  concepts: string[] = [],
+): LaneRound[] {
+  const title = primary.title.trim();
+  const author = primary.author?.trim() || "";
+  const byAuthor = author ? `${author} ${title}` : title;
+  const topic = [title, ...concepts.slice(0, 3)].filter(Boolean).join(" ");
+
+  const rounds: LaneRound[] = [];
+  const add = (lane: LaneRound["lane"], queries: (string | false)[]) => {
+    const clean = [...new Set(queries.filter((q): q is string => Boolean(q && q.trim().length > 3)))];
+    if (clean.length) rounds.push({ lane, queries: clean.slice(0, 12) });
+  };
+
+  add("explicit_citation", citationTexts.map((c) => c.replace(/\s+/g, " ").trim().slice(0, 90)).filter((c) => c.length > 6).slice(0, 10));
+  add("scholarly_debate", [title, byAuthor, `${title} criticism`, `${title} secondary literature`, `${title} interpretation`]);
+  add("author_corpus", [author && `${author} works`, author && `${author} bibliography`]);
+  add("reception_citation", [`works citing ${byAuthor}`, `${title} reception`, `${title} response to`]);
+  add("concept_doctrine", concepts.slice(0, 6).map((c) => `${c} ${title}`));
+  add("historical_background", [`${title} historical context`, author && `${author} intellectual background`]);
+  add("primary_prerequisite", [`${topic} primary sources`, `${topic} prerequisite reading`]);
+  add("parallel_literature", [`${title} compared with`, `${topic} parallel debate`]);
+  add("lecture_course", [`${topic} university lecture`, `${topic} course syllabus`]);
+  add("video_podcast", [`${topic} lecture`, `${topic} podcast`]);
+  add("blog_newsletter", [`${topic} essay`, `${topic} commentary`]);
+  add("public_discussion", [`${topic} discussion`]);
+
+  return rounds;
+}
+
+const LANE_QUERY_SCHEMA = {
+  type: "object",
+  properties: {
+    lanes: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          lane: { type: "string", enum: [...QUERY_LANES] },
+          queries: { type: "array", items: { type: "string" } },
+        },
+        required: ["lane", "queries"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["lanes"],
+  additionalProperties: false,
+};
+
+function normalizeLaneRounds(parsed: unknown): LaneRound[] {
+  const lanes = (parsed as { lanes?: unknown }).lanes;
+  if (!Array.isArray(lanes)) throw new Error("lanes not an array");
+  const valid = new Set<string>(QUERY_LANES);
+  const seen = new Set<string>();
+  const clean: LaneRound[] = [];
+  for (const entry of lanes) {
+    const lane = (entry as { lane?: unknown }).lane;
+    // Enum-constrained output still gets validated: an unrecognised lane is
+    // dropped rather than coerced, so a model can never invent a routing path.
+    if (typeof lane !== "string" || !valid.has(lane) || seen.has(lane)) continue;
+    const queries = (entry as { queries?: unknown }).queries;
+    const qs = (Array.isArray(queries) ? queries : [])
+      .filter((q): q is string => typeof q === "string")
+      .map((q) => q.replace(/\s+/g, " ").trim())
+      .filter((q) => q.length > 3)
+      .slice(0, 12);
+    if (!qs.length) continue;
+    seen.add(lane);
+    clean.push({ lane: lane as LaneRound["lane"], queries: qs });
+  }
+  if (!clean.length) throw new Error("no usable lane queries");
+  return clean;
+}
+
+/**
+ * Lane-aware query generation. Falls back to the deterministic lane queries on
+ * any failure, so losing the model degrades coverage, never correctness.
+ */
+export async function generateLaneQueries(
+  caller: StructuredCaller,
+  input: {
+    primary: PrimaryWork;
+    citationTexts: string[];
+    concepts?: string[];
+    model: string;
+    safetyIdentifier?: string;
+  },
+): Promise<{ lanes: LaneRound[]; promptTokens: number; completionTokens: number; usedModel: boolean }> {
+  const fallback = () => heuristicLaneQueries(input.primary, input.citationTexts, input.concepts ?? []);
+  if (!caller.available) return { lanes: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };
+  try {
+    const r = await caller.call({
+      model: input.model,
+      schemaName: "lane_search_queries",
+      schema: LANE_QUERY_SCHEMA,
+      safetyIdentifier: input.safetyIdentifier,
+      maxOutputTokens: 900,
+      system:
+        "You generate search queries for a scholarly research pipeline, grouped by LANE. " +
+        "Each lane answers a different question about the work: which sources it cites, what it " +
+        "presupposes, its historical background, its concepts, the scholarly debate around it, its " +
+        "author's other work, its reception, parallel literature, and lawful public teaching material " +
+        "(lectures, videos/podcasts, blogs, public discussion). " +
+        "Emit only lanes you can write a genuinely useful query for — omit the rest rather than padding. " +
+        "Use only the provided title/author/citations/concepts. Invent no facts, titles, or authors.",
+      input: JSON.stringify({
+        title: input.primary.title,
+        author: input.primary.author ?? null,
+        concepts: (input.concepts ?? []).slice(0, 12),
+        citations: input.citationTexts.slice(0, 20),
+      }),
+      validate: normalizeLaneRounds,
+    });
+    // The model supplements the deterministic lanes; it never replaces the
+    // explicit-citation lane, which is derived from the document itself.
+    const heuristic = fallback();
+    const modelLanes = new Set(r.data.map((l) => l.lane));
+    const merged = [...r.data, ...heuristic.filter((h) => !modelLanes.has(h.lane))];
+    return { lanes: merged, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };
+  } catch {
+    return { lanes: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };
+  }
 }
 
 const QUERY_SCHEMA = {

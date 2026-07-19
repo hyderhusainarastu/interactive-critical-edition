@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, runDiscovery } from "./discover";
+import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, runDiscovery } from "./discover";
 import type { AdapterResult, AdapterSearchOptions, ProviderName, RawResource, SourceAdapter } from "./types";
 
 function res(i: number, provider: ProviderName = "crossref"): RawResource {
@@ -113,5 +113,106 @@ describe("runDiscovery", () => {
     const out = await runDiscovery({ adapters: [a], rounds: [["q1"]], isRelevant: (r) => r.title !== "Work 2" });
     expect(out.resources.map((r) => r.title)).not.toContain("Work 2");
     expect(out.resources).toHaveLength(2);
+  });
+});
+
+// ---- Lane-scoped discovery (Phase 8 relevance closeout) ----
+
+describe("lane-scoped discovery", () => {
+  it("routes each lane only to providers that can serve it", () => {
+    expect([...providersForLane("video_podcast")]).toEqual(expect.arrayContaining(["youtube"]));
+    expect([...providersForLane("video_podcast")]).not.toContain("crossref");
+    expect([...providersForLane("public_discussion")]).toEqual(expect.arrayContaining(["mastodon", "bluesky"]));
+    expect([...providersForLane("scholarly_debate")]).toEqual(expect.arrayContaining(["crossref", "openalex"]));
+    expect([...providersForLane("scholarly_debate")]).not.toContain("youtube");
+    // Primary texts are catalogued as books far more often than as articles.
+    expect([...providersForLane("primary_prerequisite")]).toEqual(expect.arrayContaining(["openlibrary", "googlebooks"]));
+  });
+
+  it("only queries the adapters a lane routes to", async () => {
+    const calls: string[] = [];
+    const spy = (provider: ProviderName): SourceAdapter => ({
+      provider,
+      isEnabled: () => true,
+      async search(queries) {
+        calls.push(provider);
+        return {
+          attempt: { provider, status: "queried", queries, resultCount: 0, inspectionDepth: 0, latencyMs: 1 },
+          resources: [],
+        };
+      },
+    });
+    const adapters = [spy("crossref"), spy("youtube"), spy("bluesky")];
+    await runDiscovery({ adapters, rounds: [{ lane: "scholarly_debate", queries: ["aristotle vice"] }] });
+    expect(calls).toEqual(["crossref"]);
+  });
+
+  it("tags each resource with the lane that first surfaced it", async () => {
+    const make = (provider: ProviderName, title: string, doi: string): SourceAdapter => ({
+      provider,
+      isEnabled: () => true,
+      async search(queries) {
+        return {
+          attempt: { provider, status: "queried", queries, resultCount: 1, inspectionDepth: 0, latencyMs: 1 },
+          resources: [
+            {
+              provider, resourceType: "article", title, authors: [], year: null, url: null,
+              doi, isbn: null, snippet: null, venue: null, popularity: null, raw: null,
+            },
+          ],
+        };
+      },
+    });
+    const r = await runDiscovery({
+      adapters: [make("crossref", "Aristotle on Vice", "10.1080/09608788.2015.1022855")],
+      rounds: [
+        { lane: "explicit_citation", queries: ["irwin vice and reason"] },
+        { lane: "scholarly_debate", queries: ["aristotle vice"] },
+      ],
+    });
+    // Found in the explicit-citation lane first; the later lane must not
+    // overwrite the more specific attribution.
+    expect(r.laneByKey.get("doi:10.1080/09608788.2015.1022855")).toBe("explicit_citation");
+  });
+
+  it("records an honest attempt for adapters no lane consulted", async () => {
+    const never: SourceAdapter = {
+      provider: "youtube",
+      isEnabled: () => true,
+      async search() {
+        throw new Error("must not be called");
+      },
+    };
+    const used: SourceAdapter = {
+      provider: "crossref",
+      isEnabled: () => true,
+      async search(queries) {
+        return {
+          attempt: { provider: "crossref", status: "queried", queries, resultCount: 0, inspectionDepth: 0, latencyMs: 1 },
+          resources: [],
+        };
+      },
+    };
+    const r = await runDiscovery({ adapters: [used, never], rounds: [{ lane: "scholarly_debate", queries: ["x y z"] }] });
+    const yt = r.attempts.find((a) => a.provider === "youtube");
+    // Silence must never be mistaken for "nothing was found".
+    expect(yt).toBeDefined();
+    expect(yt?.status).toBe("unavailable");
+  });
+
+  it("still accepts plain (lane-less) rounds", async () => {
+    const a: SourceAdapter = {
+      provider: "crossref",
+      isEnabled: () => true,
+      async search(queries) {
+        return {
+          attempt: { provider: "crossref", status: "queried", queries, resultCount: 0, inspectionDepth: 0, latencyMs: 1 },
+          resources: [],
+        };
+      },
+    };
+    const r = await runDiscovery({ adapters: [a], rounds: [["one two three"]] });
+    expect(r.rounds).toBe(1);
+    expect(r.laneByKey.size).toBe(0);
   });
 });

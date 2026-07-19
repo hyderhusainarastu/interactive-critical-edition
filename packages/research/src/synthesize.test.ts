@@ -1,13 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  gradeClaims,
-  generateQueries,
-  heuristicNote,
-  heuristicQueries,
-  quoteIsGrounded,
-  synthesizeNote,
-  type StructuredCaller,
-} from "./synthesize";
+import { generateLaneQueries, generateQueries, gradeClaims, heuristicLaneQueries, heuristicNote, heuristicQueries, quoteIsGrounded, synthesizeNote, type StructuredCaller } from "./synthesize";
 import type { RawResource } from "./types";
 
 function sampleResource(over: Partial<RawResource> = {}): RawResource {
@@ -192,5 +184,81 @@ describe("heuristicNote", () => {
     expect(note).toContain("On Virtue");
     expect(note).toContain("Jane Doe");
     expect(note).toContain("crossref");
+  });
+});
+
+// ---- Lane-specific query generation (Phase 8 relevance closeout) ----
+
+describe("lane-specific query generation", () => {
+  const primary = { title: "Vice and Reason", author: "Terence Irwin" };
+
+  it("emits explicit citations first, so the strongest claim wins attribution", () => {
+    const lanes = heuristicLaneQueries(primary, ["Julia Annas, Plato and Aristotle on Friendship and Altruism, Mind 86 (1977)."], ["vice", "prohairesis"]);
+    expect(lanes[0].lane).toBe("explicit_citation");
+  });
+
+  it("omits lanes it cannot write a useful query for rather than padding", () => {
+    // No author and no citations: author-corpus and explicit-citation lanes
+    // have nothing real to ask, so they must not appear.
+    const lanes = heuristicLaneQueries({ title: "Vice and Reason" }, [], []);
+    const names = lanes.map((l) => l.lane);
+    expect(names).not.toContain("explicit_citation");
+    expect(names).not.toContain("author_corpus");
+    expect(names).toContain("scholarly_debate");
+  });
+
+  it("covers the public-source lanes so a low-yield manual search cannot disable them", () => {
+    const names = heuristicLaneQueries(primary, [], ["vice"]).map((l) => l.lane);
+    expect(names).toEqual(expect.arrayContaining(["lecture_course", "video_podcast", "blog_newsletter", "public_discussion"]));
+  });
+
+  it("falls back to deterministic lanes when no model is available", async () => {
+    const caller = { available: false, call: async () => { throw new Error("unused"); } };
+    const r = await generateLaneQueries(caller as never, { primary, citationTexts: [], model: "m" });
+    expect(r.usedModel).toBe(false);
+    expect(r.lanes.length).toBeGreaterThan(0);
+  });
+
+  it("drops invented lanes from model output instead of coercing them", async () => {
+    const caller = {
+      available: true,
+      call: async (p: { validate: (parsed: unknown) => unknown }) =>
+        ({
+          data: p.validate({
+            lanes: [
+              { lane: "scholarly_debate", queries: ["aristotle vice reason"] },
+              { lane: "totally_made_up_lane", queries: ["nonsense"] },
+            ],
+          }),
+          promptTokens: 10,
+          completionTokens: 5,
+          model: "m",
+        }),
+    };
+    const r = await generateLaneQueries(caller as never, { primary, citationTexts: [], model: "m" });
+    expect(r.usedModel).toBe(true);
+    expect(r.lanes.map((l) => l.lane)).not.toContain("totally_made_up_lane");
+    expect(r.lanes.map((l) => l.lane)).toContain("scholarly_debate");
+  });
+
+  it("keeps deterministic lanes the model omitted", async () => {
+    const caller = {
+      available: true,
+      call: async (p: { validate: (parsed: unknown) => unknown }) =>
+        ({
+          data: p.validate({ lanes: [{ lane: "scholarly_debate", queries: ["only this one"] }] }),
+          promptTokens: 1,
+          completionTokens: 1,
+          model: "m",
+        }),
+    };
+    const r = await generateLaneQueries(caller as never, {
+      primary,
+      citationTexts: ["Annas, Plato and Aristotle on Friendship and Altruism, Mind 86 (1977)."],
+      model: "m",
+    });
+    // The explicit-citation lane comes from the document itself and must
+    // survive whatever the model chose to emit.
+    expect(r.lanes.map((l) => l.lane)).toContain("explicit_citation");
   });
 });
