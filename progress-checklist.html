@@ -369,7 +369,7 @@
 
     <div class="summary">
       <div class="summary-top">
-        <span class="summary-count"><strong>8</strong> of 10 phases complete</span>
+        <span class="summary-count"><strong>8</strong> of 11 phases complete</span>
         <span class="summary-label">Phase 8 in progress</span>
       </div>
       <div class="track" role="img" aria-label="8 of 10 phases complete">
@@ -537,7 +537,9 @@
           <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Evidence-first research pipeline built + verified end-to-end: 9 source adapters, OpenAI Responses client, discovery with cost caps/saturation/dedup, credibility A–E + agreement, anti-hallucination grading, worker orchestrator (local, behind v1 flag) — plus GROBID on Cloud Run (scale-to-zero, ~$0/mo)</span></li>
           <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Edition API (full v2 payload), reader (generated vs authorial notes, claim-level evidence, credibility/agreement), admin v2 visibility — done; roadmap/graph consume v2 edges (filter/explanation polish remaining)</span></li>
           <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">PRODUCTION CUTOVER TO v2 — complete & canary-verified: full-structure GROBID via Cloud Run, 26 pages / 103 resources / 344 evidenced claims published for $0.20; three-tier upload recovery (direct, raw proxy, JSON fallback) verified; v1 kept as 7-day rollback</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Remaining acceptance gates: gold eval (fixture + spend), expanded v2 Playwright E2E, 10-PDF load test, 7-day stability window → then tag phase-8-complete</span></li>
+          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Clean-slate production purge — all three uploads permanently deleted, library/graph empty, account kept; canonical Irwin PDF preserved byte-for-byte in a new private eval-only bucket — complete</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Relevance closeout: migration 0013 candidate verdicts (accept / quarantine / reject before authority scoring), so only relevant sources reach annotations, Library, roadmap, and graph</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Remaining acceptance gates: Irwin gold eval (private fixture + spend), expanded v2 Playwright E2E, 10-PDF load test, 7-day stability window → then tag phase-8-complete</span></li>
         </ul>
       </div>
     </li>
@@ -547,7 +549,26 @@
       <span class="phase-marker">9</span>
       <div class="phase-card">
         <div class="phase-head">
-          <h2 class="phase-title"><span class="num">9</span>Educational Companion Site</h2>
+          <h2 class="phase-title"><span class="num">9</span>Interactive Learning Workspace</h2>
+          <span class="badge todo">Not started</span>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-icon"></span><span class="step-text">Reader level &amp; concept mastery — Beginner / Undergraduate / Advanced / Research change what opens by default, never what you can reach</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Passage-anchored annotations with a synchronized sidebar, short summaries, and expandable evidence</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Library of every recommended source — lectures, videos, blogs, and discussions alongside peer-reviewed work, each labelled honestly</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Curriculum routes (minimal / university / graduate) and the fourteen study-guide modules</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">Knowledge graph with concepts, people, traditions, and debates — identical data in the 3D view and the accessible table</span></li>
+          <li class="step"><span class="step-icon"></span><span class="step-text">30-day trash with restore, visible cost estimates and hard caps, private Irwin gold eval, then a 14-day v2 rollback window</span></li>
+        </ul>
+      </div>
+    </li>
+
+    <!-- Phase 10 -->
+    <li class="phase todo">
+      <span class="phase-marker">10</span>
+      <div class="phase-card">
+        <div class="phase-head">
+          <h2 class="phase-title"><span class="num">10</span>Educational Companion Site</h2>
           <span class="badge todo">Not started</span>
         </div>
         <ul class="steps">
