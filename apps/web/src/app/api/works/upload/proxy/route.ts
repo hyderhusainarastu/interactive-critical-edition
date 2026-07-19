@@ -18,6 +18,7 @@ import { getApiUserId } from "@/lib/auth";
  * so this can't overwrite a processed document or smuggle a different file.
  */
 const PROXY_MAX_BYTES = 4 * 1024 * 1024; // stay safely under Vercel's ~4.5MB body cap
+const JSON_PROXY_MAX_BYTES = 3 * 1024 * 1024; // base64 expands to at most 4 MiB
 
 export async function POST(request: Request) {
   const userId = await getApiUserId();
@@ -50,7 +51,32 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = Buffer.from(await request.arrayBuffer());
+  const contentType = request.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+  let body: Buffer;
+  if (contentType === "application/json") {
+    if (document.fileSize > JSON_PROXY_MAX_BYTES) {
+      return NextResponse.json(
+        { error: "File is too large for the JSON fallback upload path (3MB)." },
+        { status: 413 },
+      );
+    }
+    const payload = await request.json().catch(() => null);
+    const encoded = payload && typeof payload === "object"
+      ? (payload as { dataBase64?: unknown }).dataBase64
+      : null;
+    const expectedLength = 4 * Math.ceil(document.fileSize / 3);
+    if (
+      typeof encoded !== "string" ||
+      encoded.length !== expectedLength ||
+      encoded.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)
+    ) {
+      return NextResponse.json({ error: "Invalid encoded upload body." }, { status: 400 });
+    }
+    body = Buffer.from(encoded, "base64");
+  } else {
+    body = Buffer.from(await request.arrayBuffer());
+  }
   if (body.byteLength !== document.fileSize) {
     return NextResponse.json({ error: "Uploaded bytes do not match the declared file size." }, { status: 400 });
   }

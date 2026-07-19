@@ -5,6 +5,29 @@ import { useRef, useState } from "react";
 
 const ACCEPTED_TYPES = ["application/pdf", "application/epub+zip", "text/plain", "text/markdown"];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
+// Base64 expands by 4/3. Keeping the source file at or below 3 MiB keeps
+// the JSON request near 4 MiB, safely below Vercel's ~4.5 MiB body ceiling.
+const JSON_PROXY_MAX_BYTES = 3 * 1024 * 1024;
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the file for upload."));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Could not read the file for upload."));
+        return;
+      }
+      const comma = reader.result.indexOf(",");
+      if (comma < 0) {
+        reject(new Error("Could not encode the file for upload."));
+        return;
+      }
+      resolve(reader.result.slice(comma + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function UploadPage() {
   const router = useRouter();
@@ -57,13 +80,41 @@ export default function UploadPage() {
         stored = false;
       }
       if (!stored) {
-        const proxied = await fetch(
-          `/api/works/upload/proxy?workId=${body.workId}&documentId=${body.documentId}`,
-          { method: "POST", headers: { "content-type": file.type }, body: file },
-        );
-        if (!proxied.ok) {
+        const proxyUrl = `/api/works/upload/proxy?workId=${body.workId}&documentId=${body.documentId}`;
+        let proxied: Response | null = null;
+        try {
+          proxied = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "content-type": file.type },
+            body: file,
+          });
+        } catch {
+          // A small number of client environments block requests whose body
+          // is a File/Blob, even to the same origin. The final fallback below
+          // sends ordinary JSON, which those environments allow.
+        }
+
+        if (proxied && !proxied.ok) {
           const detail = await proxied.json().catch(() => ({}));
           throw new Error(detail.error ?? "Storage upload failed.");
+        }
+
+        if (!proxied) {
+          if (file.size > JSON_PROXY_MAX_BYTES) {
+            throw new Error(
+              "Your browser blocked both file upload paths. The JSON fallback supports files up to 3MB.",
+            );
+          }
+          const encoded = await readFileAsBase64(file);
+          const jsonProxy = await fetch(proxyUrl, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ dataBase64: encoded }),
+          });
+          if (!jsonProxy.ok) {
+            const detail = await jsonProxy.json().catch(() => ({}));
+            throw new Error(detail.error ?? "Storage upload failed.");
+          }
         }
       }
       const complete = await fetch("/api/works/upload/complete", {

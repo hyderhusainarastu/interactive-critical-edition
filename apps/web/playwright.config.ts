@@ -28,7 +28,9 @@ export default defineConfig({
   // headroom than the default, even serialized.
   timeout: 120_000,
   use: {
-    baseURL: "http://localhost:3000",
+    // Override when the normal dev port is already occupied (for example,
+    // when testing a production build side by side with `next dev`).
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],

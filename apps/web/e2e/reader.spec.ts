@@ -166,6 +166,43 @@ test.describe("Reader (Phase 3)", () => {
     await expect(page.getByText("Processing failed")).toHaveCount(0);
   });
 
+  test("upload falls back to JSON when both raw file transports are blocked", async ({ page }) => {
+    const filePath = join(tmpdir(), `e2e-json-upload-${Date.now()}.txt`);
+    writeFileSync(filePath, "JSON Upload Fallback\n\nThe browser blocked File bodies, but JSON remains available.");
+
+    let blockedDirect = false;
+    let blockedRawProxy = false;
+    let sawJsonProxy = false;
+    await page.route("**/*", async (route) => {
+      const request = route.request();
+      const contentType = request.headers()["content-type"] ?? "";
+      if (request.method() === "PUT" && request.url().includes("supabase")) {
+        blockedDirect = true;
+        await route.abort("connectionfailed");
+        return;
+      }
+      if (request.url().includes("/api/works/upload/proxy")) {
+        if (contentType.startsWith("application/json")) {
+          sawJsonProxy = true;
+        } else {
+          blockedRawProxy = true;
+          await route.abort("connectionfailed");
+          return;
+        }
+      }
+      await route.continue();
+    });
+
+    await login(page);
+    await page.goto("/upload");
+    await page.locator('input[type="file"]').setInputFiles(filePath);
+    await page.waitForURL(/\/works\/[a-f0-9-]+$/);
+    await expect(page.getByText(/Confirm or correct|Ready/)).toBeVisible({ timeout: 45_000 });
+    expect(blockedDirect).toBe(true);
+    expect(blockedRawProxy).toBe(true);
+    expect(sawJsonProxy).toBe(true);
+  });
+
   test("split view opens a second work alongside the first", async ({ page }) => {
     const fileA = join(tmpdir(), `e2e-split-a-${Date.now()}.txt`);
     const fileB = join(tmpdir(), `e2e-split-b-${Date.now()}.txt`);
