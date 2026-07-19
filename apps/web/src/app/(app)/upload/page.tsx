@@ -41,12 +41,31 @@ export default function UploadPage() {
         setSubmitting(false);
         return;
       }
-      const stored = await fetch(body.uploadUrl, {
-        method: "PUT",
-        headers: { "content-type": file.type, "x-upsert": "false" },
-        body: file,
-      });
-      if (!stored.ok) throw new Error("Storage upload failed.");
+      // Primary: direct PUT to the signed Storage URL (no serverless body
+      // limit). Some client environments block cross-origin PUTs to
+      // supabase.co entirely, so small files fall back to a same-origin
+      // proxy route rather than failing the upload outright.
+      let stored = false;
+      try {
+        const direct = await fetch(body.uploadUrl, {
+          method: "PUT",
+          headers: { "content-type": file.type, "x-upsert": "false" },
+          body: file,
+        });
+        stored = direct.ok;
+      } catch {
+        stored = false;
+      }
+      if (!stored) {
+        const proxied = await fetch(
+          `/api/works/upload/proxy?workId=${body.workId}&documentId=${body.documentId}`,
+          { method: "POST", headers: { "content-type": file.type }, body: file },
+        );
+        if (!proxied.ok) {
+          const detail = await proxied.json().catch(() => ({}));
+          throw new Error(detail.error ?? "Storage upload failed.");
+        }
+      }
       const complete = await fetch("/api/works/upload/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
