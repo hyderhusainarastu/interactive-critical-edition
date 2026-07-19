@@ -3,7 +3,6 @@ import {
   db,
   documents,
   docMetadata,
-  enqueueAnalyzeWork,
   type ExtractTextJob,
   footnotes,
   getQueue,
@@ -18,7 +17,7 @@ import {
 import { detectFootnotes, downloadDocumentFile, parseDocument } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
-import { analyzeWork } from "./analyze";
+import { analyzeEditionRun, analyzeWork } from "./analyze";
 
 async function handleExtractText(documentId: string) {
   const [job] = await db
@@ -125,11 +124,14 @@ async function handleExtractText(documentId: string) {
  * legacy annotations or a previous published run.
  */
 async function handleEditionExtraction(documentId: string) {
+  const [job] = await db.select({ id: processingJobs.id }).from(processingJobs)
+    .where(eq(processingJobs.documentId, documentId)).orderBy(desc(processingJobs.createdAt)).limit(1);
   const [doc] = await db.select({
     storagePath: documents.storagePath,
     mimeType: documents.mimeType,
     originalFilename: documents.originalFilename,
     workId: documents.workId,
+    processingStatus: documents.processingStatus,
   }).from(documents).where(eq(documents.id, documentId)).limit(1);
   if (!doc) throw new Error(`Document ${documentId} not found`);
 
@@ -147,9 +149,23 @@ async function handleEditionExtraction(documentId: string) {
   }).returning({ id: processingRuns.id });
 
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
+  if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   try {
     const parsed = await parseDocument(await downloadDocumentFile(doc.storagePath), doc.mimeType);
     if (!parsed.text.trim()) throw new Error("No extractable text found. OCR was unavailable or produced no text.");
+
+    // Keep the established interactive reader functional while v2 is enabled:
+    // its note panel reads the legacy table, whereas the edition separately
+    // carries structurally extracted authorial notes.
+    if (doc.mimeType === "text/plain" || doc.mimeType === "text/markdown") {
+      const detected = detectFootnotes(parsed.text);
+      await db.delete(footnotes).where(eq(footnotes.documentId, documentId));
+      if (detected.length) await db.insert(footnotes).values(detected.map((note) => ({
+        documentId,
+        marker: note.marker,
+        content: note.content,
+      })));
+    }
 
     for (const parsedPage of parsed.pages) {
       const [page] = await db.insert(pages).values({
@@ -174,7 +190,12 @@ async function handleEditionExtraction(documentId: string) {
       source: parsed.structureState === "full" ? "grobid" : "embedded/title-page",
     });
 
-    const autoReady = parsed.metadataConfidence >= 0.9 && Boolean(parsed.detectedTitle);
+    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text });
+
+    // Reprocessing a work the reader already confirmed must not send it back
+    // through metadata review just because the new extractor has lower title
+    // confidence. The user-approved work metadata is stronger evidence.
+    const autoReady = (parsed.metadataConfidence >= 0.9 && Boolean(parsed.detectedTitle)) || doc.processingStatus === "ready";
     await db.transaction(async (tx) => {
       await tx.update(processingRuns).set({ isPublished: false }).where(eq(processingRuns.documentId, documentId));
       await tx.update(processingRuns).set({
@@ -194,15 +215,16 @@ async function handleEditionExtraction(documentId: string) {
         extractedTitle: parsed.detectedTitle,
         extractedAuthor: parsed.detectedAuthor,
         processingStatus: autoReady ? "ready" : "needs_review",
-        analysisStatus: autoReady ? "not_started" : undefined,
+        analysisStatus: "complete",
         updatedAt: new Date(),
       }).where(eq(documents.id, documentId));
     });
-    if (autoReady) await enqueueAnalyzeWork(documentId);
+    if (job) await db.update(processingJobs).set({ status: "succeeded", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.update(processingRuns).set({ status: "failed", stage: "failed", error: message, finishedAt: new Date(), updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
     await db.update(documents).set({ processingStatus: "failed", processingError: message, updatedAt: new Date() }).where(eq(documents.id, documentId));
+    if (job) await db.update(processingJobs).set({ status: "failed", error: message, attempts: sql`${processingJobs.attempts} + 1`, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
     throw error;
   }
 }

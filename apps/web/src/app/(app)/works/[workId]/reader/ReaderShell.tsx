@@ -14,6 +14,7 @@ import { PdfReader } from "./PdfReader";
 import { TextReader } from "./TextReader";
 import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
+import { EditionReader, type EditionPayload } from "./EditionReader";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -30,6 +31,8 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
  */
 export function ReaderShell({ workId, embedded = false }: { workId: string; embedded?: boolean }) {
   const [data, setData] = useState<ReaderData | null>(null);
+  const [edition, setEdition] = useState<EditionPayload | null>(null);
+  const [showEdition, setShowEdition] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const [distractionReduced, setDistractionReduced] = useState(false);
@@ -54,6 +57,9 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
       .catch((err) => {
         if (!ignore) setError(err instanceof Error ? err.message : "Failed to load.");
       });
+    jsonFetch<{ edition: EditionPayload | null }>(`/api/works/${workId}/edition`)
+      .then((response) => { if (!ignore) setEdition(response.edition); })
+      .catch(() => { /* legacy reader remains fully available */ });
     return () => {
       ignore = true;
     };
@@ -248,6 +254,11 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
             <button type="button" onClick={() => setDistractionReduced((v) => !v)} aria-pressed={distractionReduced}>
               {distractionReduced ? "Exit focus mode" : "Focus mode"}
             </button>
+            {edition && (
+              <button type="button" onClick={() => setShowEdition((value) => !value)} aria-pressed={showEdition}>
+                {showEdition ? "Interactive reader" : "Published edition"}
+              </button>
+            )}
             <div className="flex items-center gap-1" role="group" aria-label="Highlight color">
               {HIGHLIGHT_COLORS.map((c) => (
                 <button
@@ -306,7 +317,7 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               ["--reader-line-width" as string]: `${lineWidth}ch`,
             }}
           >
-            {isPdf ? (
+            {showEdition && edition ? <EditionReader edition={edition} /> : isPdf ? (
               data.fileUrl ? (
                 <PdfReader
                   fileUrl={data.fileUrl}

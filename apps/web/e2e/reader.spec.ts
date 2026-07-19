@@ -135,4 +135,18 @@ test.describe("Reader (Phase 3)", () => {
     await page.getByRole("button", { name: "Close split" }).click();
     await expect(page.getByText("First Work")).toHaveCount(0);
   });
+
+  test("published edition is available without replacing the interactive reader", async ({ page }) => {
+    const filePath = join(tmpdir(), `e2e-edition-${Date.now()}.txt`);
+    writeFileSync(filePath, "Edition Test\n\nA source text that cites Kant, Critique of Pure Reason, 1781.");
+    await login(page);
+    const workId = await uploadAndConfirm(page, filePath, "Edition Test");
+    await page.goto(`/works/${workId}/reader`);
+    await expect(page.locator('[data-paragraph-index="0"]')).toBeVisible();
+    await page.getByRole("button", { name: "Published edition" }).click();
+    await expect(page.getByRole("region", { name: "Published critical edition" })).toBeVisible();
+    await page.getByRole("button", { name: "Interactive reader" }).click();
+    await expect(page.locator('[data-paragraph-index="0"]')).toBeVisible();
+  });
+
 });

@@ -5,7 +5,13 @@ import {
   citations,
   db,
   documents,
+  editionRelations,
+  evidenceSpans,
+  generatedNotes,
   graphEdges,
+  processingRuns,
+  researchResources,
+  credibilityAssessments,
   works,
 } from "@ice/db";
 import {
@@ -352,4 +358,60 @@ export async function analyzeWork(documentId: string): Promise<void> {
       .where(eq(documents.id, documentId));
     throw err;
   }
+}
+
+/** Run-scoped, evidence-first research for the v2 edition. This never deletes
+ * legacy reader records; every claim shown by the edition links to its source
+ * citation/resource and is published atomically by the caller only on success. */
+export async function analyzeEditionRun(input: {
+  runId: string;
+  documentId: string;
+  text: string;
+}): Promise<void> {
+  await db.update(processingRuns).set({ stage: "research-discovery", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  const candidates = extractCitations(input.text, 300);
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const record = await resolveCitation(candidate.query);
+    const title = record?.title ?? candidate.text.slice(0, 500);
+    const key = `${record?.doi ?? record?.externalId ?? title.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const [resource] = await db.insert(researchResources).values({
+      runId: input.runId,
+      title,
+      url: record?.url ?? null,
+      resourceType: record ? "bibliographic" : "unresolved-citation",
+      provider: record?.source ?? "unresolved",
+      accessStatus: record?.accessStatus ?? "unavailable",
+      inspectionDepth: record ? 1 : 0,
+      raw: record?.raw ?? { citation: candidate.text },
+    }).returning({ id: researchResources.id });
+    const credibility = record?.source === "crossref" ? 0.9 : record?.source === "openalex" ? 0.82 : record?.source === "openlibrary" ? 0.75 : 0.2;
+    await db.insert(credibilityAssessments).values({
+      resourceId: resource.id,
+      score: credibility,
+      rationale: record ? `Metadata resolved by ${record.source}.` : "Unresolved source text; not inspected.",
+    });
+    const [evidence] = await db.insert(evidenceSpans).values({
+      runId: input.runId,
+      resourceId: resource.id,
+      quote: candidate.text,
+    }).returning({ id: evidenceSpans.id });
+    await db.insert(editionRelations).values({
+      runId: input.runId,
+      resourceId: resource.id,
+      relationType: candidate.kind === "reference" ? "cites" : "mentions",
+      evidence: { evidenceSpanId: evidence.id, sourceText: candidate.text },
+      confidence: record ? 0.9 : 0.35,
+    });
+    if (record) await db.insert(generatedNotes).values({
+      runId: input.runId,
+      evidenceSpanId: evidence.id,
+      noteType: "explicit-reference",
+      body: `The uploaded text contains an explicit reference to ${record.title}. Metadata was resolved through ${record.source}.`,
+      confidence: 0.9,
+    });
+  }
+  await db.update(processingRuns).set({ stage: "validation", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
 }

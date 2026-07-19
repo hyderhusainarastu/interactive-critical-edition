@@ -36,6 +36,7 @@ export function WorkStatusPanel({
   const router = useRouter();
   const [data, setData] = useState(initial);
   const [saving, setSaving] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,6 +77,14 @@ export function WorkStatusPanel({
     }
     router.refresh();
     setData((d) => ({ ...d, status: "ready" }));
+  }
+
+  async function handleReprocess() {
+    setReprocessing(true);
+    const response = await fetch(`/api/works/${workId}/reprocess`, { method: "POST" });
+    if (response.ok) setData((current) => ({ ...current, status: "uploaded" }));
+    else setError((await response.json().catch(() => ({}))).error ?? "Couldn’t start reprocessing.");
+    setReprocessing(false);
   }
 
   if (POLLING_STATUSES.includes(data.status)) {
@@ -159,8 +168,12 @@ export function WorkStatusPanel({
             Edition run v{data.processingRun.version} · {data.processingRun.structureState === "full" ? "full structure" : "structure-limited fallback"}
           </p>
         )}
+        {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={handleReprocess} disabled={reprocessing} className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60">
+          {reprocessing ? "Reprocessing…" : "Reprocess edition"}
+        </button>
         <Link
           href={`/works/${workId}/roadmap`}
           className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
