@@ -16,9 +16,12 @@ export interface RouteConfig {
   model: string;
 }
 
-// Cheap-tier defaults per provider. Overridable via env.
-const OPENAI_CHEAP = process.env.OPENAI_MODEL_CHEAP ?? "gpt-5.4-nano-2026-03-17";
-const OPENAI_RESEARCH = process.env.OPENAI_MODEL_RESEARCH ?? "gpt-5.4-mini-2026-03-17";
+// Cheap-tier defaults per provider. Overridable via env. Real OpenAI model IDs
+// (confirmed against developers.openai.com pricing, 2026-07): nano handles the
+// mechanical work (extraction/query-gen/classification/validation), mini only
+// the note synthesis (RESEARCH_ROUTE).
+const OPENAI_CHEAP = process.env.OPENAI_MODEL_CHEAP ?? "gpt-5.4-nano";
+const OPENAI_RESEARCH = process.env.OPENAI_MODEL_RESEARCH ?? "gpt-5.4-mini";
 const ANTHROPIC_CHEAP = process.env.ANTHROPIC_MODEL_CHEAP ?? "claude-haiku-4-5-20251001";
 
 /**
@@ -54,9 +57,10 @@ export const RESEARCH_ROUTE: RouteConfig = { provider: "openai", model: OPENAI_R
  * conservative default for an unrecognized model.
  */
 const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
+  // USD per 1M tokens — OpenAI official pricing (developers.openai.com, 2026-07).
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "gpt-5.4-nano-2026-03-17": { input: 0.2, output: 0.8 },
-  "gpt-5.4-mini-2026-03-17": { input: 0.75, output: 3.0 },
+  "gpt-5.4-nano": { input: 0.2, output: 1.25 },
+  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
   "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
 };
 
