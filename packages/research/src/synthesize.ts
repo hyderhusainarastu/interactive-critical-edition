@@ -152,6 +152,111 @@ export function gradeClaims(
   });
 }
 
+// ---- Critical-note synthesis (research model) ----
+
+const NOTE_SCHEMA = {
+  type: "object",
+  properties: {
+    body: { type: "string" },
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          claimType: { type: "string", enum: ["factual", "interpretive", "inferred"] },
+          quote: { type: "string" },
+        },
+        required: ["text", "claimType", "quote"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["body", "claims"],
+  additionalProperties: false,
+};
+
+function normalizeNote(parsed: unknown): { body: string; claims: DraftClaim[] } {
+  const p = parsed as { body?: unknown; claims?: unknown };
+  if (typeof p.body !== "string" || p.body.trim().length < 8) throw new Error("empty note body");
+  const claims = (Array.isArray(p.claims) ? p.claims : [])
+    .map((c) => c as Record<string, unknown>)
+    .filter((c) => typeof c.text === "string")
+    .map((c) => ({
+      text: String(c.text),
+      claimType: (["factual", "interpretive", "inferred"].includes(String(c.claimType)) ? c.claimType : "interpretive") as DraftClaim["claimType"],
+      quote: typeof c.quote === "string" ? c.quote : null,
+    }));
+  return { body: p.body.trim(), claims };
+}
+
+export interface SynthesizedNote {
+  body: string;
+  claims: { text: string; claimType: DraftClaim["claimType"]; grounded: boolean }[];
+  promptTokens: number;
+  completionTokens: number;
+  usedModel: boolean;
+}
+
+/**
+ * Synthesize a short critical note explaining how a source bears on the work.
+ * Every returned claim is graded against the evidence (`gradeClaims`): a factual
+ * claim survives only if its quote is grounded AND the authority bar is met, so
+ * the model can neither invent a quotation nor over-assert. Falls back to the
+ * deterministic grounded note when no model is available or on any bad output.
+ */
+export async function synthesizeNote(
+  caller: StructuredCaller,
+  input: {
+    primary: PrimaryWork;
+    resource: RawResource;
+    relation: string;
+    evidenceTexts: string[];
+    authorityOk: boolean;
+    model: string;
+    safetyIdentifier?: string;
+  },
+): Promise<SynthesizedNote> {
+  const fallback = (): SynthesizedNote => ({
+    body: heuristicNote(input.resource, input.relation),
+    claims: [],
+    promptTokens: 0,
+    completionTokens: 0,
+    usedModel: false,
+  });
+  if (!caller.available) return fallback();
+  try {
+    const r = await caller.call({
+      model: input.model,
+      schemaName: "critical_note",
+      schema: NOTE_SCHEMA,
+      safetyIdentifier: input.safetyIdentifier,
+      maxOutputTokens: 700,
+      system:
+        "You write a short, sober scholarly note explaining how a RELATED source bears on a primary work " +
+        "(its relationship category is given). Ground every factual claim in a verbatim quote drawn from the " +
+        "provided evidence array. Never invent titles, authors, quotations, dates, identifiers, or facts. If a " +
+        "point cannot be grounded in the evidence, mark its claim 'interpretive' or 'inferred'. Keep it concise.",
+      input: JSON.stringify({
+        primary_work: { title: input.primary.title, author: input.primary.author ?? null },
+        relationship: input.relation,
+        source: {
+          title: input.resource.title,
+          authors: input.resource.authors,
+          year: input.resource.year,
+          snippet: input.resource.snippet,
+        },
+        evidence: input.evidenceTexts,
+      }),
+      validate: normalizeNote,
+    });
+    const graded = gradeClaims(r.data.claims, input.evidenceTexts, input.authorityOk);
+    return { body: r.data.body, claims: graded, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };
+  } catch {
+    return fallback();
+  }
+}
+
 /** Deterministic, source-grounded note when no model is available (or as a floor). */
 export function heuristicNote(resource: RawResource, relation: string): string {
   const who = resource.authors.length ? ` by ${resource.authors.slice(0, 3).join(", ")}` : "";

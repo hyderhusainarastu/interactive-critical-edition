@@ -31,6 +31,7 @@ import { reportError } from "@ice/observability";
 import {
   allAdapters,
   buildCredibility,
+  canAfford,
   canonicalizeDoi,
   canonicalizeIsbn,
   canonicalizeUrl,
@@ -45,6 +46,7 @@ import {
   overSoftCap,
   RESEARCH_LIMITS,
   runDiscovery,
+  synthesizeNote,
   type RawResource,
   type SourceAuthority,
 } from "@ice/research";
@@ -443,6 +445,10 @@ export async function analyzeEditionRun(input: {
   const responses = new OpenAIResponsesClient();
   const safetyIdentifier = safetyIdentifierFor(doc.userId);
   const cheapModel = process.env.OPENAI_MODEL_CHEAP ?? "gpt-5.4-nano";
+  const researchModel = process.env.OPENAI_MODEL_RESEARCH ?? "gpt-5.4-mini";
+  // Conservative upper bound on one mini-model note (~700 in + ~400 out) — used
+  // only for the hard-cap affordability gate before starting a synthesis call.
+  const NOTE_COST_ESTIMATE = 0.01;
   const usageLogs: (typeof aiUsageLogs.$inferInsert)[] = [];
   const logUsage = (task: string, stage: string, model: string, pTok: number, cTok: number) => {
     const cost = estimateCostUsd(model, pTok, cTok);
@@ -573,20 +579,43 @@ export async function analyzeEditionRun(input: {
       confidence: classification.confidence,
     });
 
-    // Source-grounded generated note + its (interpretive) claim. The heuristic
-    // note asserts no factual claim it cannot ground, so it is safe regardless
-    // of the authority bar; `meetsFactualBar` gates any future factual upgrade.
-    const noteBody = heuristicNote(r, classification.category);
-    void meetsFactualBar([authority]);
+    // Critical note: LLM prose synthesis while under the soft cap and within the
+    // hard cap, else the deterministic grounded floor. Claims are graded so a
+    // factual claim survives only if its quote is grounded in evidence AND the
+    // authority bar is met (plan §33) — the model can neither invent a quotation
+    // nor over-assert.
+    const authorityOk = meetsFactualBar([authority]);
+    const evidenceTexts = [evidenceText, r.snippet ?? ""].filter((t) => t.length > 0);
+    let noteBody = heuristicNote(r, classification.category);
+    let gradedClaims: { text: string; claimType: "factual" | "interpretive" | "inferred"; grounded: boolean }[] = [];
+    if (responses.available && !overSoftCap(budget) && canAfford(budget, NOTE_COST_ESTIMATE)) {
+      const syn = await synthesizeNote(responses, {
+        primary: { title: doc.title, author: doc.authorName },
+        resource: r,
+        relation: classification.category,
+        evidenceTexts,
+        authorityOk,
+        model: researchModel,
+        safetyIdentifier,
+      });
+      if (syn.usedModel) {
+        noteBody = syn.body;
+        gradedClaims = syn.claims;
+        logUsage("note_synthesis", "note-synthesis", researchModel, syn.promptTokens, syn.completionTokens);
+      }
+    }
     const [note] = await db
       .insert(generatedNotes)
       .values({ runId: input.runId, evidenceSpanId: evidence.id, noteType: classification.category, body: noteBody, confidence: classification.confidence })
       .returning({ id: generatedNotes.id });
-    const [claim] = await db
-      .insert(generatedClaims)
-      .values({ runId: input.runId, noteId: note.id, text: noteBody, claimType: "interpretive", agreement, confidence: classification.confidence })
-      .returning({ id: generatedClaims.id });
-    await db.insert(claimEvidence).values({ claimId: claim.id, evidenceSpanId: evidence.id, stance: "supports" });
+    const claimsToInsert = gradedClaims.length > 0 ? gradedClaims : [{ text: noteBody, claimType: "interpretive" as const, grounded: false }];
+    for (const gc of claimsToInsert) {
+      const [claim] = await db
+        .insert(generatedClaims)
+        .values({ runId: input.runId, noteId: note.id, text: gc.text, claimType: gc.claimType, agreement, confidence: classification.confidence })
+        .returning({ id: generatedClaims.id });
+      await db.insert(claimEvidence).values({ claimId: claim.id, evidenceSpanId: evidence.id, stance: "supports" });
+    }
 
     // Catalogue/graph projection for scholarly targets (roadmap + graph reuse).
     if (bibId) {

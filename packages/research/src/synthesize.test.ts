@@ -5,9 +5,28 @@ import {
   heuristicNote,
   heuristicQueries,
   quoteIsGrounded,
+  synthesizeNote,
   type StructuredCaller,
 } from "./synthesize";
 import type { RawResource } from "./types";
+
+function sampleResource(over: Partial<RawResource> = {}): RawResource {
+  return {
+    provider: "crossref",
+    resourceType: "article",
+    title: "On Virtue",
+    authors: ["Jane Doe"],
+    year: 2010,
+    url: null,
+    doi: "10.1000/x",
+    isbn: null,
+    snippet: null,
+    venue: null,
+    popularity: null,
+    raw: null,
+    ...over,
+  };
+}
 
 describe("heuristicQueries", () => {
   it("builds title/author rounds plus a citation round", () => {
@@ -85,6 +104,71 @@ describe("gradeClaims", () => {
   it("leaves interpretive/inferred claims as-is", () => {
     const out = gradeClaims([{ text: "y", claimType: "inferred" }], evidence, true);
     expect(out[0].claimType).toBe("inferred");
+  });
+});
+
+describe("synthesizeNote", () => {
+  const evidence = ["Aristotle argues the mean between extremes defines virtue."];
+
+  it("falls back to a grounded heuristic note with no model", async () => {
+    const caller: StructuredCaller = { available: false, call: vi.fn() };
+    const out = await synthesizeNote(caller, {
+      primary: { title: "Ethics" },
+      resource: sampleResource(),
+      relation: "interpretive_aid",
+      evidenceTexts: evidence,
+      authorityOk: true,
+      model: "m",
+    });
+    expect(out.usedModel).toBe(false);
+    expect(out.body).toContain("On Virtue");
+  });
+
+  it("returns the model note and grades its claims against the evidence", async () => {
+    const caller: StructuredCaller = {
+      available: true,
+      call: vi.fn(async (p) => ({
+        data: p.validate({
+          body: "This source clarifies the doctrine of the mean.",
+          claims: [
+            { text: "It defines virtue as a mean.", claimType: "factual", quote: "the mean between extremes defines virtue" },
+            { text: "It invents an unfounded fact.", claimType: "factual", quote: "virtue guarantees eternal happiness" },
+          ],
+        }),
+        promptTokens: 5,
+        completionTokens: 6,
+        model: p.model,
+      })),
+    };
+    const out = await synthesizeNote(caller, {
+      primary: { title: "Ethics" },
+      resource: sampleResource(),
+      relation: "interpretive_aid",
+      evidenceTexts: evidence,
+      authorityOk: true,
+      model: "m",
+    });
+    expect(out.usedModel).toBe(true);
+    expect(out.body).toContain("doctrine of the mean");
+    // Grounded factual claim stays factual; the fabricated one is demoted.
+    expect(out.claims[0]).toMatchObject({ claimType: "factual", grounded: true });
+    expect(out.claims[1]).toMatchObject({ claimType: "interpretive", grounded: false });
+  });
+
+  it("falls back when the model returns an empty body", async () => {
+    const caller: StructuredCaller = {
+      available: true,
+      call: vi.fn(async (p) => ({ data: p.validate({ body: "", claims: [] }), promptTokens: 0, completionTokens: 0, model: p.model })),
+    };
+    const out = await synthesizeNote(caller, {
+      primary: { title: "Ethics" },
+      resource: sampleResource(),
+      relation: "historical_context",
+      evidenceTexts: evidence,
+      authorityOk: false,
+      model: "m",
+    });
+    expect(out.usedModel).toBe(false);
   });
 });
 
