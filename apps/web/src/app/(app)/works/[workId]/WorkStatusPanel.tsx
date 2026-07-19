@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
 
 type Status = "uploaded" | "processing" | "needs_review" | "ready" | "failed";
@@ -29,12 +29,17 @@ export function WorkStatusPanel({
   const [data, setData] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!POLLING_STATUSES.includes(data.status)) return;
 
-    timer.current = setTimeout(async () => {
+    // setInterval, not setTimeout: a one-shot timeout only re-arms when the
+    // effect re-runs, but the effect's deps ([data.status]) don't change
+    // while a work sits in "processing" — so the old code polled exactly
+    // once and then froze until a manual refresh. An interval keeps firing
+    // every 2s; when the status finally reaches a terminal state the effect
+    // re-runs, the cleanup clears the interval, and polling stops.
+    const id = setInterval(async () => {
       const res = await fetch(`/api/works/${workId}/status`);
       if (res.ok) {
         const next = (await res.json()) as StatusPayload;
@@ -42,7 +47,7 @@ export function WorkStatusPanel({
       }
     }, 2000);
 
-    return () => clearTimeout(timer.current);
+    return () => clearInterval(id);
   }, [data.status, workId]);
 
   async function handleConfirm(formData: FormData) {

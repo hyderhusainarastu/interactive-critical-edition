@@ -1,5 +1,6 @@
 "use server";
 
+import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getApiUserId, signIn, signOut } from "@/lib/auth";
@@ -10,14 +11,18 @@ export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const result = await signIn("credentials", {
-    email,
-    password,
-    redirect: false,
-  });
-
-  if (result?.error) {
-    redirect(`/login?error=1`);
+  try {
+    await signIn("credentials", { email, password, redirect: false });
+  } catch (error) {
+    // Auth.js v5 THROWS when authorize() rejects (it does not return
+    // `{ error }`) — including our InvalidCredentialsError /
+    // EmailNotVerifiedError. Map any auth failure back to the login form's
+    // friendly error state. Non-auth errors — and the NEXT_REDIRECT thrown
+    // by redirect() below — must propagate untouched.
+    if (error instanceof AuthError) {
+      redirect("/login?error=1");
+    }
+    throw error;
   }
 
   redirect("/dashboard");

@@ -1,4 +1,4 @@
-import { aiUsageLogs, annotations, db, documents, processingJobs, users, works } from "@ice/db";
+import { aiUsageLogs, db, processingJobs } from "@ice/db";
 import { desc, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
 
