@@ -1,4 +1,4 @@
-import { aiUsageLogs, db, processingJobs, processingRuns, providerAttempts } from "@ice/db";
+import { aiUsageLogs, bibliographicRecords, db, processingJobs, processingRuns, providerAttempts, researchCache } from "@ice/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
 
@@ -74,6 +74,24 @@ export default async function AdminPage() {
     .where(eq(processingRuns.degraded, true))
     .orderBy(desc(processingRuns.updatedAt))
     .limit(8);
+
+  // Maintenance: result-cache size + expired rows, and orphaned catalogue
+  // records (no analysis references — the documented orphan-sweep candidates).
+  const [cacheStats] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      expired: sql<number>`count(*) filter (where ${researchCache.expiresAt} < now())`,
+    })
+    .from(researchCache);
+  const [orphanBib] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(bibliographicRecords)
+    .where(sql`
+      NOT EXISTS (SELECT 1 FROM research_resource rr WHERE rr.bib_record_id = ${bibliographicRecords.id})
+      AND NOT EXISTS (SELECT 1 FROM citation c WHERE c.resolved_bib_id = ${bibliographicRecords.id})
+      AND NOT EXISTS (SELECT 1 FROM annotation a WHERE a.target_bib_id = ${bibliographicRecords.id})
+      AND NOT EXISTS (SELECT 1 FROM graph_edge g WHERE g.target_id = ${bibliographicRecords.id} AND g.target_type = 'bibliographic_record')
+    `);
 
   // Pivot provider stats into provider -> {status: count}.
   const providerPivot = new Map<string, Record<string, number>>();
@@ -213,7 +231,7 @@ export default async function AdminPage() {
         )}
 
         {recentSaturation.length > 0 && (
-          <div>
+          <div className="mb-4">
             <h3 className="mb-1 text-sm font-medium text-[var(--color-accent-ink)]">Degraded / saturated runs</h3>
             <ul className="flex flex-col gap-1 text-sm text-[var(--color-text-muted)]">
               {recentSaturation.map((r) => (
@@ -222,6 +240,15 @@ export default async function AdminPage() {
             </ul>
           </div>
         )}
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Cache rows" value={Number(cacheStats?.total ?? 0)} />
+          <Stat label="Cache expired" value={Number(cacheStats?.expired ?? 0)} />
+          <Stat label="Orphan catalogue" value={Number(orphanBib?.count ?? 0)} />
+        </div>
+        <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+          Expired cache rows are swept on worker startup. Orphan catalogue = bibliographic records no analysis references (eventual cleanup).
+        </p>
       </section>
     </div>
   );

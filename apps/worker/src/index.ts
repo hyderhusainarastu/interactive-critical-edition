@@ -12,11 +12,12 @@ import {
   pages,
   QUEUE_ANALYZE_WORK,
   QUEUE_EXTRACT_TEXT,
+  researchCache,
   textBlocks,
 } from "@ice/db";
 import { detectFootnotes, downloadDocumentFile, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 
@@ -232,6 +233,14 @@ async function handleEditionExtraction(documentId: string) {
 
 async function main() {
   const boss = await getQueue();
+
+  // Sweep expired result-cache rows so research_cache stays bounded (plan §33).
+  try {
+    const swept = await db.delete(researchCache).where(lt(researchCache.expiresAt, new Date())).returning({ id: researchCache.id });
+    if (swept.length) console.log(`[worker] swept ${swept.length} expired research_cache row(s)`);
+  } catch (err) {
+    reportError(err, { scope: "worker.cacheSweep" });
+  }
 
   await boss.work<ExtractTextJob>(QUEUE_EXTRACT_TEXT, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
