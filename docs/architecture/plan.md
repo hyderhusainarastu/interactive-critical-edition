@@ -58,7 +58,8 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 25 | This planning document itself | entire document |
 | 26 | Working rules post-approval | §30, and restated in CLAUDE.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 8, §31 |
+| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 9, §31 |
+| — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
 
 ## 3. Assumptions and Resolved/Open Decisions
 
@@ -465,14 +466,20 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Tests: everything in §21 run end-to-end.
 - DoD: the recovery drill succeeds, all Phase 0–6 acceptance criteria still pass, and CLAUDE.md fully reflects shipped state.
 
-**Phase 8 — Educational Companion Site (added by explicit user request, runs after Phase 7)**
-- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–7 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 8 itself (no infinite regress).
-- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–7, content sourced primarily from this repo's own `CLAUDE.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
-- Dependencies: all of Phases 0–7 complete (it teaches what was actually built, not a plan).
+**Phase 8 — Critical Edition Recovery, Autonomous Research & Public-Source Discovery (redefined; runs after Phase 7)**
+- Objective: transform the app into a reliable, largely autonomous critical-edition generator. Uploading a PDF leads — with no manual refresh and no unnecessary metadata form — to page-aware extraction, automatic title/author, anchored authorial footnotes, resolved explicit + implied references, broad credibility-aware research across scholarly/web/social sources, and traceable critical notes, under a cost ceiling.
+- Full decision-complete plan (defect audit, GROBID + Tavily decisions, provider matrix, GPT-5.x tiers, data model, sub-phases 8.1–8.9, testing, DoD): **§33 below**.
+- Dependencies: Phases 0–7 (repairs and extends the shipped pipeline).
+- DoD: autonomous upload→edition with no manual refresh; *Vice and Reason* acceptance tests pass (≥95% explicit-citation recall, *Nicomachean Ethics* as essential background, all configured providers queried-or-reported-unavailable, weak sources separated, generated≠authorial, every factual claim traceable, no fabricated data); failed reprocess preserves the last edition; `phase-8-complete` tagged.
+
+**Phase 9 — Educational Companion Site (added by explicit user request, runs after Phase 8)**
+- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–8 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 9 itself (no infinite regress).
+- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–8, content sourced primarily from this repo's own `CLAUDE.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
+- Dependencies: all of Phases 0–8 complete (it teaches what was actually built, not a plan).
 - Deliverables: a deployed, independent, publicly reachable tutorial site with one chapter per phase plus an intro and retrospective.
-- Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual `interactive-critical-edition` repo's code/history at time of writing.
+- Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual repo's code/history at time of writing.
 - DoD: someone with no prior context could follow the site from Chapter 1 onward and understand, and largely reproduce, the architecture and decisions of the main project.
-- Git: its own repo, its own commit history, its own checkpoints — entirely separate from `interactive-critical-edition`'s history.
+- Git: its own repo, its own commit history, its own checkpoints — entirely separate from the main repo's history.
 
 **Post-MVP (kept explicitly separate so it never blocks core delivery — see §27).**
 
@@ -546,7 +553,7 @@ In order, each its own small commit:
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Educational Companion Site (Phase 8 detail)
+## 31. Educational Companion Site (Phase 9 detail)
 
 **Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened Phase-7 deployment. It documents everything done in Phases 0–7 of this plan; it does not document its own creation.
 
@@ -577,3 +584,24 @@ In order, each its own small commit:
 
 - Phase 0 is verified by: `git log` on GitHub showing the pushed initial commit, the repo visible as private under `hyderhusainarastu/interactive-critical-edition`, and CLAUDE.md content matching actual repo state.
 - Each subsequent phase is verified per its DoD line in §23 — run the relevant app flow manually plus the automated test suite for that phase, not typecheck alone, before marking the phase complete in CLAUDE.md.
+
+## 33. Phase 8 — Critical Edition Recovery, Autonomous Research & Public-Source Discovery (approved plan)
+
+**Goal.** Turn the app into a reliable, largely autonomous critical-edition generator: upload → (no manual refresh, no unnecessary metadata form) → page-aware extraction, automatic title/author, anchored authorial footnotes, resolved explicit + implied references, credibility-aware research across scholarly/web/social sources, and traceable critical notes, under a cost ceiling.
+
+**Locked technical decisions.**
+- **PDF/structure:** **GROBID** (self-hosted Docker → TEI-XML: headers, per-reference bibliography, footnotes, sections, coords) is the extraction anchor; `pdfjs-dist` for page rasterization + reader text-layer; **Tesseract.js** OCR fallback for scanned pages; `epub.js`-class parser for EPUB. `GROBID_URL` env; graceful "structure-limited" fallback to pdf.js if unreachable.
+- **Web discovery:** **Tavily** (`TAVILY_API_KEY`) for search + content extraction, behind a swappable adapter.
+- **Providers (enable all *free*, ship paid/gated as fallback-only; UI reports coverage):** live/free — Crossref, OpenAlex, Open Library, Google Books, Semantic Scholar, Tavily, YouTube Data API, Mastodon, Bluesky; free-but-approval-gated — Reddit (adapter shipped disabled); paid/gated fallback-only — X/Twitter, Meta/Instagram, Threads. OCR = Tesseract.js (free) with a cloud seam.
+- **AI models (GPT-5.x, env-overridable, structured outputs/JSON-schema):** mechanical extraction/classification → `gpt-5.4-nano` ($0.20/$1.25 per 1M); research planning + note synthesis → `gpt-5.4-mini`/`gpt-5.6-luna`; escalate conflicts/failed validations → `gpt-5.5`/`gpt-5.6-sol`. `gpt-4o-mini` kept as override.
+- **Cost/saturation caps (config):** ~$2 soft / $5 hard AI budget per work; ≤300 explicit-citation candidates, ≤750 pre-dedup resources, traversal depth 2, 12 web / 8 YouTube / 6 per social queries, ≤120 full inspections; stop after 2 discovery batches add <5% new relevant non-dupes.
+
+**Two-axis credibility.** (1) Document provenance: authorial-footnote/bibliography → main-text citation/quote → strong implication → AI research lead. (2) Source authority A–E (A: primary/peer-reviewed/academic press; … E: unreliable). Authorial footnotes are strongest evidence of *what the document cites*, but the cited source's authority is assessed independently. Engagement/popularity is never credibility. Low-authority-but-relevant kept in a clearly separated supplementary section, never the sole support for a factual note.
+
+**Data model (additive; legacy tables untouched, UI prefers a published run).** Migration **0008**: `processing_run`, `page`, `text_block`, `doc_footnote`, `doc_metadata`. Migration **0009**: `research_resource`, `resource_provenance` (provider, inspection depth), `relation` (cites/mentions/quotes/replies_to/reposts/recommends/summarizes/interprets/criticizes/supports/contradicts/discusses/influenced_by/historical_context_for/conceptual_background_for/…, each with evidence anchor + confidence), `credibility`, `generated_note`, `evidence_span`; extend `ai_usage_logs` with run/stage/provider. **Versioned processing runs with publish-on-success** — a failed reprocess never destroys the last good edition (fixes the delete-before-success defect).
+
+**Sub-phases (execution order, each its own reviewable commit group + gate + docs/checklist update + push):** 8.1 defect recovery (login, live polling, auto-advance) + bone-white theme + doc renumber · 8.2 versioned page-aware doc model + GROBID + OCR/EPUB + auto-metadata · 8.3 evidence-first pipeline skeleton + versioned publish + validation · 8.4 scholarly adapters (candidate-ranked resolution) · 8.5 web/blog/newsletter/social discovery (honest inspection-depth) · 8.6 credibility + relations + implied refs + critical-note synthesis · 8.7 critical-edition UI · 8.8 admin reprocessing + orphan cleanup + reprocess safety · 8.9 full test matrix + non-hardcoded gold eval + CI + deploy + prod smoke + `phase-8-complete`.
+
+**Rollout/rollback.** Feature flag `ANALYSIS_PIPELINE` (v1 legacy / v2 new); publish-on-success + additive migrations mean bad runs never replace good editions; every provider degrades independently. Never fabricate URLs/DOIs/titles/quotations/authors/dates/credentials — a validator cross-checks every generated factual claim against inspected evidence or labels it interpretive/uncertain.
+
+**Acceptance (Vice and Reason).** Upload without manual refresh; auto title/author on sufficient evidence; page boundaries + authorial notes retained; explicit-citation recall ≥95%; *Nicomachean Ethics* as essential background; relevant Aristotle/virtue-ethics scholarship; all configured providers queried or explicitly reported unavailable; ≥40 relevant deduped resources and ≥20 A/B authority (unless saturation proves fewer); no per-social-platform minimum; weak sources separated; generated ≠ authorial; every factual claim traceable; zero fabricated bibliographic/quote/creator/credential/transcript/URL data; failed reprocess preserves the last edition.
