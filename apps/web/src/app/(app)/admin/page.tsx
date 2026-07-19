@@ -1,5 +1,5 @@
-import { aiUsageLogs, db, processingJobs } from "@ice/db";
-import { desc, sql } from "drizzle-orm";
+import { aiUsageLogs, db, processingJobs, processingRuns, providerAttempts } from "@ice/db";
+import { desc, eq, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
 
 /**
@@ -47,6 +47,43 @@ export default async function AdminPage() {
     .where(sql`${processingJobs.status} = 'failed'`)
     .orderBy(desc(processingJobs.updatedAt))
     .limit(10);
+
+  // ---- v2 critical-edition pipeline (plan §33 §3.4) ----
+  const runsByStage = await db
+    .select({ status: processingRuns.status, stage: processingRuns.stage, count: sql<number>`count(*)` })
+    .from(processingRuns)
+    .groupBy(processingRuns.status, processingRuns.stage)
+    .orderBy(desc(sql`count(*)`));
+  const [runAgg] = await db
+    .select({
+      total: sql<number>`count(*)`,
+      published: sql<number>`count(*) filter (where ${processingRuns.isPublished})`,
+      full: sql<number>`count(*) filter (where ${processingRuns.structureState} = 'full')`,
+      limited: sql<number>`count(*) filter (where ${processingRuns.structureState} = 'limited')`,
+      degraded: sql<number>`count(*) filter (where ${processingRuns.degraded})`,
+      cost: sql<number>`coalesce(sum(${processingRuns.aiCostUsd}), 0)`,
+    })
+    .from(processingRuns);
+  const providerStats = await db
+    .select({ provider: providerAttempts.provider, status: providerAttempts.status, count: sql<number>`count(*)` })
+    .from(providerAttempts)
+    .groupBy(providerAttempts.provider, providerAttempts.status);
+  const recentSaturation = await db
+    .select({ id: processingRuns.id, version: processingRuns.version, note: processingRuns.saturationNote, updatedAt: processingRuns.updatedAt })
+    .from(processingRuns)
+    .where(eq(processingRuns.degraded, true))
+    .orderBy(desc(processingRuns.updatedAt))
+    .limit(8);
+
+  // Pivot provider stats into provider -> {status: count}.
+  const providerPivot = new Map<string, Record<string, number>>();
+  for (const row of providerStats) {
+    const entry = providerPivot.get(row.provider) ?? {};
+    entry[row.status] = Number(row.count);
+    providerPivot.set(row.provider, entry);
+  }
+  const providerRows = [...providerPivot.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const PROVIDER_STATUSES = ["queried", "rate_limited", "unavailable", "failed", "disabled"] as const;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -126,6 +163,61 @@ export default async function AdminPage() {
                 <li key={j.id} className="truncate">
                   <span className="font-mono text-xs">{j.jobType}</span> — {j.error ?? "unknown error"}
                 </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Critical editions (v2)</h2>
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          <Stat label="Runs" value={Number(runAgg?.total ?? 0)} />
+          <Stat label="Published" value={Number(runAgg?.published ?? 0)} />
+          <Stat label="Full structure" value={Number(runAgg?.full ?? 0)} />
+          <Stat label="Limited" value={Number(runAgg?.limited ?? 0)} />
+          <Stat label="Degraded" value={Number(runAgg?.degraded ?? 0)} />
+          <Stat label="Research cost" value={`$${Number(runAgg?.cost ?? 0).toFixed(4)}`} />
+        </div>
+
+        {runsByStage.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-2 text-xs">
+            {runsByStage.map((r) => (
+              <span key={`${r.status}/${r.stage}`} className="rounded border border-[var(--color-border)] px-2 py-1 text-[var(--color-text-muted)]">
+                {r.status}{r.stage ? ` · ${r.stage}` : ""}: <span className="tabular-nums text-[var(--color-text)]">{Number(r.count)}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {providerRows.length > 0 && (
+          <div className="mb-4 overflow-x-auto">
+            <h3 className="mb-1 text-sm font-medium">Provider availability</h3>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
+                  <th className="py-1 pr-4 font-medium">Provider</th>
+                  {PROVIDER_STATUSES.map((s) => <th key={s} className="py-1 pr-4 font-medium">{s}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {providerRows.map(([provider, stats]) => (
+                  <tr key={provider} className="border-b border-[var(--color-border)]">
+                    <td className="py-1 pr-4 text-[var(--color-text)]">{provider}</td>
+                    {PROVIDER_STATUSES.map((s) => <td key={s} className="py-1 pr-4 tabular-nums text-[var(--color-text-muted)]">{stats[s] ?? 0}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {recentSaturation.length > 0 && (
+          <div>
+            <h3 className="mb-1 text-sm font-medium text-[var(--color-accent-ink)]">Degraded / saturated runs</h3>
+            <ul className="flex flex-col gap-1 text-sm text-[var(--color-text-muted)]">
+              {recentSaturation.map((r) => (
+                <li key={r.id} className="truncate">v{r.version} — {r.note ?? "degraded extraction / research"}</li>
               ))}
             </ul>
           </div>
