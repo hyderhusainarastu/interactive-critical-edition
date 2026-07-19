@@ -35,30 +35,28 @@ const IRWIN_TOPIC_TERMS: string[] = [
   "claims", "clear", "conception", "concern", "connexion", "content", "contrast", "control",
   "conviction", "convictions", "correct", "correctly", "decide", "decision", "deliberation",
   "dependent", "description", "desire", "desires", "difference", "different", "difficult",
-  "downloaded", "end", "ends", "especially", "ethics", "even", "examine", "expedient", "explain",
-  "fact", "far", "feature", "find", "fine", "first", "follow", "form", "forms", "function",
-  "further", "future", "gap", "general", "give", "good", "guided", "happiness", "hence", "him",
-  "himself", "however", "https", "human", "inclinations", "incontinence", "incontinent",
-  "inherently", "instability", "irwin", "jstor", "jun", "kind", "less", "liable", "live", "love",
-  "make", "makes", "may", "mean", "might", "moral", "more", "must", "need", "non", "nothing", "now",
-  "obedient", "once", "one", "only", "org", "other", "ought", "our", "out", "outlook", "over",
-  "own", "oxford", "part", "particular", "parts", "passage", "passion", "passions", "pay", "people",
-  "perhaps", "person", "pleasure", "point", "practical", "present", "presents", "press",
-  "prohairesis", "psychology", "pursue", "pursuing", "pursuit", "puzzle", "questions", "rather",
-  "rational", "reason", "reconciles", "regret", "remarks", "result", "right", "said", "sake",
-  "same", "sat", "satisfaction", "say", "says", "see", "seem", "seems", "self", "should", "simply",
-  "since", "sometimes", "sort", "soul", "still", "strategic", "subject", "such", "suggests", "take",
-  "terence", "term", "terms", "than", "them", "themselves", "then", "these", "they", "things",
-  "though", "try", "two", "types", "understand", "university", "use", "utc", "value", "vice",
-  "vices", "vicious", "view", "virtue", "virtues", "virtuous", "way", "ways", "well", "when",
-  "which", "who", "will", "without", "would", "wrong", "yet",
+  "downloaded", "end", "ends", "especially", "ethics", "even", "expedient", "explain", "fact",
+  "far", "feature", "find", "fine", "first", "follow", "form", "forms", "function", "further",
+  "future", "gap", "general", "give", "good", "guided", "happiness", "hence", "him", "himself",
+  "however", "https", "human", "inclinations", "incontinence", "incontinent", "inherently",
+  "instability", "irwin", "jstor", "jun", "less", "live", "love", "make", "makes", "may", "mean",
+  "might", "moral", "more", "must", "need", "non", "nothing", "now", "obedient", "one", "only",
+  "org", "other", "ought", "our", "out", "outlook", "over", "own", "oxford", "part", "particular",
+  "parts", "passage", "passion", "passions", "pay", "people", "perhaps", "person", "pleasure",
+  "point", "practical", "present", "presents", "press", "prohairesis", "psychology", "pursue",
+  "pursuing", "puzzle", "questions", "rather", "rational", "reason", "regret", "remarks", "result",
+  "right", "said", "sake", "same", "sat", "satisfaction", "say", "says", "see", "seem", "seems",
+  "self", "should", "simply", "since", "sometimes", "sort", "soul", "still", "strategic", "subject",
+  "such", "suggests", "take", "terence", "term", "terms", "than", "them", "themselves", "then",
+  "these", "they", "things", "though", "try", "two", "types", "understand", "university", "use",
+  "utc", "value", "vice", "vices", "vicious", "view", "virtue", "virtues", "virtuous", "way",
+  "ways", "well", "when", "which", "who", "will", "without", "would", "wrong", "yet",
 ];
 
 
 const IRWIN_ENTITY_TERMS: string[] = [
-  "account", "adequacy", "and", "aristotle", "decision", "expedient", "fine", "gap", "instability",
-  "moral", "person", "pleasure", "psychology", "pursuing", "reason", "regret", "the", "types",
-  "vice", "vicious",
+  "aquinas", "aris", "aristotle", "bywater", "cooper", "david", "nicomachean", "plato", "rhetoric",
+  "rogers", "ufe",
 ];
 
 const IRWIN_CORE_CONCEPTS = [
@@ -130,7 +128,15 @@ describe("relevance gate — genuinely relevant scholarship is accepted", () => 
     expect(a.verdict).toBe("accepted");
     expect(a.confidence).toBe(1);
     expect(a.reasons).toContain("explicit_citation_match");
-    expect(a.signals.topicOverlap).toBeLessThan(0.5);
+
+    // Prove it is the citation doing the work: strip the citation evidence and
+    // the same record no longer qualifies on its own merits.
+    const uncited: WorkIdentity = { ...irwin, explicitCitationKeys: new Set(), explicitCitationTexts: [] };
+    expect(assessCandidate(
+      R({ title: "Plato and Aristotle on Friendship and Altruism", authors: ["Julia Annas"], doi: "10.1093/mind/LXXXVI.344.532", venue: "Mind" }),
+      uncited,
+      "scholarly_debate",
+    ).verdict).not.toBe("accepted");
   });
 });
 
@@ -207,6 +213,48 @@ describe("relevance gate — observed false positives never reach the reader", (
     expect(a.verdict).toBe("rejected");
     expect(a.signals.venueLooksOffDiscipline).toBe(true);
     expect(a.venueReliable).toBe(false);
+  });
+});
+
+// ------------------------------------------- canary regressions (production)
+
+describe("relevance gate — a shared concept WORD is not a shared subject", () => {
+  // All of these were accepted by a real production run over the Irwin
+  // fixture, whose core concepts were "vice" and "reason". Both words are
+  // polysemous and common, so matching on them alone admitted consumer
+  // research, epistemology, political theory and constitutional law —
+  // 74 accepted at roughly 16% precision. Requiring a shared named entity is
+  // what separates the subject from the vocabulary.
+  const falsePositives: Array<[string, RawResource]> = [
+    ["consumer research on 'vice goods'", R({ title: "Variety, Vice, and Virtue: How Assortment Size Influences Option Choice", venue: "Journal of Consumer Research" })],
+    ["organic-product purchasing", R({ title: "Willingness to pay for organic products: Differences between virtue and vice foods" })],
+    ["epistemology's 'epistemic vice'", R({ title: "Vice Epistemology", venue: "The Monist" })],
+    ["motivation in epistemic vice", R({ title: "Epistemic Vice and Motivation", venue: "Metaphilosophy" })],
+    ["political theory's 'public reason'", R({ title: "Public Reason in Hobbes" })],
+    ["Kant on public reason", R({ title: "Kant on Public Reason" })],
+    ["critical theory", R({ title: "Algorithmic Reason" })],
+    ["historiography", R({ title: "Ordinary Historical Reason" })],
+    ["political economy", R({ title: "Ordoliberalism and the Crisis of Reason" })],
+    ["constitutional law", R({ title: "Disobedience of Constitutional Court Decision as a Reason for Impeachment of the President" })],
+    ["business ethics", R({ title: "Vice and Virtue in Everyday (Business) Life" })],
+    ["comparative religion", R({ title: "Combinations of reason and tradition in Islamic ethics" })],
+    ["a bare token", R({ title: "Vice Versa" })],
+  ];
+
+  it.each(falsePositives)("never accepts %s", (_name, candidate) => {
+    const a = assessCandidate(candidate, irwin, "scholarly_debate");
+    expect(a.verdict).not.toBe("accepted");
+  });
+
+  it("still accepts the same concepts when the work's own subject is named", () => {
+    // The control: identical concept words, but genuinely about this subject.
+    for (const title of [
+      "Aristotle on Vice",
+      "Vice in the Nicomachean Ethics",
+      "Vice in ancient philosophy: Plato and Aristotle on moral character",
+    ]) {
+      expect(assessCandidate(R({ title }), irwin, "scholarly_debate").verdict).toBe("accepted");
+    }
   });
 });
 

@@ -75,6 +75,7 @@ export type RelevanceReason =
   | "author_collision_given_name"
   | "no_grounding_signal"
   | "unusable_identity"
+  | "no_shared_entity"
   | "off_discipline_venue_flagged"
   | "below_accept_threshold";
 
@@ -154,6 +155,32 @@ export const REJECT_CONFIDENCE = 0.35;
 /** Extra topical floor for public/media lanes, where a title is often the only
  *  thing we may lawfully inspect. */
 export const PUBLIC_LANE_MIN_OVERLAP = 0.5;
+/** A token must be capitalized this many times, and this many times more often
+ *  than it appears lowercase, to count as a named entity of the work. */
+const ENTITY_MIN_MENTIONS = 3;
+const ENTITY_CAP_RATIO = 3;
+
+/**
+ * Words the capitalization test flags but which name nothing: sentence-initial
+ * connectives, publisher/structural furniture from the extracted PDF, and
+ * calendar tokens. Left in, they make the shared-entity requirement toothless —
+ * "…in Islamic ethics" would match on "Ethics", and half the catalogue would
+ * match on "Oxford" or "Journal".
+ */
+const ENTITY_BLOCKLIST = new Set([
+  // sentence-initial connectives
+  "moreover", "similarly", "however", "therefore", "furthermore", "nevertheless", "thus",
+  "hence", "finally", "indeed", "also", "first", "second", "third", "since", "although",
+  "perhaps", "instead", "rather", "again", "here", "there", "then", "now", "one", "two",
+  // publishing / structural furniture
+  "journal", "university", "press", "book", "books", "section", "chapter", "volume", "page",
+  "pages", "review", "reviews", "article", "philosophy", "ethics", "studies", "quarterly",
+  "oxford", "cambridge", "london", "new", "york", "princeton", "harvard", "routledge",
+  "content", "downloaded", "terms", "https", "org", "jstor", "doi",
+  // calendar
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+  "mon", "tue", "wed", "thu", "fri", "sat", "sun",
+]);
 
 const STOP = new Set([
   "the", "and", "for", "with", "from", "into", "a", "an", "of", "on", "in", "to", "at", "by",
@@ -463,6 +490,17 @@ export function assessCandidate(
       reasons.push("no_grounding_signal");
       return finish("quarantined", confidence);
     }
+    // A shared concept word is not a shared subject. Measured on a real
+    // production run whose core concepts were "vice" and "reason": matching on
+    // those alone admitted consumer-research papers on "vice goods",
+    // epistemology's "epistemic vice", and political theory's "public reason"
+    // — 74 accepted at roughly 16% precision. Requiring the candidate to ALSO
+    // name an entity the work actually discusses (Aristotle, Plato, Aquinas…)
+    // is what distinguishes the subject from the vocabulary.
+    if (!entityHit) {
+      reasons.push("no_shared_entity");
+      return finish("quarantined", Math.min(confidence, ACCEPT_CONFIDENCE - 0.01));
+    }
     return finish("accepted", confidence);
   }
 
@@ -506,10 +544,28 @@ export function buildTopicSignature(input: {
     .slice(0, 200)
     .map(([t]) => t);
 
-  // Capitalized multi-token runs in the title/abstract approximate named
-  // entities well enough for a gate, without an NER dependency.
+  // Named entities, approximated without an NER dependency: a token that the
+  // document capitalizes far more often than not, and does so repeatedly.
+  // "Aristotle" is essentially always capitalized; "reason" essentially never
+  // is except at the start of a sentence. The ratio test is what separates
+  // them, and it is why entities are read from the BODY, not just the title —
+  // a title of "Vice and Reason" names no entity at all.
+  const capCount = new Map<string, number>();
+  const lowerCount = new Map<string, number>();
+  const scan = `${strong} ${input.bodyText ?? ""}`;
+  for (const m of scan.matchAll(/\b([A-Za-z][a-z]{2,})\b/g)) {
+    const raw = m[1];
+    const key = raw.toLowerCase();
+    if (STOP.has(key)) continue;
+    const bucket = raw[0] === raw[0].toUpperCase() ? capCount : lowerCount;
+    bucket.set(key, (bucket.get(key) ?? 0) + 1);
+  }
   const entityTerms = new Set<string>();
-  for (const m of strong.matchAll(/\b([A-Z][a-z]{2,})\b/g)) entityTerms.add(m[1].toLowerCase());
+  for (const [term, caps] of capCount) {
+    const lows = lowerCount.get(term) ?? 0;
+    if (ENTITY_BLOCKLIST.has(term)) continue;
+    if (caps >= ENTITY_MIN_MENTIONS && caps >= lows * ENTITY_CAP_RATIO) entityTerms.add(term);
+  }
 
   // Multi-word and hyphenated concepts are kept WHOLE so they match as phrases.
   // Tokenizing them leaks generic fragments into the core set ("self-love" →
