@@ -76,7 +76,7 @@ Full rationale for every stack choice, including rejected alternatives: plan §4
 
 ## Current Implementation Status
 
-**Phase 0 — Research & Planning: complete. Phases 1–6 complete. Phase 7 (Hardening & Deployment): complete — local and deployed. Phase 8 (Critical Edition Recovery, Autonomous Research & Public-Source Discovery): IN PROGRESS.** Phase 9 (Educational Companion Site) not started. Phase 8 plan of record: the approved plan in the changelog + `docs/architecture/plan.md` §33 (sub-phases 8.1–8.9).
+**Phase 0 — Research & Planning: complete. Phases 1–7 complete. Phase 8 (Critical Edition Recovery, Autonomous Research & Public-Source Discovery): IN PROGRESS; 8.1 is complete in code and 8.2 foundation is additive but not deployed.** Production remains on migration `0007`; `0008`–`0010` are pending release gates. Phase 9 (Educational Companion Site) not started. Phase 8 plan of record: `docs/architecture/plan.md` §33 (sub-phases 8.1–8.9).
 
 - Repo: https://github.com/hyderhusainarastu/interactive-critical-edition (private)
 - Checkpoint tags: `phase-0-complete`, `phase-1a-complete`, `phase-1-complete`, `phase-2a-complete`, `phase-2-complete`, `phase-3-complete`, `phase-4-complete`, `phase-5-complete`, `phase-6-complete`, `phase-7-complete`

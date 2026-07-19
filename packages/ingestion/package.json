@@ -10,7 +10,10 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.2",
     "@supabase/supabase-js": "^2.45.4",
+    "epub2": "^3.0.2",
+    "tesseract.js": "^7.0.0",
     "unpdf": "^0.12.1"
   },
   "devDependencies": {

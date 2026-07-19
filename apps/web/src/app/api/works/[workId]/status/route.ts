@@ -1,5 +1,5 @@
-import { db, documents, works } from "@ice/db";
-import { and, eq } from "drizzle-orm";
+import { db, documents, processingRuns, works } from "@ice/db";
+import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
 
@@ -16,6 +16,7 @@ export async function GET(
   const [row] = await db
     .select({
       title: works.title,
+      documentId: documents.id,
       authorName: works.authorName,
       status: documents.processingStatus,
       extractedTitle: documents.extractedTitle,
@@ -31,6 +32,13 @@ export async function GET(
   if (!row) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  return NextResponse.json(row);
+  const [run] = await db.select({
+    version: processingRuns.version,
+    stage: processingRuns.stage,
+    structureState: processingRuns.structureState,
+    runStatus: processingRuns.status,
+    published: processingRuns.isPublished,
+    note: processingRuns.note,
+  }).from(processingRuns).where(eq(processingRuns.documentId, row.documentId)).orderBy(desc(processingRuns.version)).limit(1);
+  return NextResponse.json({ ...row, processingRun: run ?? null });
 }

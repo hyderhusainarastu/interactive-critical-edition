@@ -2,35 +2,13 @@ import { db, documents, processingJobs, works } from "@ice/db";
 import { enqueueExtractText } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { uploadDocumentFile } from "@ice/ingestion";
+import { scanWithOptionalClamAv, uploadDocumentFile, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { getApiUserId } from "@/lib/auth";
 
-const ACCEPTED_TYPES = new Set(["application/pdf", "text/plain", "text/markdown"]);
+const ACCEPTED_TYPES = new Set(["application/pdf", "application/epub+zip", "text/plain", "text/markdown"]);
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
-
-/**
- * Malware scanning is stubbed for Phase 2 — the plan calls for
- * ClamAV/a hosted scanning API, which needs its own infra. Tracked as
- * known debt in CLAUDE.md rather than silently skipped. This function
- * is the seam a real scanner plugs into later.
- */
-async function scanForMalware(_buffer: Buffer): Promise<{ clean: boolean }> {
-  return { clean: true };
-}
-
-// Lightweight content-vs-claimed-type check — not a substitute for the
-// malware scan above, just catches an obviously mislabeled upload
-// (plan §14/§15: "MIME-sniffed, not trusted by extension").
-function contentMatchesType(buffer: Buffer, mimeType: string): boolean {
-  if (mimeType === "application/pdf") {
-    return buffer.subarray(0, 5).toString("ascii") === "%PDF-";
-  }
-  // text/plain, text/markdown: reject anything with embedded NUL bytes
-  // (a reliable signal of binary content mislabeled as text).
-  return !buffer.subarray(0, 8000).includes(0);
-}
 
 export async function POST(request: Request) {
   const userId = await getApiUserId();
@@ -73,17 +51,18 @@ export async function POST(request: Request) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  if (!contentMatchesType(buffer, file.type)) {
+  const validation = validateUploadContent(buffer, file.type);
+  if (!validation.valid) {
     return NextResponse.json(
-      { error: "File content doesn't match its declared type." },
+      { error: validation.error },
       { status: 400 },
     );
   }
 
-  const scan = await scanForMalware(buffer);
-  if (!scan.clean) {
+  const scan = await scanWithOptionalClamAv(buffer);
+  if (!scan.valid) {
     return NextResponse.json(
-      { error: "File failed a security scan." },
+      { error: scan.error },
       { status: 400 },
     );
   }

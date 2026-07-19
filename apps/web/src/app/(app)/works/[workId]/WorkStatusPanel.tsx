@@ -14,6 +14,14 @@ interface StatusPayload {
   extractedTitle: string | null;
   extractedAuthor: string | null;
   processingError: string | null;
+  processingRun: {
+    version: number;
+    stage: string | null;
+    structureState: "full" | "limited";
+    runStatus: "pending" | "running" | "complete" | "failed";
+    published: boolean;
+    note: string | null;
+  } | null;
 }
 
 const POLLING_STATUSES: Status[] = ["uploaded", "processing"];
@@ -79,7 +87,7 @@ export function WorkStatusPanel({
         />
         <span className="text-[var(--color-text)]">
           {STATUS_LABEL[data.status]} — extracting text and detecting
-          metadata. This page updates automatically.
+          metadata{data.processingRun?.stage ? ` (${data.processingRun.stage})` : ""}. This page updates automatically.
         </span>
       </div>
     );
@@ -146,6 +154,11 @@ export function WorkStatusPanel({
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           {data.authorName ? `${data.title} — ${data.authorName}` : data.title}
         </p>
+        {data.processingRun && (
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            Edition run v{data.processingRun.version} · {data.processingRun.structureState === "full" ? "full structure" : "structure-limited fallback"}
+          </p>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Link

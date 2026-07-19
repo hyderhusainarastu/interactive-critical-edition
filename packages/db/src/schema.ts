@@ -9,6 +9,7 @@ import {
   real,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -474,7 +475,11 @@ export const aiUsageLogs = pgTable("ai_usage_log", {
   documentId: uuid("document_id").references(() => documents.id, {
     onDelete: "set null",
   }),
+  // processingRuns is declared later in this incrementally-grown schema;
+  // the database FK is supplied by migration 0010.
+  runId: uuid("run_id"),
   task: text("task").notNull(),
+  stage: text("stage"),
   provider: text("provider").notNull(),
   model: text("model").notNull(),
   promptTokens: integer("prompt_tokens").notNull().default(0),
@@ -590,6 +595,12 @@ export const processingRunStatusEnum = pgEnum("processing_run_status", [
   "failed",
 ]);
 
+// Whether the run has structured TEI semantics or the deliberately honest
+// PDF.js fallback. This is distinct from success: a structure-limited run is
+// still safe to publish and render, it simply cannot claim GROBID-level
+// sections, references, or coordinates.
+export const structureStateEnum = pgEnum("structure_state", ["full", "limited"]);
+
 // Structural role of an extracted text block (from GROBID TEI / pdf.js).
 export const textBlockKindEnum = pgEnum("text_block_kind", [
   "title",
@@ -613,6 +624,7 @@ export const processingRuns = pgTable(
     version: integer("version").notNull().default(1),
     pipelineVersion: text("pipeline_version").notNull().default("v2"),
     status: processingRunStatusEnum("status").notNull().default("pending"),
+    structureState: structureStateEnum("structure_state").notNull().default("limited"),
     // Human-readable current stage for live progress (e.g. "extracting",
     // "scholarly-discovery", "note-synthesis").
     stage: text("stage"),
@@ -630,6 +642,7 @@ export const processingRuns = pgTable(
   (t) => [
     index("processing_run_document_idx").on(t.documentId),
     index("processing_run_published_idx").on(t.documentId, t.isPublished),
+    uniqueIndex("processing_run_document_version_unique").on(t.documentId, t.version),
   ],
 );
 
@@ -713,4 +726,66 @@ export const docMetadata = pgTable("doc_metadata", {
   // "embedded" | "grobid" | "title-page" | "bibliographic" | "ai"
   source: text("source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [uniqueIndex("doc_metadata_run_unique").on(t.runId)]);
+
+/** Phase 8 research is scoped to a processing run, so reprocessing can
+ * publish atomically without deleting the last good edition. */
+export const researchResources = pgTable("research_resource", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  url: text("url"),
+  resourceType: text("resource_type").notNull().default("bibliographic"),
+  provider: text("provider").notNull(),
+  accessStatus: text("access_status").notNull().default("metadata_only"),
+  inspectionDepth: integer("inspection_depth").notNull().default(0),
+  raw: jsonb("raw"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("research_resource_run_idx").on(t.runId)]);
+
+export const resourceProvenance = pgTable("resource_provenance", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  resourceId: uuid("resource_id").notNull().references(() => researchResources.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  query: text("query"),
+  inspectedAt: timestamp("inspected_at"),
+  inspectionDepth: integer("inspection_depth").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("resource_provenance_resource_idx").on(t.resourceId)]);
+
+export const editionRelations = pgTable("edition_relation", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  resourceId: uuid("resource_id").references(() => researchResources.id, { onDelete: "set null" }),
+  relationType: text("relation_type").notNull(),
+  evidence: jsonb("evidence"),
+  confidence: real("confidence").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("edition_relation_run_idx").on(t.runId)]);
+
+export const credibilityAssessments = pgTable("credibility_assessment", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  resourceId: uuid("resource_id").notNull().references(() => researchResources.id, { onDelete: "cascade" }),
+  score: real("score").notNull(),
+  rationale: text("rationale"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("credibility_assessment_resource_unique").on(t.resourceId)]);
+
+export const evidenceSpans = pgTable("evidence_span", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  resourceId: uuid("resource_id").references(() => researchResources.id, { onDelete: "set null" }),
+  pageAnchor: jsonb("page_anchor"),
+  quote: text("quote").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("evidence_span_run_idx").on(t.runId)]);
+
+export const generatedNotes = pgTable("generated_note", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  evidenceSpanId: uuid("evidence_span_id").references(() => evidenceSpans.id, { onDelete: "set null" }),
+  noteType: text("note_type").notNull().default("critical"),
+  body: text("body").notNull(),
+  confidence: real("confidence").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("generated_note_run_idx").on(t.runId)]);

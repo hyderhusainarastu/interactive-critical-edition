@@ -1,4 +1,20 @@
 services:
+  # Free, local-only structured PDF extraction. Start explicitly with
+  # `docker compose --profile grobid up -d grobid`; no production endpoint is
+  # configured by this compose file.
+  grobid:
+    image: grobid/grobid:0.9.0-crf
+    profiles: ["grobid"]
+    restart: unless-stopped
+    ports:
+      - "8070:8070"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8070/api/isalive || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped

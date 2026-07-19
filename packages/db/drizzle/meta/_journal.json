@@ -64,6 +64,20 @@
       "when": 1784420152491,
       "tag": "0008_public_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784505600000,
+      "tag": "0009_phase_8_run_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784509200000,
+      "tag": "0010_phase_8_research_edition",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
-import { db, documents, works } from "@ice/db";
-import { and, eq } from "drizzle-orm";
+import { db, documents, processingRuns, works } from "@ice/db";
+import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { WorkStatusPanel } from "./WorkStatusPanel";
@@ -15,6 +15,7 @@ export default async function WorkPage({
   const [row] = await db
     .select({
       title: works.title,
+      documentId: documents.id,
       authorName: works.authorName,
       status: documents.processingStatus,
       extractedTitle: documents.extractedTitle,
@@ -28,6 +29,14 @@ export default async function WorkPage({
     .limit(1);
 
   if (!row) notFound();
+  const [run] = await db.select({
+    version: processingRuns.version,
+    stage: processingRuns.stage,
+    structureState: processingRuns.structureState,
+    runStatus: processingRuns.status,
+    published: processingRuns.isPublished,
+    note: processingRuns.note,
+  }).from(processingRuns).where(eq(processingRuns.documentId, row.documentId)).orderBy(desc(processingRuns.version)).limit(1);
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
@@ -39,7 +48,7 @@ export default async function WorkPage({
           {row.title}
         </h1>
       </div>
-      <WorkStatusPanel workId={workId} initial={row} />
+      <WorkStatusPanel workId={workId} initial={{ ...row, processingRun: run ?? null }} />
     </div>
   );
 }

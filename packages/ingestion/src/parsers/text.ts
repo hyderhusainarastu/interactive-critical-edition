@@ -12,5 +12,12 @@ export function parseText(buffer: Buffer, mimeType: string): ParsedDocument {
       ? firstLine.replace(/^#+\s*/, "")
       : (firstLine ?? null);
 
-  return { text, detectedTitle, detectedAuthor: null };
+  return {
+    text,
+    detectedTitle,
+    detectedAuthor: null,
+    pages: [{ pageIndex: 0, text, blocks: [{ kind: "body", text }], isOcr: false, extractionConfidence: 1 }],
+    structureState: "limited",
+    metadataConfidence: detectedTitle ? 0.65 : 0,
+  };
 }
