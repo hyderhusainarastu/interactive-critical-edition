@@ -1,0 +1,112 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  gradeClaims,
+  generateQueries,
+  heuristicNote,
+  heuristicQueries,
+  quoteIsGrounded,
+  type StructuredCaller,
+} from "./synthesize";
+import type { RawResource } from "./types";
+
+describe("heuristicQueries", () => {
+  it("builds title/author rounds plus a citation round", () => {
+    const rounds = heuristicQueries({ title: "Being and Time", author: "Heidegger" }, ["Kant, Critique of Pure Reason"]);
+    expect(rounds[0]).toContain("Being and Time");
+    expect(rounds[0].some((q) => q.includes("Heidegger"))).toBe(true);
+    expect(rounds[1][0]).toContain("Kant");
+  });
+});
+
+describe("generateQueries", () => {
+  it("falls back to heuristics when no model is available", async () => {
+    const caller: StructuredCaller = { available: false, call: vi.fn() };
+    const out = await generateQueries(caller, { primary: { title: "Ethics", author: "Spinoza" }, citationTexts: [], model: "m" });
+    expect(out.usedModel).toBe(false);
+    expect(out.rounds[0].length).toBeGreaterThan(0);
+  });
+
+  it("uses and validates the model's queries when available", async () => {
+    const caller: StructuredCaller = {
+      available: true,
+      call: vi.fn(async (p) => ({
+        data: p.validate({ rounds: [["good query one", "  "], ["another decent query"]] }),
+        promptTokens: 3,
+        completionTokens: 4,
+        model: p.model,
+      })),
+    };
+    const out = await generateQueries(caller, { primary: { title: "Ethics" }, citationTexts: [], model: "m" });
+    expect(out.usedModel).toBe(true);
+    // The blank query is dropped by validation.
+    expect(out.rounds[0]).toEqual(["good query one"]);
+  });
+
+  it("falls back if the model returns an unusable shape", async () => {
+    const caller: StructuredCaller = {
+      available: true,
+      call: vi.fn(async (p) => ({ data: p.validate({ rounds: "nope" }), promptTokens: 0, completionTokens: 0, model: p.model })),
+    };
+    // The validate() throw propagates out of call() in this mock; generateQueries catches it.
+    const out = await generateQueries(caller, { primary: { title: "Ethics" }, citationTexts: [], model: "m" });
+    expect(out.usedModel).toBe(false);
+  });
+});
+
+describe("quoteIsGrounded (anti-hallucination)", () => {
+  const evidence = ["The soul is the form of the body, according to the treatise."];
+  it("accepts a quote that really appears in the evidence", () => {
+    expect(quoteIsGrounded("the soul is the form of the body", evidence)).toBe(true);
+  });
+  it("rejects a fabricated quote", () => {
+    expect(quoteIsGrounded("the soul is immortal and eternal forever", evidence)).toBe(false);
+  });
+  it("rejects a too-short quote", () => {
+    expect(quoteIsGrounded("soul", evidence)).toBe(false);
+  });
+});
+
+describe("gradeClaims", () => {
+  const evidence = ["Aristotle argues the mean between extremes defines virtue."];
+  it("keeps a factual claim only when grounded AND authority is sufficient", () => {
+    const out = gradeClaims([{ text: "x", claimType: "factual", quote: "the mean between extremes defines virtue" }], evidence, true);
+    expect(out[0].claimType).toBe("factual");
+    expect(out[0].grounded).toBe(true);
+  });
+  it("demotes a factual claim to interpretive when authority is insufficient", () => {
+    const out = gradeClaims([{ text: "x", claimType: "factual", quote: "the mean between extremes defines virtue" }], evidence, false);
+    expect(out[0].claimType).toBe("interpretive");
+  });
+  it("demotes a factual claim with an ungrounded quote", () => {
+    const out = gradeClaims([{ text: "x", claimType: "factual", quote: "virtue is its own reward always" }], evidence, true);
+    expect(out[0].claimType).toBe("interpretive");
+    expect(out[0].grounded).toBe(false);
+  });
+  it("leaves interpretive/inferred claims as-is", () => {
+    const out = gradeClaims([{ text: "y", claimType: "inferred" }], evidence, true);
+    expect(out[0].claimType).toBe("inferred");
+  });
+});
+
+describe("heuristicNote", () => {
+  it("states the relation and source without inventing facts", () => {
+    const r: RawResource = {
+      provider: "crossref",
+      resourceType: "article",
+      title: "On Virtue",
+      authors: ["Jane Doe"],
+      year: 2010,
+      url: null,
+      doi: "10.1000/x",
+      isbn: null,
+      snippet: null,
+      venue: null,
+      popularity: null,
+      raw: null,
+    };
+    const note = heuristicNote(r, "secondary_scholarly_recommendation");
+    expect(note).toContain("On Virtue");
+    expect(note).toContain("Jane Doe");
+    expect(note).toContain("crossref");
+  });
+});

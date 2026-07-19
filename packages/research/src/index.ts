@@ -3,4 +3,5 @@ export * from "./config";
 export * from "./normalize";
 export * from "./credibility";
 export * from "./discover";
+export * from "./synthesize";
 export * from "./adapters";
