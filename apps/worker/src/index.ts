@@ -13,12 +13,12 @@ import {
   QUEUE_ANALYZE_WORK,
   QUEUE_EXTRACT_TEXT,
   textBlocks,
-  works,
 } from "@ice/db";
 import { detectFootnotes, downloadDocumentFile, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
+import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 
 async function handleExtractText(documentId: string) {
   const [job] = await db
@@ -140,30 +140,9 @@ async function handleEditionExtraction(documentId: string) {
   }).from(documents).where(eq(documents.id, documentId)).limit(1);
   if (!doc) throw new Error(`Document ${documentId} not found`);
 
-  // Allocate the next run version under a per-document advisory lock so two
-  // concurrent reprocess requests can never claim the same version (which the
-  // processing_run_document_version_unique index would otherwise reject with a
-  // hard error). The lock is transaction-scoped and released on commit.
-  const run = await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${documentId}))`);
-    const [{ nextVersion }] = await tx
-      .select({ nextVersion: sql<number>`coalesce(max(${processingRuns.version}), 0) + 1` })
-      .from(processingRuns)
-      .where(eq(processingRuns.documentId, documentId));
-    const [created] = await tx
-      .insert(processingRuns)
-      .values({
-        documentId,
-        version: nextVersion,
-        pipelineVersion: "v2",
-        status: "running",
-        stage: "extracting",
-        structureState: "limited",
-        startedAt: new Date(),
-      })
-      .returning({ id: processingRuns.id });
-    return created;
-  });
+  // Allocate the next run version under a per-document advisory lock (see
+  // runLifecycle) so two concurrent reprocesses never claim the same version.
+  const run = await allocateEditionRun(documentId);
 
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
   if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -230,28 +209,16 @@ async function handleEditionExtraction(documentId: string) {
     // through metadata review just because the new extractor has lower title
     // confidence. The user-approved work metadata is stronger evidence.
     const autoReady = (parsed.metadataConfidence >= 0.9 && Boolean(parsed.detectedTitle)) || doc.processingStatus === "ready";
-    await db.transaction(async (tx) => {
-      await tx.update(processingRuns).set({ isPublished: false }).where(eq(processingRuns.documentId, documentId));
-      await tx.update(processingRuns).set({
-        isPublished: true,
-        status: "complete",
-        stage: "published",
-        structureState: parsed.structureState,
-        note: parsed.structureState === "limited" ? "Structured GROBID extraction is unavailable; PDF.js page blocks are published." : null,
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      }).where(eq(processingRuns.id, run.id));
-      if (autoReady) {
-        await tx.update(works).set({ title: parsed.detectedTitle!, authorName: parsed.detectedAuthor, updatedAt: new Date() }).where(eq(works.id, doc.workId));
-      }
-      await tx.update(documents).set({
-        extractedText: parsed.text,
-        extractedTitle: parsed.detectedTitle,
-        extractedAuthor: parsed.detectedAuthor,
-        processingStatus: autoReady ? "ready" : "needs_review",
-        analysisStatus: "complete",
-        updatedAt: new Date(),
-      }).where(eq(documents.id, documentId));
+    await publishEditionRun({
+      runId: run.id,
+      documentId,
+      workId: doc.workId,
+      structureState: parsed.structureState,
+      note: parsed.structureState === "limited" ? "Structured GROBID extraction is unavailable; PDF.js page blocks are published." : null,
+      extractedText: parsed.text,
+      detectedTitle: parsed.detectedTitle,
+      detectedAuthor: parsed.detectedAuthor,
+      autoReady,
     });
     if (job) await db.update(processingJobs).set({ status: "succeeded", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   } catch (error) {
