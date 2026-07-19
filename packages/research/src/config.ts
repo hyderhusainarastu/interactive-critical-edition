@@ -22,8 +22,9 @@ export const RESEARCH_LIMITS = {
   maxWebResults: 12,
   maxYoutubeResults: 8,
   maxSocialResultsPerProvider: 6,
-  /** Max resources promoted to a full (content-level) inspection. */
-  maxFullInspections: 120,
+  /** Max resources promoted to a full (content-level) inspection. Env-
+   *  overridable so ops/tests can bound per-run LLM spend. */
+  maxFullInspections: Number(process.env.RESEARCH_MAX_INSPECTIONS ?? 120),
   /** Saturation: stop after this many consecutive discovery batches each add
    *  fewer than `saturationMinNewFraction` new relevant non-duplicates. */
   saturationBatches: 2,

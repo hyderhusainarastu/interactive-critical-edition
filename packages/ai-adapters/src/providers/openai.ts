@@ -15,22 +15,32 @@ export class OpenAIProvider implements LLMProvider {
   ) {}
 
   async complete(params: LLMCompletionParams): Promise<LLMCompletionResult> {
+    // GPT-5 family / reasoning models reject `max_tokens` (need
+    // `max_completion_tokens`) and any non-default `temperature`. Older chat
+    // models (gpt-4o-mini) take the deterministic temperature:0 + max_tokens.
+    const isReasoning = /^(gpt-5|o\d)/.test(this.model);
+    const body: Record<string, unknown> = {
+      model: this.model,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: params.system },
+        { role: "user", content: params.prompt },
+      ],
+    };
+    if (isReasoning) {
+      // Leave headroom for reasoning tokens so the JSON output isn't truncated.
+      body.max_completion_tokens = params.maxTokens ? Math.max(params.maxTokens, 1024) : 1024;
+    } else {
+      body.temperature = 0;
+      body.max_tokens = params.maxTokens ?? 400;
+    }
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: JSON.stringify({
-        model: this.model,
-        temperature: 0,
-        max_tokens: params.maxTokens ?? 400,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: params.system },
-          { role: "user", content: params.prompt },
-        ],
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
