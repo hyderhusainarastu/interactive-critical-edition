@@ -570,3 +570,147 @@ export const roadmapOverrides = pgTable("roadmap_override", {
   addedManually: boolean("added_manually").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [index("roadmap_override_root_idx").on(t.userId, t.rootWorkId)]);
+
+/**
+ * Phase 8 scope (Critical Edition Recovery): a VERSIONED, page-aware,
+ * structure-preserving document-processing model (plan §33). Each
+ * (re)processing attempt is a `processing_run`; only the run marked
+ * `is_published = true` is read by the reader/edition UI. A failed
+ * reprocess never touches the previously published run, which fixes the
+ * Phase 4 "delete-before-success" defect (analyzeWork used to delete the
+ * live analysis at the START of a run). Legacy Phase 2–5 tables
+ * (`documents.extracted_text`, `annotations`, …) are untouched and remain
+ * the fallback until a work has a published v2 run.
+ */
+
+export const processingRunStatusEnum = pgEnum("processing_run_status", [
+  "pending",
+  "running",
+  "complete",
+  "failed",
+]);
+
+// Structural role of an extracted text block (from GROBID TEI / pdf.js).
+export const textBlockKindEnum = pgEnum("text_block_kind", [
+  "title",
+  "header",
+  "body",
+  "footer",
+  "footnote",
+  "caption",
+  "bibliography",
+  "reference",
+]);
+
+export const processingRuns = pgTable(
+  "processing_run",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    // Monotonic per document; the highest published one is "current".
+    version: integer("version").notNull().default(1),
+    pipelineVersion: text("pipeline_version").notNull().default("v2"),
+    status: processingRunStatusEnum("status").notNull().default("pending"),
+    // Human-readable current stage for live progress (e.g. "extracting",
+    // "scholarly-discovery", "note-synthesis").
+    stage: text("stage"),
+    // Only ONE published run per document at a time (enforced in app logic
+    // on publish); the reader/edition reads exclusively the published run.
+    isPublished: boolean("is_published").notNull().default(false),
+    // "structure-limited" etc. degradation notes, and failure messages.
+    note: text("note"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("processing_run_document_idx").on(t.documentId),
+    index("processing_run_published_idx").on(t.documentId, t.isPublished),
+  ],
+);
+
+export const pages = pgTable(
+  "page",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    pageIndex: integer("page_index").notNull(), // 0-based
+    width: real("width"),
+    height: real("height"),
+    // Supabase Storage path for the rasterized page image (reader render).
+    imagePath: text("image_path"),
+    // True when this page's text came from OCR (scanned), not a text layer.
+    isOcr: boolean("is_ocr").notNull().default(false),
+    extractionConfidence: real("extraction_confidence"),
+    text: text("text"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("page_run_idx").on(t.runId, t.pageIndex)],
+);
+
+export const textBlocks = pgTable(
+  "text_block",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => pages.id, { onDelete: "cascade" }),
+    blockOrder: integer("block_order").notNull(),
+    kind: textBlockKindEnum("kind").notNull().default("body"),
+    // { x, y, w, h } in page coordinate space, when available (GROBID coords).
+    bbox: jsonb("bbox"),
+    text: text("text").notNull(),
+    confidence: real("confidence"),
+  },
+  (t) => [index("text_block_page_idx").on(t.pageId, t.blockOrder)],
+);
+
+/**
+ * Authorial footnotes/endnotes, extracted structurally and page-anchored.
+ * `kind` distinguishes authorial (from the source document — NEVER to be
+ * replaced by generated notes) from any future editorial kind. `source`
+ * records how it was found (grobid structure vs regex fallback).
+ */
+export const docFootnotes = pgTable(
+  "doc_footnote",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    marker: text("marker").notNull(),
+    // { pageIndex, quote, prefix, suffix } and/or { bbox } — same
+    // text-fingerprint idea as highlights (plan §25 R3), page-scoped.
+    pageAnchor: jsonb("page_anchor"),
+    text: text("text").notNull(),
+    kind: text("kind").notNull().default("authorial"),
+    source: text("source").notNull().default("grobid"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("doc_footnote_run_idx").on(t.runId)],
+);
+
+/**
+ * Auto-resolved document metadata for a run, with the winning source and a
+ * confidence. High confidence lets the pipeline auto-advance past the
+ * manual metadata form (Phase 8 auto-advance); low confidence keeps the
+ * review step. `authors` is a jsonb string array.
+ */
+export const docMetadata = pgTable("doc_metadata", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id")
+    .notNull()
+    .references(() => processingRuns.id, { onDelete: "cascade" }),
+  title: text("title"),
+  authors: jsonb("authors"),
+  confidence: real("confidence").notNull().default(0),
+  // "embedded" | "grobid" | "title-page" | "bibliographic" | "ai"
+  source: text("source"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
