@@ -24,6 +24,10 @@ export interface GraphNode {
   authors: string | null;
   year: number | null;
   url: string | null;
+  /** Best source authority (A–E) and discovering provider from v2 research,
+   *  when this reference was surfaced by the edition pipeline; null for legacy. */
+  authority: string | null;
+  provider: string | null;
 }
 
 export interface GraphLink {
@@ -99,6 +103,25 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         `)) as unknown as RefRow[])
       : [];
 
+  // 3b) v2 research enrichment: best authority + discovering provider per bib.
+  const enrichRows =
+    refIds.length > 0
+      ? ((await db.execute(sql`
+          SELECT rr.bib_record_id AS bib_id, ca.authority, rr.provider
+          FROM research_resource rr
+          LEFT JOIN credibility_assessment ca ON ca.resource_id = rr.id
+          WHERE rr.bib_record_id IN ${refIds}
+        `)) as unknown as { bib_id: string; authority: string | null; provider: string | null }[])
+      : [];
+  const AUTH_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+  const enrichByBib = new Map<string, { authority: string | null; provider: string | null }>();
+  for (const row of enrichRows) {
+    if (!row.bib_id) continue;
+    const prior = enrichByBib.get(row.bib_id);
+    const better = !prior || (AUTH_ORDER[row.authority ?? "E"] ?? 4) < (AUTH_ORDER[prior.authority ?? "E"] ?? 4);
+    if (better) enrichByBib.set(row.bib_id, { authority: row.authority, provider: row.provider });
+  }
+
   // 4) Reading state (records + ratings) for those references.
   const [records, ratings] = await Promise.all([
     db.select({ bibId: readingRecords.bibId, status: readingRecords.status }).from(readingRecords).where(eq(readingRecords.userId, userId)),
@@ -118,6 +141,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     authors: null,
     year: null,
     url: null,
+    authority: null,
+    provider: null,
   }));
 
   let missing = 0;
@@ -137,6 +162,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     } else {
       state = "unread";
     }
+    const enrich = enrichByBib.get(r.id);
     nodes.push({
       id: `bib:${r.id}`,
       label: r.title,
@@ -145,6 +171,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       authors: r.authors,
       year: r.year,
       url: r.url,
+      authority: enrich?.authority ?? null,
+      provider: enrich?.provider ?? null,
     });
   }
 

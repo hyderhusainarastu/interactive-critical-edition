@@ -14,24 +14,46 @@ type SortKey = "label" | "state" | "type" | "connections";
 
 export function GraphAccessibleFallback({ data }: { data: GraphData }) {
   const [filterState, setFilterState] = useState<NodeState | "all">("all");
+  const [filterAuthority, setFilterAuthority] = useState<string>("all");
+  const [filterProvider, setFilterProvider] = useState<string>("all");
+  const [filterRelation, setFilterRelation] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("state");
   const [asc, setAsc] = useState(true);
 
-  // Connections per node (degree) and a readable "connected to" summary.
-  const connections = useMemo(() => {
+  // Connections per node (degree) and a readable "connected to" summary, plus
+  // the set of relation (edge) types touching each node (for the relation filter).
+  const { connections, edgeTypesByNode } = useMemo(() => {
     const byNode = new Map<string, string[]>();
+    const edgesByNode = new Map<string, Set<string>>();
     const labelById = new Map(data.nodes.map((n) => [n.id, n.label]));
+    const add = (id: string, edgeType: string) => {
+      const set = edgesByNode.get(id) ?? new Set<string>();
+      set.add(edgeType);
+      edgesByNode.set(id, set);
+    };
     for (const l of data.links) {
       const s = typeof l.source === "string" ? l.source : (l.source as { id: string }).id;
       const t = typeof l.target === "string" ? l.target : (l.target as { id: string }).id;
       byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} → ${labelById.get(t) ?? t}`]);
       byNode.set(t, [...(byNode.get(t) ?? []), `← ${edgeTypeLabel(l.edgeType)} from ${labelById.get(s) ?? s}`]);
+      add(s, l.edgeType);
+      add(t, l.edgeType);
     }
-    return byNode;
+    return { connections: byNode, edgeTypesByNode: edgesByNode };
   }, [data]);
 
+  const authorities = useMemo(() => [...new Set(data.nodes.map((n) => n.authority).filter(Boolean) as string[])].sort(), [data.nodes]);
+  const providers = useMemo(() => [...new Set(data.nodes.map((n) => n.provider).filter(Boolean) as string[])].sort(), [data.nodes]);
+  const relations = useMemo(() => [...new Set(data.links.map((l) => l.edgeType))].sort(), [data.links]);
+
   const rows = useMemo(() => {
-    const filtered = data.nodes.filter((n) => filterState === "all" || n.state === filterState);
+    const filtered = data.nodes.filter(
+      (n) =>
+        (filterState === "all" || n.state === filterState) &&
+        (filterAuthority === "all" || n.authority === filterAuthority) &&
+        (filterProvider === "all" || n.provider === filterProvider) &&
+        (filterRelation === "all" || edgeTypesByNode.get(n.id)?.has(filterRelation)),
+    );
     const dir = asc ? 1 : -1;
     return [...filtered].sort((a, b) => {
       if (sortKey === "connections") {
@@ -39,7 +61,7 @@ export function GraphAccessibleFallback({ data }: { data: GraphData }) {
       }
       return dir * String(a[sortKey]).localeCompare(String(b[sortKey]));
     });
-  }, [data.nodes, filterState, sortKey, asc, connections]);
+  }, [data.nodes, filterState, filterAuthority, filterProvider, filterRelation, sortKey, asc, connections, edgeTypesByNode]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setAsc((v) => !v);
@@ -67,6 +89,36 @@ export function GraphAccessibleFallback({ data }: { data: GraphData }) {
             ))}
           </select>
         </label>
+
+        {relations.length > 0 && (
+          <label className="flex items-center gap-1">
+            <span className="text-[var(--color-text-muted)]">Relation</span>
+            <select value={filterRelation} onChange={(e) => setFilterRelation(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <option value="all">All</option>
+              {relations.map((r) => <option key={r} value={r}>{edgeTypeLabel(r)}</option>)}
+            </select>
+          </label>
+        )}
+
+        {authorities.length > 0 && (
+          <label className="flex items-center gap-1">
+            <span className="text-[var(--color-text-muted)]">Authority</span>
+            <select value={filterAuthority} onChange={(e) => setFilterAuthority(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <option value="all">All</option>
+              {authorities.map((a) => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </label>
+        )}
+
+        {providers.length > 0 && (
+          <label className="flex items-center gap-1">
+            <span className="text-[var(--color-text-muted)]">Provider</span>
+            <select value={filterProvider} onChange={(e) => setFilterProvider(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <option value="all">All</option>
+              {providers.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="overflow-x-auto">

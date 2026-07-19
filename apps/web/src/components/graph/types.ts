@@ -8,6 +8,9 @@ export interface GraphNode {
   authors: string | null;
   year: number | null;
   url: string | null;
+  /** v2 research enrichment (null for legacy analysis nodes). */
+  authority?: string | null;
+  provider?: string | null;
 }
 
 export interface GraphLink {
