@@ -13,6 +13,7 @@ import {
   graphEdges,
   processingRuns,
   providerAttempts,
+  researchCache,
   researchResources,
   credibilityAssessments,
   works,
@@ -47,6 +48,8 @@ import {
   RESEARCH_LIMITS,
   runDiscovery,
   synthesizeNote,
+  withCache,
+  type CacheStore,
   type RawResource,
   type SourceAuthority,
 } from "@ice/research";
@@ -391,6 +394,32 @@ export async function analyzeWork(documentId: string): Promise<void> {
 // full-inspection budget.
 const AUTHORITY_ORDER: Record<SourceAuthority, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
+/** Persistent provider-result cache over the `research_cache` table (plan §33
+ *  TTLs). A read/write failure never breaks discovery (withCache degrades to a
+ *  live call), so the store can throw freely. */
+const dbCacheStore: CacheStore = {
+  async get(provider, key) {
+    const [row] = await db
+      .select({ results: researchCache.results, expiresAt: researchCache.expiresAt })
+      .from(researchCache)
+      .where(and(eq(researchCache.provider, provider), eq(researchCache.cacheKey, key)))
+      .limit(1);
+    if (!row) return null;
+    if (new Date(row.expiresAt).getTime() < Date.now()) return null;
+    return row.results as RawResource[];
+  },
+  async set(provider, key, resources, ttlMs) {
+    const expiresAt = new Date(Date.now() + ttlMs);
+    await db
+      .insert(researchCache)
+      .values({ provider, cacheKey: key, results: resources, expiresAt })
+      .onConflictDoUpdate({
+        target: [researchCache.provider, researchCache.cacheKey],
+        set: { results: resources, expiresAt, createdAt: new Date() },
+      });
+  },
+};
+
 /** Project a scholarly book/article resource into the shared bibliographic
  *  catalogue, deduped by DOI/ISBN/normalized title (returns the record id). */
 async function findOrCreateBibFromResource(r: RawResource): Promise<string | null> {
@@ -481,8 +510,10 @@ export async function analyzeEditionRun(input: {
   });
   if (qg.usedModel) logUsage("query_generation", "research-discovery", cheapModel, qg.promptTokens, qg.completionTokens);
 
-  // Discovery across every adapter (disabled ones still record a `disabled` attempt).
-  const discovery = await runDiscovery({ adapters: allAdapters(), rounds: qg.rounds, timeoutMs: 10_000 });
+  // Discovery across every adapter (disabled ones still record a `disabled`
+  // attempt), each wrapped with the persistent result cache.
+  const adapters = allAdapters().map((a) => withCache(a, dbCacheStore));
+  const discovery = await runDiscovery({ adapters, rounds: qg.rounds, timeoutMs: 10_000 });
 
   if (discovery.attempts.length) {
     await db.insert(providerAttempts).values(

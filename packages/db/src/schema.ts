@@ -914,3 +914,21 @@ export const claimEvidence = pgTable("claim_evidence", {
   stance: text("stance").notNull().default("supports"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("claim_evidence_unique").on(t.claimId, t.evidenceSpanId)]);
+
+/**
+ * Normalized provider-result cache (plan §33): scholarly 30d / web+video 7d /
+ * social 24h. Keyed by (provider, cache_key) where cache_key is a hash of the
+ * normalized query set; `results` is a RawResource[] the worker rehydrates. Not
+ * user-scoped — the cached metadata is public and shared across runs.
+ */
+export const researchCache = pgTable("research_cache", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provider: text("provider").notNull(),
+  cacheKey: text("cache_key").notNull(),
+  results: jsonb("results").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("research_cache_provider_key_unique").on(t.provider, t.cacheKey),
+  index("research_cache_expires_idx").on(t.expiresAt),
+]);

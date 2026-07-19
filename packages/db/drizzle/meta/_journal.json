@@ -85,6 +85,13 @@
       "when": 1784552400000,
       "tag": "0011_phase_8_edition_research",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784556000000,
+      "tag": "0012_phase_8_research_cache",
+      "breakpoints": true
     }
   ]
 }
