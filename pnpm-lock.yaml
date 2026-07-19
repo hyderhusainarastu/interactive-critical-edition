@@ -113,6 +113,9 @@ importers:
       '@ice/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@ice/research':
+        specifier: workspace:*
+        version: link:../../packages/research
       drizzle-orm:
         specifier: ^0.44.0
         version: 0.44.7(pg@8.22.0)(postgres@3.4.9)

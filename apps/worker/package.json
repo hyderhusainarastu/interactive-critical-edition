@@ -14,6 +14,7 @@
     "@ice/db": "workspace:*",
     "@ice/ingestion": "workspace:*",
     "@ice/observability": "workspace:*",
+    "@ice/research": "workspace:*",
     "drizzle-orm": "^0.44.0"
   },
   "devDependencies": {

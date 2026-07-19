@@ -3,13 +3,16 @@ import {
   annotations,
   bibliographicRecords,
   citations,
+  claimEvidence,
   db,
   documents,
   editionRelations,
   evidenceSpans,
+  generatedClaims,
   generatedNotes,
   graphEdges,
   processingRuns,
+  providerAttempts,
   researchResources,
   credibilityAssessments,
   works,
@@ -18,11 +21,33 @@ import {
   classifyRelationship,
   CLASSIFY_PROMPT_VERSION,
   estimateCostUsd,
+  OpenAIResponsesClient,
+  safetyIdentifierFor,
   type RelationshipCategory,
 } from "@ice/ai-adapters";
 import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
 import { extractCitations, type RawCitation } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
+import {
+  allAdapters,
+  buildCredibility,
+  canonicalizeDoi,
+  canonicalizeIsbn,
+  canonicalizeUrl,
+  charge,
+  classifyAuthority,
+  computeAgreement,
+  generateQueries,
+  heuristicNote,
+  makeBudget,
+  meetsFactualBar,
+  normalizedKey,
+  overSoftCap,
+  RESEARCH_LIMITS,
+  runDiscovery,
+  type RawResource,
+  type SourceAuthority,
+} from "@ice/research";
 import { and, eq } from "drizzle-orm";
 
 /**
@@ -360,58 +385,231 @@ export async function analyzeWork(documentId: string): Promise<void> {
   }
 }
 
-/** Run-scoped, evidence-first research for the v2 edition. This never deletes
- * legacy reader records; every claim shown by the edition links to its source
- * citation/resource and is published atomically by the caller only on success. */
+// A-first ordering so the highest-authority resources are inspected within the
+// full-inspection budget.
+const AUTHORITY_ORDER: Record<SourceAuthority, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+
+/** Project a scholarly book/article resource into the shared bibliographic
+ *  catalogue, deduped by DOI/ISBN/normalized title (returns the record id). */
+async function findOrCreateBibFromResource(r: RawResource): Promise<string | null> {
+  const doi = canonicalizeDoi(r.doi);
+  const isbn = canonicalizeIsbn(r.isbn);
+  if (doi) {
+    const [ex] = await db.select({ id: bibliographicRecords.id }).from(bibliographicRecords).where(eq(bibliographicRecords.doi, doi)).limit(1);
+    if (ex) return ex.id;
+  }
+  const [created] = await db
+    .insert(bibliographicRecords)
+    .values({
+      source: r.provider,
+      externalId: isbn ?? null,
+      title: r.title,
+      authors: r.authors.join(", ") || null,
+      year: r.year,
+      doi,
+      url: r.url,
+      accessStatus: "metadata_only",
+      raw: r.raw,
+    })
+    .returning({ id: bibliographicRecords.id });
+  return created.id;
+}
+
+/**
+ * Run-scoped, evidence-first research for the v2 edition (plan §33). Generates
+ * search queries (LLM cheap-tier or heuristic), discovers across every enabled
+ * source adapter under the cost/saturation/dedup budget, then for each resource
+ * records provenance, independent credibility components (authority A–E, never
+ * popularity), a source-grounded generated note + claim, and — for scholarly
+ * works — a catalogue + graph projection. Never deletes legacy reader records;
+ * published atomically by the caller only on success. Every generated note is a
+ * grounded floor (no invented facts); LLM prose synthesis is a later add-on
+ * gated by the soft cost cap.
+ */
 export async function analyzeEditionRun(input: {
   runId: string;
   documentId: string;
   text: string;
 }): Promise<void> {
-  await db.update(processingRuns).set({ stage: "research-discovery", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
-  const candidates = extractCitations(input.text, 300);
-  const seen = new Set<string>();
-  for (const candidate of candidates) {
-    const record = await resolveCitation(candidate.query);
-    const title = record?.title ?? candidate.text.slice(0, 500);
-    const key = `${record?.doi ?? record?.externalId ?? title.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const [resource] = await db.insert(researchResources).values({
+  const [doc] = await db
+    .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName })
+    .from(documents)
+    .innerJoin(works, eq(works.id, documents.workId))
+    .where(eq(documents.id, input.documentId))
+    .limit(1);
+  if (!doc) throw new Error(`Document ${input.documentId} not found for edition research`);
+
+  const budget = makeBudget();
+  const responses = new OpenAIResponsesClient();
+  const safetyIdentifier = safetyIdentifierFor(doc.userId);
+  const cheapModel = process.env.OPENAI_MODEL_CHEAP ?? "gpt-5.4-nano";
+  const usageLogs: (typeof aiUsageLogs.$inferInsert)[] = [];
+  const logUsage = (task: string, stage: string, model: string, pTok: number, cTok: number) => {
+    const cost = estimateCostUsd(model, pTok, cTok);
+    charge(budget, cost);
+    usageLogs.push({
+      documentId: input.documentId,
       runId: input.runId,
-      title,
-      url: record?.url ?? null,
-      resourceType: record ? "bibliographic" : "unresolved-citation",
-      provider: record?.source ?? "unresolved",
-      accessStatus: record?.accessStatus ?? "unavailable",
-      inspectionDepth: record ? 1 : 0,
-      raw: record?.raw ?? { citation: candidate.text },
-    }).returning({ id: researchResources.id });
-    const credibility = record?.source === "crossref" ? 0.9 : record?.source === "openalex" ? 0.82 : record?.source === "openlibrary" ? 0.75 : 0.2;
-    await db.insert(credibilityAssessments).values({
-      resourceId: resource.id,
-      score: credibility,
-      rationale: record ? `Metadata resolved by ${record.source}.` : "Unresolved source text; not inspected.",
+      stage,
+      task,
+      provider: "openai",
+      model,
+      promptTokens: pTok,
+      completionTokens: cTok,
+      estimatedCostUsd: cost,
     });
-    const [evidence] = await db.insert(evidenceSpans).values({
-      runId: input.runId,
-      resourceId: resource.id,
-      quote: candidate.text,
-    }).returning({ id: evidenceSpans.id });
+  };
+
+  await db.update(processingRuns).set({ stage: "research-discovery", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+
+  // Stage 1 (cheap, deterministic): candidate citations seed the query set.
+  const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
+  const citationTexts = citationCandidates.map((c) => c.text);
+
+  // Query generation (LLM cheap-tier or heuristic fallback).
+  const qg = await generateQueries(responses, {
+    primary: { title: doc.title, author: doc.authorName },
+    citationTexts,
+    model: cheapModel,
+    safetyIdentifier,
+  });
+  if (qg.usedModel) logUsage("query_generation", "research-discovery", cheapModel, qg.promptTokens, qg.completionTokens);
+
+  // Discovery across every adapter (disabled ones still record a `disabled` attempt).
+  const discovery = await runDiscovery({ adapters: allAdapters(), rounds: qg.rounds, timeoutMs: 10_000 });
+
+  if (discovery.attempts.length) {
+    await db.insert(providerAttempts).values(
+      discovery.attempts.map((a) => ({
+        runId: input.runId,
+        provider: a.provider,
+        status: a.status,
+        queries: a.queries,
+        resultCount: a.resultCount,
+        inspectionDepth: a.inspectionDepth,
+        latencyMs: a.latencyMs,
+        error: a.error ?? null,
+      })),
+    );
+  }
+
+  await db.update(processingRuns).set({ stage: "classification", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+
+  // Highest-authority first, capped by the full-inspection budget.
+  const ranked = discovery.resources
+    .map((r) => ({ r, authority: classifyAuthority(r) }))
+    .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority])
+    .slice(0, RESEARCH_LIMITS.maxFullInspections);
+
+  for (const { r, authority } of ranked) {
+    const classification = await classifyRelationship({
+      primaryTitle: doc.title,
+      primaryAuthor: doc.authorName,
+      candidateTitle: r.title,
+      candidateAuthor: r.authors.join(", ") || null,
+      sourceText: r.snippet ?? r.title,
+      resolved: Boolean(r.doi || r.isbn),
+    });
+    if (!classification.heuristic) {
+      logUsage("relationship_classification", "classification", classification.model, classification.promptTokens, classification.completionTokens);
+    }
+
+    const isScholarly = r.resourceType === "book" || r.resourceType === "article";
+    const bibId = isScholarly ? await findOrCreateBibFromResource(r) : null;
+
+    const [resourceRow] = await db
+      .insert(researchResources)
+      .values({
+        runId: input.runId,
+        title: r.title,
+        url: r.url,
+        resourceType: r.resourceType,
+        provider: r.provider,
+        accessStatus: "metadata_only",
+        inspectionDepth: r.snippet ? 1 : 0,
+        doi: canonicalizeDoi(r.doi),
+        isbn: canonicalizeIsbn(r.isbn),
+        canonicalUrl: canonicalizeUrl(r.url),
+        normalizedKey: normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }),
+        year: r.year,
+        authors: r.authors,
+        bibRecordId: bibId,
+        raw: r.raw,
+      })
+      .returning({ id: researchResources.id });
+
+    const cred = buildCredibility(r, {
+      relevance: Math.max(0, Math.min(1, classification.confidence)),
+      inspectionDepth: r.snippet ? 1 : 0,
+      evidenceStrength: r.snippet ? 0.6 : 0.3,
+    });
+    // Single independent source at this stage → agreement is honestly insufficient.
+    const agreement = computeAgreement(1, 0);
+    await db.insert(credibilityAssessments).values({
+      resourceId: resourceRow.id,
+      score: cred.score,
+      authority: cred.authority,
+      relevance: cred.relevance,
+      inspectionDepth: cred.inspectionDepth,
+      evidenceStrength: cred.evidenceStrength,
+      agreement,
+      components: cred,
+      rationale: cred.rationale,
+    });
+
+    const evidenceText = (r.snippet ?? r.title).slice(0, 1000);
+    const [evidence] = await db
+      .insert(evidenceSpans)
+      .values({ runId: input.runId, resourceId: resourceRow.id, quote: evidenceText })
+      .returning({ id: evidenceSpans.id });
+
     await db.insert(editionRelations).values({
       runId: input.runId,
-      resourceId: resource.id,
-      relationType: candidate.kind === "reference" ? "cites" : "mentions",
-      evidence: { evidenceSpanId: evidence.id, sourceText: candidate.text },
-      confidence: record ? 0.9 : 0.35,
+      resourceId: resourceRow.id,
+      relationType: classification.category,
+      depth: r.resourceType === "unresolved-citation" ? 0 : 1,
+      importance: cred.score,
+      evidence: { category: classification.category, sourceText: evidenceText.slice(0, 300) },
+      confidence: classification.confidence,
     });
-    if (record) await db.insert(generatedNotes).values({
-      runId: input.runId,
-      evidenceSpanId: evidence.id,
-      noteType: "explicit-reference",
-      body: `The uploaded text contains an explicit reference to ${record.title}. Metadata was resolved through ${record.source}.`,
-      confidence: 0.9,
-    });
+
+    // Source-grounded generated note + its (interpretive) claim. The heuristic
+    // note asserts no factual claim it cannot ground, so it is safe regardless
+    // of the authority bar; `meetsFactualBar` gates any future factual upgrade.
+    const noteBody = heuristicNote(r, classification.category);
+    void meetsFactualBar([authority]);
+    const [note] = await db
+      .insert(generatedNotes)
+      .values({ runId: input.runId, evidenceSpanId: evidence.id, noteType: classification.category, body: noteBody, confidence: classification.confidence })
+      .returning({ id: generatedNotes.id });
+    const [claim] = await db
+      .insert(generatedClaims)
+      .values({ runId: input.runId, noteId: note.id, text: noteBody, claimType: "interpretive", agreement, confidence: classification.confidence })
+      .returning({ id: generatedClaims.id });
+    await db.insert(claimEvidence).values({ claimId: claim.id, evidenceSpanId: evidence.id, stance: "supports" });
+
+    // Catalogue/graph projection for scholarly targets (roadmap + graph reuse).
+    if (bibId) {
+      await db.insert(graphEdges).values({
+        userId: doc.userId,
+        sourceType: "work",
+        sourceId: doc.workId,
+        targetType: "bibliographic_record",
+        targetId: bibId,
+        edgeType: edgeValue(CATEGORY_TO_EDGE[classification.category]),
+        weight: 1,
+        confidence: classification.confidence,
+        evidence: { category: classification.category, provider: r.provider },
+        createdBy: "system",
+      });
+    }
   }
-  await db.update(processingRuns).set({ stage: "validation", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+
+  if (usageLogs.length) await db.insert(aiUsageLogs).values(usageLogs);
+
+  const degraded = Boolean(discovery.saturationNote) || overSoftCap(budget);
+  await db
+    .update(processingRuns)
+    .set({ stage: "validation", aiCostUsd: budget.spentUsd, degraded, saturationNote: discovery.saturationNote, updatedAt: new Date() })
+    .where(eq(processingRuns.id, input.runId));
 }
