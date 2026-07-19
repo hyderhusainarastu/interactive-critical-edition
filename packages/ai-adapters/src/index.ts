@@ -7,8 +7,15 @@ import type { ClassificationInput, ClassificationResult, LLMProvider } from "./t
 
 export * from "./types";
 export { CLASSIFY_PROMPT_VERSION } from "./classify";
-export { estimateCostUsd } from "./routing";
+export { estimateCostUsd, RESEARCH_ROUTE } from "./routing";
 export { heuristicClassify } from "./providers/heuristic";
+export {
+  OpenAIResponsesClient,
+  safetyIdentifierFor,
+  MAX_RETRIES,
+  type StructuredCall,
+  type StructuredResult,
+} from "./responses";
 
 /**
  * Selects the LLM provider for a task based on which API keys are
