@@ -12,6 +12,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Phase 1 scope only: auth tables. Shape follows the @auth/drizzle-adapter
@@ -634,6 +635,15 @@ export const processingRuns = pgTable(
     // "structure-limited" etc. degradation notes, and failure messages.
     note: text("note"),
     error: text("error"),
+    // Running total of estimated AI spend for this run (plan §33: $2 soft /
+    // $5 hard cap enforced by the pipeline). Surfaced in the edition response
+    // and admin dashboard. Authoritative per-call rows live in ai_usage_log.
+    aiCostUsd: real("ai_cost_usd").notNull().default(0),
+    // True when the run fell back below its intended quality (OCR unavailable,
+    // GROBID structure-limited, a research cap hit). Distinct from `failed`.
+    degraded: boolean("degraded").notNull().default(false),
+    // Deterministic reason research stopped early (saturation rule / cost cap).
+    saturationNote: text("saturation_note"),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -643,6 +653,13 @@ export const processingRuns = pgTable(
     index("processing_run_document_idx").on(t.documentId),
     index("processing_run_published_idx").on(t.documentId, t.isPublished),
     uniqueIndex("processing_run_document_version_unique").on(t.documentId, t.version),
+    // At most one published run per document. Created by migration 0009 in the
+    // DB; declared here so drizzle's snapshot matches reality (plan 1.2). The
+    // transactional publish step relies on this partial unique to make
+    // "exactly one live edition" a database invariant, not just app logic.
+    uniqueIndex("processing_run_one_published_per_document")
+      .on(t.documentId)
+      .where(sql`${t.isPublished}`),
   ],
 );
 
@@ -728,6 +745,33 @@ export const docMetadata = pgTable("doc_metadata", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("doc_metadata_run_unique").on(t.runId)]);
 
+// Source authority band (plan §33): A (peer-reviewed / canonical primary) …
+// E (anonymous / unverifiable). Popularity is never authority. A factual
+// claim needs an A/B source or two independent C sources.
+export const sourceAuthorityEnum = pgEnum("source_authority", ["A", "B", "C", "D", "E"]);
+
+// Deterministic agreement label across a claim's independent sources
+// (plan §33): strong (≥3 independent supporting, no credible contradiction),
+// contested (≥2 credible each side), mixed (support + contradiction below
+// that threshold), otherwise insufficient.
+export const agreementStateEnum = pgEnum("agreement_state", [
+  "strong",
+  "contested",
+  "mixed",
+  "insufficient",
+]);
+
+// Per-run outcome of querying one source provider (plan §33 §2.3). Every
+// enabled/disabled provider records exactly one attempt per run so the
+// admin dashboard and edition can prove what was and wasn't consulted.
+export const providerAttemptStatusEnum = pgEnum("provider_attempt_status", [
+  "queried",
+  "unavailable",
+  "rate_limited",
+  "failed",
+  "disabled",
+]);
+
 /** Phase 8 research is scoped to a processing run, so reprocessing can
  * publish atomically without deleting the last good edition. */
 export const researchResources = pgTable("research_resource", {
@@ -739,9 +783,40 @@ export const researchResources = pgTable("research_resource", {
   provider: text("provider").notNull(),
   accessStatus: text("access_status").notNull().default("metadata_only"),
   inspectionDepth: integer("inspection_depth").notNull().default(0),
+  // Normalized identity for deduplication (plan §33): dedup by DOI, ISBN,
+  // canonical URL, then normalized title/author/year. `normalizedKey` is the
+  // computed winner used for the per-run unique constraint below.
+  doi: text("doi"),
+  isbn: text("isbn"),
+  canonicalUrl: text("canonical_url"),
+  normalizedKey: text("normalized_key"),
+  year: integer("year"),
+  authors: jsonb("authors"),
+  // Set when a scholarly resource is projected into the shared catalogue on
+  // publish (books/articles become bibliographic_records; videos/web/social
+  // stay research-only). Enables graph + roadmap projection (plan §33 §3.2).
+  bibRecordId: uuid("bib_record_id").references(() => bibliographicRecords.id, { onDelete: "set null" }),
   raw: jsonb("raw"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [index("research_resource_run_idx").on(t.runId)]);
+}, (t) => [
+  index("research_resource_run_idx").on(t.runId),
+  uniqueIndex("research_resource_run_key_unique").on(t.runId, t.normalizedKey),
+]);
+
+/** One row per (run, provider): the auditable evidence of which sources were
+ * actually consulted, with query count, depth, latency and error (plan §33). */
+export const providerAttempts = pgTable("provider_attempt", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  status: providerAttemptStatusEnum("status").notNull(),
+  queries: jsonb("queries"),
+  resultCount: integer("result_count").notNull().default(0),
+  inspectionDepth: integer("inspection_depth").notNull().default(0),
+  latencyMs: integer("latency_ms"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("provider_attempt_run_idx").on(t.runId)]);
 
 export const resourceProvenance = pgTable("resource_provenance", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -756,17 +831,34 @@ export const resourceProvenance = pgTable("resource_provenance", {
 export const editionRelations = pgTable("edition_relation", {
   id: uuid("id").primaryKey().defaultRandom(),
   runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  // `resourceId` is the relation's source (or the sole endpoint for a
+  // work→resource relation). `relatedResourceId`, when set, makes this a
+  // resource↔resource relation (plan §33 §3.1) — e.g. resource A influences B.
   resourceId: uuid("resource_id").references(() => researchResources.id, { onDelete: "set null" }),
+  relatedResourceId: uuid("related_resource_id").references(() => researchResources.id, { onDelete: "set null" }),
   relationType: text("relation_type").notNull(),
+  // Traversal depth from the primary work (0 = direct, up to 2 — plan §33).
+  depth: integer("depth").notNull().default(0),
+  // 0–1 ranking weight for roadmap prerequisite/context trees.
+  importance: real("importance"),
   evidence: jsonb("evidence"),
   confidence: real("confidence").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [index("edition_relation_run_idx").on(t.runId)]);
 
+// Credibility kept as independent components (plan §33): authority and
+// popularity/agreement never collapse into one number. `score` remains an
+// overall convenience roll-up; the components below are what the reader shows.
 export const credibilityAssessments = pgTable("credibility_assessment", {
   id: uuid("id").primaryKey().defaultRandom(),
   resourceId: uuid("resource_id").notNull().references(() => researchResources.id, { onDelete: "cascade" }),
   score: real("score").notNull(),
+  authority: sourceAuthorityEnum("authority"),
+  relevance: real("relevance"),
+  inspectionDepth: integer("inspection_depth").notNull().default(0),
+  evidenceStrength: real("evidence_strength"),
+  agreement: agreementStateEnum("agreement"),
+  components: jsonb("components"),
   rationale: text("rationale"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("credibility_assessment_resource_unique").on(t.resourceId)]);
@@ -789,3 +881,36 @@ export const generatedNotes = pgTable("generated_note", {
   confidence: real("confidence").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [index("generated_note_run_idx").on(t.runId)]);
+
+/**
+ * A single factual/interpretive claim carried by a generated note. Claims are
+ * the unit the reader validates: each links to one or more evidence spans
+ * (claim_evidence, many-to-many) and carries a deterministic agreement label.
+ * A factual claim may only be published if its supporting evidence meets the
+ * authority bar (plan §33) — enforced in the pipeline, recorded here.
+ */
+export const generatedClaims = pgTable("generated_claim", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+  noteId: uuid("note_id").references(() => generatedNotes.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  // "factual" | "interpretive" | "inferred" — factual needs the A/B (or 2×C)
+  // authority bar; interpretive/inferred stay visibly uncertain.
+  claimType: text("claim_type").notNull().default("interpretive"),
+  agreement: agreementStateEnum("agreement").notNull().default("insufficient"),
+  confidence: real("confidence").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("generated_claim_run_idx").on(t.runId),
+  index("generated_claim_note_idx").on(t.noteId),
+]);
+
+/** Many-to-many: which evidence spans support (or contradict) a claim. */
+export const claimEvidence = pgTable("claim_evidence", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  claimId: uuid("claim_id").notNull().references(() => generatedClaims.id, { onDelete: "cascade" }),
+  evidenceSpanId: uuid("evidence_span_id").notNull().references(() => evidenceSpans.id, { onDelete: "cascade" }),
+  // "supports" | "contradicts" — the reader shows both sides (plan §33 §3.4).
+  stance: text("stance").notNull().default("supports"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("claim_evidence_unique").on(t.claimId, t.evidenceSpanId)]);

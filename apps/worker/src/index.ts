@@ -2,6 +2,7 @@ import {
   type AnalyzeWorkJob,
   db,
   documents,
+  docFootnotes,
   docMetadata,
   type ExtractTextJob,
   footnotes,
@@ -139,18 +140,30 @@ async function handleEditionExtraction(documentId: string) {
   }).from(documents).where(eq(documents.id, documentId)).limit(1);
   if (!doc) throw new Error(`Document ${documentId} not found`);
 
-  const [{ nextVersion }] = await db.select({
-    nextVersion: sql<number>`coalesce(max(${processingRuns.version}), 0) + 1`,
-  }).from(processingRuns).where(eq(processingRuns.documentId, documentId));
-  const [run] = await db.insert(processingRuns).values({
-    documentId,
-    version: nextVersion,
-    pipelineVersion: "v2",
-    status: "running",
-    stage: "extracting",
-    structureState: "limited",
-    startedAt: new Date(),
-  }).returning({ id: processingRuns.id });
+  // Allocate the next run version under a per-document advisory lock so two
+  // concurrent reprocess requests can never claim the same version (which the
+  // processing_run_document_version_unique index would otherwise reject with a
+  // hard error). The lock is transaction-scoped and released on commit.
+  const run = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${documentId}))`);
+    const [{ nextVersion }] = await tx
+      .select({ nextVersion: sql<number>`coalesce(max(${processingRuns.version}), 0) + 1` })
+      .from(processingRuns)
+      .where(eq(processingRuns.documentId, documentId));
+    const [created] = await tx
+      .insert(processingRuns)
+      .values({
+        documentId,
+        version: nextVersion,
+        pipelineVersion: "v2",
+        status: "running",
+        stage: "extracting",
+        structureState: "limited",
+        startedAt: new Date(),
+      })
+      .returning({ id: processingRuns.id });
+    return created;
+  });
 
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
   if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -189,6 +202,18 @@ async function handleEditionExtraction(documentId: string) {
         blockOrder,
         kind: block.kind,
         text: block.text,
+        bbox: block.bbox ?? null,
+      })));
+      // Structural (GROBID) footnotes become page-anchored authorial notes,
+      // kept distinct from AI-generated notes (plan §33 §3.4).
+      const footnoteBlocks = parsedPage.blocks.filter((block) => block.kind === "footnote");
+      if (footnoteBlocks.length) await db.insert(docFootnotes).values(footnoteBlocks.map((block) => ({
+        runId: run.id,
+        marker: block.marker ?? "*",
+        pageAnchor: { pageIndex: parsedPage.pageIndex, bbox: block.bbox ?? null },
+        text: block.text,
+        kind: "authorial",
+        source: "grobid",
       })));
     }
     await db.insert(docMetadata).values({

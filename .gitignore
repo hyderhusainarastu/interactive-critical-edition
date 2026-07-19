@@ -40,3 +40,7 @@ test-results/
 # CLI-local project links (machine-specific, not app config)
 .vercel/
 supabase/.temp/
+
+# ScholarLens reference clone — ideas only, no code reuse (no LICENSE upstream).
+# Kept locally for reference but never committed. See CLAUDE.md design decisions.
+ScholarLens-main/
