@@ -6,6 +6,7 @@ import {
   claimEvidence,
   db,
   documents,
+  docMetadata,
   editionRelations,
   evidenceSpans,
   generatedClaims,
@@ -476,6 +477,28 @@ export async function analyzeEditionRun(input: {
     .limit(1);
   if (!doc) throw new Error(`Document ${input.documentId} not found for edition research`);
 
+  // Prefer the metadata THIS run actually extracted over the work's provisional
+  // title. Until the user confirms metadata, `works.title` is derived from the
+  // filename ("Irwin-ViceReason-2001.pdf" → "Irwin ViceReason 2001"), which is
+  // not the work's identity and makes every downstream query and relevance
+  // decision wrong. Observed in a production canary: GROBID had extracted
+  // "Vice and Reason" correctly and the research stage ignored it.
+  const [extracted] = await db
+    .select({ title: docMetadata.title, authors: docMetadata.authors })
+    .from(docMetadata)
+    .where(eq(docMetadata.runId, input.runId))
+    .limit(1);
+  const extractedAuthors = Array.isArray(extracted?.authors)
+    ? (extracted.authors as unknown[]).filter((a): a is string => typeof a === "string" && a.trim().length > 0)
+    : [];
+  const resolvedTitle = extracted?.title?.trim() || doc.title;
+  const resolvedAuthors = extractedAuthors.length
+    ? extractedAuthors
+    : doc.authorName
+      ? [doc.authorName]
+      : [];
+  const resolvedAuthorName = resolvedAuthors.join(", ") || null;
+
   const budget = makeBudget();
   const responses = new OpenAIResponsesClient();
   const safetyIdentifier = safetyIdentifierFor(doc.userId);
@@ -511,7 +534,7 @@ export async function analyzeEditionRun(input: {
   // Running discovery per lane means a candidate is judged against the question
   // that surfaced it, and each lane only queries providers that can serve it.
   const qg = await generateLaneQueries(responses, {
-    primary: { title: doc.title, author: doc.authorName },
+    primary: { title: resolvedTitle, author: resolvedAuthorName },
     citationTexts,
     model: cheapModel,
     safetyIdentifier,
@@ -547,14 +570,15 @@ export async function analyzeEditionRun(input: {
   await db.update(processingRuns).set({ stage: "relevance-gate", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
 
   const identity: WorkIdentity = {
-    title: doc.title,
-    authors: doc.authorName ? [doc.authorName] : [],
+    title: resolvedTitle,
+    authors: resolvedAuthors,
     year: null,
     doi: null,
     ...buildTopicSignature({
-      title: doc.title,
+      title: resolvedTitle,
       bodyText: input.text,
-      concepts: [doc.title],
+      concepts: [resolvedTitle],
+      authors: resolvedAuthors,
     }),
     explicitCitationKeys: new Set(),
     explicitCitationTexts: citationTexts,
@@ -631,8 +655,8 @@ export async function analyzeEditionRun(input: {
 
   for (const { r, authority } of ranked) {
     const classification = await classifyRelationship({
-      primaryTitle: doc.title,
-      primaryAuthor: doc.authorName,
+      primaryTitle: resolvedTitle,
+      primaryAuthor: resolvedAuthorName,
       candidateTitle: r.title,
       candidateAuthor: r.authors.join(", ") || null,
       sourceText: r.snippet ?? r.title,

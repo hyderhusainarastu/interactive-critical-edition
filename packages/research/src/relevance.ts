@@ -486,6 +486,12 @@ export function buildTopicSignature(input: {
   bodyText?: string | null;
   /** Concepts the pipeline extracted for this work, plus their variants. */
   concepts?: string[];
+  /** The work's own authors. Their names are EXCLUDED from the core-concept
+   *  set: a surname is an identity, not a subject. Observed in production —
+   *  a provisional title of "Irwin ViceReason 2001" made "irwin" a core
+   *  concept, and the gate then accepted "Gage, Irwin", "Bazelon, Irwin" and
+   *  "Irwin, John" as though they were on-topic. */
+  authors?: string[];
 }): Pick<WorkIdentity, "topicTerms" | "entityTerms" | "coreConceptTerms"> {
   const strong = [input.title, input.abstract ?? "", ...(input.headings ?? [])].join(" ");
   const strongTerms = new Set(terms(strong));
@@ -516,8 +522,13 @@ export function buildTopicSignature(input: {
     if (/[\s-]/.test(norm)) coreConceptTerms.add(norm);
     else for (const t of terms(norm)) coreConceptTerms.add(t);
   }
-  // The title's own distinctive words are core by construction.
-  for (const t of terms(input.title)) coreConceptTerms.add(t);
+  // The title's own distinctive words are core by construction — except the
+  // author's own name. Provisional titles are often filename-derived and carry
+  // the author ("Irwin-ViceReason-2001.pdf"), and a surname admitted as a core
+  // concept matches every unrelated paper by anyone of that name.
+  const authorTokens = new Set((input.authors ?? []).flatMap((a) => terms(a)));
+  for (const t of terms(input.title)) if (!authorTokens.has(t)) coreConceptTerms.add(t);
+  for (const t of authorTokens) coreConceptTerms.delete(t);
 
   return {
     topicTerms: [...new Set([...strongTerms, ...frequent])],

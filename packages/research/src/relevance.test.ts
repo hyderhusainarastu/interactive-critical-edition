@@ -301,6 +301,31 @@ describe("relevance gate — structural guarantees", () => {
     expect(collectCoreMatches(["love"], ["self-love"], "Aristotle on self-love and regret")).toEqual(["self-love"]);
   });
 
+  it("never admits an author's own name as a core concept", () => {
+    // Caught by a production canary: before metadata is confirmed the work
+    // title is filename-derived ("Irwin-ViceReason-2001.pdf" → "Irwin
+    // ViceReason 2001"), which made "irwin" a core concept. The gate then
+    // accepted "Gage, Irwin", "Bazelon, Irwin" and "Irwin, John" as on-topic.
+    const sig = buildTopicSignature({
+      title: "Irwin ViceReason 2001",
+      authors: ["Terence Irwin"],
+    });
+    expect(sig.coreConceptTerms).not.toContain("irwin");
+    expect(sig.coreConceptTerms).not.toContain("terence");
+
+    const leaky: WorkIdentity = {
+      ...irwin,
+      title: "Irwin ViceReason 2001",
+      coreConceptTerms: sig.coreConceptTerms,
+      entityTerms: sig.entityTerms,
+      topicTerms: sig.topicTerms,
+      citedAuthorSurnames: new Set(),
+    };
+    for (const title of ["Gage, Irwin", "Bazelon, Irwin", "Irwin, John"]) {
+      expect(assessCandidate(R({ title }), leaky, "scholarly_debate").verdict).not.toBe("accepted");
+    }
+  });
+
   it("drops numeric extraction artifacts from the topic signature", () => {
     // Real PDFs carry access furniture ("downloaded from 172.226.191.27").
     const sig = buildTopicSignature({
