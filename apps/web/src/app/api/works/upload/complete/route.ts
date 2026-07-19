@@ -1,17 +1,23 @@
 import { db, documents, enqueueExtractText, processingJobs } from "@ice/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
 
 const schema = z.object({ workId: z.string().uuid(), documentId: z.string().uuid() });
+const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 export async function POST(request: Request) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const input = schema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: "Invalid upload completion." }, { status: 400 });
-  const [document] = await db.select({ id: documents.id }).from(documents).where(and(eq(documents.id, input.data.documentId), eq(documents.workId, input.data.workId), eq(documents.userId, userId))).limit(1);
+  const [document] = await db.select({ id: documents.id, fileSize: documents.fileSize }).from(documents).where(and(eq(documents.id, input.data.documentId), eq(documents.workId, input.data.workId), eq(documents.userId, userId))).limit(1);
   if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Enforce the quota again when a staged direct upload becomes a document.
+  // This is the authoritative check; the init-route check is only an early
+  // user-facing guard while the file is still in the browser.
+  const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(and(eq(documents.userId, userId), ne(documents.processingStatus, "uploaded")));
+  if (used + document.fileSize > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB). Remove an existing work and try again." }, { status: 413 });
   const [queued] = await db.update(documents)
     .set({ processingStatus: "processing", updatedAt: new Date() })
     .where(and(eq(documents.id, document.id), eq(documents.processingStatus, "uploaded")))
