@@ -152,6 +152,16 @@ export function deriveWorkIdentity(
     evidence.push("author-prefixed review listing");
   }
 
+  // "Ethics with Aristotle. Sarah Broadie" — catalogues also APPEND the author
+  // to the title. Observed in production splitting one book across two works.
+  // Only stripped when the trailing name is an author the document cites, so a
+  // title genuinely ending in a proper noun is never truncated.
+  const trailing = working.match(/^(.{6,}?)\s*[.\-–—]\s*([A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){0,2})\s*$/);
+  if (trailing && cited.has(surnameOf(trailing[2]))) {
+    working = tidy(trailing[1]);
+    evidence.push("author-suffixed listing");
+  }
+
   const surnames = record.authors.map(surnameOf).filter(Boolean);
   // Prefer an author the citing document names — that is the work's author, not
   // the reviewer who happens to occupy the same metadata field. Failing that,

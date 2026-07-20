@@ -100,6 +100,26 @@ describe("grouping the real canary-10 duplicates", () => {
     expect(groupByWork(records, read, { citedAuthorSurnames: CITED })).toHaveLength(4);
   });
 
+  it("collapses a title with the author appended, as catalogues emit it", () => {
+    // Observed in production splitting one book across two works:
+    // "Ethics with Aristotle" and "Ethics with Aristotle. Sarah Broadie".
+    const records = [
+      R({ title: "Ethics with Aristotle", authors: ["Sarah Broadie"] }),
+      R({ title: "Ethics with Aristotle. Sarah Broadie", authors: [] }),
+      R({ title: "Ethics with Aristotle", authors: ["Sarah Broadie"], year: 1991 }),
+    ];
+    expect(groupByWork(records, read, { citedAuthorSurnames: CITED })).toHaveLength(1);
+  });
+
+  it("does not truncate a title that merely ends in a proper noun", () => {
+    // "…on Aristotle" must survive: the trailing name is only stripped when it
+    // is an author the citing document actually names.
+    const id = deriveWorkIdentity(R({ title: "Listening to Reason in Plato and Aristotle" }), {
+      citedAuthorSurnames: CITED,
+    });
+    expect(id.canonicalTitle).toBe("Listening to Reason in Plato and Aristotle");
+  });
+
   it("does not merge two works that merely share an author", () => {
     const records = [
       R({ title: "Intelligent Virtue", authors: ["Julia Annas"] }),
