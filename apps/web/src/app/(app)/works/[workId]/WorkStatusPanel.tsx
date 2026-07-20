@@ -187,6 +187,12 @@ export function WorkStatusPanel({
           Concept check
         </Link>
         <Link
+          href={`/works/${workId}/curriculum`}
+          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+        >
+          Curriculum
+        </Link>
+        <Link
           href={`/works/${workId}/graph`}
           className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
         >

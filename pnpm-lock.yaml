@@ -19,6 +19,9 @@ importers:
       '@ice/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@ice/curriculum':
+        specifier: workspace:*
+        version: link:../../packages/curriculum
       '@ice/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -167,6 +170,22 @@ importers:
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
 
   packages/config:
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
+
+  packages/curriculum:
+    dependencies:
+      '@ice/roadmap':
+        specifier: workspace:*
+        version: link:../roadmap
     devDependencies:
       '@types/node':
         specifier: ^24
