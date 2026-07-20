@@ -36,10 +36,40 @@ const YEAR = /\b(1[0-9]{3}|20[0-2][0-9])\b/;
 const INLINE_PAREN = /\(([A-Z][A-Za-z.'-]+(?:\s+(?:and|&|et al\.?)\s+[A-Z][A-Za-z.'-]+)?),?\s+((?:1[0-9]{3}|20[0-2][0-9]))[a-z]?(?:,\s*\d+)?\)/g;
 const INLINE_NARRATIVE = /\b([A-Z][A-Za-z.'-]+)\s+\((?:1[0-9]{3}|20[0-2][0-9])[a-z]?\)/g;
 
+/**
+ * Note-style citations — the humanities convention, where full references live
+ * in footnotes and there is no reference list at all.
+ *
+ * This is not a stylistic nicety: measured on a real production run over a
+ * 2001 philosophy article, the reference-section and author–year passes above
+ * extracted ZERO citations, because the paper cites entirely in numbered
+ * footnotes. GROBID could not help either — it recovered 4 notes of roughly
+ * forty and no bibliography, since there is no bibliography to find. Without
+ * these two patterns the pipeline cannot see a single work such a paper cites.
+ *
+ * Journal form:  Julia Annas, "Plato and Aristotle on Friendship," Mind 86 (1977)
+ * Book form:     Sarah Broadie, Ethics with Aristotle (Oxford: OUP, 1991)
+ */
+const NAME = String.raw`[A-Z][A-Za-z.'’-]+(?:\s+[A-Z][A-Za-z.'’-]+){0,3}`;
+const YEAR_IN = String.raw`1[89]\d\d|20[0-2]\d`;
+const NOTE_QUOTED = new RegExp(
+  String.raw`(${NAME}),\s*["“]([^"”]{8,200}?)[,.]?["”][^.]{0,160}?\((?:${YEAR_IN})\)`,
+  "g",
+);
+const NOTE_BOOK = new RegExp(
+  String.raw`(${NAME}),\s+([A-Z][^()\n]{6,120}?)\s*\([^)\n]{0,80}?(?:${YEAR_IN})[^)\n]{0,20}\)`,
+  "g",
+);
+
+/** Signal words that introduce a note citation but are not part of the author's
+ *  name ("See W.F.R. Hardie…", "Cf. Broadie…"). */
+const LEADING_CUE = /^(?:see\s+also|see|cf\.?|compare|contrast|e\.g\.?,?|cited\s+in|quoted\s+in|following|so\s+also)\s+/i;
+
 function cleanQuery(entry: string): string {
   return entry
     .replace(/^\s*\[?\(?\d{1,3}\)?[.):\]]\s*/, "") // leading "1." / "[1]" / "(1)"
     .replace(/^\s*[-•*–—]\s*/, "") // leading bullet
+    .replace(LEADING_CUE, "") // "See ...", "Cf. ..."
     .replace(/\bpp?\.\s*\d+(?:[-–]\d+)?\.?\s*$/i, "") // trailing "p. 12" / "pp. 12-15"
     .replace(/\bibid\.?|op\.\s*cit\.?/gi, "")
     .replace(/\s+/g, " ")
@@ -105,6 +135,19 @@ export function extractCitations(text: string, max = 300): RawCitation[] {
       if (out.length >= max) break;
     }
     flush();
+  }
+
+  // --- Note-style citations (footnote apparatus, no reference list) ---
+  // Run over the WHOLE text, not just the pre-heading body: in note-style
+  // documents the citations are scattered through footnotes at page bottoms,
+  // which land anywhere in the extracted text.
+  for (const re of [NOTE_QUOTED, NOTE_BOOK]) {
+    re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) && out.length < max) {
+      const full = m[0].replace(/\s+/g, " ").trim();
+      add(full, cleanQuery(full), "reference");
+    }
   }
 
   // --- Inline author–year mentions from the body (before the heading) ---
