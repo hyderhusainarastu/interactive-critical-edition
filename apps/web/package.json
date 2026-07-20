@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",
+    "@ice/config": "workspace:*",
     "@ice/db": "workspace:*",
     "@ice/ingestion": "workspace:*",
     "@ice/observability": "workspace:*",

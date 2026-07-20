@@ -16,6 +16,9 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.7.4
         version: 1.11.2
+      '@ice/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@ice/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -104,6 +107,9 @@ importers:
       '@ice/bibliographic':
         specifier: workspace:*
         version: link:../../packages/bibliographic
+      '@ice/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@ice/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -146,6 +152,18 @@ importers:
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
 
   packages/bibliographic:
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)
+
+  packages/config:
     devDependencies:
       '@types/node':
         specifier: ^24

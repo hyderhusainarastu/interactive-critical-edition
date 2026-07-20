@@ -1,3 +1,4 @@
+import { isEditionPipeline, pipelineVersion } from "@ice/config";
 import {
   type AnalyzeWorkJob,
   db,
@@ -275,7 +276,7 @@ async function main() {
   await boss.work<ExtractTextJob>(QUEUE_EXTRACT_TEXT, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
-      if (process.env.ANALYSIS_PIPELINE === "v2") await handleEditionExtraction(job.data.documentId);
+      if (isEditionPipeline()) await handleEditionExtraction(job.data.documentId);
       else await handleExtractText(job.data.documentId);
     }
   });
@@ -289,7 +290,11 @@ async function main() {
     }
   });
 
-  console.log(`[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs`);
+  // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary
+  // runs to production quietly running something other than what was assumed.
+  console.log(
+    `[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs (pipeline ${pipelineVersion()})`,
+  );
 }
 
 main().catch((err) => {

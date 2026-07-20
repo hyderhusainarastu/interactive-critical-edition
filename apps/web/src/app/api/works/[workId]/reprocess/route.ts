@@ -1,3 +1,4 @@
+import { isEditionPipeline } from "@ice/config";
 import { db, enqueueExtractText, processingJobs, processingRuns } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -12,7 +13,9 @@ import { getOwnedDocument } from "@/lib/works";
 export async function POST(_request: Request, { params }: { params: Promise<{ workId: string }> }) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (process.env.ANALYSIS_PIPELINE !== "v2") {
+  // Any edition-producing pipeline (v2, and v3 from Phase 9.2) can reprocess;
+  // v1 annotates in place and has no edition to replace.
+  if (!isEditionPipeline()) {
     return NextResponse.json({ error: "Edition reprocessing is not enabled on this deployment." }, { status: 409 });
   }
   const { workId } = await params;

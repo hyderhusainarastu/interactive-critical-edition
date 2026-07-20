@@ -9,6 +9,7 @@ import {
   real,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -25,6 +26,19 @@ import { sql } from "drizzle-orm";
  * rolls in incrementally in later phases via their own migrations, not
  * all at once here.
  */
+
+/**
+ * Phase 9 reader levels (plan §34.4). Four, replacing the three-level
+ * `preferences.expertise` vocabulary rather than sitting beside it:
+ * `intermediate` maps to `undergraduate`. Declared here because `users`
+ * references it below and pgEnum values are read at table-definition time.
+ */
+export const readerLevelEnum = pgEnum("reader_level", [
+  "beginner",
+  "undergraduate",
+  "advanced",
+  "research",
+]);
 
 export const users = pgTable("user", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -49,6 +63,18 @@ export const users = pgTable("user", {
    * uses. jsonb so more preferences can be added without a migration.
    */
   preferences: jsonb("preferences"),
+  /**
+   * Phase 9: the reader's level, promoted out of the `preferences` jsonb into
+   * a typed column with FOUR levels (plan §34.4 9.4). Migration `0015`
+   * backfills it from `preferences.expertise`, mapping the old three-level
+   * vocabulary (`intermediate` → `undergraduate`); the jsonb key is left in
+   * place until 9.4 moves the readers over, so 9.1 changes no behaviour.
+   *
+   * Null means "not chosen" — the caller applies its own default rather than
+   * this column pretending the user picked something. The level only ever
+   * changes what opens by DEFAULT, never what is reachable.
+   */
+  readerLevel: readerLevelEnum("reader_level"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -1045,3 +1071,173 @@ export const researchCandidates = pgTable("research_candidate", {
   uniqueIndex("research_candidate_run_lane_key_unique").on(t.runId, t.lane, t.normalizedKey),
 ]);
 
+
+/* ---------------------------------------------------------------------------
+ * Phase 9 — Interactive Learning Workspace (plan §34)
+ *
+ * 9.1 lands the schema only: nothing writes to these tables yet. They exist
+ * first so the pipeline (9.2), the reader (9.3–9.4), the Library (9.5) and the
+ * curriculum (9.6) can all be built against one set of canonical identities
+ * instead of each inventing its own.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a `concept` row IS. The graph the reader needs is not concepts alone —
+ * a doctrine, the person who held it, the tradition it belongs to and the
+ * debate it was argued in are all nodes a reader navigates between (plan
+ * §34.4 9.7). One typed table beats five near-identical ones: the columns and
+ * the mastery relationship are the same for all of them.
+ */
+export const conceptKindEnum = pgEnum("concept_kind", [
+  "concept",
+  "doctrine",
+  "person",
+  "tradition",
+  "debate",
+]);
+
+/**
+ * The shared vocabulary of things a reader can understand. Global and
+ * append-only like `bibliographic_record`, not per-user: two readers studying
+ * the same doctrine must land on the same node, or the graph and the
+ * curriculum cannot agree with each other.
+ */
+export const concepts = pgTable("concept", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  kind: conceptKindEnum("kind").notNull().default("concept"),
+  /** Stable, human-readable identity (e.g. `akrasia`). Unique across kinds. */
+  slug: text("slug").notNull().unique(),
+  label: text("label").notNull(),
+  summary: text("summary"),
+  /** Surface forms that denote this same concept, for matching extracted text. */
+  aliases: jsonb("aliases"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [index("concept_kind_idx").on(t.kind)]);
+
+/**
+ * Where a mastery score came from. Phase 9.4's precedence is explicit rating →
+ * diagnostic → inference from completed prerequisites (weak evidence only) →
+ * the reader's global level, and precedence is only enforceable if the source
+ * is recorded rather than inferred back from the number.
+ */
+export const masterySourceEnum = pgEnum("mastery_source", [
+  "explicit",
+  "diagnostic",
+  "inferred",
+]);
+
+/**
+ * A reader's understanding of one concept. Deliberately shaped like the
+ * existing `understanding_rating` (0–100, ≥60 = known) so the roadmap's
+ * established threshold means the same thing here.
+ */
+export const conceptMastery = pgTable("concept_mastery", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  conceptId: uuid("concept_id").notNull().references(() => concepts.id, { onDelete: "cascade" }),
+  score: integer("score").notNull(),
+  source: masterySourceEnum("source").notNull(),
+  /** Why we believe this — a diagnostic answer, a completed prerequisite. */
+  evidence: text("evidence"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("concept_mastery_user_idx").on(t.userId),
+  uniqueIndex("concept_mastery_user_concept_unique").on(t.userId, t.conceptId),
+]);
+
+/**
+ * Canonical WORK identity, promoted out of the run-scoped
+ * `research_resource.work_*` columns added in `0014`. Run-scoped grouping was
+ * the honest first step, but it means two runs over the same work produce two
+ * unrelated groupings — so the Library cannot say "you already have this"
+ * across works, and the graph cannot join them. Phase 9 needs one shared row
+ * per work.
+ *
+ * `workKey` is the same computed key `packages/research/src/workIdentity.ts`
+ * already produces (title + author, reviewer framing and edition markers
+ * stripped), so promotion is a backfill rather than a re-derivation.
+ */
+export const workIdentities = pgTable("work_identity", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workKey: text("work_key").notNull().unique(),
+  canonicalTitle: text("canonical_title").notNull(),
+  authorSurname: text("author_surname"),
+  authors: jsonb("authors"),
+  year: integer("year"),
+  /** Why records were grouped here — a wrong grouping must be explainable. */
+  evidence: text("evidence"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * A resource a reader can learn from, shared across runs and users — the
+ * Library's system of record (plan §34.4 9.5). `research_resource` stays
+ * run-scoped and auditable; this is its durable projection, keyed by the same
+ * `normalizedKey` so the two can be reconciled without guessing.
+ *
+ * Note what is stored separately here: `popularity` is displayed but NEVER
+ * scored as credibility (plan §34.2), and `peerReviewed` is a fact about the
+ * venue, not a verdict about the content.
+ */
+export const learningResources = pgTable("learning_resource", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workIdentityId: uuid("work_identity_id").references(() => workIdentities.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  url: text("url"),
+  canonicalUrl: text("canonical_url"),
+  doi: text("doi"),
+  isbn: text("isbn"),
+  /** Matches `research_resource.normalized_key` — the dedup identity. */
+  normalizedKey: text("normalized_key").notNull().unique(),
+  resourceType: text("resource_type").notNull().default("bibliographic"),
+  provider: text("provider").notNull(),
+  year: integer("year"),
+  authors: jsonb("authors"),
+  venue: text("venue"),
+  /** Creator identity/credentials, verified in 9.2 — never asserted by the LLM. */
+  creator: jsonb("creator"),
+  peerReviewed: boolean("peer_reviewed"),
+  /** Views/likes/citation counts as reported. Shown, never scored. */
+  popularity: jsonb("popularity"),
+  /** Set when this resource also exists in the shared bibliographic catalogue. */
+  bibRecordId: uuid("bib_record_id").references(() => bibliographicRecords.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [index("learning_resource_work_idx").on(t.workIdentityId)]);
+
+/**
+ * The role one learning resource plays FOR one work, at a given reader level —
+ * the join the Library, curriculum and graph all read (plan §34.4 9.5/9.6).
+ * A resource has no single intrinsic role: the same commentary is a
+ * prerequisite for a beginner and a parallel reading for a specialist, so the
+ * role belongs on the edge and is scoped by level.
+ *
+ * `relationship` reuses the existing ten-category vocabulary rather than
+ * inventing a second one; `readerLevel` null means "at every level".
+ */
+export const resourceRoles = pgTable("resource_role", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  learningResourceId: uuid("learning_resource_id").notNull().references(() => learningResources.id, { onDelete: "cascade" }),
+  workIdentityId: uuid("work_identity_id").notNull().references(() => workIdentities.id, { onDelete: "cascade" }),
+  relationship: relationshipCategoryEnum("relationship").notNull(),
+  readerLevel: readerLevelEnum("reader_level"),
+  /** Reader-facing justification; required for anything the reader is told to read. */
+  rationale: text("rationale"),
+  confidence: real("confidence").notNull().default(0),
+  createdBy: provenanceEnum("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("resource_role_work_idx").on(t.workIdentityId),
+  index("resource_role_resource_idx").on(t.learningResourceId),
+  // One role per (resource, work, level): re-running the pipeline updates a
+  // judgement rather than stacking contradictory ones. NULLS NOT DISTINCT
+  // because null here MEANS something ("at every level") — under Postgres's
+  // default null handling the all-levels row would be the one case the
+  // constraint silently failed to cover.
+  unique("resource_role_unique")
+    .on(t.learningResourceId, t.workIdentityId, t.readerLevel)
+    .nullsNotDistinct(),
+]);
