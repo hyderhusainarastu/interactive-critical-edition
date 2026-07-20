@@ -74,9 +74,10 @@ jobs:
       # bibliographic APIs) run in CI — landing/onboarding (a11y), the
       # authorization matrix, the v2 edition reader, the Phase 9.4
       # diagnostic, the Phase 9.5 Library, the Phase 9.6 Curriculum, and the
-      # Phase 9.7 knowledge-graph extension (all seed their data directly,
-      # so none needs a worker, GROBID, or API spend — buildGraph() itself
-      # has always been a pure DB read). The analysis/reader/roadmap specs
+      # Phase 9.7 knowledge-graph extension and work trash (all seed their
+      # data directly, so none needs a worker, GROBID, or API spend —
+      # buildGraph() and the trash routes are pure DB reads/writes with no
+      # AI pipeline involved at all). The analysis/reader/roadmap specs
       # still run manually against the full local stack (documented in
       # CLAUDE.md).
       - name: Install Playwright browser
@@ -90,7 +91,7 @@ jobs:
             curl -sf http://localhost:3000/login > /dev/null && break
             sleep 2
           done
-          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts edition.spec.ts diagnostic.spec.ts library.spec.ts curriculum.spec.ts graph.spec.ts
+          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts edition.spec.ts diagnostic.spec.ts library.spec.ts curriculum.spec.ts graph.spec.ts trash.spec.ts
           STATUS=$?
           kill $SERVER_PID 2>/dev/null || true
           exit $STATUS

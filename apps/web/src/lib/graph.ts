@@ -110,9 +110,10 @@ const NORM = (c: string) => sql.raw(`regexp_replace(lower(${c}), '[^a-z0-9]', ''
 
 export async function buildGraph(userId: string, rootWorkId?: string): Promise<GraphData> {
   // 1) Work nodes (all the user's, or just the root when work-scoped).
+  // Trashed works (plan §34.4 9.7) are excluded — same as gone until restored.
   const works = (await db.execute(sql`
     SELECT id, title FROM work
-    WHERE user_id = ${userId}
+    WHERE user_id = ${userId} AND deleted_at IS NULL
     ${rootWorkId ? sql`AND id = ${rootWorkId}` : sql``}
   `)) as unknown as WorkRow[];
 
@@ -137,7 +138,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
           SELECT br.id, br.title, br.authors, br.year, br.url,
             EXISTS (
               SELECT 1 FROM work w
-              WHERE w.user_id = ${userId} AND ${NORM("w.title")} = ${NORM("br.title")}
+              WHERE w.user_id = ${userId} AND w.deleted_at IS NULL AND ${NORM("w.title")} = ${NORM("br.title")}
             ) AS in_library
           FROM bibliographic_record br
           WHERE br.id IN ${refIds}

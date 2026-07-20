@@ -43,6 +43,7 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       `/api/works/${w}/reader/annotations`,
       `/api/works/${w}/roadmap`,
       `/api/works/${w}/graph`,
+      `/api/works/${w}/curriculum`,
     ];
     for (const url of reads) {
       const res = await page.request.get(url);
@@ -61,6 +62,12 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       { method: "delete", url: `/api/works/${w}/reader/highlights/${owned.highlightId}` },
       { method: "delete", url: `/api/works/${w}/reader/notes/${owned.noteId}` },
       { method: "delete", url: `/api/works/${w}/reader/bookmarks/${owned.bookmarkId}` },
+      // Phase 9.7 trash routes — must 404 the same as every other
+      // resource-scoped route, not silently trash/restore/purge another
+      // user's work.
+      { method: "delete", url: `/api/works/${w}` },
+      { method: "post", url: `/api/works/${w}/restore` },
+      { method: "post", url: `/api/works/${w}/purge` },
     ];
     for (const op of writes) {
       const res = await page.request[op.method](op.url, op.body ? { data: op.body } : undefined);
@@ -73,6 +80,7 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
     const w = owned.workId;
     for (const url of [
       `/api/works`,
+      `/api/works/trash`,
       `/api/graph`,
       `/api/works/${w}/reader`,
       `/api/works/${w}/roadmap`,

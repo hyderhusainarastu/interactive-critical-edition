@@ -14,6 +14,8 @@ interface StatusPayload {
   extractedTitle: string | null;
   extractedAuthor: string | null;
   processingError: string | null;
+  /** Non-null when this work is trashed (plan §34.4 9.7). */
+  deletedAt: string | null;
   processingRun: {
     version: number;
     stage: string | null;
@@ -37,10 +39,27 @@ export function WorkStatusPanel({
   const [data, setData] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [confirmingTrash, setConfirmingTrash] = useState(false);
+  const [trashing, setTrashing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  async function handleTrash() {
+    setTrashing(true);
+    const res = await fetch(`/api/works/${workId}`, { method: "DELETE" });
+    setTrashing(false);
+    setConfirmingTrash(false);
+    if (res.ok) setData((current) => ({ ...current, deletedAt: new Date().toISOString() }));
+    else setError((await res.json().catch(() => ({}))).error ?? "Couldn't move this to trash.");
+  }
+
+  async function handleRestore() {
+    const res = await fetch(`/api/works/${workId}/restore`, { method: "POST" });
+    if (res.ok) setData((current) => ({ ...current, deletedAt: null }));
+    else setError((await res.json().catch(() => ({}))).error ?? "Couldn't restore this work.");
+  }
+
   useEffect(() => {
-    if (!POLLING_STATUSES.includes(data.status)) return;
+    if (data.deletedAt || !POLLING_STATUSES.includes(data.status)) return;
 
     // setInterval, not setTimeout: a one-shot timeout only re-arms when the
     // effect re-runs, but the effect's deps ([data.status]) don't change
@@ -57,7 +76,7 @@ export function WorkStatusPanel({
     }, 2000);
 
     return () => clearInterval(id);
-  }, [data.status, workId]);
+  }, [data.status, data.deletedAt, workId]);
 
   async function handleConfirm(formData: FormData) {
     setSaving(true);
@@ -85,6 +104,32 @@ export function WorkStatusPanel({
     if (response.ok) setData((current) => ({ ...current, status: "uploaded" }));
     else setError((await response.json().catch(() => ({}))).error ?? "Couldn’t start reprocessing.");
     setReprocessing(false);
+  }
+
+  if (data.deletedAt) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--color-border)] px-4 py-3">
+        <div>
+          <p className="font-medium text-[var(--color-accent-burgundy)]">In trash</p>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+            The reader, roadmap, curriculum, and graph for this work are unavailable while trashed. Restore it, or
+            manage it from the{" "}
+            <Link href="/works/trash" className="underline">
+              Trash
+            </Link>
+            .
+          </p>
+          {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={handleRestore}
+          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+        >
+          Restore
+        </button>
+      </div>
+    );
   }
 
   if (POLLING_STATUSES.includes(data.status)) {
@@ -210,6 +255,30 @@ export function WorkStatusPanel({
         >
           Open reader
         </Link>
+        {confirmingTrash ? (
+          <span className="flex items-center gap-2 text-sm">
+            <span className="text-[var(--color-text-muted)]">Move to trash? Restorable for 30 days.</span>
+            <button
+              type="button"
+              onClick={handleTrash}
+              disabled={trashing}
+              className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-[var(--color-accent-burgundy)] disabled:opacity-60"
+            >
+              {trashing ? "Moving…" : "Yes, move to trash"}
+            </button>
+            <button type="button" onClick={() => setConfirmingTrash(false)} className="underline">
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingTrash(true)}
+            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)]"
+          >
+            Move to trash
+          </button>
+        )}
       </div>
     </div>
   );

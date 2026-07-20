@@ -22,6 +22,7 @@ export default async function WorkPage({
       extractedAuthor: documents.extractedAuthor,
       processingError: documents.processingError,
       originalFilename: documents.originalFilename,
+      deletedAt: works.deletedAt,
     })
     .from(works)
     .innerJoin(documents, eq(documents.workId, works.id))
@@ -48,7 +49,10 @@ export default async function WorkPage({
           {row.title}
         </h1>
       </div>
-      <WorkStatusPanel workId={workId} initial={{ ...row, processingRun: run ?? null }} />
+      <WorkStatusPanel
+        workId={workId}
+        initial={{ ...row, deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null, processingRun: run ?? null }}
+      />
     </div>
   );
 }

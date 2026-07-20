@@ -22,6 +22,7 @@ export async function GET(
       extractedTitle: documents.extractedTitle,
       extractedAuthor: documents.extractedAuthor,
       processingError: documents.processingError,
+      deletedAt: works.deletedAt,
     })
     .from(works)
     .innerJoin(documents, eq(documents.workId, works.id))

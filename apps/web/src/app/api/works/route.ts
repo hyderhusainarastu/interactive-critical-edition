@@ -1,5 +1,5 @@
 import { db, documents, works } from "@ice/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
 
@@ -14,7 +14,7 @@ export async function GET() {
     .select({ workId: works.id, title: works.title, authorName: works.authorName })
     .from(works)
     .innerJoin(documents, eq(documents.workId, works.id))
-    .where(and(eq(works.userId, userId), eq(documents.processingStatus, "ready")));
+    .where(and(eq(works.userId, userId), eq(documents.processingStatus, "ready"), isNull(works.deletedAt)));
 
   return NextResponse.json(rows);
 }

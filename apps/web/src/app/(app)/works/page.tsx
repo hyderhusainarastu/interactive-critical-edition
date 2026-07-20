@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, documents, works } from "@ice/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
@@ -28,7 +28,7 @@ export default async function WorksPage() {
     })
     .from(works)
     .leftJoin(documents, eq(documents.workId, works.id))
-    .where(eq(works.userId, userId))
+    .where(and(eq(works.userId, userId), isNull(works.deletedAt)))
     .orderBy(desc(works.createdAt));
 
   return (
@@ -38,6 +38,12 @@ export default async function WorksPage() {
           Your works
         </h1>
         <div className="flex items-center gap-2">
+          <Link
+            href="/works/trash"
+            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+          >
+            Trash
+          </Link>
           <Link
             href="/graph"
             className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"

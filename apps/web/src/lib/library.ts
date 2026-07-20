@@ -10,7 +10,7 @@ import {
   understandingRatings,
   works,
 } from "@ice/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 /**
  * The Library (plan §34.4 9.5): every source the research pipeline has
@@ -52,7 +52,7 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
   const ownedWorks = await db
     .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId })
     .from(works)
-    .where(eq(works.userId, userId));
+    .where(and(eq(works.userId, userId), isNull(works.deletedAt)));
   const identityToWorks = new Map<string, { workId: string; title: string }[]>();
   for (const w of ownedWorks) {
     if (!w.workIdentityId) continue;

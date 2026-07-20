@@ -189,11 +189,23 @@ export const works = pgTable("work", {
    * work analyzed only under v2 has no Library presence yet.
    */
   workIdentityId: uuid("work_identity_id").references((): AnyPgColumn => workIdentities.id, { onDelete: "set null" }),
+  /**
+   * Soft-delete marker (plan §34.4 9.7: "30-day work trash with restore and
+   * idempotent purge"). Null = not trashed. Non-null = trashed as of this
+   * timestamp; a work older than 30 days past this becomes eligible for
+   * permanent purge. Deliberately NOT a hard delete — deleting a `work` row
+   * cascades through nearly the entire per-document pipeline (document,
+   * every reader/analysis table, reading_record/understanding_rating/
+   * roadmap_override), so an accidental or regretted delete needs a
+   * recovery window before that cascade actually runs.
+   */
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
   index("work_user_idx").on(t.userId),
   index("work_identity_idx").on(t.workIdentityId),
+  index("work_deleted_at_idx").on(t.deletedAt),
 ]);
 
 export const editions = pgTable("edition", {

@@ -7,7 +7,7 @@ import {
   type CurriculumRoute,
   type ProfileEntry,
 } from "@ice/curriculum";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 const EMPTY_ROUTE_COUNTS: Record<CurriculumRoute, number> = { minimal: 0, university: 0, graduate: 0 };
 
@@ -40,7 +40,7 @@ export async function computeCurriculum(
   const [work] = await db
     .select({ id: works.id, workIdentityId: works.workIdentityId })
     .from(works)
-    .where(and(eq(works.id, workId), eq(works.userId, userId)))
+    .where(and(eq(works.id, workId), eq(works.userId, userId), isNull(works.deletedAt)))
     .limit(1);
   if (!work) return null;
 

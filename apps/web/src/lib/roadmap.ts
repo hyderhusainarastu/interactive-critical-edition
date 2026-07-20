@@ -82,7 +82,7 @@ export async function computeRoadmap(
              r.work_path || w.id
       FROM reach r
       JOIN bibliographic_record br ON br.id = r.bib_id
-      JOIN work w ON w.user_id = ${userId}
+      JOIN work w ON w.user_id = ${userId} AND w.deleted_at IS NULL
         AND ${NORM_TITLE("w.title")} = ${NORM_TITLE("br.title")}
       JOIN graph_edge e2 ON e2.user_id = ${userId}
         AND e2.source_type = 'work' AND e2.source_id = w.id
@@ -113,7 +113,7 @@ export async function computeRoadmap(
     SELECT br.id, br.title, br.authors, br.year, br.doi, br.access_status, br.source,
       EXISTS (
         SELECT 1 FROM work w
-        WHERE w.user_id = ${userId}
+        WHERE w.user_id = ${userId} AND w.deleted_at IS NULL
           AND ${NORM_TITLE("w.title")} = ${NORM_TITLE("br.title")}
       ) AS in_library,
       (

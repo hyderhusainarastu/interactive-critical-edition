@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, documents, users, works } from "@ice/db";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
@@ -28,7 +28,7 @@ export default async function DashboardPage() {
     .select({ workId: works.id, title: works.title, status: documents.processingStatus, updatedAt: documents.updatedAt })
     .from(works)
     .leftJoin(documents, eq(documents.workId, works.id))
-    .where(eq(works.userId, userId))
+    .where(and(eq(works.userId, userId), isNull(works.deletedAt)))
     .orderBy(desc(works.createdAt));
 
   const statusCounts = myWorks.reduce<Record<string, number>>((acc, w) => {
