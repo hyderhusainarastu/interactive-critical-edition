@@ -76,7 +76,13 @@ export interface EditionPassageAnnotation {
 
 export interface EditionPayload {
   run: { version: number; structureState: "full" | "limited"; note: string | null; status: string; stage: string | null };
-  cost: { aiCostUsd: number; degraded: boolean; saturationNote: string | null };
+  cost: {
+    aiCostUsd: number;
+    degraded: boolean;
+    saturationNote: string | null;
+    /** Per-module actual cost behind the single total above (plan §34.4 9.7). */
+    breakdown: Array<{ stage: string | null; task: string; costUsd: number; calls: number; promptTokens: number; completionTokens: number }>;
+  };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
   blocks: Array<{ id: string; pageId: string; blockOrder: number; kind: string; text: string }>;
   authorialNotes: Array<{ id: string; marker: string; text: string }>;
@@ -244,8 +250,26 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
       <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
         <strong>Edition v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited"}</span>
-        <span className="text-[var(--color-text-muted)]">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
-        {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs" title={edition.cost.saturationNote ?? "Research stopped early"}>degraded</span>}
+        {edition.cost.breakdown.length > 0 ? (
+          <details className="text-[var(--color-text-muted)]">
+            <summary className="cursor-pointer">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
+            <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+              {edition.cost.breakdown.map((b, i) => (
+                <li key={i} className="flex justify-between gap-3">
+                  <span>{b.stage ?? b.task}</span>
+                  <span>${b.costUsd.toFixed(4)} · {b.calls} call{b.calls === 1 ? "" : "s"}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : (
+          <span className="text-[var(--color-text-muted)]">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
+        )}
+        {/* `degraded` is set only when the run crossed its cost soft cap
+         *  (see `overSoftCap()` in apps/worker/src/analyze.ts) — it never
+         *  means anything else, so the default tooltip names the cause
+         *  rather than a generic "stopped early". */}
+        {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
         {page && (
           <>
             <span className="ml-auto">Page {page.pageIndex + 1} / {edition.pages.length}</span>

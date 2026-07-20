@@ -171,9 +171,15 @@ export function WorkStatusPanel({
         {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={handleReprocess} disabled={reprocessing} className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60">
-          {reprocessing ? "Reprocessing…" : "Reprocess edition"}
-        </button>
+        <span className="flex flex-col items-start">
+          <button type="button" onClick={handleReprocess} disabled={reprocessing} className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60">
+            {reprocessing ? "Reprocessing…" : "Reprocess edition"}
+          </button>
+          {/* Static, honest range from the plan's own cost posture (§34.5) —
+           *  not a per-work prediction, since nothing exists to predict a
+           *  specific work's cost before a run actually happens. */}
+          <span className="mt-0.5 text-xs text-[var(--color-text-muted)]">Typically $0.50–$2, hard cap $5</span>
+        </span>
         <Link
           href={`/works/${workId}/roadmap`}
           className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"

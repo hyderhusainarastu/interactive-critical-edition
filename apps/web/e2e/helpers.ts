@@ -1,4 +1,5 @@
 import {
+  aiUsageLogs,
   annotations,
   bibliographicRecords,
   bookmarks,
@@ -194,6 +195,13 @@ export async function seedPublishedEdition(userId: string): Promise<{
       degraded: false,
     })
     .returning({ id: processingRuns.id });
+
+  // Phase 9.7: real per-stage usage rows so getRunCostBreakdown() has
+  // something to group — sums to the same 0.0421 already seeded on the run.
+  await db.insert(aiUsageLogs).values([
+    { runId: run.id, documentId: doc.id, task: "research", stage: "research-discovery", provider: "openai", model: "gpt-5.4-nano", promptTokens: 1200, completionTokens: 300, estimatedCostUsd: 0.03 },
+    { runId: run.id, documentId: doc.id, task: "classify", stage: "classification", provider: "openai", model: "gpt-5.4-nano", promptTokens: 500, completionTokens: 100, estimatedCostUsd: 0.0121 },
+  ]);
 
   const [page] = await db
     .insert(pages)

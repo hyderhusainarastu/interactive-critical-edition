@@ -15,6 +15,7 @@ import {
   textBlocks,
 } from "@ice/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { getRunCostBreakdown } from "./cost";
 
 /**
  * Assemble the full published v2 edition for a document (plan §33 §3.3): the
@@ -34,7 +35,7 @@ export async function getPublishedEdition(documentId: string) {
 
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
-  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes] = await Promise.all([
+  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, costBreakdown] = await Promise.all([
     pageIds.length ? db.select().from(textBlocks).where(inArray(textBlocks.pageId, pageIds)).orderBy(asc(textBlocks.blockOrder)) : Promise.resolve([]),
     db.select().from(docFootnotes).where(eq(docFootnotes.runId, run.id)).orderBy(asc(docFootnotes.createdAt)),
     db.select().from(generatedNotes).where(eq(generatedNotes.runId, run.id)).orderBy(asc(generatedNotes.createdAt)),
@@ -48,6 +49,8 @@ export async function getPublishedEdition(documentId: string) {
     // reader payload shape is identical either way (an empty array, not a
     // missing field).
     db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
+    // Phase 9.7: per-run, per-module cost detail behind the existing single total.
+    getRunCostBreakdown(run.id),
   ]);
 
   const spanById = new Map(spans.map((s) => [s.id, s]));
@@ -193,7 +196,7 @@ export async function getPublishedEdition(documentId: string) {
       startedAt: run.startedAt,
       finishedAt: run.finishedAt,
     },
-    cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote },
+    cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote, breakdown: costBreakdown },
     pages: editionPages,
     blocks,
     authorialNotes,

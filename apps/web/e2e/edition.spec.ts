@@ -128,9 +128,17 @@ test("provider reports are honest about what was not consulted", async ({ page }
   await expect(edition).toContainText(/mastodon.*disabled/i);
 });
 
-test("research cost is disclosed to the reader", async ({ page }) => {
+test("research cost is disclosed to the reader, with a per-module breakdown (Phase 9.7)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /published critical edition/i });
   await expect(edition).toContainText(/\$0\.04/);
+
+  // The total is a <summary> — the per-stage breakdown is collapsed by
+  // default and only in the DOM/visible once expanded.
+  await edition.getByText(/AI cost/).click();
+  await expect(edition).toContainText("research-discovery");
+  await expect(edition).toContainText("$0.0300");
+  await expect(edition).toContainText("classification");
+  await expect(edition).toContainText("$0.0121");
 });
 
 test("the interactive reader remains reachable alongside the edition", async ({ page }) => {
