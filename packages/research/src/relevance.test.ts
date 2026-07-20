@@ -529,3 +529,38 @@ describe("relevance gate — structural guarantees", () => {
     expect(a.confidence).toBeGreaterThanOrEqual(ACCEPT_CONFIDENCE);
   });
 });
+
+// ------------------------------------------- canary 5 regressions (production)
+
+describe("relevance gate — canary 5 false positives", () => {
+  it("does not match a core concept buried in a hyphenated compound", () => {
+    // Observed: "Aspiring Vice-Chancellors' Rhetoric and the Challenges of
+    // Building..." matched the core concept "vice" through "Vice-Chancellors",
+    // and the entity "rhetoric" through Aristotle's Rhetoric. Both words are
+    // present; neither concept is.
+    const a = assessCandidate(
+      R({ title: "2 - Aspiring Vice-Chancellors' Rhetoric and the Challenges of Building a University" }),
+      irwin,
+      "concept_doctrine",
+    );
+    expect(a.signals.coreConceptMatches).not.toContain("vice");
+    expect(a.verdict).not.toBe("accepted");
+  });
+
+  it("still matches the concept when the word stands alone", () => {
+    expect(collectCoreMatches([], ["vice"], "Aristotle on Vice")).toEqual(["vice"]);
+    expect(collectCoreMatches([], ["vice"], "Vice, Reason, and Character")).toEqual(["vice"]);
+    expect(collectCoreMatches([], ["vice"], "The Vice-Chancellor's Report")).toEqual([]);
+  });
+
+  it("requires two shared concepts before trusting an abstract name-drop", () => {
+    // Observed: "'Public Reason' and Moral Debate" shared only "reason" and was
+    // admitted by an abstract that mentioned Aristotle in passing.
+    const a = assessCandidate(
+      R({ title: "'Public Reason' and Moral Debate", snippet: "Rawlsian public reason, contrasted with Aristotle on practical wisdom." }),
+      irwin,
+      "scholarly_debate",
+    );
+    expect(a.verdict).not.toBe("accepted");
+  });
+});

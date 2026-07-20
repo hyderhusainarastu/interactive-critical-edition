@@ -1,5 +1,5 @@
 import type { LaneRound } from "./discover";
-import { QUERY_LANES } from "./relevance";
+import { QUERY_LANES, type QueryLane } from "./relevance";
 import type { RawResource } from "./types";
 
 /**
@@ -173,11 +173,22 @@ export async function generateLaneQueries(
       }),
       validate: normalizeLaneRounds,
     });
-    // The model supplements the deterministic lanes; it never replaces the
-    // explicit-citation lane, which is derived from the document itself.
+    // The model SUPPLEMENTS the deterministic lanes; it must never displace
+    // the explicit-citation lane, whose queries are the document's own
+    // reference entries. An earlier version dropped the heuristic lane whenever
+    // the model emitted a lane of the same name, which silently discarded every
+    // real citation query and left explicit-citation recall at zero in
+    // production — the code and its comment disagreed, and the comment lost.
     const heuristic = fallback();
-    const modelLanes = new Set(r.data.map((l) => l.lane));
-    const merged = [...r.data, ...heuristic.filter((h) => !modelLanes.has(h.lane))];
+    const byLane = new Map<QueryLane, string[]>();
+    for (const l of heuristic) byLane.set(l.lane, [...l.queries]);
+    for (const l of r.data) {
+      const existing = byLane.get(l.lane);
+      // Document-derived queries come first and are always kept; model queries
+      // extend them rather than replacing them.
+      byLane.set(l.lane, existing ? [...new Set([...existing, ...l.queries])].slice(0, 16) : l.queries);
+    }
+    const merged: LaneRound[] = [...byLane.entries()].map(([lane, queries]) => ({ lane, queries }));
     return { lanes: merged, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };
   } catch {
     return { lanes: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };

@@ -163,6 +163,9 @@ const ENTITY_CAP_RATIO = 3;
  *  the title is itself substantially on-vocabulary — a passing mention of
  *  "Aristotle" in an abstract is not by itself evidence of subject. */
 const CONTEXT_ENTITY_MIN_OVERLAP = 0.5;
+/** …and share at least this many of the work's own concepts. One generic
+ *  concept plus a name-drop in an abstract is not evidence of subject. */
+const CONTEXT_ENTITY_MIN_CORE_MATCHES = 2;
 
 /**
  * Words the capitalization test flags but which name nothing: sentence-initial
@@ -252,11 +255,23 @@ export function collectCoreMatches(candidateTerms: string[], core: string[], raw
     if (!c) continue;
     if (/[\s-]/.test(c)) {
       if (haystack.includes(c)) found.add(c);
+      continue;
+    }
+    // A single-word concept must appear as a STANDALONE word, never buried in a
+    // hyphenated compound. Observed in production: "Aspiring Vice-Chancellors'
+    // Rhetoric" matched the core concept "vice" through "Vice-Chancellors" —
+    // the word is present, the concept is not.
+    if (haystack) {
+      if (new RegExp(String.raw`(?<![\w-])${escapeRe(c)}(?![\w-])`).test(haystack)) found.add(c);
     } else if (tokens.has(c)) {
       found.add(c);
     }
   }
   return [...found];
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -362,7 +377,15 @@ export function assessCandidate(
   const titleEntityHit = candidateTerms.some((t) => entitySet.has(t));
   const contextTerms = new Set([...terms(candidate.snippet), ...terms(candidate.venue)]);
   const contextEntityHit = !titleEntityHit && [...contextTerms].some((t) => entitySet.has(t));
-  const entityHit = titleEntityHit || (contextEntityHit && topicOverlap >= CONTEXT_ENTITY_MIN_OVERLAP);
+  // Context evidence is second-hand, so it carries a higher bar: the title must
+  // be on-vocabulary AND share at least two of the work's concepts. Observed in
+  // production with a single-concept bar: "'Public Reason' and Moral Debate"
+  // shared only "reason" and rode in on an abstract that mentioned Aristotle.
+  const entityHit =
+    titleEntityHit ||
+    (contextEntityHit &&
+      topicOverlap >= CONTEXT_ENTITY_MIN_OVERLAP &&
+      coreConceptMatches.length >= CONTEXT_ENTITY_MIN_CORE_MATCHES);
 
   // ---- Identity signals ----
   const targetSurnames = new Set(identity.authors.map(surname).filter(Boolean));

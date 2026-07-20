@@ -262,3 +262,35 @@ describe("lane-specific query generation", () => {
     expect(r.lanes.map((l) => l.lane)).toContain("explicit_citation");
   });
 });
+
+describe("lane query merge — the document's own citations always survive", () => {
+  it("keeps document-derived citation queries when the model emits the same lane", async () => {
+    // Regression: the merge dropped the heuristic lane whenever the model
+    // emitted a lane of the same name. In production that silently discarded
+    // every real citation query and left explicit-citation recall at zero.
+    const caller = {
+      available: true,
+      call: async (p: { validate: (parsed: unknown) => unknown }) => ({
+        data: p.validate({
+          lanes: [{ lane: "explicit_citation", queries: ["works cited by Vice and Reason"] }],
+        }),
+        promptTokens: 1,
+        completionTokens: 1,
+        model: "m",
+      }),
+    };
+    const citation = 'Julia Annas, "Plato and Aristotle on Friendship and Altruism," Mind 86 (1977)';
+    const r = await generateLaneQueries(caller as never, {
+      primary: { title: "Vice and Reason", author: "Terence Irwin" },
+      citationTexts: [citation],
+      model: "m",
+    });
+    const lane = r.lanes.find((l) => l.lane === "explicit_citation");
+    expect(lane).toBeDefined();
+    expect(lane!.queries.some((q) => q.includes("Annas"))).toBe(true);
+    // The model's query is kept too — it supplements rather than replaces.
+    expect(lane!.queries.some((q) => q.includes("works cited by"))).toBe(true);
+    // Document-derived queries come first.
+    expect(lane!.queries[0]).toContain("Annas");
+  });
+});
