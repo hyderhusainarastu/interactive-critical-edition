@@ -912,6 +912,22 @@ export const credibilityAssessments = pgTable("credibility_assessment", {
   agreement: agreementStateEnum("agreement"),
   components: jsonb("components"),
   rationale: text("rationale"),
+  // Phase 9.2: the remaining separated dimensions, as real columns rather than
+  // buried in `components`, because the admin review and the reader-facing
+  // labels both filter on them. They come apart in practice — an expert's
+  // recorded lecture has high creator expertise and high pedagogical value with
+  // NO publication rigor, and collapsing that into one number would quietly
+  // make "not peer-reviewed" mean "not credible", which is false.
+  publicationRigor: real("publication_rigor"),
+  creatorExpertise: real("creator_expertise"),
+  hostProvenance: real("host_provenance"),
+  pedagogicalValue: real("pedagogical_value"),
+  /** Identified creator + how well corroborated. Never asserted by an LLM. */
+  creator: jsonb("creator"),
+  /** Fact about the venue's process, not a verdict. Null means unknown, never "no". */
+  peerReviewed: boolean("peer_reviewed"),
+  /** Reported popularity with its unit. Displayed; never an input to any score. */
+  popularity: jsonb("popularity"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("credibility_assessment_resource_unique").on(t.resourceId)]);
 
