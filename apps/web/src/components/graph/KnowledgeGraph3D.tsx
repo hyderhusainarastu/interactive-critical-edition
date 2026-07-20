@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D from "react-force-graph-3d";
-import { STATE_META, type GraphData, type GraphNode, type NodeState } from "./types";
+import { STATE_META, type GraphData, type GraphNode, type NodeState, type NodeType } from "./types";
+
+// Relative node size by kind — work is the anchor, concepts next, then
+// references, with sections (a per-work outline, often numerous) smallest.
+const NODE_SIZE: Record<NodeType, number> = { work: 6, concept: 4, reference: 3, section: 2 };
 
 /**
  * The 3D force-directed knowledge graph (plan §16/§19). Built with
@@ -72,7 +76,7 @@ export function KnowledgeGraph3D({
             const node = n as GraphNode;
             return `${node.label} — ${STATE_META[node.state].label}`;
           }}
-          nodeVal={(n: object) => ((n as GraphNode).type === "work" ? 6 : 3)}
+          nodeVal={(n: object) => NODE_SIZE[(n as GraphNode).type]}
           nodeOpacity={0.9}
           linkColor={() => "rgba(120,110,90,0.35)"}
           linkWidth={0.5}

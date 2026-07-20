@@ -420,6 +420,85 @@ export async function seedWorkWithConcepts(
 }
 
 /**
+ * Seeds ONE work carrying all four graph node types the Phase 9.7 knowledge
+ * graph shows (plan §34.4): the work itself, a referenced bibliographic
+ * record (`work -[cites]-> bibliographic_record`, the pre-9.7 shape),
+ * a concept (`work -[presupposes]-> concept`, same shape `seedWorkWithConcepts`
+ * uses), and — via a published run + page + header text_block — a section
+ * outline node. All in one work so a single `/works/[workId]/graph` fetch
+ * exercises every node type together. Seeded directly for the same
+ * CI-safety reason as the other seed helpers: no worker, no live model call.
+ */
+export async function seedWorkWithGraphData(
+  userId: string,
+): Promise<{ workId: string; documentId: string; bibId: string; conceptId: string; sectionBlockId: string }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: "On the Soul", authorName: "Aristotle" })
+    .returning({ id: works.id });
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId,
+      workId: work.id,
+      storagePath: `${userId}/${work.id}/graph.txt`,
+      originalFilename: "graph.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: "ready",
+      analysisStatus: "complete",
+      extractedText: "The soul is the form of a natural body having life potentially.",
+    })
+    .returning({ id: documents.id });
+
+  const [run] = await db
+    .insert(processingRuns)
+    .values({
+      documentId: doc.id,
+      version: 1,
+      pipelineVersion: "v2",
+      status: "complete",
+      stage: "publish",
+      structureState: "full",
+      isPublished: true,
+      aiCostUsd: 0.01,
+      degraded: false,
+    })
+    .returning({ id: processingRuns.id });
+  const [page] = await db
+    .insert(pages)
+    .values({ runId: run.id, pageIndex: 0, isOcr: false, text: "The soul is the form of a natural body." })
+    .returning({ id: pages.id });
+  const [sectionBlock] = await db
+    .insert(textBlocks)
+    .values({ pageId: page.id, blockOrder: 0, kind: "header", text: "Book II: The Nature of the Soul" })
+    .returning({ id: textBlocks.id });
+
+  const [bib] = await db
+    .insert(bibliographicRecords)
+    .values({ source: "crossref", title: "Physics", authors: "Aristotle", year: -350, accessStatus: "metadata_only" })
+    .returning({ id: bibliographicRecords.id });
+  const [concept] = await db
+    .insert(concepts)
+    .values({ slug: `hylomorphism-${suffix}`, kind: "doctrine", label: "Hylomorphism", summary: "Matter and form as co-constituents of a substance." })
+    .returning({ id: concepts.id });
+
+  await db.insert(graphEdges).values([
+    {
+      userId, sourceType: "work", sourceId: work.id, targetType: "bibliographic_record", targetId: bib.id,
+      edgeType: "cites", confidence: 0.85, evidence: { category: "explicit_reference" }, createdBy: "system",
+    },
+    {
+      userId, sourceType: "work", sourceId: work.id, targetType: "concept", targetId: concept.id,
+      edgeType: "presupposes", confidence: 0.8, evidence: { role: "central", reason: "Core doctrine of the work." }, createdBy: "system",
+    },
+  ]);
+
+  return { workId: work.id, documentId: doc.id, bibId: bib.id, conceptId: concept.id, sectionBlockId: sectionBlock.id };
+}
+
+/**
  * Seeds a work already linked to a `work_identity`, plus one Library item
  * recommended for it (`learning_resource` + `resource_role`) — the shape
  * `apps/worker/src/analyze.ts`'s v3-only promotion block writes (plan §34.4

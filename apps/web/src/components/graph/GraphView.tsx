@@ -2,9 +2,20 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
-import { STATE_META, STATE_ORDER, type GraphData, type GraphNode } from "./types";
+import {
+  DEFAULT_GRAPH_FILTERS,
+  STATE_META,
+  STATE_ORDER,
+  TYPE_LABEL,
+  filterGraphData,
+  type GraphData,
+  type GraphFilters,
+  type GraphNode,
+  type NodeType,
+} from "./types";
 
 // WebGL + three.js — client only, so pull it in dynamically with SSR off.
 const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => m.KnowledgeGraph3D), {
@@ -12,18 +23,39 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
   loading: () => <p className="py-10 text-center text-[var(--color-text-muted)]">Loading 3D view…</p>,
 });
 
+const FILTER_KEYS = ["state", "type", "authority", "provider", "relation"] as const;
+
+function filtersFromParams(params: URLSearchParams): GraphFilters {
+  const next = { ...DEFAULT_GRAPH_FILTERS };
+  for (const key of FILTER_KEYS) {
+    const v = params.get(key);
+    if (v) next[key] = v as never;
+  }
+  return next;
+}
+
 /**
  * Orchestrates the knowledge-graph tab: fetches the per-user graph, offers
  * a visible 3D ⇄ table toggle (the table is the accessible equal, plan
  * §20), a state legend, summary counts, and a click-to-detail panel. The
  * table view is the default so the information is reachable with zero
  * WebGL — the 3D scene is opt-in.
+ *
+ * Phase 9.7 (plan §34.4): filters live HERE, not inside either view, and
+ * are synced to the URL — so the table and the 3D scene are always showing
+ * the exact same filtered node/edge set (one `filterGraphData` call feeds
+ * both), and a filtered link is shareable/reloadable.
  */
 export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string; backHref: string; backLabel: string }) {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"table" | "3d">("table");
   const [selected, setSelected] = useState<GraphNode | null>(null);
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<GraphFilters>(() => filtersFromParams(searchParams));
 
   useEffect(() => {
     let ignore = false;
@@ -43,7 +75,37 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
     };
   }, [endpoint]);
 
+  const updateFilter = useCallback(
+    (key: keyof GraphFilters, value: string) => {
+      const next = { ...filters, [key]: value } as GraphFilters;
+      setFilters(next);
+      const params = new URLSearchParams(searchParams.toString());
+      for (const k of FILTER_KEYS) {
+        if (next[k] === "all") params.delete(k);
+        else params.set(k, next[k]);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [filters, pathname, router, searchParams],
+  );
+
   const onNodeClick = useCallback((node: GraphNode) => setSelected(node), []);
+
+  const filtered = useMemo(() => (data ? filterGraphData(data, filters) : null), [data, filters]);
+
+  // Filter option lists come from the FULL data, not the filtered set, so
+  // choosing one filter never hides the options for another.
+  const relations = useMemo(() => (data ? [...new Set(data.links.map((l) => l.edgeType))].sort() : []), [data]);
+  const authorities = useMemo(
+    () => (data ? [...new Set(data.nodes.map((n) => n.authority).filter(Boolean) as string[])].sort() : []),
+    [data],
+  );
+  const providers = useMemo(
+    () => (data ? [...new Set(data.nodes.map((n) => n.provider).filter(Boolean) as string[])].sort() : []),
+    [data],
+  );
+  const types = useMemo(() => (data ? [...new Set(data.nodes.map((n) => n.type))] : []), [data]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -56,7 +118,7 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
         <div>
           <h1 className="font-serif text-2xl font-semibold text-[var(--color-text)]">Knowledge graph</h1>
           <p className="text-sm text-[var(--color-text-muted)]">
-            {data?.title ?? ""} · works, the readings they reference, and what you&rsquo;ve read.
+            {data?.title ?? ""} · works, references, concepts, and (per-work) the text&rsquo;s own outline.
           </p>
         </div>
         <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="View mode">
@@ -90,7 +152,7 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
         </p>
       )}
 
-      {data && data.nodes.length > 0 && (
+      {data && filtered && data.nodes.length > 0 && (
         <>
           {/* Legend + stats */}
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
@@ -101,15 +163,112 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
               </span>
             ))}
             <span className="ml-auto text-[var(--color-text-muted)]">
-              {data.stats.works} works · {data.stats.references} references · {data.stats.missing} missing ·{" "}
-              {data.stats.read} read
+              {data.stats.works} works · {data.stats.references} references · {data.stats.concepts} concepts ·{" "}
+              {data.stats.missing} missing · {data.stats.read} read
             </span>
           </div>
 
-          {view === "table" ? (
-            <GraphAccessibleFallback data={data} />
+          {/* Filters — the single source both views render from (plan §34.4 9.7). */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-1">
+              <span className="text-[var(--color-text-muted)]">Filter</span>
+              <select
+                value={filters.state}
+                onChange={(e) => updateFilter("state", e.target.value)}
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              >
+                <option value="all">All ({data.nodes.length})</option>
+                {STATE_ORDER.map((s) => (
+                  <option key={s} value={s}>
+                    {STATE_META[s].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {types.length > 1 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Kind</span>
+                <select
+                  value={filters.type}
+                  onChange={(e) => updateFilter("type", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {(types as NodeType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {relations.length > 0 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Relation</span>
+                <select
+                  value={filters.relation}
+                  onChange={(e) => updateFilter("relation", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {relations.map((r) => (
+                    <option key={r} value={r}>
+                      {r.replace(/_/g, " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {authorities.length > 0 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Authority</span>
+                <select
+                  value={filters.authority}
+                  onChange={(e) => updateFilter("authority", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {authorities.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {providers.length > 0 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Provider</span>
+                <select
+                  value={filters.provider}
+                  onChange={(e) => updateFilter("provider", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {providers.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+              {filtered.nodes.length} of {data.nodes.length} shown
+            </span>
+          </div>
+
+          {filtered.nodes.length === 0 ? (
+            <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
+          ) : view === "table" ? (
+            <GraphAccessibleFallback data={filtered} />
           ) : (
-            <KnowledgeGraph3D data={data} onNodeClick={onNodeClick} />
+            <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} />
           )}
 
           {/* Node detail (from a 3D click) */}
