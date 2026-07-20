@@ -1,609 +1,221 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Interactive Critical Edition — Progress Checklist</title>
-<style>
-  :root {
-    --color-background: #faf6ee;
-    --color-surface: #f3ecdd;
-    --color-surface-raised: #fbf8f0;
-    --color-text: #2a241c;
-    --color-text-muted: #5c5344;
-    --color-border: #e3d9c4;
-    --color-accent-ink: #2e4057;
-    --color-accent-green: #3b5d42;
-    --color-accent-burgundy: #7a2e3a;
-    --color-accent-umber: #5c4632;
-    --color-highlight: #c9a227;
-    --shadow-card: 0 1px 2px rgba(42, 36, 28, 0.06);
-  }
-
-  @media (prefers-color-scheme: dark) {
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Implementation progress for Interactive Critical Edition.">
+  <title>Progress · Interactive Critical Edition</title>
+  <style>
     :root {
-      --color-background: #211d17;
-      --color-surface: #2b2620;
-      --color-surface-raised: #322c24;
-      --color-text: #f2ead9;
-      --color-text-muted: #c3b8a3;
-      --color-border: #43392c;
-      --color-accent-ink: #8fa8c9;
-      --color-accent-green: #7ea988;
-      --color-accent-burgundy: #c2707c;
-      --color-accent-umber: #b99c7a;
-      --color-highlight: #e0bb4d;
-      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
+      color-scheme: light dark;
+      --canvas: #f7f3eb;
+      --surface: #fffdf8;
+      --surface-muted: #eee7da;
+      --ink: #24211d;
+      --muted: #625b51;
+      --line: #d9d0c0;
+      --complete: #286044;
+      --complete-soft: #dcece2;
+      --active: #8c5c0d;
+      --active-soft: #f8e8bf;
+      --planned: #5b6470;
+      --planned-soft: #e7e9ed;
+      --link: #294b72;
+      --shadow: 0 10px 28px rgb(44 36 25 / 0.07);
     }
-  }
-  :root[data-theme="dark"] {
-    --color-background: #211d17;
-    --color-surface: #2b2620;
-    --color-surface-raised: #322c24;
-    --color-text: #f2ead9;
-    --color-text-muted: #c3b8a3;
-    --color-border: #43392c;
-    --color-accent-ink: #8fa8c9;
-    --color-accent-green: #7ea988;
-    --color-accent-burgundy: #c2707c;
-    --color-accent-umber: #b99c7a;
-    --color-highlight: #e0bb4d;
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.25);
-  }
-  :root[data-theme="light"] {
-    --color-background: #faf6ee;
-    --color-surface: #f3ecdd;
-    --color-surface-raised: #fbf8f0;
-    --color-text: #2a241c;
-    --color-text-muted: #5c5344;
-    --color-border: #e3d9c4;
-    --color-accent-ink: #2e4057;
-    --color-accent-green: #3b5d42;
-    --color-accent-burgundy: #7a2e3a;
-    --color-accent-umber: #5c4632;
-    --color-highlight: #c9a227;
-    --shadow-card: 0 1px 2px rgba(42, 36, 28, 0.06);
-  }
 
-  * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --canvas: #191815;
+        --surface: #24211d;
+        --surface-muted: #302c26;
+        --ink: #f3eee5;
+        --muted: #c3baad;
+        --line: #4a4339;
+        --complete: #8dc79e;
+        --complete-soft: #1e3a2a;
+        --active: #e8bc5c;
+        --active-soft: #483613;
+        --planned: #bec6d2;
+        --planned-soft: #343942;
+        --link: #a8c9f0;
+        --shadow: 0 10px 28px rgb(0 0 0 / 0.22);
+      }
+    }
 
-  body {
-    margin: 0;
-    background: var(--color-background);
-    color: var(--color-text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1.5;
-  }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-width: 20rem;
+      background: var(--canvas);
+      color: var(--ink);
+      font: 1rem/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
 
-  .wrap {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 3.5rem 1.5rem 6rem;
-  }
+    a { color: var(--link); }
+    a:focus-visible, summary:focus-visible {
+      outline: 3px solid var(--active);
+      outline-offset: 3px;
+      border-radius: 3px;
+    }
 
-  header.masthead {
-    margin-bottom: 2.5rem;
-  }
+    .page { width: min(100% - 2rem, 72rem); margin-inline: auto; padding: clamp(2.5rem, 7vw, 5.5rem) 0 5rem; }
+    .eyebrow, .meta, .status, .phase-number {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      letter-spacing: .07em;
+      text-transform: uppercase;
+    }
+    .eyebrow { margin: 0 0 .65rem; color: var(--muted); font-size: .76rem; font-weight: 700; }
+    h1, h2, h3 { font-family: Iowan Old Style, Palatino Linotype, Palatino, Georgia, serif; }
+    h1 { max-width: 18ch; margin: 0; font-size: clamp(2.35rem, 7vw, 4.5rem); line-height: .98; letter-spacing: -.045em; }
+    .lede { max-width: 63ch; margin: 1.25rem 0 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.16rem); }
+    .links { display: flex; flex-wrap: wrap; gap: .65rem 1.25rem; margin-top: 1.2rem; font-size: .94rem; }
 
-  .eyebrow {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-    margin: 0 0 0.6rem;
-  }
+    .overview {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 1.5rem;
+      align-items: end;
+      margin-top: 2.5rem;
+      padding: clamp(1.25rem, 3vw, 2rem);
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .overview h2 { margin: .1rem 0 0; font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; }
+    .overview p { max-width: 55ch; margin: .7rem 0 0; color: var(--muted); }
+    .metric { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+    .metric strong { display: block; font-size: 2.5rem; line-height: 1; letter-spacing: -.06em; }
+    .metric span { color: var(--muted); font-size: .82rem; }
+    .progress { margin-top: 1.35rem; }
+    .progress-label { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .45rem; color: var(--muted); font-size: .84rem; }
+    .bar { height: .7rem; overflow: hidden; border-radius: 999px; background: var(--surface-muted); }
+    .bar > span { display: block; width: 50%; height: 100%; border-radius: inherit; background: var(--active); }
 
-  h1 {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    font-weight: 600;
-    font-size: clamp(1.7rem, 4vw, 2.15rem);
-    line-height: 1.2;
-    letter-spacing: -0.01em;
-    margin: 0 0 0.5rem;
-    text-wrap: balance;
-  }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 4rem 0 1.25rem; }
+    .section-heading h2 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.35rem); letter-spacing: -.025em; }
+    .section-heading p { margin: 0; color: var(--muted); font-size: .9rem; }
 
-  .subtitle {
-    color: var(--color-text-muted);
-    font-size: 0.98rem;
-    max-width: 60ch;
-    margin: 0 0 1.6rem;
-  }
+    .phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
+    .phase { display: flex; flex-direction: column; min-height: 15rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--surface); }
+    .phase.active { border: 2px solid var(--active); box-shadow: var(--shadow); }
+    .phase-top { display: flex; align-items: start; justify-content: space-between; gap: .75rem; }
+    .phase-number { color: var(--muted); font-size: .74rem; font-weight: 700; }
+    .phase h3 { margin: .25rem 0 0; font-size: 1.35rem; line-height: 1.12; letter-spacing: -.02em; }
+    .status { flex: none; margin-top: .1rem; padding: .3rem .5rem; border-radius: 999px; font-size: .65rem; font-weight: 800; white-space: nowrap; }
+    .status.complete { color: var(--complete); background: var(--complete-soft); }
+    .status.active { color: var(--active); background: var(--active-soft); }
+    .status.planned { color: var(--planned); background: var(--planned-soft); }
+    .phase p { margin: .9rem 0 0; color: var(--muted); font-size: .92rem; }
+    .phase .meta { margin-top: auto; padding-top: 1rem; color: var(--muted); font-size: .7rem; }
 
-  .links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1.2rem;
-    font-size: 0.85rem;
-    margin-bottom: 1.8rem;
-  }
-  .links a {
-    color: var(--color-accent-ink);
-    text-decoration: none;
-    border-bottom: 1px solid transparent;
-  }
-  .links a:hover, .links a:focus-visible {
-    border-bottom-color: currentColor;
-  }
-  .links a:focus-visible {
-    outline: 2px solid var(--color-accent-ink);
-    outline-offset: 3px;
-    border-radius: 2px;
-  }
+    .focus { margin-top: 1.5rem; padding: clamp(1.3rem, 3vw, 2rem); border: 1px solid var(--active); border-radius: 1rem; background: var(--surface); }
+    .focus-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+    .focus h2 { margin: .2rem 0 0; font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.1; letter-spacing: -.025em; }
+    .focus > p { max-width: 72ch; margin: 1rem 0 0; color: var(--muted); }
+    .subphases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1.5rem 0 0; padding: 0; list-style: none; counter-reset: subphase; }
+    .subphase { position: relative; min-height: 8.6rem; padding: 1rem 1rem 1rem 3.2rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface-muted); }
+    .subphase::before { position: absolute; left: 1rem; top: 1rem; display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); content: counter(subphase); counter-increment: subphase; font: 700 .7rem/1 ui-monospace, monospace; }
+    .subphase.complete::before { content: "✓"; border-color: var(--complete); background: var(--complete); color: var(--surface); }
+    .subphase.current { border-color: var(--active); background: var(--active-soft); }
+    .subphase.current::before { border-color: var(--active); color: var(--active); }
+    .subphase h3 { margin: 0; font-size: 1rem; line-height: 1.2; }
+    .subphase p { margin: .4rem 0 0; color: var(--muted); font-size: .86rem; line-height: 1.45; }
+    .subphase.complete h3 { color: var(--complete); }
+    .subphase.current h3 { color: var(--active); }
 
-  .summary {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    padding: 1.1rem 1.3rem;
-    box-shadow: var(--shadow-card);
-  }
+    details { margin-top: 1.5rem; border-top: 1px solid var(--line); }
+    summary { padding: 1rem 0; cursor: pointer; color: var(--link); font-weight: 700; }
+    .evidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; padding-bottom: .5rem; }
+    .evidence div { padding: .8rem; border-left: 3px solid var(--line); }
+    .evidence strong { display: block; font-size: .85rem; }
+    .evidence span { color: var(--muted); font-size: .82rem; }
 
-  .summary-top {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.65rem;
-  }
+    footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+    footer p { margin: 0; }
 
-  .summary-count {
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 0.95rem;
-    color: var(--color-text);
-  }
-  .summary-count strong {
-    font-weight: 700;
-  }
-
-  .summary-label {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-  }
-
-  .track {
-    display: flex;
-    gap: 3px;
-    height: 8px;
-    border-radius: 5px;
-    overflow: hidden;
-    background: var(--color-border);
-  }
-  .track > span {
-    display: block;
-    height: 100%;
-  }
-  .track .done { background: var(--color-accent-green); }
-  .track .active { background: var(--color-highlight); }
-  .track .todo { background: transparent; }
-
-  /* Timeline */
-  .timeline {
-    margin-top: 2.4rem;
-    position: relative;
-  }
-  .timeline::before {
-    content: "";
-    position: absolute;
-    left: 15px;
-    top: 8px;
-    bottom: 8px;
-    width: 1px;
-    background: var(--color-border);
-  }
-
-  .phase {
-    position: relative;
-    padding-left: 42px;
-    margin-bottom: 1.4rem;
-  }
-  .phase:last-child { margin-bottom: 0; }
-
-  .phase-marker {
-    position: absolute;
-    left: 0;
-    top: 1.35rem;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-background);
-    border: 1.5px solid var(--color-border);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.78rem;
-    font-weight: 600;
-    color: var(--color-text-muted);
-    z-index: 1;
-  }
-  .phase.done .phase-marker {
-    border-color: var(--color-accent-green);
-    color: var(--color-accent-green);
-    background: var(--color-background);
-  }
-  .phase.active .phase-marker {
-    border-color: var(--color-highlight);
-    color: var(--color-highlight);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-highlight) 18%, transparent);
-  }
-
-  .phase-card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    box-shadow: var(--shadow-card);
-    overflow: hidden;
-  }
-  .phase.active .phase-card {
-    border-color: color-mix(in srgb, var(--color-highlight) 55%, var(--color-border));
-  }
-
-  .phase-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.95rem 1.15rem;
-  }
-
-  .phase-title {
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    font-size: 1.08rem;
-    font-weight: 600;
-    margin: 0;
-    letter-spacing: -0.005em;
-  }
-  .phase-title .num {
-    color: var(--color-text-muted);
-    font-weight: 500;
-    margin-right: 0.4em;
-  }
-
-  .badge {
-    flex-shrink: 0;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.68rem;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 0.28em 0.6em;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    white-space: nowrap;
-  }
-  .badge.done {
-    color: var(--color-accent-green);
-    background: color-mix(in srgb, var(--color-accent-green) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-accent-green) 30%, transparent);
-  }
-  .badge.active {
-    color: color-mix(in srgb, var(--color-highlight) 75%, var(--color-text));
-    background: color-mix(in srgb, var(--color-highlight) 18%, transparent);
-    border-color: color-mix(in srgb, var(--color-highlight) 40%, transparent);
-  }
-  .badge.todo {
-    color: var(--color-text-muted);
-    background: transparent;
-    border-color: var(--color-border);
-  }
-
-  .steps {
-    list-style: none;
-    margin: 0;
-    padding: 0 1.15rem 1.05rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .step {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    font-size: 0.92rem;
-  }
-
-  .step-icon {
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    margin-top: 0.1rem;
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .phase.done .step-icon {
-    background: var(--color-accent-green);
-  }
-  .phase.done .step-icon svg { stroke: var(--color-surface); }
-  .phase.active .step-icon {
-    border: 1.5px solid var(--color-highlight);
-  }
-  /* A completed sub-step inside an in-progress phase: fill it like a done
-     step, or the tick would inherit no stroke colour and render invisible. */
-  .phase.active .step-icon:has(svg) {
-    background: var(--color-accent-green);
-    border-color: var(--color-accent-green);
-  }
-  .phase.active .step-icon svg { stroke: var(--color-surface); }
-  .phase.todo .step-icon {
-    border: 1.5px solid var(--color-border);
-  }
-
-  .phase.done .step-text { color: var(--color-text); }
-  .phase.active .step-text { color: var(--color-text); }
-  .phase.todo .step-text { color: var(--color-text-muted); }
-
-  .phase-meta {
-    padding: 0 1.15rem 1.05rem;
-    font-size: 0.78rem;
-    color: var(--color-text-muted);
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  }
-  .phase-meta a {
-    color: inherit;
-  }
-
-  footer.note {
-    margin-top: 2.6rem;
-    padding-top: 1.4rem;
-    border-top: 1px solid var(--color-border);
-    font-size: 0.82rem;
-    color: var(--color-text-muted);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; animation: none !important; }
-  }
-</style>
+    @media (max-width: 43rem) {
+      .overview, .subphases { grid-template-columns: 1fr; }
+      .metric { text-align: left; }
+      .phases { grid-template-columns: 1fr; }
+      .phase { min-height: 0; }
+      .evidence { grid-template-columns: 1fr; }
+      .section-heading { align-items: start; flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
 </head>
 <body>
-<div class="wrap">
+  <main class="page">
+    <header>
+      <p class="eyebrow">Interactive Critical Edition · Project record</p>
+      <h1>Build progress, plainly accounted for.</h1>
+      <p class="lede">A concise record of what has shipped, what is underway, and what comes next. The canonical detail lives in <code>CLAUDE.md</code>; the approved delivery plan lives in <code>docs/architecture/plan.md</code>.</p>
+      <nav class="links" aria-label="Project links">
+        <a href="https://github.com/hyderhusainarastu/interactive-critical-edition" target="_blank" rel="noopener noreferrer">Repository</a>
+        <a href="https://interactive-critical-edition.vercel.app" target="_blank" rel="noopener noreferrer">Live application</a>
+      </nav>
+    </header>
 
-  <header class="masthead">
-    <p class="eyebrow">Interactive Critical Edition · Build Log</p>
-    <h1>Progress Checklist</h1>
-    <p class="subtitle">Start-to-end tracker across every implementation phase. Updated as work lands — see CLAUDE.md in the repo for the full detailed log behind each item here.</p>
-    <div class="links">
-      <a href="https://github.com/hyderhusainarastu/interactive-critical-edition" target="_blank" rel="noopener">Repository ↗</a>
-      <a href="https://interactive-critical-edition.vercel.app" target="_blank" rel="noopener">Live app ↗</a>
-    </div>
-
-    <div class="summary">
-      <div class="summary-top">
-        <span class="summary-count"><strong>9</strong> of 11 phases complete</span>
-        <span class="summary-label">Phase 9 in progress — 9.1–9.3 canary-verified in production; 9.4 (reader levels &amp; concept mastery) built and locally verified, its production canary pending approval</span>
-      </div>
-      <div class="track" role="img" aria-label="9 of 11 phases complete, phase 9 in progress">
-        <span class="done" style="flex:9"></span>
-        <span class="active" style="flex:1"></span>
-        <span class="todo" style="flex:1"></span>
-      </div>
-    </div>
-  </header>
-
-  <ol class="timeline" style="list-style:none; margin:0; padding:0;">
-
-    <!-- Phase 0 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">0</span>Research &amp; Planning</h2>
-          <span class="badge done">Complete</span>
+    <section class="overview" aria-labelledby="overview-title">
+      <div>
+        <p class="eyebrow">Current position</p>
+        <h2 id="overview-title">Phase 9 is underway</h2>
+        <p>Phases 0–8 are complete. Four of Phase 9’s eight sub-phases have been built and production-canary-verified. The next deliverable is 9.5: Library &amp; work grouping.</p>
+        <div class="progress">
+          <div class="progress-label"><span>Phase 9 sub-phases</span><span>4 of 8 complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 9 sub-phases complete" aria-valuemin="0" aria-valuemax="8" aria-valuenow="4"><span></span></div>
         </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full implementation plan researched and approved</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Reference project inspected, license verdict recorded</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Private GitHub repo created, CLAUDE.md governance established</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-0-complete</div>
       </div>
-    </li>
+      <div class="metric"><strong>9 / 11</strong><span>numbered phases complete</span></div>
+    </section>
 
-    <!-- Phase 1 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">1</span>Foundation</h2>
-          <span class="badge done">Complete</span>
+    <section aria-labelledby="phase-index-title">
+      <div class="section-heading">
+        <h2 id="phase-index-title">Phase index</h2>
+        <p>Completed phases are deliberately summarized; the active phase is detailed below.</p>
+      </div>
+      <ol class="phases">
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 0</div><h3>Research &amp; planning</h3></div><span class="status complete">Complete</span></div><p>Product definition, implementation plan, governance, repository, and project constraints established.</p><div class="meta">tag · phase-0-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 1</div><h3>Foundation</h3></div><span class="status complete">Complete</span></div><p>Next.js, authentication, database, storage, observability, and CI brought to production.</p><div class="meta">tag · phase-1-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 2</div><h3>Upload &amp; library</h3></div><span class="status complete">Complete</span></div><p>Secure upload, parsing, metadata confirmation, worker processing, and a personal library shipped.</p><div class="meta">tag · phase-2-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 3</div><h3>Reader</h3></div><span class="status complete">Complete</span></div><p>PDF and text reading, anchored highlights, notes, bookmarks, persistence, and split-pane reading delivered.</p><div class="meta">tag · phase-3-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 4</div><h3>Scholarly analysis</h3></div><span class="status complete">Complete</span></div><p>Citation resolution, relationship analysis, provenance, confidence, and reader annotations implemented.</p><div class="meta">tag · phase-4-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 5</div><h3>Roadmap &amp; knowledge graph</h3></div><span class="status complete">Complete</span></div><p>Personalized reading routes, knowledge profile, 3D graph, and equal accessible table fallback delivered.</p><div class="meta">tag · phase-5-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 6</div><h3>Landing &amp; onboarding</h3></div><span class="status complete">Complete</span></div><p>Public product story, policy pages, and optional reader onboarding completed.</p><div class="meta">tag · phase-6-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 7</div><h3>Hardening &amp; deployment</h3></div><span class="status complete">Complete</span></div><p>Authorization coverage, evaluation harness, admin tools, CI, recovery drill, and documentation completed.</p><div class="meta">tag · phase-7-complete</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 8</div><h3>Autonomous critical edition</h3></div><span class="status complete">Complete</span></div><p>Page-aware extraction, evidence-first research, relevance gating, source grouping, and reliable v2 publishing verified in production.</p><div class="meta">tag · phase-8-complete</div></li>
+        <li class="phase active"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status active">In progress</span></div><p>Four of eight planned parts are complete and verified. The Library is next.</p><div class="meta">next · 9.5 Library &amp; work grouping</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 9</div></li>
+      </ol>
+    </section>
+
+    <section class="focus" aria-labelledby="phase-nine-title">
+      <div class="focus-header"><div><p class="eyebrow">Active phase · 4 of 8</p><h2 id="phase-nine-title">Interactive Learning Workspace</h2></div><span class="status active">9.5 next</span></div>
+      <p>Phase 9 turns a trustworthy critical edition into a space a reader can learn in: level-aware without withholding depth, passage-grounded, and organized around what to read and understand next.</p>
+      <ol class="subphases">
+        <li class="subphase complete"><h3>9.1 · Foundations &amp; flag</h3><p>Version-aware v1/v2/v3 pipeline handling and schema foundations for reader levels, concepts, canonical works, Library resources, and roles.</p></li>
+        <li class="subphase complete"><h3>9.2 · Research sequence v3</h3><p>Creator evidence and separated credibility dimensions; popularity is visible but never counted as credibility. Verified by a production canary.</p></li>
+        <li class="subphase complete"><h3>9.3 · Passage annotations</h3><p>Short, expandable annotations anchored to real text blocks, with whole-work guidance kept distinct. Verified by a production canary.</p></li>
+        <li class="subphase complete"><h3>9.4 · Reader levels &amp; mastery</h3><p>Four reader levels, optional self-assessment, and a protected mastery precedence chain. Verified by a production canary.</p></li>
+        <li class="subphase current"><h3>9.5 · Library &amp; work grouping</h3><p>Separate uploaded works from recommended sources; add Library states, filters, sorts, and navigation.</p></li>
+        <li class="subphase"><h3>9.6 · Curriculum &amp; study guide</h3><p>Minimal, university, and graduate routes with acyclic dependencies, rationales, checkpoints, and review-only completion.</p></li>
+        <li class="subphase"><h3>9.7 · Graph, trash &amp; cost UI</h3><p>Expanded graph entities and parity across 3D/table views, 30-day restoreable trash, and transparent cost controls.</p></li>
+        <li class="subphase"><h3>9.8 · Comprehensive dossier</h3><p>Fourteen deeper modules behind an $8 warning and $20 confirmed ceiling.</p></li>
+      </ol>
+      <details>
+        <summary>What “complete” means for this phase</summary>
+        <div class="evidence">
+          <div><strong>Trust</strong><span>Every annotation is genuinely anchored; a failed v3 publish leaves the previous edition served.</span></div>
+          <div><strong>Consistency</strong><span>Reader, Library, Curriculum, and Graph share canonical IDs; 3D and table filters return the same set.</span></div>
+          <div><strong>Reader control</strong><span>State persists; Library changes affect Curriculum and Graph; cost caps, trash, restore, and purge are safe.</span></div>
         </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Monorepo scaffolded, local dev environment bootstrapped</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Auth built: signup, email verification, login, password reset, session revocation</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Supabase + Vercel provisioned, CI configured</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full auth flow verified end-to-end in production</span></li>
-        </ul>
-        <div class="phase-meta">tags: phase-1a-complete, phase-1-complete</div>
-      </div>
-    </li>
+      </details>
+    </section>
 
-    <!-- Phase 2 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">2</span>Upload &amp; Library</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Upload flow with validation, quota, and secure storage</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Ingestion pipeline: PDF/text parsing, metadata detection, confirm step</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Background worker built and deployed to Render</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Full pipeline verified live in production, end to end</span></li>
-        </ul>
-        <div class="phase-meta">tags: phase-2a-complete, phase-2-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 3 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">3</span>Reader</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Text and PDF reader with adjustable typography and reading modes</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Reading-position persistence, heuristic footnote detection and rendering</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Quote-anchored highlights, notes, bookmarks — verified to survive reload</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Split-pane view; full Playwright E2E suite passing</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-3-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 4 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">4</span>Scholarly Analysis</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Citation extraction + keyless bibliographic resolution (Crossref/OpenAlex/Open Library)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Two-stage relationship classification (OpenAI/Anthropic adapters, heuristic fallback) with full provenance and confidence</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Reader annotation layer (category-coded markers + panel) with approve/reject/edit/hide workflow</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Verified end-to-end through the deployed system (Vercel + Render worker + Supabase)</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-4-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 5 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">5</span>Reading Roadmap &amp; Knowledge Profile</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Prerequisite-graph traversal + priority-ranking algorithm (14 unit tests incl. Heidegger/Vico cases)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Roadmap UI (tiers, filters, overrides) + knowledge profile (understanding ratings, reading status)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">3D knowledge-graph visualizer (read/unread/missing states) + accessible table fallback</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Verified end-to-end (Playwright) and deployed to production</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-5-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 6 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">6</span>Landing Page &amp; Onboarding</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Scholarly landing page: hero, capability showcases, how-it-works, audiences, reliability (0 axe a11y violations)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Privacy &amp; copyright and terms pages</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Skippable onboarding (expertise → roadmap default) with first-upload nudge; verified &amp; deployed</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-6-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 7 -->
-    <li class="phase done">
-      <span class="phase-marker">✓</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">7</span>Hardening &amp; Deployment</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Security: authorization-bypass matrix (16 routes → 404), prompt-injection hardening, upload checks</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">AI eval harness, performance indexes, error-reporting seam, admin dashboard (AI-cost view)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">E2E wired into CI, recovery drill from a tagged checkpoint, README + docs pass</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-7-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 8 -->
-    <li class="phase done">
-      <span class="phase-marker">8</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">8</span>Critical Edition Recovery &amp; Autonomous Research</h2>
-          <span class="badge done">Complete</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">8.1 Defect recovery (login, live polling, auto-advance) + bone-white theme — complete</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Foundation — reconciled docs to reality (production still runs v1); repaired drizzle 0009/0010 metadata + migration 0011; per-document run-version lock; fixed scanned-PDF OCR merged text; real TEI XML parser (page/coords/footnotes, no duplication) — complete</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Evidence-first research pipeline built + verified end-to-end: 9 source adapters, OpenAI Responses client, discovery with cost caps/saturation/dedup, credibility A–E + agreement, anti-hallucination grading, worker orchestrator (local, behind v1 flag) — plus GROBID on Cloud Run (scale-to-zero, ~$0/mo)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Edition API (full v2 payload), reader (generated vs authorial notes, claim-level evidence, credibility/agreement), admin v2 visibility — done; roadmap/graph consume v2 edges (filter/explanation polish remaining)</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">PRODUCTION CUTOVER TO v2 — complete & canary-verified: full-structure GROBID via Cloud Run, 26 pages / 103 resources / 344 evidenced claims published for $0.20; three-tier upload recovery (direct, raw proxy, JSON fallback) verified; v1 kept as a rollback</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Clean-slate production purge — all three uploads permanently deleted, library/graph empty, account kept; canonical Irwin PDF preserved byte-for-byte in a new private eval-only bucket — complete</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Relevance gate built (migration 0013): every source is judged relevant, uncertain, or off-topic <em>before</em> its authority is scored, so only genuinely related material reaches the reader — calibrated on real search results, zero wrong sources let through</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Searches now run in twelve separate lanes (what the work cites, its background, its concepts, the debate around it, lectures, videos, blogs, discussions), each asking only the sources that can answer it — plus an admin screen reviewing what was accepted, held back, or excluded, and why</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Live test run on the real Irwin paper (three passes, 12¢ total) — caught two genuine bugs the unit tests missed, and now every source shown is correct: 100% precision</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Fourth test run: the reader now sees twice as many sources and every one is correct — including the key Nielsen article the evaluation requires</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Footnote citations now read: the Irwin paper cites entirely in footnotes with no reference list, so the pipeline learned to read that style — from 0 works found to all nine it cites</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Ten live test runs on the real paper (28¢ total) found and fixed six genuine bugs the unit tests missed. The works Irwin actually cites — Broadie, Hardie, Charles, Annas, Green, Sherman — are now looked up and matched</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">The system now knows a book, a review of it, and its second edition are all <em>one work</em> — so a book that arrived as five separate catalogue records becomes one Library entry with its reviews attached</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">The reader's source list now shows one entry per work with its reviews tucked underneath — confirmed on a live run: 21 catalogue records became 12 works, and the repeated books are gone</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Automated checks now cover the published edition itself — that source notes stay distinct from AI commentary, that every claim shows its evidence both for and against, and that sources are listed once per work</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">Ten-document load test passed: all ten published successfully, no failures, 48¢ total, just over two minutes each — and it caught a false &ldquo;degraded&rdquo; warning that was appearing on every healthy edition</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Remaining acceptance gates: expanded v2 Playwright E2E and a 10-PDF load test → then tag phase-8-complete</span></li>
-        </ul>
-        <div class="phase-meta">tag: phase-8-complete</div>
-      </div>
-    </li>
-
-    <!-- Phase 9 -->
-    <li class="phase active">
-      <span class="phase-marker">9</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">9</span>Interactive Learning Workspace</h2>
-          <span class="badge active">In progress</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">9.1 Foundations — the pipeline switch now understands v1/v2/v3 instead of comparing for one exact string, so a new pipeline can no longer drop the app back to the old one in silence; database groundwork for reader levels, concepts, canonical works, and the Library, applied to both databases with nothing yet changed for readers</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">9.2a Evidence model — every source now records WHO made it and on what evidence, and credibility is kept as separate things a reader can weigh (was it peer-reviewed, does the creator have standing, where is it published, how well is it evidenced, does it actually teach) instead of one number. Popularity is shown but can never raise any of them</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">9.2b V3 research sequence — identity, anchors, citations, relevance, creator verification, credibility, claims, then conservative influence classification. V2 stays live; the owner-approved production canary against the private Irwin fixture completed clean (33 sources, all credibility dimensions populated, $0.056), and every canary row was purged back out of production afterward</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Post-Phase-8 cleanup: seven defects found and fixed in a deliberate sweep — including a citation the system could never match because its title was a single word, and a progress bar that told screen-reader users a different number from the one on screen</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">9.3 Passage-anchored annotations — a short note anchored to the exact paragraph it explains, never a fabricated one (the database itself refuses a note that claims an anchor but has none, or claims none but sneaks one in). Collapsed to a one-line summary until expanded; guidance about the work as a whole is kept in its own clearly labelled section rather than mixed in. Owner-approved production canary completed clean (6 grounded annotations, non-degraded), every canary row purged back out of production afterward</span></li>
-          <li class="step"><span class="step-icon"><svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="step-text">9.4 Reader level &amp; concept mastery — Beginner / Undergraduate / Advanced / Research change what opens by default, never what you can reach; an optional, skippable concept check per work, self-assessed rather than machine-graded so nothing pretends to know a "correct" answer in a scholarly field; a rating you give explicitly is never quietly overruled by a guess. Built and verified locally and in the automated test suite; its production canary is the next approval needed</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Library of every recommended source — lectures, videos, blogs, and discussions alongside peer-reviewed work, each labelled honestly</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Curriculum routes (minimal / university / graduate) and the fourteen study-guide modules</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">Knowledge graph with concepts, people, traditions, and debates — identical data in the 3D view and the accessible table</span></li>
-          <li class="step"><span class="step-icon"></span><span class="step-text">30-day trash with restore, visible cost estimates and hard caps, private Irwin gold eval, then a 14-day v2 rollback window</span></li>
-        </ul>
-      </div>
-    </li>
-
-    <!-- Phase 10 -->
-    <li class="phase todo">
-      <span class="phase-marker">10</span>
-      <div class="phase-card">
-        <div class="phase-head">
-          <h2 class="phase-title"><span class="num">10</span>Educational Companion Site</h2>
-          <span class="badge todo">Not started</span>
-        </div>
-        <ul class="steps">
-          <li class="step"><span class="step-icon"></span><span class="step-text">Independent site teaching the whole build, start to end</span></li>
-        </ul>
-      </div>
-    </li>
-
-  </ol>
-
-  <footer class="note">
-    Maintained alongside <code>CLAUDE.md</code> in the project repo; that file carries the full detail behind each checklist item. This page tracks major milestones only.
-  </footer>
-
-</div>
+    <footer><p>Last reconciled with <code>CLAUDE.md</code> and <code>docs/architecture/plan.md</code> on 2026-07-20. This page is a milestone tracker, not a substitute for the project record.</p></footer>
+  </main>
 </body>
 </html>
