@@ -127,6 +127,13 @@
       "when": 1784556005000,
       "tag": "0017_left_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784569221327,
+      "tag": "0018_parallel_cardiac",
+      "breakpoints": true
     }
   ]
 }

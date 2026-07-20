@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   check,
   index,
@@ -180,9 +181,20 @@ export const works = pgTable("work", {
   title: text("title").notNull(),
   authorName: text("author_name"),
   workType: workTypeEnum("work_type").notNull().default("primary"),
+  /**
+   * The canonical identity this upload resolves to (plan §34.4 9.5),
+   * set once a v3 run derives it from the work's own resolved title/author —
+   * the same `deriveWorkIdentity` computation already used for cited
+   * resources (migration 0014). Null until that first v3 analysis; a
+   * work analyzed only under v2 has no Library presence yet.
+   */
+  workIdentityId: uuid("work_identity_id").references((): AnyPgColumn => workIdentities.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [index("work_user_idx").on(t.userId)]);
+}, (t) => [
+  index("work_user_idx").on(t.userId),
+  index("work_identity_idx").on(t.workIdentityId),
+]);
 
 export const editions = pgTable("edition", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -559,12 +571,29 @@ export const readingRecords = pgTable("reading_record", {
     .references(() => users.id, { onDelete: "cascade" }),
   workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
   bibId: uuid("bib_id").references(() => bibliographicRecords.id, { onDelete: "cascade" }),
+  // Third polymorphic target (plan §34.4 9.5): a Library item that is neither
+  // the reader's own upload nor a scholarly bibliographic record (a video, a
+  // blog post, a lecture). Exactly one of the three is ever set — enforced
+  // below by a DB CHECK, not just convention, same precedent as
+  // `passage_annotation`'s anchor-or-whole-work constraint.
+  learningResourceId: uuid("learning_resource_id").references((): AnyPgColumn => learningResources.id, { onDelete: "cascade" }),
   status: readingStatusEnum("status").notNull().default("planned"),
   startedAt: timestamp("started_at"),
   finishedAt: timestamp("finished_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [index("reading_record_user_idx").on(t.userId)]);
+}, (t) => [
+  index("reading_record_user_idx").on(t.userId),
+  index("reading_record_learning_resource_idx").on(t.learningResourceId),
+  check(
+    "reading_record_exactly_one_target",
+    sql`(
+      (case when ${t.workId} is null then 0 else 1 end) +
+      (case when ${t.bibId} is null then 0 else 1 end) +
+      (case when ${t.learningResourceId} is null then 0 else 1 end)
+    ) = 1`,
+  ),
+]);
 
 export const understandingRatings = pgTable("understanding_rating", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -573,11 +602,24 @@ export const understandingRatings = pgTable("understanding_rating", {
     .references(() => users.id, { onDelete: "cascade" }),
   workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
   bibId: uuid("bib_id").references(() => bibliographicRecords.id, { onDelete: "cascade" }),
+  // Third polymorphic target (plan §34.4 9.5) — see `readingRecords` above.
+  learningResourceId: uuid("learning_resource_id").references((): AnyPgColumn => learningResources.id, { onDelete: "cascade" }),
   // 0..100 with a derived label in the UI (plan §7). >= 60 = "working
   // understanding" → the roadmap deprioritizes it (personalization pass).
   score: integer("score").notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [index("understanding_rating_user_idx").on(t.userId)]);
+}, (t) => [
+  index("understanding_rating_user_idx").on(t.userId),
+  index("understanding_rating_learning_resource_idx").on(t.learningResourceId),
+  check(
+    "understanding_rating_exactly_one_target",
+    sql`(
+      (case when ${t.workId} is null then 0 else 1 end) +
+      (case when ${t.bibId} is null then 0 else 1 end) +
+      (case when ${t.learningResourceId} is null then 0 else 1 end)
+    ) = 1`,
+  ),
+]);
 
 /**
  * Per-user, per-root-work manual adjustments applied on top of the
@@ -854,6 +896,11 @@ export const researchResources = pgTable("research_resource", {
   index("research_resource_run_idx").on(t.runId),
   index("research_resource_work_idx").on(t.runId, t.workKey),
   uniqueIndex("research_resource_run_key_unique").on(t.runId, t.normalizedKey),
+  // Plan §34.4 9.5: the Library's read-time credibility join looks up the
+  // most recent research_resource row by normalizedKey (scoped further to
+  // the same workKey in application code) — without this, that lookup is a
+  // full table scan once history accumulates across runs.
+  index("research_resource_normalized_key_idx").on(t.normalizedKey),
 ]);
 
 /** One row per (run, provider): the auditable evidence of which sources were
