@@ -53,6 +53,7 @@ import {
   buildTopicSignature,
   laneForResource,
   citedSurnamesFrom,
+  deriveWorkIdentity,
   type WorkIdentity,
   synthesizeNote,
   withCache,
@@ -689,6 +690,18 @@ export async function analyzeEditionRun(input: {
         isbn: canonicalizeIsbn(r.isbn),
         canonicalUrl: canonicalizeUrl(r.url),
         normalizedKey: normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }),
+        // Canonical WORK identity, so the Library can show one entry per work
+        // with its reviews and editions attached instead of repeating a book.
+        ...(() => {
+          const w = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
+          return {
+            workKey: w.key,
+            workRole: w.role,
+            workCanonicalTitle: w.canonicalTitle,
+            workAuthorSurname: w.authorSurname,
+            workEvidence: w.evidence,
+          };
+        })(),
         year: r.year,
         authors: r.authors,
         bibRecordId: bibId,

@@ -5,6 +5,7 @@ export * from "./normalize";
 // candidate's relevance is settled first, and only accepted candidates are
 // ever scored for authority.
 export * from "./relevance";
+export * from "./workIdentity";
 export * from "./credibility";
 export * from "./discover";
 export * from "./synthesize";

@@ -772,6 +772,20 @@ export const providerAttemptStatusEnum = pgEnum("provider_attempt_status", [
   "disabled",
 ]);
 
+/**
+ * How a discovered record relates to the WORK it belongs to. Record-level
+ * dedup cannot collapse a book with a review of it — different DOI, different
+ * title, different author — and should not: both are real records. But the
+ * reader must see one Library entry per work, with reviews attached.
+ */
+export const recordRoleEnum = pgEnum("record_role", [
+  "primary",
+  "review",
+  "edition",
+  "translation",
+  "excerpt",
+]);
+
 /** Phase 8 research is scoped to a processing run, so reprocessing can
  * publish atomically without deleting the last good edition. */
 export const researchResources = pgTable("research_resource", {
@@ -797,9 +811,21 @@ export const researchResources = pgTable("research_resource", {
   // stay research-only). Enables graph + roadmap projection (plan §33 §3.2).
   bibRecordId: uuid("bib_record_id").references(() => bibliographicRecords.id, { onDelete: "set null" }),
   raw: jsonb("raw"),
+  // Canonical WORK identity (as opposed to record identity above). Observed in
+  // production: one cited book arrived as five correct records — the book, two
+  // reviews, and two other editions. Grouping on these lets the Library show
+  // the work once with its reviews attached. Phase 9 promotes this to a shared
+  // `work_identity` table; run-scoped columns are the honest first step.
+  workKey: text("work_key"),
+  workRole: recordRoleEnum("work_role").notNull().default("primary"),
+  workCanonicalTitle: text("work_canonical_title"),
+  workAuthorSurname: text("work_author_surname"),
+  /** Why this record was grouped as it was — a wrong grouping must be explainable. */
+  workEvidence: text("work_evidence"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
   index("research_resource_run_idx").on(t.runId),
+  index("research_resource_work_idx").on(t.runId, t.workKey),
   uniqueIndex("research_resource_run_key_unique").on(t.runId, t.normalizedKey),
 ]);
 
@@ -1018,3 +1044,4 @@ export const researchCandidates = pgTable("research_candidate", {
   // than duplicating, so precision metrics stay meaningful.
   uniqueIndex("research_candidate_run_lane_key_unique").on(t.runId, t.lane, t.normalizedKey),
 ]);
+
