@@ -124,3 +124,24 @@ describe("note citations survive line wrapping", () => {
     expect(q!.query).toContain("Aristotle's Philosophy of Action");
   });
 });
+
+describe("citation query strings are shaped for catalogue lookup", () => {
+  it("collapses a publisher imprint to its year", () => {
+    // Imprint tokens swamp the title in catalogue search. Measured against
+    // real note citations, searching the full string found 1 of 9 cited works.
+    const found = extractCitations("Sarah Broadie, Ethics with Aristotle (Oxford: Oxford University Press, 1991), p. 177n41.");
+    const q = found.find((c) => /Broadie/.test(c.query));
+    expect(q).toBeDefined();
+    expect(q!.query).toBe("Sarah Broadie, Ethics with Aristotle 1991");
+    expect(q!.query).not.toMatch(/University Press/);
+    // The verbatim text is preserved separately for gate matching.
+    expect(q!.text).toMatch(/Oxford University Press/);
+  });
+
+  it("keeps a journal citation's volume and year", () => {
+    const q = extractCitations('Julia Annas, "Plato and Aristotle on Friendship and Altruism," Mind 86 (1977), pp. 532-554.')
+      .find((c) => /Annas/.test(c.query));
+    expect(q!.query).toContain("Mind 86");
+    expect(q!.query).toContain("1977");
+  });
+});

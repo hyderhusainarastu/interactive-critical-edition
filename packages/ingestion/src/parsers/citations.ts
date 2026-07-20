@@ -71,6 +71,12 @@ function cleanQuery(entry: string): string {
     .replace(/^\s*[-•*–—]\s*/, "") // leading bullet
     .replace(LEADING_CUE, "") // "See ...", "Cf. ..."
     .replace(/\bpp?\.\s*\d+(?:[-–]\d+)?\.?\s*$/i, "") // trailing "p. 12" / "pp. 12-15"
+    // Collapse a publisher parenthetical to just its year. "(Oxford: Oxford
+    // University Press, 1991)" is imprint noise that pushes catalogue search
+    // away from the work: measured against real note citations, searching the
+    // full string found 1 of 9 cited works, since the publisher tokens swamp
+    // the title. The year is the part worth keeping.
+    .replace(/\(([^()]*?)\b(1[89]\d\d|20[0-2]\d)\b([^()]*?)\)/g, " $2")
     .replace(/\bibid\.?|op\.\s*cit\.?/gi, "")
     .replace(/\s+/g, " ")
     .trim();

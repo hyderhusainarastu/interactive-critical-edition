@@ -528,14 +528,20 @@ export async function analyzeEditionRun(input: {
 
   // Stage 1 (cheap, deterministic): candidate citations seed the query set.
   const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
+  // Two different consumers, two different shapes:
+  //  - `citationTexts` keeps the VERBATIM entry, which the relevance gate
+  //    matches a discovered title against for containment.
+  //  - `citationQueries` is the cleaned lookup string (cue words and
+  //    publisher imprints stripped), which is what a catalogue search wants.
   const citationTexts = citationCandidates.map((c) => c.text);
+  const citationQueries = citationCandidates.map((c) => c.query);
 
   // Lane-specific query generation (LLM cheap-tier or heuristic fallback).
   // Running discovery per lane means a candidate is judged against the question
   // that surfaced it, and each lane only queries providers that can serve it.
   const qg = await generateLaneQueries(responses, {
     primary: { title: resolvedTitle, author: resolvedAuthorName },
-    citationTexts,
+    citationTexts: citationQueries,
     model: cheapModel,
     safetyIdentifier,
   });
