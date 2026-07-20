@@ -28,6 +28,9 @@ importers:
       '@ice/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@ice/research':
+        specifier: workspace:*
+        version: link:../../packages/research
       '@ice/roadmap':
         specifier: workspace:*
         version: link:../../packages/roadmap

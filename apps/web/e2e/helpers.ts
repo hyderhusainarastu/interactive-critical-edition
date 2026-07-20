@@ -3,6 +3,8 @@ import {
   bibliographicRecords,
   bookmarks,
   claimEvidence,
+  concepts,
+  conceptMastery,
   credibilityAssessments,
   db,
   docFootnotes,
@@ -10,6 +12,7 @@ import {
   evidenceSpans,
   generatedClaims,
   generatedNotes,
+  graphEdges,
   highlights,
   notes,
   pages,
@@ -327,4 +330,71 @@ export async function seedPublishedEdition(userId: string): Promise<{
   ]);
 
   return { workId: work.id, documentId: doc.id, runId: run.id };
+}
+
+/**
+ * Seeds a ready work + document plus two globally-shared concepts, each
+ * linked to the work via a `work -[presupposes]-> concept` graph edge — the
+ * shape Phase 9.4's diagnostic reads (`apps/web/src/app/api/works/[workId]/
+ * diagnostic/route.ts`). Concepts use a random slug per test run so repeat
+ * runs never collide on the catalog's unique slug constraint.
+ *
+ * Seeded directly rather than produced by the real v3 pipeline for the same
+ * CI-safety reason as `seedPublishedEdition`: no worker, no live model call.
+ */
+export async function seedWorkWithConcepts(
+  userId: string,
+  opts: { existingMastery?: { conceptIndex: 0 | 1; score: number; source: "explicit" | "diagnostic" | "inferred" } } = {},
+): Promise<{ workId: string; documentId: string; conceptIds: [string, string] }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: "Nicomachean Ethics", authorName: "Aristotle" })
+    .returning({ id: works.id });
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId,
+      workId: work.id,
+      storagePath: `${userId}/${work.id}/concepts.txt`,
+      originalFilename: "concepts.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: "ready",
+      analysisStatus: "complete",
+      extractedText: "Akrasia is weakness of will. Sophrosyne is temperance.",
+    })
+    .returning({ id: documents.id });
+
+  const inserted = await db
+    .insert(concepts)
+    .values([
+      { slug: `akrasia-${suffix}`, kind: "concept", label: "Akrasia", summary: "Weakness of will — acting against one's own better judgment." },
+      { slug: `sophrosyne-${suffix}`, kind: "concept", label: "Sophrosyne", summary: "Temperance, as understood in the Peripatetic tradition." },
+    ])
+    .returning({ id: concepts.id });
+  const conceptIds: [string, string] = [inserted[0].id, inserted[1].id];
+
+  await db.insert(graphEdges).values([
+    {
+      userId, sourceType: "work", sourceId: work.id, targetType: "concept", targetId: conceptIds[0],
+      edgeType: "presupposes", confidence: 0.9, evidence: { role: "central", reason: "Central to the work's argument." }, createdBy: "system",
+    },
+    {
+      userId, sourceType: "work", sourceId: work.id, targetType: "concept", targetId: conceptIds[1],
+      edgeType: "presupposes", confidence: 0.7, evidence: { role: "mentioned", reason: "Contrasted with akrasia." }, createdBy: "system",
+    },
+  ]);
+
+  if (opts.existingMastery) {
+    await db.insert(conceptMastery).values({
+      userId,
+      conceptId: conceptIds[opts.existingMastery.conceptIndex],
+      score: opts.existingMastery.score,
+      source: opts.existingMastery.source,
+      evidence: "seeded for test",
+    });
+  }
+
+  return { workId: work.id, documentId: doc.id, conceptIds };
 }
