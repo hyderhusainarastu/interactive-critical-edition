@@ -48,6 +48,17 @@ describe.skipIf(!hasDb)("run lifecycle (integration)", () => {
     expect([a.version, b.version, c.version]).toEqual([1, 2, 3]);
   });
 
+  it("records v3 at allocation with its first ordered stage", async () => {
+    const { userId, documentId } = await seedDoc();
+    cleanup.push(userId);
+    const run = await allocateEditionRun(documentId, "v3");
+    const [stored] = await db
+      .select({ pipelineVersion: processingRuns.pipelineVersion, stage: processingRuns.stage })
+      .from(processingRuns)
+      .where(eq(processingRuns.id, run.id));
+    expect(stored).toEqual({ pipelineVersion: "v3", stage: "canonical-identity" });
+  });
+
   it("allocates distinct versions under concurrency (advisory lock)", async () => {
     const { userId, documentId } = await seedDoc();
     cleanup.push(userId);

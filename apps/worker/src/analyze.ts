@@ -34,6 +34,8 @@ import { reportError } from "@ice/observability";
 import {
   allAdapters,
   buildCredibility,
+  assessCredibilityV3,
+  publicationRigor,
   canAfford,
   canonicalizeDoi,
   canonicalizeIsbn,
@@ -62,6 +64,7 @@ import {
   type SourceAuthority,
 } from "@ice/research";
 import { and, eq } from "drizzle-orm";
+import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
 
 /**
  * Scholarly-analysis pipeline (plan §10–§12), the two-stage design:
@@ -469,6 +472,7 @@ export async function analyzeEditionRun(input: {
   runId: string;
   documentId: string;
   text: string;
+  pipeline?: "v1" | "v2" | "v3";
 }): Promise<void> {
   const [doc] = await db
     .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName })
@@ -477,6 +481,10 @@ export async function analyzeEditionRun(input: {
     .where(eq(documents.id, input.documentId))
     .limit(1);
   if (!doc) throw new Error(`Document ${input.documentId} not found for edition research`);
+  const isV3 = input.pipeline === "v3";
+  const setStage = async (v2Stage: string, v3Stage: string) => {
+    await db.update(processingRuns).set({ stage: isV3 ? v3Stage : v2Stage, updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  };
 
   // Prefer the metadata THIS run actually extracted over the work's provisional
   // title. Until the user confirms metadata, `works.title` is derived from the
@@ -525,7 +533,7 @@ export async function analyzeEditionRun(input: {
     });
   };
 
-  await db.update(processingRuns).set({ stage: "research-discovery", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  await setStage("research-discovery", "explicit-citations");
 
   // Stage 1 (cheap, deterministic): candidate citations seed the query set.
   const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
@@ -537,12 +545,20 @@ export async function analyzeEditionRun(input: {
   const citationTexts = citationCandidates.map((c) => c.text);
   const citationQueries = citationCandidates.map((c) => c.query);
 
+  // V3 makes this formerly implicit preparation step explicit. The topic
+  // signature derives only from extracted work text and citation metadata;
+  // it does not invent concepts, people, or debates with an LLM.
+  await setStage("research-discovery", "concepts-people-debates");
+
   // Lane-specific query generation (LLM cheap-tier or heuristic fallback).
   // Running discovery per lane means a candidate is judged against the question
   // that surfaced it, and each lane only queries providers that can serve it.
+  const concepts = [resolvedTitle];
+  await setStage("research-discovery", "lane-discovery");
   const qg = await generateLaneQueries(responses, {
     primary: { title: resolvedTitle, author: resolvedAuthorName },
     citationTexts: citationQueries,
+    concepts,
     model: cheapModel,
     safetyIdentifier,
   });
@@ -574,7 +590,7 @@ export async function analyzeEditionRun(input: {
   // real false positives (a marketing paper has ranked first for a scholarly
   // seed query); scoring their authority first would dress them up rather than
   // filter them out.
-  await db.update(processingRuns).set({ stage: "relevance-gate", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  await setStage("relevance-gate", "relevance-gate");
 
   const identity: WorkIdentity = {
     title: resolvedTitle,
@@ -584,7 +600,7 @@ export async function analyzeEditionRun(input: {
     ...buildTopicSignature({
       title: resolvedTitle,
       bodyText: input.text,
-      concepts: [resolvedTitle],
+      concepts,
       authors: resolvedAuthors,
     }),
     explicitCitationKeys: new Set(),
@@ -650,18 +666,26 @@ export async function analyzeEditionRun(input: {
       `(of ${assessed.length} discovered)`,
   );
 
-  await db.update(processingRuns).set({ stage: "classification", updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  await setStage("classification", "creator-verification");
 
   // Highest-authority first, capped by the full-inspection budget. Only
   // ACCEPTED candidates get here — nothing quarantined or rejected is ever
   // scored, projected, or shown.
   const ranked = acceptedResources
-    .map(({ r }) => ({ r, authority: classifyAuthority(r) }))
+    .map(({ r, assessment }) => ({ r, assessment, authority: classifyAuthority(r) }))
     .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority])
     .slice(0, RESEARCH_LIMITS.maxFullInspections);
 
-  for (const { r, authority } of ranked) {
-    const classification = await classifyRelationship({
+  // Creator verification is a separate pass so every accepted resource gets a
+  // provider-metadata-only identity before citation expansion or scoring.
+  const verifiedCreators = new Map(ranked.map(({ r }) => [
+    normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }) ?? r.title,
+    verifyCreatorFromProviderMetadata(r),
+  ]));
+  await setStage("classification", "citation-graph-expansion");
+
+  for (const { r, assessment, authority } of ranked) {
+    const classify = () => classifyRelationship({
       primaryTitle: resolvedTitle,
       primaryAuthor: resolvedAuthorName,
       candidateTitle: r.title,
@@ -669,9 +693,17 @@ export async function analyzeEditionRun(input: {
       sourceText: r.snippet ?? r.title,
       resolved: Boolean(r.doi || r.isbn),
     });
-    if (!classification.heuristic) {
+    // V2 classifies before writing its note as it always has. V3 deliberately
+    // delays this until the final conservative-influence stage: a source first
+    // earns relevance, creator evidence, citation expansion, credibility and
+    // grounded claims; only then may an AI-assisted relationship label be
+    // attached. Until then the note carries the honest generic aid label.
+    let classification = isV3 ? null : await classify();
+    if (classification && !classification.heuristic) {
       logUsage("relationship_classification", "classification", classification.model, classification.promptTokens, classification.completionTokens);
     }
+    const relevanceConfidence = isV3 ? assessment.confidence : classification!.confidence;
+    const provisionalCategory: RelationshipCategory = classification?.category ?? "interpretive_aid";
 
     const isScholarly = r.resourceType === "book" || r.resourceType === "article";
     const bibId = isScholarly ? await findOrCreateBibFromResource(r) : null;
@@ -709,13 +741,22 @@ export async function analyzeEditionRun(input: {
       })
       .returning({ id: researchResources.id });
 
+    await setStage("classification", "credibility");
     const cred = buildCredibility(r, {
-      relevance: Math.max(0, Math.min(1, classification.confidence)),
+      relevance: Math.max(0, Math.min(1, relevanceConfidence)),
       inspectionDepth: r.snippet ? 1 : 0,
       evidenceStrength: r.snippet ? 0.6 : 0.3,
     });
     // Single independent source at this stage → agreement is honestly insufficient.
     const agreement = computeAgreement(1, 0);
+    const creatorKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }) ?? r.title;
+    const v3Credibility = isV3
+      ? assessCredibilityV3(r, {
+          relevance: Math.max(0, Math.min(1, relevanceConfidence)),
+          evidenceStrength: r.snippet ? 0.6 : 0.3,
+          creator: verifiedCreators.get(creatorKey),
+        })
+      : null;
     await db.insert(credibilityAssessments).values({
       resourceId: resourceRow.id,
       score: cred.score,
@@ -726,6 +767,16 @@ export async function analyzeEditionRun(input: {
       agreement,
       components: cred,
       rationale: cred.rationale,
+      ...(v3Credibility ? {
+        publicationRigor: v3Credibility.dimensions.publicationRigor,
+        creatorExpertise: v3Credibility.dimensions.creatorExpertise,
+        hostProvenance: v3Credibility.dimensions.hostProvenance,
+        pedagogicalValue: v3Credibility.dimensions.pedagogicalValue,
+        creator: v3Credibility.creator,
+        peerReviewed: publicationRigor(r).peerReviewed,
+        popularity: v3Credibility.popularity,
+        rationale: v3Credibility.rationale,
+      } : {}),
     });
 
     const evidenceText = (r.snippet ?? r.title).slice(0, 1000);
@@ -737,11 +788,11 @@ export async function analyzeEditionRun(input: {
     await db.insert(editionRelations).values({
       runId: input.runId,
       resourceId: resourceRow.id,
-      relationType: classification.category,
+      relationType: provisionalCategory,
       depth: r.resourceType === "unresolved-citation" ? 0 : 1,
       importance: cred.score,
-      evidence: { category: classification.category, sourceText: evidenceText.slice(0, 300) },
-      confidence: classification.confidence,
+      evidence: { category: provisionalCategory, sourceText: evidenceText.slice(0, 300) },
+      confidence: relevanceConfidence,
     });
 
     // Critical note: LLM prose synthesis while under the soft cap and within the
@@ -751,13 +802,13 @@ export async function analyzeEditionRun(input: {
     // nor over-assert.
     const authorityOk = meetsFactualBar([authority]);
     const evidenceTexts = [evidenceText, r.snippet ?? ""].filter((t) => t.length > 0);
-    let noteBody = heuristicNote(r, classification.category);
+    let noteBody = heuristicNote(r, provisionalCategory);
     let gradedClaims: { text: string; claimType: "factual" | "interpretive" | "inferred"; grounded: boolean }[] = [];
     if (responses.available && !overSoftCap(budget) && canAfford(budget, NOTE_COST_ESTIMATE)) {
       const syn = await synthesizeNote(responses, {
         primary: { title: doc.title, author: doc.authorName },
         resource: r,
-        relation: classification.category,
+        relation: provisionalCategory,
         evidenceTexts,
         authorityOk,
         model: researchModel,
@@ -769,20 +820,37 @@ export async function analyzeEditionRun(input: {
         logUsage("note_synthesis", "note-synthesis", researchModel, syn.promptTokens, syn.completionTokens);
       }
     }
+    await setStage("classification", "claims");
     const [note] = await db
       .insert(generatedNotes)
-      .values({ runId: input.runId, evidenceSpanId: evidence.id, noteType: classification.category, body: noteBody, confidence: classification.confidence })
+      .values({ runId: input.runId, evidenceSpanId: evidence.id, noteType: provisionalCategory, body: noteBody, confidence: relevanceConfidence })
       .returning({ id: generatedNotes.id });
     const claimsToInsert = gradedClaims.length > 0 ? gradedClaims : [{ text: noteBody, claimType: "interpretive" as const, grounded: false }];
     for (const gc of claimsToInsert) {
       const [claim] = await db
         .insert(generatedClaims)
-        .values({ runId: input.runId, noteId: note.id, text: gc.text, claimType: gc.claimType, agreement, confidence: classification.confidence })
+        .values({ runId: input.runId, noteId: note.id, text: gc.text, claimType: gc.claimType, agreement, confidence: relevanceConfidence })
         .returning({ id: generatedClaims.id });
       await db.insert(claimEvidence).values({ claimId: claim.id, evidenceSpanId: evidence.id, stance: "supports" });
     }
 
     // Catalogue/graph projection for scholarly targets (roadmap + graph reuse).
+    await setStage("classification", "conservative-influence-classification");
+    if (isV3) classification = await classify();
+    if (!classification!.heuristic && isV3) {
+      logUsage("relationship_classification", "conservative-influence-classification", classification!.model, classification!.promptTokens, classification!.completionTokens);
+    }
+    const conservativeCategory = isV3
+      ? conservativeInfluenceClassification(classification!.category, evidenceText)
+      : classification!.category;
+    if (isV3) {
+      await db.update(editionRelations).set({
+        relationType: conservativeCategory,
+        evidence: { category: conservativeCategory, sourceText: evidenceText.slice(0, 300) },
+        confidence: classification!.confidence,
+      }).where(and(eq(editionRelations.runId, input.runId), eq(editionRelations.resourceId, resourceRow.id)));
+      await db.update(generatedNotes).set({ noteType: conservativeCategory, confidence: classification!.confidence }).where(eq(generatedNotes.id, note.id));
+    }
     if (bibId) {
       await db.insert(graphEdges).values({
         userId: doc.userId,
@@ -790,10 +858,10 @@ export async function analyzeEditionRun(input: {
         sourceId: doc.workId,
         targetType: "bibliographic_record",
         targetId: bibId,
-        edgeType: edgeValue(CATEGORY_TO_EDGE[classification.category]),
+        edgeType: edgeValue(CATEGORY_TO_EDGE[conservativeCategory]),
         weight: 1,
-        confidence: classification.confidence,
-        evidence: { category: classification.category, provider: r.provider },
+        confidence: classification!.confidence,
+        evidence: { category: conservativeCategory, provider: r.provider },
         createdBy: "system",
       });
     }

@@ -144,7 +144,8 @@ async function handleEditionExtraction(documentId: string) {
 
   // Allocate the next run version under a per-document advisory lock (see
   // runLifecycle) so two concurrent reprocesses never claim the same version.
-  const run = await allocateEditionRun(documentId);
+  const pipeline = pipelineVersion();
+  const run = await allocateEditionRun(documentId, pipeline === "v3" ? "v3" : "v2");
 
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
   if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -156,6 +157,10 @@ async function handleEditionExtraction(documentId: string) {
     if (!scan.valid) throw new Error(scan.error);
     const parsed = await parseDocument(buffer, doc.mimeType);
     if (!parsed.text.trim()) throw new Error("No extractable text found. OCR was unavailable or produced no text.");
+
+    if (pipeline === "v3") {
+      await db.update(processingRuns).set({ stage: "structural-outline", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
+    }
 
     // Keep the established interactive reader functional while v2 is enabled:
     // its note panel reads the legacy table, whereas the edition separately
@@ -205,7 +210,10 @@ async function handleEditionExtraction(documentId: string) {
       source: parsed.structureState === "full" ? "grobid" : "embedded/title-page",
     });
 
-    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text });
+    if (pipeline === "v3") {
+      await db.update(processingRuns).set({ stage: "section-passage-anchors", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
+    }
+    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline });
 
     // Reprocessing a work the reader already confirmed must not send it back
     // through metadata review just because the new extractor has lower title

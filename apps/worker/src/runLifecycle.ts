@@ -11,7 +11,10 @@ import { eq, sql } from "drizzle-orm";
  *    called) the prior published run is left untouched.
  */
 
-export async function allocateEditionRun(documentId: string): Promise<{ id: string; version: number }> {
+export async function allocateEditionRun(
+  documentId: string,
+  pipeline: "v2" | "v3" = "v2",
+): Promise<{ id: string; version: number }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${documentId}))`);
     const [{ nextVersion }] = await tx
@@ -23,9 +26,9 @@ export async function allocateEditionRun(documentId: string): Promise<{ id: stri
       .values({
         documentId,
         version: nextVersion,
-        pipelineVersion: "v2",
+        pipelineVersion: pipeline,
         status: "running",
-        stage: "extracting",
+        stage: pipeline === "v3" ? "canonical-identity" : "extracting",
         structureState: "limited",
         startedAt: new Date(),
       })

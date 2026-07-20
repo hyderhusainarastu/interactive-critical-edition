@@ -9,7 +9,9 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    include: process.env.DATABASE_URL ? ["src/**/*.test.ts"] : [],
+    // `v3.test.ts` is intentionally pure and runs in CI; lifecycle tests also
+    // run wherever a local/integration database has been configured.
+    include: process.env.DATABASE_URL ? ["src/**/*.test.ts"] : ["src/v3.test.ts"],
     passWithNoTests: true,
   },
 });
