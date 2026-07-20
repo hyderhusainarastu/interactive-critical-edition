@@ -21,6 +21,9 @@ import {
   researchCandidates,
   credibilityAssessments,
   works,
+  workIdentities,
+  learningResources,
+  resourceRoles,
 } from "@ice/db";
 import {
   classifyRelationship,
@@ -60,6 +63,7 @@ import {
   citedSurnamesFrom,
   deriveWorkIdentity,
   type WorkIdentity,
+  type WorkIdentityKey,
   synthesizeConcepts,
   synthesizeNote,
   synthesizePassageAnnotations,
@@ -68,7 +72,7 @@ import {
   type RawResource,
   type SourceAuthority,
 } from "@ice/research";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
 
 /**
@@ -463,6 +467,30 @@ async function findOrCreateBibFromResource(r: RawResource): Promise<string | nul
 }
 
 /**
+ * Find-or-create the shared `work_identity` row for a computed identity key
+ * (plan §34.4 9.5). Unlike `findOrCreateBibFromResource`'s catalogue,
+ * `work_identity.workKey` carries a real unique constraint, so a plain
+ * select-then-insert can lose a race between two concurrent runs that
+ * resolve to the same work — `onConflictDoNothing` + re-select closes it.
+ */
+async function findOrCreateWorkIdentity(identity: WorkIdentityKey, authors: string[]): Promise<string | null> {
+  const inserted = await db
+    .insert(workIdentities)
+    .values({
+      workKey: identity.key,
+      canonicalTitle: identity.canonicalTitle,
+      authorSurname: identity.authorSurname,
+      authors,
+      evidence: identity.evidence,
+    })
+    .onConflictDoNothing({ target: workIdentities.workKey })
+    .returning({ id: workIdentities.id });
+  if (inserted[0]) return inserted[0].id;
+  const [existing] = await db.select({ id: workIdentities.id }).from(workIdentities).where(eq(workIdentities.workKey, identity.key)).limit(1);
+  return existing?.id ?? null;
+}
+
+/**
  * Run-scoped, evidence-first research for the v2 edition (plan §33). Generates
  * search queries (LLM cheap-tier or heuristic), discovers across every enabled
  * source adapter under the cost/saturation/dedup budget, then for each resource
@@ -514,6 +542,31 @@ export async function analyzeEditionRun(input: {
       ? [doc.authorName]
       : [];
   const resolvedAuthorName = resolvedAuthors.join(", ") || null;
+
+  // Plan §34.4 9.5, v3 only: give the PRIMARY work its own canonical identity
+  // — the same `deriveWorkIdentity` computation already applied to every
+  // cited resource (migration 0014) — so the Library can later join "what
+  // was recommended for MY works" via `works.workIdentityId` instead of
+  // re-deriving/matching workKey strings in application code. Lazy and
+  // idempotent: only set once, harmless to repeat on reprocess.
+  let primaryWorkIdentityId: string | null = null;
+  if (isV3) {
+    const primaryIdentity = deriveWorkIdentity({
+      title: resolvedTitle,
+      authors: resolvedAuthors,
+      year: null,
+      doi: null,
+      isbn: null,
+      resourceType: "book",
+    });
+    primaryWorkIdentityId = await findOrCreateWorkIdentity(primaryIdentity, resolvedAuthors);
+    if (primaryWorkIdentityId) {
+      await db
+        .update(works)
+        .set({ workIdentityId: primaryWorkIdentityId, updatedAt: new Date() })
+        .where(and(eq(works.id, doc.workId), sql`${works.workIdentityId} is null`));
+    }
+  }
 
   const budget = makeBudget();
   const responses = new OpenAIResponsesClient();
@@ -1000,6 +1053,58 @@ export async function analyzeEditionRun(input: {
         evidence: { category: conservativeCategory, provider: r.provider },
         createdBy: "system",
       });
+    }
+
+    // Promote into the standing Library (plan §34.4 9.5), v3 only: a durable,
+    // cross-run/cross-user projection so a reader's next visit shows what was
+    // already discovered, not just this run's own "Sources consulted" panel.
+    // `unresolved-citation` stubs (no real content) and a resource whose title
+    // has no normalizable identity (rare — see `normalizedKey`'s doc comment)
+    // are skipped rather than promoted as unreadable/unkeyable ghost entries.
+    if (isV3 && primaryWorkIdentityId && r.resourceType !== "unresolved-citation") {
+      const libraryKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
+      if (libraryKey) {
+        const resourceIdentity = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
+        const resourceWorkIdentityId = await findOrCreateWorkIdentity(resourceIdentity, r.authors);
+        const libraryFields = {
+          workIdentityId: resourceWorkIdentityId,
+          title: r.title,
+          url: r.url,
+          canonicalUrl: canonicalizeUrl(r.url),
+          doi: canonicalizeDoi(r.doi),
+          isbn: canonicalizeIsbn(r.isbn),
+          resourceType: r.resourceType,
+          provider: r.provider,
+          year: r.year,
+          authors: r.authors,
+          venue: r.venue,
+          creator: v3Credibility?.creator ?? null,
+          peerReviewed: publicationRigor(r).peerReviewed,
+          popularity: v3Credibility?.popularity ?? null,
+          bibRecordId: bibId,
+        };
+        const [learningResource] = await db
+          .insert(learningResources)
+          .values({ ...libraryFields, normalizedKey: libraryKey })
+          .onConflictDoUpdate({ target: learningResources.normalizedKey, set: { ...libraryFields, updatedAt: new Date() } })
+          .returning({ id: learningResources.id });
+
+        await db
+          .insert(resourceRoles)
+          .values({
+            learningResourceId: learningResource.id,
+            workIdentityId: primaryWorkIdentityId,
+            relationship: conservativeCategory,
+            readerLevel: null,
+            rationale: noteBody,
+            confidence: classification!.confidence,
+            createdBy: "system",
+          })
+          .onConflictDoUpdate({
+            target: [resourceRoles.learningResourceId, resourceRoles.workIdentityId, resourceRoles.readerLevel],
+            set: { relationship: conservativeCategory, rationale: noteBody, confidence: classification!.confidence },
+          });
+      }
     }
   }
 
