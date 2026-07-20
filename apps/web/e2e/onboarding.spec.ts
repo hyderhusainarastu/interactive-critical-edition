@@ -27,7 +27,7 @@ test.describe("Onboarding (Phase 6)", () => {
     await page.waitForURL("**/welcome");
     await expect(page.getByRole("heading", { name: /Welcome/ })).toBeVisible();
 
-    // Choose an expertise level and complete → lands on upload.
+    // Choose a reader level and complete → lands on upload.
     await page.getByRole("radio", { name: /New to the field/i }).check();
     await page.getByRole("button", { name: "Upload my first text" }).click();
     await page.waitForURL("**/upload");

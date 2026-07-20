@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
-import type { Expertise } from "@ice/roadmap";
 import { requireSession } from "@/lib/auth";
-import { getUserPreferences } from "@/lib/preferences";
+import { getUserReaderLevel } from "@/lib/readerLevel";
 import { getOwnedDocument } from "@/lib/works";
 import { RoadmapView } from "./RoadmapView";
 
@@ -16,9 +15,9 @@ export default async function RoadmapPage({
   const doc = await getOwnedDocument(workId, session.user.id);
   if (!doc) notFound();
 
-  // Default the roadmap's level to the expertise chosen at onboarding.
-  const prefs = await getUserPreferences(session.user.id);
-  const initialExpertise = (prefs.expertise as Expertise | undefined) ?? "advanced";
+  // Default the roadmap's level to the reader level chosen at onboarding
+  // (plan §34.4 9.4); "research" (full view) when the reader never chose one.
+  const readerLevel = await getUserReaderLevel(session.user.id);
 
-  return <RoadmapView workId={workId} title={doc.title} initialExpertise={initialExpertise} />;
+  return <RoadmapView workId={workId} title={doc.title} initialReaderLevel={readerLevel ?? "research"} />;
 }

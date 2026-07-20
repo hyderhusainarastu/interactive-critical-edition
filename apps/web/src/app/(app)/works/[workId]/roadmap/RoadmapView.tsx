@@ -5,8 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   TIER_LABEL,
   TIER_ORDER,
-  type Expertise,
   type PriorityTier,
+  type ReaderLevel,
+  type ReaderLevelFilter,
   type ReadingStatus,
   type RoadmapItem,
   type RoadmapMode,
@@ -18,7 +19,17 @@ interface RoadmapResponse {
   rootWorkId: string;
   items: RoadmapItem[];
   totalReached: number;
+  levelCounts: Record<ReaderLevelFilter, number>;
 }
+
+const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
+  all: "Show all levels",
+};
+const READER_LEVEL_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
 
 // Tier → palette accent (shared with the reader's visual language).
 const TIER_COLOR: Record<PriorityTier, string> = {
@@ -36,16 +47,20 @@ const READING_STATUSES: ReadingStatus[] = ["planned", "reading", "completed", "a
 export function RoadmapView({
   workId,
   title,
-  initialExpertise = "advanced",
+  initialReaderLevel = "research",
 }: {
   workId: string;
   title: string;
-  initialExpertise?: Expertise;
+  /** The reader's saved global level, or "research" (full view) if they
+   *  never chose one. Selecting a different level here is a page-local view
+   *  filter only — it never overwrites the saved global level (plan §34.4:
+   *  "Browsing alone never silently changes a level"). */
+  initialReaderLevel?: ReaderLevel;
 }) {
   const [data, setData] = useState<RoadmapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RoadmapMode>("comprehensive");
-  const [expertise, setExpertise] = useState<Expertise>(initialExpertise);
+  const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [maxMinutes, setMaxMinutes] = useState<string>("");
 
   // Used by `mutate` to refetch after a change. Not called from the effect
@@ -53,7 +68,7 @@ export function RoadmapView({
   // directly in an effect), so the initial/filter-change load is inlined
   // below with the `.then` pattern the rule accepts.
   const load = useCallback(async () => {
-    const qs = new URLSearchParams({ mode, expertise });
+    const qs = new URLSearchParams({ mode, readerLevel });
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     try {
       const res = await fetch(`/api/works/${workId}/roadmap?${qs}`);
@@ -63,11 +78,11 @@ export function RoadmapView({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load roadmap");
     }
-  }, [workId, mode, expertise, maxMinutes]);
+  }, [workId, mode, readerLevel, maxMinutes]);
 
   useEffect(() => {
     let ignore = false;
-    const qs = new URLSearchParams({ mode, expertise });
+    const qs = new URLSearchParams({ mode, readerLevel });
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     fetch(`/api/works/${workId}/roadmap?${qs}`)
       .then(async (res) => {
@@ -86,7 +101,7 @@ export function RoadmapView({
     return () => {
       ignore = true;
     };
-  }, [workId, mode, expertise, maxMinutes]);
+  }, [workId, mode, readerLevel, maxMinutes]);
 
   const mutate = useCallback(
     async (bibId: string, patch: Record<string, unknown>) => {
@@ -129,11 +144,25 @@ export function RoadmapView({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--color-text-muted)]">Level</span>
-          <select value={expertise} onChange={(e) => setExpertise(e.target.value as Expertise)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
+          <span className="text-xs text-[var(--color-text-muted)]">
+            Level
+            {readerLevel !== "all" && (
+              <span className="ml-1 text-[var(--color-text-muted)]">
+                (never hides anything you can&rsquo;t also see — pick &ldquo;Show all levels&rdquo; anytime)
+              </span>
+            )}
+          </span>
+          <select
+            value={readerLevel}
+            onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
+            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+          >
+            {READER_LEVEL_OPTIONS.map((lvl) => (
+              <option key={lvl} value={lvl}>
+                {READER_LEVEL_LABEL[lvl]}
+                {data ? ` (${data.levelCounts[lvl]})` : ""}
+              </option>
+            ))}
           </select>
         </label>
         <label className="flex flex-col gap-1">

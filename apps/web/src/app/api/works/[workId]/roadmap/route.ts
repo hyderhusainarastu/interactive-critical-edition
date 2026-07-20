@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Expertise, RoadmapMode } from "@ice/roadmap";
+import { READER_LEVELS, type ReaderLevelFilter, type RoadmapMode } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
 import { computeRoadmap } from "@/lib/roadmap";
 import { getOwnedDocument } from "@/lib/works";
@@ -8,8 +8,10 @@ import { getOwnedDocument } from "@/lib/works";
  * Computes the reading roadmap for a work on demand (plan §13) — a graph
  * traversal + ranking, recomputed each request so it always reflects the
  * latest analysis, ratings, and overrides. Query params: mode
- * (concise|comprehensive), expertise (beginner|intermediate|advanced),
- * maxMinutes (time budget). IDOR-safe (404 for a work you don't own).
+ * (concise|comprehensive), readerLevel (beginner|undergraduate|advanced|
+ * research|all — plan §34.4 9.4), maxMinutes (time budget). Also returns
+ * `levelCounts` so the client can show per-level counts without a second
+ * request. IDOR-safe (404 for a work you don't own).
  */
 export async function GET(
   request: Request,
@@ -24,14 +26,14 @@ export async function GET(
 
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
-  const expertise = url.searchParams.get("expertise");
+  const readerLevel = url.searchParams.get("readerLevel");
   const maxMinutesRaw = url.searchParams.get("maxMinutes");
 
   const options = {
     mode: mode === "concise" || mode === "comprehensive" ? (mode as RoadmapMode) : undefined,
-    expertise:
-      expertise === "beginner" || expertise === "intermediate" || expertise === "advanced"
-        ? (expertise as Expertise)
+    readerLevel:
+      readerLevel === "all" || (READER_LEVELS as string[]).includes(readerLevel ?? "")
+        ? (readerLevel as ReaderLevelFilter)
         : undefined,
     maxMinutes: maxMinutesRaw && Number.isFinite(Number(maxMinutesRaw)) ? Number(maxMinutesRaw) : undefined,
   };

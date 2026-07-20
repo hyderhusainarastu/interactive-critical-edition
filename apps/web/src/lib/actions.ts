@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getApiUserId, signIn, signOut } from "@/lib/auth";
 import { registerUser, requestPasswordReset, resetPassword } from "@/lib/auth-service";
 import { updateUserPreferences } from "@/lib/preferences";
+import { setUserReaderLevel } from "@/lib/readerLevel";
 
 export async function loginAction(formData: FormData) {
   const email = String(formData.get("email") ?? "");
@@ -54,26 +55,25 @@ export async function registerAction(formData: FormData) {
 }
 
 /**
- * Onboarding completion (Phase 6): records the chosen expertise (which the
- * roadmap uses as its default level) and stamps `onboardedAt` so the
+ * Onboarding completion (Phase 6, updated Phase 9.4): records the chosen
+ * reader level (`users.readerLevel`, four levels — plan §34.4 9.4, replacing
+ * the retired `preferences.expertise`) and stamps `onboardedAt` so the
  * dashboard stops routing the user through /welcome. "Skip" submits with no
- * expertise but still stamps onboardedAt. Then sends them to their first
- * upload.
+ * level chosen but still stamps onboardedAt — an explicit choice is never
+ * required. Then sends them to their first upload.
  */
-const expertiseSchema = z.enum(["beginner", "intermediate", "advanced"]).optional();
+const readerLevelSchema = z.enum(["beginner", "undergraduate", "advanced", "research"]).optional();
 
 export async function completeOnboardingAction(formData: FormData) {
   const userId = await getApiUserId();
   if (!userId) redirect("/login");
 
-  const raw = formData.get("expertise");
-  const parsed = expertiseSchema.safeParse(raw === "" || raw == null ? undefined : raw);
-  const expertise = parsed.success ? parsed.data : undefined;
+  const raw = formData.get("readerLevel");
+  const parsed = readerLevelSchema.safeParse(raw === "" || raw == null ? undefined : raw);
+  const readerLevel = parsed.success ? parsed.data : undefined;
 
-  await updateUserPreferences(userId, {
-    ...(expertise ? { expertise } : {}),
-    onboardedAt: new Date().toISOString(),
-  });
+  if (readerLevel) await setUserReaderLevel(userId, readerLevel);
+  await updateUserPreferences(userId, { onboardedAt: new Date().toISOString() });
 
   redirect(formData.get("skip") ? "/dashboard" : "/upload");
 }

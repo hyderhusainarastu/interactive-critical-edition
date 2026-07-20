@@ -1,9 +1,11 @@
 import { db, readingRecords, roadmapOverrides, understandingRatings } from "@ice/db";
 import {
+  countByReaderLevel,
   rankRoadmap,
   type OverrideEntry,
   type ProfileEntry,
   type RankOptions,
+  type ReaderLevelFilter,
   type RelationshipCategory,
   type RoadmapCandidate,
 } from "@ice/roadmap";
@@ -50,6 +52,9 @@ export interface RoadmapResult {
   options: RankOptions;
   items: ReturnType<typeof rankRoadmap>;
   totalReached: number;
+  /** How many items each reader level (plus "all") would show for these same
+   *  candidates — plan §34.4 9.4's always-visible per-level counts. */
+  levelCounts: Record<ReaderLevelFilter, number>;
 }
 
 export async function computeRoadmap(
@@ -89,8 +94,16 @@ export async function computeRoadmap(
     GROUP BY bib_id, category
   `)) as unknown as ReachRow[];
 
+  const emptyLevelCounts: Record<ReaderLevelFilter, number> = {
+    beginner: 0,
+    undergraduate: 0,
+    advanced: 0,
+    research: 0,
+    all: 0,
+  };
+
   if (reach.length === 0) {
-    return { rootWorkId, options, items: [], totalReached: 0 };
+    return { rootWorkId, options, items: [], totalReached: 0, levelCounts: emptyLevelCounts };
   }
 
   const bibIds = [...new Set(reach.map((r) => r.bib_id))];
@@ -173,5 +186,8 @@ export async function computeRoadmap(
   });
 
   const items = rankRoadmap(candidates, profile, overrideMap, options);
-  return { rootWorkId, options, items, totalReached: bibIds.length };
+  const { readerLevel: _readerLevel, ...countBaseOptions } = options;
+  void _readerLevel;
+  const levelCounts = countByReaderLevel(candidates, profile, overrideMap, countBaseOptions);
+  return { rootWorkId, options, items, totalReached: bibIds.length, levelCounts };
 }

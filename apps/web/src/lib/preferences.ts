@@ -1,10 +1,14 @@
 import { db, users } from "@ice/db";
 import { eq } from "drizzle-orm";
 
-export type Expertise = "beginner" | "intermediate" | "advanced";
-
+/**
+ * Phase 9.4 (plan §34.4): `expertise` retired from this jsonb blob onto the
+ * typed `users.readerLevel` column (see `@/lib/readerLevel`) — migration
+ * `0015` already backfilled every existing value, so nothing here needs to
+ * read the old key going forward. `onboardedAt` stays jsonb; it was never
+ * part of the reader-level migration.
+ */
 export interface UserPreferences {
-  expertise?: Expertise;
   /** ISO timestamp; presence marks onboarding complete. */
   onboardedAt?: string;
 }

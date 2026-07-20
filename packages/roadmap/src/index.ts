@@ -112,11 +112,21 @@ export interface OverrideEntry {
 }
 
 export type RoadmapMode = "concise" | "comprehensive";
-export type Expertise = "beginner" | "intermediate" | "advanced";
+/**
+ * Phase 9.4 (plan §34.4): the four-level reader-level vocabulary, replacing
+ * the old three-level `preferences.expertise` (`intermediate` → `undergraduate`,
+ * see `packages/db/src/schema.ts`'s `readerLevelEnum`). `"all"` is not a real
+ * level — it is the explicit "show every tier regardless of level" override
+ * the plan requires always be available (distinct from picking "research",
+ * which is a level choice that happens to also resolve to every tier today).
+ */
+export type ReaderLevel = "beginner" | "undergraduate" | "advanced" | "research";
+export const READER_LEVELS: ReaderLevel[] = ["beginner", "undergraduate", "advanced", "research"];
+export type ReaderLevelFilter = ReaderLevel | "all";
 
 export interface RankOptions {
   mode?: RoadmapMode;
-  expertise?: Expertise;
+  readerLevel?: ReaderLevelFilter;
   /** Time budget in minutes; a greedy pass keeps the highest-priority
    *  items that fit and marks the rest as over-budget (plan §13 step 6). */
   maxMinutes?: number;
@@ -178,15 +188,19 @@ function reasonFor(category: RelationshipCategory, centrality: number, known: bo
 }
 
 /**
- * Which tiers a given expertise level sees. Beginners get a focused set
- * (essential → strongly recommended); advanced readers get the full
- * contextual/comparative tail (plan §13 step 6).
+ * Which tiers a given reader level sees by default (plan §13 step 6, plan
+ * §34.4 9.4). Each level is a strict superset of the one before it, ending
+ * at `research`/`all` = every tier — level only ever narrows the DEFAULT
+ * view, never what is reachable (the caller always offers "Show all
+ * levels", which resolves to `"all"` here). `undergraduate`'s set is
+ * unchanged from the old three-level `intermediate` it replaces, so the one
+ * production user already backfilled onto it sees no behavior change.
  */
-function tiersForExpertise(expertise: Expertise): Set<PriorityTier> {
-  if (expertise === "beginner") {
+export function tiersForReaderLevel(level: ReaderLevelFilter): Set<PriorityTier> {
+  if (level === "beginner") {
     return new Set<PriorityTier>(["essential", "high", "strongly_recommended"]);
   }
-  if (expertise === "intermediate") {
+  if (level === "undergraduate") {
     return new Set<PriorityTier>([
       "essential",
       "high",
@@ -195,6 +209,19 @@ function tiersForExpertise(expertise: Expertise): Set<PriorityTier> {
       "interpretive_aid",
     ]);
   }
+  if (level === "advanced") {
+    return new Set<PriorityTier>([
+      "essential",
+      "high",
+      "strongly_recommended",
+      "contextual",
+      "interpretive_aid",
+      "comparative",
+    ]);
+  }
+  // "research" and the explicit "all" override both resolve to every tier —
+  // see the ReaderLevelFilter doc comment for why they're kept as distinct
+  // concepts even though they agree today.
   return new Set<PriorityTier>(TIER_ORDER);
 }
 
@@ -205,11 +232,11 @@ export function rankRoadmap(
   options: RankOptions = {},
 ): RoadmapItem[] {
   const mode = options.mode ?? "comprehensive";
-  // Default to the full view (all tiers); expertise is an opt-in narrowing
+  // Default to the full view (all tiers); reader level is an opt-in narrowing
   // filter, so the untouched roadmap shows everything reached (plan §13:
   // comprehensive is the natural default, concise/beginner narrow it).
-  const expertise = options.expertise ?? "advanced";
-  const allowedTiers = tiersForExpertise(expertise);
+  const readerLevel = options.readerLevel ?? "all";
+  const allowedTiers = tiersForReaderLevel(readerLevel);
 
   type Interim = RoadmapItem & { _manualPosition?: number };
   const items: Interim[] = [];
@@ -224,7 +251,7 @@ export function rankRoadmap(
 
     // Concise mode = essential + high only (a filter on the same ranking).
     if (mode === "concise" && TIER_RANK[tier] > TIER_RANK["high"]) continue;
-    // Expertise filter (a manual tier pin always shows through).
+    // Reader-level filter (a manual tier pin always shows through).
     if (!ov.manualTier && !allowedTiers.has(tier)) continue;
 
     const pe = profile.get(c.bibId) ?? {};
@@ -286,4 +313,27 @@ export function rankRoadmap(
     void _manualPosition;
     return { ...rest, sequence: i + 1 };
   });
+}
+
+/**
+ * How many items each reader level would show for the SAME candidates —
+ * the "per-level counts" the plan requires always be visible alongside the
+ * level selector, so choosing a level is an informed narrowing rather than
+ * a blind one (plan §34.4 9.4). Reuses `rankRoadmap` itself (cheap: no I/O,
+ * just re-filtering already-fetched candidates) rather than duplicating its
+ * tier/hidden-item logic, so the counts can never drift from what selecting
+ * that level would actually show.
+ */
+export function countByReaderLevel(
+  candidates: RoadmapCandidate[],
+  profile: Map<string, ProfileEntry>,
+  overrides: Map<string, OverrideEntry>,
+  baseOptions: Omit<RankOptions, "readerLevel"> = {},
+): Record<ReaderLevelFilter, number> {
+  const levels: ReaderLevelFilter[] = [...READER_LEVELS, "all"];
+  const counts = {} as Record<ReaderLevelFilter, number>;
+  for (const level of levels) {
+    counts[level] = rankRoadmap(candidates, profile, overrides, { ...baseOptions, readerLevel: level }).length;
+  }
+  return counts;
 }

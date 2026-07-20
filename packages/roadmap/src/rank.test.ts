@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   KNOWN_THRESHOLD,
+  countByReaderLevel,
   rankRoadmap,
   type OverrideEntry,
   type ProfileEntry,
@@ -102,16 +103,26 @@ describe("rankRoadmap — modes, filters, overrides", () => {
     expect(items.map((i) => i.bibId)).toEqual(["e"]);
   });
 
-  it("beginner expertise hides the contextual/optional tail; advanced shows all", () => {
-    const beginner = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { expertise: "beginner" });
+  it("beginner reader level hides the contextual/optional tail; research shows all", () => {
+    const beginner = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "beginner" });
     expect(beginner.map((i) => i.bibId)).toEqual(["e"]);
-    const advanced = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { expertise: "advanced" });
-    expect(advanced.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
+    const research = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "research" });
+    expect(research.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
+  });
+
+  it("undergraduate reader level matches the old three-level intermediate exactly (no regression on backfill)", () => {
+    const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "undergraduate" });
+    expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e"]); // contextual in, optional still out
+  });
+
+  it("the explicit 'all' override shows everything, same as research", () => {
+    const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "all" });
+    expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
   });
 
   it("hidden override excludes an item entirely", () => {
     const ov = new Map<string, OverrideEntry>([["c", { hidden: true }]]);
-    const items = rankRoadmap([essential, contextual], empty(), ov, { expertise: "advanced" });
+    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "research" });
     expect(items.map((i) => i.bibId)).toEqual(["e"]);
   });
 
@@ -126,7 +137,7 @@ describe("rankRoadmap — modes, filters, overrides", () => {
 
   it("manual position pins an item to an exact slot", () => {
     const ov = new Map<string, OverrideEntry>([["c", { manualPosition: 1 }]]);
-    const items = rankRoadmap([essential, contextual], empty(), ov, { expertise: "advanced" });
+    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "research" });
     expect(items[0].bibId).toBe("c"); // pinned first despite lower tier
   });
 
@@ -140,8 +151,25 @@ describe("rankRoadmap — modes, filters, overrides", () => {
   });
 
   it("assigns a stable 1-based sequence", () => {
-    const items = rankRoadmap([contextual, essential], empty(), noOverrides(), { expertise: "advanced" });
+    const items = rankRoadmap([contextual, essential], empty(), noOverrides(), { readerLevel: "research" });
     expect(items.map((i) => i.sequence)).toEqual([1, 2]);
     expect(items[0].bibId).toBe("e"); // essential first
+  });
+});
+
+describe("countByReaderLevel", () => {
+  const essential = cand({ bibId: "e", title: "Essential Prereq", categories: ["prerequisite"] });
+  const contextual = cand({ bibId: "c", title: "Context Work", categories: ["historical_context"] });
+  const optional = cand({ bibId: "o", title: "Optional Extra", categories: ["optional_extension"] });
+
+  it("matches what selecting each level would actually show, plus 'all'", () => {
+    const counts = countByReaderLevel([essential, contextual, optional], empty(), noOverrides());
+    expect(counts).toEqual({
+      beginner: 1, // essential only
+      undergraduate: 2, // + contextual
+      advanced: 2, // no comparative candidate in this fixture
+      research: 3, // everything
+      all: 3,
+    });
   });
 });
