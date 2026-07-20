@@ -141,10 +141,17 @@ export function extractCitations(text: string, max = 300): RawCitation[] {
   // Run over the WHOLE text, not just the pre-heading body: in note-style
   // documents the citations are scattered through footnotes at page bottoms,
   // which land anywhere in the extracted text.
+  //
+  // Matched against a whitespace-FLATTENED copy, because a citation routinely
+  // wraps across lines and the extracted text preserves those breaks. Measured
+  // on a real production document: matching the raw per-page text found 7
+  // citations where the same document flattened yields 9 — Broadie and Charles
+  // were lost purely to a line break inside the title.
+  const flat = text.replace(/\s+/g, " ");
   for (const re of [NOTE_QUOTED, NOTE_BOOK]) {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) && out.length < max) {
+    while ((m = re.exec(flat)) && out.length < max) {
       const full = m[0].replace(/\s+/g, " ").trim();
       add(full, cleanQuery(full), "reference");
     }

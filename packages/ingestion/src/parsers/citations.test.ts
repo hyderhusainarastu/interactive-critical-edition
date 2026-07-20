@@ -105,3 +105,22 @@ describe("note-style citations (footnote apparatus, no reference list)", () => {
     expect(found.some((c) => /Broadie/.test(c.query))).toBe(false);
   });
 });
+
+describe("note citations survive line wrapping", () => {
+  it("finds a citation whose title wraps across a line break", () => {
+    // Real extracted text is per-page and keeps its line breaks. Matching the
+    // raw text lost citations purely to a newline inside the title.
+    const wrapped =
+      "Her argument is criticized by Sarah Broadie, Ethics with\nAristotle (Oxford: Oxford University Press, 1991), p. 177n41.";
+    const found = extractCitations(wrapped);
+    expect(found.some((c) => /Broadie/.test(c.query) && /Ethics with Aristotle/.test(c.query))).toBe(true);
+  });
+
+  it("collapses the wrapped citation to a single-line query", () => {
+    const wrapped = "David Charles, Aristotle's Philosophy\nof Action (London: Duckworth, 1984).";
+    const q = extractCitations(wrapped).find((c) => /Charles/.test(c.query));
+    expect(q).toBeDefined();
+    expect(q!.query).not.toContain("\n");
+    expect(q!.query).toContain("Aristotle's Philosophy of Action");
+  });
+});
