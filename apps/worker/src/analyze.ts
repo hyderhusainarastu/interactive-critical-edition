@@ -4,6 +4,7 @@ import {
   bibliographicRecords,
   citations,
   claimEvidence,
+  concepts as conceptsTable,
   db,
   documents,
   docMetadata,
@@ -59,6 +60,7 @@ import {
   citedSurnamesFrom,
   deriveWorkIdentity,
   type WorkIdentity,
+  synthesizeConcepts,
   synthesizeNote,
   synthesizePassageAnnotations,
   withCache,
@@ -599,15 +601,95 @@ export async function analyzeEditionRun(input: {
   const citationTexts = citationCandidates.map((c) => c.text);
   const citationQueries = citationCandidates.map((c) => c.query);
 
-  // V3 makes this formerly implicit preparation step explicit. The topic
-  // signature derives only from extracted work text and citation metadata;
-  // it does not invent concepts, people, or debates with an LLM.
+  // V3 (Phase 9.4, plan §34.4): real extraction for what was, until now, only
+  // a label on this stage (the topic signature derived purely from citation
+  // metadata — no concepts, people, or debates with an LLM at all). A
+  // per-work diagnostic quiz needs something real to ask about, so this
+  // extracts the concepts/doctrines/people/traditions/debates the work
+  // itself requires or discusses, in one bulk call (bounded cost regardless
+  // of document length, same pattern as `synthesizePassageAnnotations`), and
+  // shares them in the global `concept` catalog — append-only, like
+  // `bibliographic_record`, so two readers studying the same doctrine land
+  // on the same node. Falls back to an honest empty result with no model
+  // key; extracted labels also feed lane query generation below, replacing
+  // the resolvedTitle-only placeholder with the work's actual vocabulary.
   await setStage("research-discovery", "concepts-people-debates");
+  let extractedConceptLabels: string[] = [];
+  if (isV3) {
+    const CONCEPT_EXTRACTION_COST_ESTIMATE = 0.01;
+    if (canAfford(budget, CONCEPT_EXTRACTION_COST_ESTIMATE)) {
+      const synthesizedConcepts = await synthesizeConcepts(responses, {
+        primary: { title: resolvedTitle, author: resolvedAuthorName },
+        textSample: input.text,
+        model: cheapModel,
+        safetyIdentifier,
+      });
+      if (synthesizedConcepts.usedModel) {
+        logUsage(
+          "concept_extraction",
+          "concepts-people-debates",
+          cheapModel,
+          synthesizedConcepts.promptTokens,
+          synthesizedConcepts.completionTokens,
+        );
+      }
+      if (synthesizedConcepts.concepts.length) {
+        extractedConceptLabels = synthesizedConcepts.concepts.map((c) => c.label);
+        for (const c of synthesizedConcepts.concepts) {
+          const [existingConcept] = await db
+            .select({ id: conceptsTable.id })
+            .from(conceptsTable)
+            .where(eq(conceptsTable.slug, c.slug))
+            .limit(1);
+          const conceptId =
+            existingConcept?.id ??
+            (
+              await db
+                .insert(conceptsTable)
+                .values({ slug: c.slug, kind: c.kind, label: c.label, summary: c.summary })
+                .returning({ id: conceptsTable.id })
+            )[0].id;
+
+          // Idempotent-safe on reprocess: graph_edge has no runId scope of
+          // its own (unlike research_resource/passage_annotation), so a
+          // repeat run over the same work would otherwise duplicate this
+          // edge indefinitely rather than just refreshing it.
+          const [existingEdge] = await db
+            .select({ id: graphEdges.id })
+            .from(graphEdges)
+            .where(
+              and(
+                eq(graphEdges.userId, doc.userId),
+                eq(graphEdges.sourceType, "work"),
+                eq(graphEdges.sourceId, doc.workId),
+                eq(graphEdges.targetType, "concept"),
+                eq(graphEdges.targetId, conceptId),
+              ),
+            )
+            .limit(1);
+          if (!existingEdge) {
+            await db.insert(graphEdges).values({
+              userId: doc.userId,
+              sourceType: "work",
+              sourceId: doc.workId,
+              targetType: "concept",
+              targetId: conceptId,
+              edgeType: "presupposes",
+              confidence: c.confidence,
+              evidence: { role: c.role, reason: c.evidence },
+              createdBy: "system",
+            });
+          }
+        }
+        console.log(`[analyze] wrote ${synthesizedConcepts.concepts.length} concept(s) for run ${input.runId}`);
+      }
+    }
+  }
 
   // Lane-specific query generation (LLM cheap-tier or heuristic fallback).
   // Running discovery per lane means a candidate is judged against the question
   // that surfaced it, and each lane only queries providers that can serve it.
-  const concepts = [resolvedTitle];
+  const concepts = extractedConceptLabels.length ? extractedConceptLabels : [resolvedTitle];
   await setStage("research-discovery", "lane-discovery");
   const qg = await generateLaneQueries(responses, {
     primary: { title: resolvedTitle, author: resolvedAuthorName },

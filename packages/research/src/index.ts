@@ -17,5 +17,11 @@ export * from "./synthesize";
 // Phase 9.3: passage-anchored annotations over the PRIMARY text, distinct
 // from synthesize.ts's notes about discovered EXTERNAL resources.
 export * from "./passageAnnotations";
+// Phase 9.4: real extraction for the v3 "concepts/people/debates" stage,
+// feeding the global concept catalog a per-work diagnostic quizzes over.
+export * from "./concepts";
+// Phase 9.4: the concept-mastery precedence rule (explicit → diagnostic →
+// inferred → reader-level fallback), pure and decoupled from the DB layer.
+export * from "./mastery";
 export * from "./cache";
 export * from "./adapters";
