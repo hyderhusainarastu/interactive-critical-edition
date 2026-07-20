@@ -191,7 +191,13 @@ export async function synthesizePassageAnnotations(
       schemaName: "passage_annotations",
       schema: PASSAGE_ANNOTATION_SCHEMA,
       safetyIdentifier: input.safetyIdentifier,
-      maxOutputTokens: 1400,
+      // Generous headroom over what a full batch of annotations actually needs
+      // (~1100–1300 tokens observed for 7-8 annotations) — a canary caught this
+      // running RIGHT AT a tighter 1400 cap, non-deterministically truncating
+      // mid-JSON on roughly 1 in 3 calls (retried by the client, but still a
+      // real failure mode worth eliminating at the source rather than hoping
+      // the retry saves it three times in a row).
+      maxOutputTokens: 3000,
       system:
         `You are annotating a scholarly primary text for a reader, one passage at a time. You are given ` +
         `numbered blocks with their block_id. For each passage genuinely worth explaining (a difficult term, ` +
@@ -201,10 +207,10 @@ export async function synthesizePassageAnnotations(
         `ALSO emit at most one additional annotation with an empty block_id and an empty quote for genuine ` +
         `whole-document guidance (something true of the work as a whole that no single passage captures) — ` +
         `use this rarely, never as a substitute for a real anchor. summary must be a single sentence under ` +
-        `${MAX_SUMMARY_LENGTH} characters; explanation may be longer. annotation_type is what KIND of note this ` +
-        `is about the passage itself. relationship is only relevant when the note draws a comparison to another ` +
-        `work or thinker; otherwise use "interpretive_aid". reader_level is who most needs this note — leave it ` +
-        `empty if it's useful at every level.`,
+        `${MAX_SUMMARY_LENGTH} characters; explanation must be 1-3 sentences, concise. annotation_type is what ` +
+        `KIND of note this is about the passage itself. relationship is only relevant when the note draws a ` +
+        `comparison to another work or thinker; otherwise use "interpretive_aid". reader_level is who most needs ` +
+        `this note — leave it empty if it's useful at every level.`,
       input: JSON.stringify({
         title: input.primary.title,
         author: input.primary.author ?? null,
@@ -226,7 +232,14 @@ export async function synthesizePassageAnnotations(
       completionTokens: r.completionTokens,
       usedModel: true,
     };
-  } catch {
+  } catch (err) {
+    // A transient/malformed model call must not sink the whole run — degrade
+    // to the honest empty result, same as `classifyRelationship`'s heuristic
+    // fallback in @ice/ai-adapters. Logged (not silent) because a swallowed
+    // truncation/parse failure here was exactly what a production canary
+    // caught: the run still published, degraded=false, with zero passage
+    // annotations and no error anywhere pointing at the cause.
+    console.error("[passageAnnotations] synthesis call failed, no annotations this run:", err);
     return empty();
   }
 }
