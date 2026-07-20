@@ -1,93 +1,106 @@
 import Link from "next/link";
-import { db, documents, works } from "@ice/db";
+import { db, documents, users, works } from "@ice/db";
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
-import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
+import { getLibrary } from "@/lib/library";
+import { STATUS_LABEL } from "@/lib/status";
 
+/**
+ * Overview (plan §34.4 9.5) — this route used to BE the uploads list; that
+ * content moved to `/works`. This page is now a light cross-cutting summary:
+ * counts and a continue-reading nudge, not a duplicate of either `/works` or
+ * `/library`. The onboarding redirect is kept here too (duplicated with
+ * `/works`, not centralized into the layout — a cosmetic reorg is not the
+ * moment to touch shared auth-adjacent code).
+ */
 export default async function DashboardPage() {
   const session = await requireSession();
   const userId = session.user.id;
 
-  // First-run onboarding: route new users through /welcome until they've
-  // completed (or skipped) it. One extra query, only until onboarded.
   const prefs = await getUserPreferences(userId);
   if (!prefs.onboardedAt) redirect("/welcome");
 
-  const library = await db
-    .select({
-      workId: works.id,
-      title: works.title,
-      authorName: works.authorName,
-      status: documents.processingStatus,
-      documentId: documents.id,
-    })
+  const [me] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+
+  const myWorks = await db
+    .select({ workId: works.id, title: works.title, status: documents.processingStatus, updatedAt: documents.updatedAt })
     .from(works)
     .leftJoin(documents, eq(documents.workId, works.id))
     .where(eq(works.userId, userId))
     .orderBy(desc(works.createdAt));
 
+  const statusCounts = myWorks.reduce<Record<string, number>>((acc, w) => {
+    const key = w.status ?? "uploaded";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const continueReading = myWorks.find((w) => w.status === "ready") ?? null;
+
+  // Library data only exists once a work has been analyzed under the v3
+  // pipeline (see apps/worker/src/analyze.ts) — while production stays on
+  // v2, this is honestly zero for every real user, not a bug.
+  const libraryItems = await getLibrary(userId);
+  const toReadCount = libraryItems.filter((item) => item.readingStatus === null || item.readingStatus === "planned").length;
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
+      <div>
         <h1 className="text-3xl font-semibold text-[var(--color-text)]">
-          Your library
+          Welcome back{me?.name ? `, ${me.name}` : ""}
         </h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/graph"
-            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
-          >
-            Knowledge graph
-          </Link>
-          <Link
-            href="/upload"
-            className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
-          >
-            Upload a work
-          </Link>
+        <p className="mt-1 text-[var(--color-text-muted)]">
+          {me?.email}
+        </p>
+      </div>
+
+      {continueReading && (
+        <Link
+          href={`/works/${continueReading.workId}/reader`}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 hover:bg-[var(--color-surface)]/80"
+        >
+          <div className="text-sm text-[var(--color-text-muted)]">Continue reading</div>
+          <div className="mt-1 text-lg font-medium text-[var(--color-text)]">{continueReading.title}</div>
+        </Link>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Link href="/works" className="rounded-md border border-[var(--color-border)] px-5 py-4 hover:bg-[var(--color-surface)]">
+          <div className="text-2xl font-semibold text-[var(--color-text)]">{myWorks.length}</div>
+          <div className="text-sm text-[var(--color-text-muted)]">
+            {myWorks.length === 1 ? "work uploaded" : "works uploaded"}
+          </div>
+        </Link>
+        <Link href="/library" className="rounded-md border border-[var(--color-border)] px-5 py-4 hover:bg-[var(--color-surface)]">
+          <div className="text-2xl font-semibold text-[var(--color-text)]">{toReadCount}</div>
+          <div className="text-sm text-[var(--color-text-muted)]">Library items to read</div>
+        </Link>
+        <div className="rounded-md border border-[var(--color-border)] px-5 py-4">
+          <div className="text-2xl font-semibold text-[var(--color-text)]">
+            {statusCounts.processing ?? 0}
+          </div>
+          <div className="text-sm text-[var(--color-text-muted)]">
+            {STATUS_LABEL.processing}
+          </div>
         </div>
       </div>
 
-      {library.length === 0 ? (
-        <p className="text-[var(--color-text-muted)]">
-          Nothing uploaded yet.{" "}
-          <Link href="/upload" className="underline">
-            Upload your first work
-          </Link>{" "}
-          to get started.
-        </p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
-          {library.map((item) => (
-            <li key={item.workId}>
-              <Link
-                href={`/works/${item.workId}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-[var(--color-surface)]"
-              >
-                <span>
-                  <span className="font-medium text-[var(--color-text)]">
-                    {item.title}
-                  </span>
-                  {item.authorName && (
-                    <span className="text-[var(--color-text-muted)]">
-                      {" "}
-                      — {item.authorName}
-                    </span>
-                  )}
-                </span>
-                <span
-                  className="text-sm font-medium"
-                  style={{ color: item.status ? STATUS_COLOR[item.status] : undefined }}
-                >
-                  {item.status ? STATUS_LABEL[item.status] : "—"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-wrap gap-2">
+        <Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+          Your works
+        </Link>
+        <Link href="/library" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+          Library
+        </Link>
+        <Link href="/graph" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+          Knowledge graph
+        </Link>
+        <Link href="/upload" className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]">
+          Upload a work
+        </Link>
+      </div>
     </div>
   );
 }

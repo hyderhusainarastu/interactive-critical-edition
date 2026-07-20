@@ -1,0 +1,261 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { LibraryItem } from "@/lib/library";
+
+const RELATIONSHIP_LABEL: Record<string, string> = {
+  explicit_reference: "Explicit reference",
+  secondary_scholarly_recommendation: "Secondary scholarship",
+  historical_context: "Historical context",
+  prerequisite: "Prerequisite",
+  conceptual_influence: "Conceptual influence",
+  disagreement_polemical_target: "Disagreement",
+  interpretive_aid: "Interpretive aid",
+  parallel_comparison: "Parallel / comparison",
+  optional_extension: "Optional extension",
+  ai_inferred: "AI-inferred",
+};
+
+const READER_LEVEL_LABEL: Record<string, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
+};
+
+type Tab = "all" | "to_read" | "reading" | "completed";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "to_read", label: "To read" },
+  { key: "reading", label: "Reading" },
+  { key: "completed", label: "Completed" },
+];
+
+type SortKey = "recency" | "title" | "credibility";
+const READING_STATUSES = ["planned", "reading", "completed", "abandoned"] as const;
+
+function matchesTab(item: LibraryItem, tab: Tab): boolean {
+  if (tab === "all") return true;
+  if (tab === "to_read") return item.readingStatus === null || item.readingStatus === "planned";
+  return item.readingStatus === tab;
+}
+
+export function LibraryView({ initialItems }: { initialItems: LibraryItem[] }) {
+  const [items, setItems] = useState(initialItems);
+  const [tab, setTab] = useState<Tab>("all");
+  const [relationship, setRelationship] = useState<string>("");
+  const [resourceType, setResourceType] = useState<string>("");
+  const [readerLevel, setReaderLevel] = useState<string>("");
+  const [sort, setSort] = useState<SortKey>("recency");
+
+  const relationships = useMemo(() => [...new Set(items.map((i) => i.relationship))].sort(), [items]);
+  const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
+
+  const tabCounts = useMemo(() => {
+    const counts: Record<Tab, number> = { all: items.length, to_read: 0, reading: 0, completed: 0 };
+    for (const item of items) {
+      if (item.readingStatus === null || item.readingStatus === "planned") counts.to_read += 1;
+      else if (item.readingStatus === "reading") counts.reading += 1;
+      else if (item.readingStatus === "completed") counts.completed += 1;
+    }
+    return counts;
+  }, [items]);
+
+  const visible = useMemo(() => {
+    let filtered = items.filter((i) => matchesTab(i, tab));
+    if (relationship) filtered = filtered.filter((i) => i.relationship === relationship);
+    if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
+    if (readerLevel) filtered = filtered.filter((i) => i.readerLevel === readerLevel || i.readerLevel === null);
+    const sorted = [...filtered];
+    if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sort === "credibility") sorted.sort((a, b) => (b.credibility?.score ?? -1) - (a.credibility?.score ?? -1));
+    else sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    return sorted;
+  }, [items, tab, relationship, resourceType, readerLevel, sort]);
+
+  async function setReadingStatus(resourceId: string, status: (typeof READING_STATUSES)[number] | null) {
+    setItems((prev) => prev.map((i) => (i.id === resourceId ? { ...i, readingStatus: status } : i)));
+    await fetch(`/api/library/${resourceId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ readingStatus: status }),
+    });
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl px-6 py-8">
+      <h1 className="mb-1 font-serif text-2xl font-semibold text-[var(--color-text)]">Library</h1>
+      <p className="mb-5 max-w-2xl text-sm text-[var(--color-text-muted)]">
+        Every source recommended for your own works, in one place — separate from the works you&rsquo;ve uploaded
+        yourself. An AI-assisted aid; verify against the sources.
+      </p>
+
+      {items.length === 0 && (
+        <p className="rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+          Nothing here yet. The Library fills in once one of your works has been analyzed under the newer research
+          pipeline — if you just uploaded something, check back after analysis completes.
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <>
+          <div className="mb-4 flex flex-wrap gap-2 border-b border-[var(--color-border)] text-sm">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className="border-b-2 px-3 py-2"
+                style={{
+                  borderColor: tab === t.key ? "var(--color-accent-ink)" : "transparent",
+                  color: tab === t.key ? "var(--color-text)" : "var(--color-text-muted)",
+                  fontWeight: tab === t.key ? 600 : 400,
+                }}
+              >
+                {t.label} ({tabCounts[t.key]})
+              </button>
+            ))}
+          </div>
+
+          <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Relationship</span>
+              <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+                <option value="">All</option>
+                {relationships.map((r) => (
+                  <option key={r} value={r}>
+                    {RELATIONSHIP_LABEL[r] ?? r}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Source type</span>
+              <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+                <option value="">All</option>
+                {resourceTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+              <select value={readerLevel} onChange={(e) => setReaderLevel(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+                <option value="">All levels</option>
+                {Object.entries(READER_LEVEL_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Sort</span>
+              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+                <option value="recency">Recently added</option>
+                <option value="title">Title A–Z</option>
+                <option value="credibility">Credibility</option>
+              </select>
+            </label>
+            <div className="ml-auto text-xs text-[var(--color-text-muted)]">
+              {visible.length} of {items.length}
+            </div>
+          </div>
+
+          {visible.length === 0 && (
+            <p className="text-[var(--color-text-muted)]">No items match these filters.</p>
+          )}
+
+          <ul className="flex flex-col gap-2">
+            {visible.map((item) => (
+              <LibraryRow key={item.id} item={item} onSetStatus={setReadingStatus} />
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function LibraryRow({
+  item,
+  onSetStatus,
+}: {
+  item: LibraryItem;
+  onSetStatus: (resourceId: string, status: (typeof READING_STATUSES)[number] | null) => void;
+}) {
+  return (
+    <li data-library-item={item.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-[var(--color-text)]">
+            {item.url ? (
+              <a href={item.url} target="_blank" rel="noreferrer" className="underline">
+                {item.title}
+              </a>
+            ) : (
+              item.title
+            )}
+            {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
+          </p>
+          {item.authors.length > 0 && <p className="text-xs text-[var(--color-text-muted)]">{item.authors.join(", ")}</p>}
+          {item.rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{item.rationale}</p>}
+
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
+            <span>{RELATIONSHIP_LABEL[item.relationship] ?? item.relationship}</span>
+            <span>·</span>
+            <span>{item.resourceType}</span>
+            {item.credibility?.authority && (
+              <>
+                <span>·</span>
+                <span>Authority {item.credibility.authority.toUpperCase()}</span>
+              </>
+            )}
+            {item.peerReviewed === false && (
+              <>
+                <span>·</span>
+                <span>Not peer-reviewed</span>
+              </>
+            )}
+            {item.readerLevel && (
+              <>
+                <span>·</span>
+                <span>{READER_LEVEL_LABEL[item.readerLevel] ?? item.readerLevel}</span>
+              </>
+            )}
+          </div>
+
+          {item.recommendedFor.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+              {item.recommendedFor.map((w) => (
+                <Link key={w.workId} href={`/works/${w.workId}`} className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                  {w.title}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 flex items-center gap-2 text-xs">
+            <span className="text-[var(--color-text-muted)]">Status</span>
+            <select
+              value={item.readingStatus ?? ""}
+              onChange={(e) => onSetStatus(item.id, (e.target.value || null) as (typeof READING_STATUSES)[number] | null)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+              aria-label={`Reading status of ${item.title}`}
+            >
+              <option value="">To read</option>
+              {READING_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}

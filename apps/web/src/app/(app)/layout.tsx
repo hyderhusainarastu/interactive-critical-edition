@@ -31,11 +31,20 @@ export default async function AppLayout({
           >
             Interactive Critical Edition
           </Link>
-          <Link href="/upload" className="text-[var(--color-text-muted)]">
-            Upload
+          <Link href="/dashboard" className="text-[var(--color-text-muted)]">
+            Dashboard
+          </Link>
+          <Link href="/works" className="text-[var(--color-text-muted)]">
+            Works
+          </Link>
+          <Link href="/library" className="text-[var(--color-text-muted)]">
+            Library
           </Link>
           <Link href="/graph" className="text-[var(--color-text-muted)]">
             Graph
+          </Link>
+          <Link href="/upload" className="text-[var(--color-text-muted)]">
+            Upload
           </Link>
           {admin && (
             <Link href="/admin" className="text-[var(--color-text-muted)]">

@@ -14,6 +14,7 @@ import {
   generatedNotes,
   graphEdges,
   highlights,
+  learningResources,
   notes,
   pages,
   passageAnnotations,
@@ -21,8 +22,10 @@ import {
   providerAttempts,
   readingRecords,
   researchResources,
+  resourceRoles,
   textBlocks,
   users,
+  workIdentities,
   works,
 } from "@ice/db";
 import { deleteDocumentFile } from "@ice/ingestion";
@@ -414,4 +417,61 @@ export async function seedWorkWithConcepts(
   }
 
   return { workId: work.id, documentId: doc.id, conceptIds };
+}
+
+/**
+ * Seeds a work already linked to a `work_identity`, plus one Library item
+ * recommended for it (`learning_resource` + `resource_role`) — the shape
+ * `apps/worker/src/analyze.ts`'s v3-only promotion block writes (plan §34.4
+ * 9.5). Concepts are real extraction output normally; the Library items here
+ * are SEEDED rather than produced by the real pipeline, same CI-safety
+ * reasoning as `seedWorkWithConcepts` (no worker, no live model call).
+ */
+export async function seedWorkWithLibraryItem(
+  userId: string,
+  opts: {
+    title?: string;
+    resourceTitle?: string;
+    relationship?: "prerequisite" | "interpretive_aid" | "secondary_scholarly_recommendation";
+    readingStatus?: "planned" | "reading" | "completed" | "abandoned";
+  } = {},
+): Promise<{ workId: string; resourceId: string }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: opts.title ?? "Vice and Reason", authorName: "Terence Irwin" })
+    .returning({ id: works.id });
+  const [identity] = await db
+    .insert(workIdentities)
+    .values({ workKey: `work:test:${suffix}`, canonicalTitle: opts.title ?? "Vice and Reason", authorSurname: "irwin", authors: ["Terence Irwin"], evidence: "seeded for test" })
+    .returning({ id: workIdentities.id });
+  await db.update(works).set({ workIdentityId: identity.id }).where(eq(works.id, work.id));
+
+  const [resource] = await db
+    .insert(learningResources)
+    .values({
+      title: opts.resourceTitle ?? "Nicomachean Ethics",
+      normalizedKey: `title:${suffix}`,
+      resourceType: "book",
+      provider: "openalex",
+      authors: ["Aristotle"],
+      year: -340,
+      peerReviewed: null,
+    })
+    .returning({ id: learningResources.id });
+  await db.insert(resourceRoles).values({
+    learningResourceId: resource.id,
+    workIdentityId: identity.id,
+    relationship: opts.relationship ?? "prerequisite",
+    readerLevel: null,
+    rationale: "Foundational for understanding the paper's central argument.",
+    confidence: 0.8,
+    createdBy: "system",
+  });
+
+  if (opts.readingStatus) {
+    await db.insert(readingRecords).values({ userId, learningResourceId: resource.id, status: opts.readingStatus });
+  }
+
+  return { workId: work.id, resourceId: resource.id };
 }

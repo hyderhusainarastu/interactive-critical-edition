@@ -81,6 +81,13 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       const res = await anon.get(url);
       expect(res.status(), `anon GET ${url}`).toBe(401);
     }
+    // /api/library/[resourceId]/status (plan §34.4 9.5) — auth is checked
+    // before the resource itself is looked up, so a placeholder id proves
+    // the 401 without needing a real learning_resource seeded here.
+    const libraryRes = await anon.post(`/api/library/00000000-0000-0000-0000-000000000000/status`, {
+      data: { readingStatus: "reading" },
+    });
+    expect(libraryRes.status(), "anon POST /api/library/:id/status").toBe(401);
     await anon.dispose();
   });
 });

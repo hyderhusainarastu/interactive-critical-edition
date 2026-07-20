@@ -17,7 +17,7 @@ test.describe("Onboarding (Phase 6)", () => {
     await deleteTestUser(EMAIL);
   });
 
-  test("new user is onboarded on first login, then reaches the library normally", async ({ page }) => {
+  test("new user is onboarded on first login, then reaches the dashboard normally", async ({ page }) => {
     // Log in — a brand-new user has no onboardedAt, so the dashboard routes
     // them to /welcome.
     await page.goto("/login");
@@ -35,6 +35,6 @@ test.describe("Onboarding (Phase 6)", () => {
     // Now the dashboard is reachable directly — onboarding no longer intercepts.
     await page.goto("/dashboard");
     await page.waitForURL("**/dashboard");
-    await expect(page.getByRole("heading", { name: "Your library" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Welcome back/ })).toBeVisible();
   });
 });
