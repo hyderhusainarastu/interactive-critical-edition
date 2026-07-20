@@ -169,7 +169,12 @@ export function extractCitations(text: string, max = 300): RawCitation[] {
     re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = re.exec(body)) && out.length < max) {
-      const full = m[0].replace(/^\(|\)$/g, "").trim();
+      // Unwrap ONLY a fully parenthesised match, "(Kant 1781)" → "Kant 1781".
+      // Applying it to the narrative form stripped the closing paren of the
+      // year instead: "Ethics (2001)" became the unbalanced "Ethics (2001",
+      // which then went out as a search query.
+      const raw = m[0].trim();
+      const full = raw.startsWith("(") && raw.endsWith(")") ? raw.slice(1, -1).trim() : raw;
       add(full, cleanQuery(full), "inline");
     }
   }

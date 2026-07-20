@@ -32,21 +32,6 @@ export interface PrimaryWork {
 
 // ---- Search-query generation ----
 
-/** Deterministic query rounds from the work + its citations (no LLM needed). */
-export function heuristicQueries(primary: PrimaryWork, citationTexts: string[]): string[][] {
-  const round1 = [
-    primary.title,
-    primary.author ? `${primary.author} ${primary.title}` : "",
-    `${primary.title} secondary literature`,
-    `${primary.title} critical interpretation`,
-  ].filter((q) => q.trim().length > 3);
-  const round2 = citationTexts
-    .map((c) => c.replace(/\s+/g, " ").trim().slice(0, 90))
-    .filter((c) => c.length > 6)
-    .slice(0, 8);
-  return [round1, round2].filter((r) => r.length > 0);
-}
-
 /**
  * Deterministic per-lane query rounds. Lanes are emitted in priority order:
  * explicit citations first (the strongest claim a source can have on a work),
@@ -192,65 +177,6 @@ export async function generateLaneQueries(
     return { lanes: merged, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };
   } catch {
     return { lanes: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };
-  }
-}
-
-const QUERY_SCHEMA = {
-  type: "object",
-  properties: {
-    rounds: {
-      type: "array",
-      items: { type: "array", items: { type: "string" } },
-    },
-  },
-  required: ["rounds"],
-  additionalProperties: false,
-};
-
-function normalizeQueryRounds(parsed: unknown): string[][] {
-  const rounds = (parsed as { rounds?: unknown }).rounds;
-  if (!Array.isArray(rounds)) throw new Error("rounds not an array");
-  const clean = rounds
-    .map((round) =>
-      (Array.isArray(round) ? round : [])
-        .filter((q): q is string => typeof q === "string")
-        .map((q) => q.replace(/\s+/g, " ").trim())
-        .filter((q) => q.length > 3)
-        .slice(0, 12),
-    )
-    .filter((r) => r.length > 0)
-    .slice(0, 3); // traversal depth 2 → at most a few rounds
-  if (clean.length === 0) throw new Error("no usable queries");
-  return clean;
-}
-
-export async function generateQueries(
-  caller: StructuredCaller,
-  input: { primary: PrimaryWork; citationTexts: string[]; model: string; safetyIdentifier?: string },
-): Promise<{ rounds: string[][]; promptTokens: number; completionTokens: number; usedModel: boolean }> {
-  const fallback = () => heuristicQueries(input.primary, input.citationTexts);
-  if (!caller.available) return { rounds: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };
-  try {
-    const r = await caller.call({
-      model: input.model,
-      schemaName: "search_queries",
-      schema: QUERY_SCHEMA,
-      safetyIdentifier: input.safetyIdentifier,
-      maxOutputTokens: 500,
-      system:
-        "You generate web/scholarly search queries to find sources that illuminate a scholarly work: " +
-        "secondary literature, intellectual influences, disagreements, prerequisites, and interpretive aids. " +
-        "Return 1-3 rounds of short queries. Use only the provided title/author/citations — invent no facts.",
-      input: JSON.stringify({
-        title: input.primary.title,
-        author: input.primary.author ?? null,
-        citations: input.citationTexts.slice(0, 20),
-      }),
-      validate: normalizeQueryRounds,
-    });
-    return { rounds: r.data, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };
-  } catch {
-    return { rounds: fallback(), promptTokens: 0, completionTokens: 0, usedModel: false };
   }
 }
 

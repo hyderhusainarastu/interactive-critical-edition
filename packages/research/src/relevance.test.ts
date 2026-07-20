@@ -573,3 +573,52 @@ describe("relevance gate — canary 5 false positives", () => {
     expect(a.verdict).not.toBe("accepted");
   });
 });
+
+// ------------------------------------------------ single-word title recall
+
+describe("relevance gate — a distinctive one-word title can still be a citation", () => {
+  // Irwin cites J. A. Smith, "Aristotelica," Classical Quarterly 14 (1920).
+  // "Aristotelica" is one token, and the two-token floor made it unmatchable
+  // however strong the corroboration — the outstanding miss that held
+  // explicit-citation recall at ~88%. Crossref returns that exact work as the
+  // top hit for the query already sent, so it was never source coverage.
+  const smithEntry = 'J.A. Smith, "Aristotelica," Classical Quarterly 14 (1920), pp. 1-8.';
+
+  it("matches a distinctive one-word title corroborated by author and year", () => {
+    const withRefs: WorkIdentity = { ...irwin, explicitCitationTexts: [smithEntry] };
+    const a = assessCandidate(
+      R({ title: "Aristotelica", authors: ["J. A. Smith"], year: 1920, venue: "The Classical Quarterly" }),
+      withRefs,
+      "explicit_citation",
+    );
+    expect(a.signals.isExplicitCitation).toBe(true);
+    expect(a.verdict).toBe("accepted");
+  });
+
+  it("refuses a one-word title without both corroborating signals", () => {
+    const withRefs: WorkIdentity = { ...irwin, explicitCitationTexts: [smithEntry] };
+    // Right title, wrong year — corroboration is incomplete.
+    expect(
+      assessCandidate(R({ title: "Aristotelica", authors: ["J. A. Smith"], year: 1998 }), withRefs, "explicit_citation")
+        .signals.isExplicitCitation,
+    ).toBe(false);
+    // Right title and year, but the entry does not name that author.
+    expect(
+      assessCandidate(R({ title: "Aristotelica", authors: ["Someone Else"], year: 1920 }), withRefs, "explicit_citation")
+        .signals.isExplicitCitation,
+    ).toBe(false);
+  });
+
+  it("refuses a short generic one-word title even when fully corroborated", () => {
+    // "Ethics" is a word many works share; admitting it would let any book of
+    // that name ride in on a matching author and year.
+    const withRefs: WorkIdentity = {
+      ...irwin,
+      explicitCitationTexts: ["Terence Irwin, Ethics, Hackett (2001), p. 12."],
+    };
+    expect(
+      assessCandidate(R({ title: "Ethics", authors: ["Terence Irwin"], year: 2001 }), withRefs, "scholarly_debate")
+        .signals.isExplicitCitation,
+    ).toBe(false);
+  });
+});

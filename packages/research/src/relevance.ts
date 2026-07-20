@@ -313,6 +313,21 @@ const CITATION_MATCH_MIN_CONTAINMENT = 0.8;
 /** Relaxed bar when the reference entry independently names the same author
  *  AND the same year — two corroborating signals, not one guess. */
 const CITATION_MATCH_CORROBORATED_CONTAINMENT = 0.6;
+/**
+ * A one-word title can still be recognised, but only when it is distinctive
+ * enough to stand alone AND the entry names the same author and year.
+ *
+ * Observed in production: Irwin cites J. A. Smith, "Aristotelica," Classical
+ * Quarterly 14 (1920). "Aristotelica" is a single token, so the two-token floor
+ * below made it unmatchable no matter how strong the corroboration — and it was
+ * the outstanding miss holding explicit-citation recall at ~88%. Crossref
+ * returns that exact work as the top hit for the query already being sent, so
+ * this was never a source-coverage problem.
+ *
+ * The length bar is what keeps the exemption safe: "Aristotelica" (12) is a
+ * title, "Ethics" (6) and "Regret" (6) are words that any number of works share.
+ */
+const CITATION_MATCH_MIN_SOLO_TOKEN_LENGTH = 8;
 
 /**
  * Does a discovered resource correspond to an entry in the document's own
@@ -330,7 +345,13 @@ export function matchesCitationText(
   authorSurnames: string[] = [],
   year: number | null = null,
 ): boolean {
-  if (!citationTexts?.length || titleTokens.length < CITATION_MATCH_MIN_TOKENS_WITH_AUTHOR) return false;
+  if (!citationTexts?.length || !titleTokens.length) return false;
+  // A single-token title is admissible only if that token is distinctive; below
+  // the floor it needs at least two tokens, as before.
+  const soloTitle = titleTokens.length === 1;
+  if (soloTitle && titleTokens[0].length < CITATION_MATCH_MIN_SOLO_TOKEN_LENGTH) return false;
+  if (!soloTitle && titleTokens.length < CITATION_MATCH_MIN_TOKENS_WITH_AUTHOR) return false;
+
   for (const entry of citationTexts) {
     const entryTokens = new Set(terms(entry));
     if (!entryTokens.size) continue;
@@ -343,6 +364,12 @@ export function matchesCitationText(
     // line-wrapped, and demanding near-total title containment against them
     // was losing genuine citations — the one category that must not be lost.
     const yearNamed = year != null && entry.includes(String(year));
+    // A distinctive one-word title needs BOTH corroborating signals and a
+    // complete match of the word itself — nothing weaker.
+    if (soloTitle) {
+      if (authorNamed && yearNamed && ratio === 1) return true;
+      continue;
+    }
     if (authorNamed && yearNamed && ratio >= CITATION_MATCH_CORROBORATED_CONTAINMENT) return true;
     if (ratio < CITATION_MATCH_MIN_CONTAINMENT) continue;
     if (titleTokens.length >= CITATION_MATCH_MIN_TOKENS) return true;

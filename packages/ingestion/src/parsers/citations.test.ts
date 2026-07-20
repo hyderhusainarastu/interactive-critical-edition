@@ -145,3 +145,30 @@ describe("citation query strings are shaped for catalogue lookup", () => {
     expect(q!.query).toContain("1977");
   });
 });
+
+describe("inline citations are never emitted malformed", () => {
+  it("unwraps a parenthesised citation but leaves a narrative one intact", () => {
+    const found = extractCitations("As argued (Kant 1781), the point stands. Irwin (2001) disagrees.");
+    const kant = found.find((c) => /Kant/.test(c.query));
+    expect(kant?.query).toBe("Kant 1781");
+    const irwin = found.find((c) => /Irwin/.test(c.query));
+    // The verbatim text keeps the parenthetical; the lookup query collapses it
+    // to the bare year, which is what a catalogue search wants.
+    expect(irwin?.text).toBe("Irwin (2001)");
+    expect(irwin?.query).toBe("Irwin 2001");
+  });
+
+  it("never produces an unbalanced parenthesis", () => {
+    // The paren-strip meant for "(Kant 1781)" was also stripping the closing
+    // paren of a narrative year: "Ethics (2001)" became "Ethics (2001", which
+    // then went out as a search query.
+    const found = extractCitations(
+      "Published in The Journal of Ethics (2001). See also Broadie (1991) and (Annas 1977).",
+    );
+    for (const c of found) {
+      const opens = (c.query.match(/\(/g) ?? []).length;
+      const closes = (c.query.match(/\)/g) ?? []).length;
+      expect(opens, `unbalanced: ${c.query}`).toBe(closes);
+    }
+  });
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { generateLaneQueries, generateQueries, gradeClaims, heuristicLaneQueries, heuristicNote, heuristicQueries, quoteIsGrounded, synthesizeNote, type StructuredCaller } from "./synthesize";
+import { generateLaneQueries, gradeClaims, heuristicLaneQueries, heuristicNote, quoteIsGrounded, synthesizeNote, type StructuredCaller } from "./synthesize";
 import type { RawResource } from "./types";
 
 function sampleResource(over: Partial<RawResource> = {}): RawResource {
@@ -19,50 +19,6 @@ function sampleResource(over: Partial<RawResource> = {}): RawResource {
     ...over,
   };
 }
-
-describe("heuristicQueries", () => {
-  it("builds title/author rounds plus a citation round", () => {
-    const rounds = heuristicQueries({ title: "Being and Time", author: "Heidegger" }, ["Kant, Critique of Pure Reason"]);
-    expect(rounds[0]).toContain("Being and Time");
-    expect(rounds[0].some((q) => q.includes("Heidegger"))).toBe(true);
-    expect(rounds[1][0]).toContain("Kant");
-  });
-});
-
-describe("generateQueries", () => {
-  it("falls back to heuristics when no model is available", async () => {
-    const caller: StructuredCaller = { available: false, call: vi.fn() };
-    const out = await generateQueries(caller, { primary: { title: "Ethics", author: "Spinoza" }, citationTexts: [], model: "m" });
-    expect(out.usedModel).toBe(false);
-    expect(out.rounds[0].length).toBeGreaterThan(0);
-  });
-
-  it("uses and validates the model's queries when available", async () => {
-    const caller: StructuredCaller = {
-      available: true,
-      call: vi.fn(async (p) => ({
-        data: p.validate({ rounds: [["good query one", "  "], ["another decent query"]] }),
-        promptTokens: 3,
-        completionTokens: 4,
-        model: p.model,
-      })),
-    };
-    const out = await generateQueries(caller, { primary: { title: "Ethics" }, citationTexts: [], model: "m" });
-    expect(out.usedModel).toBe(true);
-    // The blank query is dropped by validation.
-    expect(out.rounds[0]).toEqual(["good query one"]);
-  });
-
-  it("falls back if the model returns an unusable shape", async () => {
-    const caller: StructuredCaller = {
-      available: true,
-      call: vi.fn(async (p) => ({ data: p.validate({ rounds: "nope" }), promptTokens: 0, completionTokens: 0, model: p.model })),
-    };
-    // The validate() throw propagates out of call() in this mock; generateQueries catches it.
-    const out = await generateQueries(caller, { primary: { title: "Ethics" }, citationTexts: [], model: "m" });
-    expect(out.usedModel).toBe(false);
-  });
-});
 
 describe("quoteIsGrounded (anti-hallucination)", () => {
   const evidence = ["The soul is the form of the body, according to the treatise."];
@@ -186,8 +142,6 @@ describe("heuristicNote", () => {
     expect(note).toContain("crossref");
   });
 });
-
-// ---- Lane-specific query generation (Phase 8 relevance closeout) ----
 
 describe("lane-specific query generation", () => {
   const primary = { title: "Vice and Reason", author: "Terence Irwin" };

@@ -17,7 +17,7 @@ import {
 } from "@ice/db";
 import { detectFootnotes, downloadDocumentFile, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
-import { desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 
@@ -240,6 +240,36 @@ async function main() {
     if (swept.length) console.log(`[worker] swept ${swept.length} expired research_cache row(s)`);
   } catch (err) {
     reportError(err, { scope: "worker.cacheSweep" });
+  }
+
+  // Sweep runs abandoned mid-flight. A run is left `running` when its process
+  // dies — an instance drained by a deploy, or (observed in a 10-document load
+  // test) a job retried while still executing. Nothing ever cleared them, so
+  // they accumulated: admin counts stayed wrong and the documents looked
+  // permanently mid-processing. Published runs are never touched, and the
+  // threshold sits above the job expiration so a genuinely running job is
+  // never mistaken for an abandoned one.
+  try {
+    const staleMinutes = Math.max(1, Number(process.env.STALE_RUN_MINUTES ?? 90));
+    const cutoff = new Date(Date.now() - staleMinutes * 60_000);
+    const stale = await db
+      .update(processingRuns)
+      .set({
+        status: "failed",
+        error: `Abandoned mid-run: no progress for over ${staleMinutes} minutes (process ended before the run finished).`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(processingRuns.status, "running"),
+          eq(processingRuns.isPublished, false),
+          lt(processingRuns.updatedAt, cutoff),
+        ),
+      )
+      .returning({ id: processingRuns.id });
+    if (stale.length) console.log(`[worker] marked ${stale.length} abandoned processing_run row(s) as failed`);
+  } catch (err) {
+    reportError(err, { scope: "worker.staleRunSweep" });
   }
 
   await boss.work<ExtractTextJob>(QUEUE_EXTRACT_TEXT, async (jobs) => {

@@ -58,7 +58,8 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 25 | This planning document itself | entire document |
 | 26 | Working rules post-approval | §30, and restated in CLAUDE.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 9, §31 |
+| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 10, §31 |
+| — | *Redefined 2026-07-19:* Phase 9 = Interactive Learning Workspace (learner levels, passage-anchored annotations, Library, curriculum, graph, trash) | §23 Phase 9, §34 |
 | — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
 
 ## 3. Assumptions and Resolved/Open Decisions
@@ -472,10 +473,16 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Dependencies: Phases 0–7 (repairs and extends the shipped pipeline).
 - DoD: autonomous upload→edition with no manual refresh; *Vice and Reason* acceptance tests pass (≥95% explicit-citation recall, *Nicomachean Ethics* as essential background, all configured providers queried-or-reported-unavailable, weak sources separated, generated≠authorial, every factual claim traceable, no fabricated data); failed reprocess preserves the last edition; `phase-8-complete` tagged.
 
-**Phase 9 — Educational Companion Site (added by explicit user request, runs after Phase 8)**
-- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–8 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 9 itself (no infinite regress).
-- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–8, content sourced primarily from this repo's own `CLAUDE.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
-- Dependencies: all of Phases 0–8 complete (it teaches what was actually built, not a plan).
+**Phase 9 — Interactive Learning Workspace (redefined 2026-07-19; full detail in §34)**
+- Objective: turn the published critical edition into a workspace that adapts to the reader's level without ever hiding depth — passage-anchored annotations, a Library of every recommended source, curriculum routes, an entity-rich knowledge graph, and safe deletion.
+- Tasks: sub-phases 9.1–9.8 behind `ANALYSIS_PIPELINE=v3`, v2 retained as rollback. See §34.
+- Dependencies: Phase 8 complete (`phase-8-complete`, 2026-07-20).
+- DoD: see §34 acceptance gates; `phase-9-complete` tagged.
+
+**Phase 10 — Educational Companion Site (added by explicit user request, runs after Phase 9)**
+- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–9 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 10 itself (no infinite regress).
+- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–9, content sourced primarily from this repo's own `CLAUDE.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
+- Dependencies: all of Phases 0–9 complete (it teaches what was actually built, not a plan).
 - Deliverables: a deployed, independent, publicly reachable tutorial site with one chapter per phase plus an intro and retrospective.
 - Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual repo's code/history at time of writing.
 - DoD: someone with no prior context could follow the site from Chapter 1 onward and understand, and largely reproduce, the architecture and decisions of the main project.
@@ -553,7 +560,7 @@ In order, each its own small commit:
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Educational Companion Site (Phase 9 detail)
+## 31. Educational Companion Site (Phase 10 detail — renumbered from Phase 9 on 2026-07-19)
 
 **Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened Phase-7 deployment. It documents everything done in Phases 0–7 of this plan; it does not document its own creation.
 
@@ -605,3 +612,57 @@ In order, each its own small commit:
 **Rollout/rollback.** Feature flag `ANALYSIS_PIPELINE` (v1 legacy / v2 new); publish-on-success + additive migrations mean bad runs never replace good editions; every provider degrades independently. Never fabricate URLs/DOIs/titles/quotations/authors/dates/credentials — a validator cross-checks every generated factual claim against inspected evidence or labels it interpretive/uncertain.
 
 **Acceptance (Vice and Reason).** Upload without manual refresh; auto title/author on sufficient evidence; page boundaries + authorial notes retained; explicit-citation recall ≥95%; *Nicomachean Ethics* as essential background; relevant Aristotle/virtue-ethics scholarship; all configured providers queried or explicitly reported unavailable; ≥40 relevant deduped resources and ≥20 A/B authority (unless saturation proves fewer); no per-social-platform minimum; weak sources separated; generated ≠ authorial; every factual claim traceable; zero fabricated bibliographic/quote/creator/credential/transcript/URL data; failed reprocess preserves the last edition.
+
+---
+
+## 34. Phase 9 — Interactive Learning Workspace (approved plan)
+
+**Status:** approved 2026-07-20, not started. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 10 (§31). This section is the plan of record; `CLAUDE.md`'s changelog remains the record of what actually shipped.
+
+### 34.1 Objective
+
+Phase 8 produced a trustworthy critical edition: relevant sources, honest credibility, evidence-linked claims. Phase 9 turns that edition into a **workspace a reader learns in** — adapting to their level without ever hiding depth, anchoring every explanation to the passage it explains, and organising what to read next.
+
+### 34.2 Delivery shape
+
+Sub-phases **9.1–9.8**, each committed, pushed and verified before the next begins, gated behind **`ANALYSIS_PIPELINE=v3`** with v2 retained as rollback. **Core edition first**; the 14-module Comprehensive dossier is deferred to 9.8 so canary runs cost cents, not $3–10, while the pipeline is still moving.
+
+> **Known trap.** `ANALYSIS_PIPELINE` is compared by exact equality today (`=== "v2"` in `apps/worker/src/index.ts`, `!== "v2"` in `apps/web/src/app/api/works/[workId]/reprocess/route.ts`). Setting `v3` would silently fall back to v1 *and* disable the reprocess route. Replace both with a version-aware helper in 9.1, before anything else.
+
+### 34.3 Reuse, don't rebuild
+
+| Need | Existing implementation |
+|---|---|
+| Learner profile primitives | `reading_record`, `understanding_rating` (0–100, ≥60 = known), `roadmap_override` — `packages/db/src/schema.ts` |
+| Reader level | `users.preferences.expertise` — **3 levels today** (`beginner\|intermediate\|advanced`); Phase 9 needs 4 (`beginner\|undergraduate\|advanced\|research`). Migrate and map (`intermediate → undergraduate`), do not add a parallel field. |
+| Ranking | `packages/roadmap` pure `rankRoadmap()` + `apps/web/src/lib/roadmap.ts` recursive-CTE traversal |
+| Graph | `apps/web/src/lib/graph.ts`, `components/graph/*` (3D + mandatory accessible table sharing one filter set) |
+| Work identity | `packages/research/src/workIdentity.ts` + `research_resource.work_*` (migration `0014`) |
+| Relevance gate | `packages/research/src/relevance.ts` (12 lanes, verdicts, `research_candidate`) |
+| Credibility | `credibility_assessment` (authority A–E, agreement, relevance, evidence strength) |
+| Edition assembly | `apps/web/src/lib/edition.ts` `getPublishedEdition()` (already returns work-grouped `works`) |
+| Passage anchoring | quote+prefix+suffix fingerprint in `reader/highlightDom.ts` |
+| Cost gating | `canAfford()` / `overSoftCap()` in `packages/research/src/discover.ts` |
+
+### 34.4 Sub-phases
+
+- **9.1 Foundations & flag.** Version-aware pipeline helper (`v1|v2|v3`). Migration `0015`: 4-level `reader_level` enum + mapping; `concept`, `concept_mastery`, `work_identity` (promoting run-scoped `work_key` to a shared table), `learning_resource`, `resource_role`. Schema only, no behaviour change.
+- **9.2 Research sequence v3.** Canonical identity → structural outline → section/passage anchors → explicit citations → concepts/people/debates → lane discovery → relevance gate → creator verification → citation-graph expansion → credibility → claims → conservative influence classification. Adds creator identity and separates credibility into publication rigor, creator expertise, host provenance, evidence strength, relevance, pedagogical value, and popularity — **popularity is displayed but never scored as credibility**.
+- **9.3 Passage-anchored annotations.** Valid page+block anchor, ≤240-character summary, expandable explanation, type, reader level, confidence, relationship, evidence. Whole-document synthesis is allowed but must be labelled "Whole-work guidance" and must never carry a fabricated anchor.
+- **9.4 Reader levels & concept mastery.** Four levels; optional skippable 5–10 question per-work diagnostic. Precedence: explicit rating → diagnostic → completed prerequisites (weak evidence only) → global level. **Level changes what opens by default, never what is reachable**: always show the level selector, per-level counts, and "Show all levels". Browsing alone never silently changes a level.
+- **9.5 Library & work grouping.** Split `/works` (uploads) from `/library` (recommended sources), with the spec's tabs, filters, sorts and reading states. Nav: Dashboard · Works · Library · Graph · Upload.
+- **9.6 Curriculum & study guide.** Five stages; minimal / university / graduate routes; acyclic dependencies; per-item rationale, time, difficulty and checkpoint. Completed items become review-only rather than disappearing.
+- **9.7 Graph, trash, cost UI.** Graph nodes extended to concepts/people/traditions/debates/sections, filters persisted in the URL and **identical** across the 3D scene and the accessible table. 30-day work trash with restore and idempotent purge. Cost estimate and actual, per run and per module, with hard stops.
+- **9.8 Comprehensive dossier (deferred).** The 14 modules, gated by the $8 warning and the $20 confirmed ceiling.
+
+### 34.5 Cost posture
+
+Core edition ~$0.50–2/run, hard cap $5. Comprehensive $3–10, warn at $8, user-confirmed ceiling $20. No call begins if its projected maximum crosses the cap — reuse `canAfford()`.
+
+### 34.6 Acceptance gates
+
+Every passage annotation has a valid anchor · Reader/Library/Curriculum/Graph share canonical IDs · 3D and accessible-table filters yield identical sets · relevant expert lectures accepted and correctly labelled "not peer-reviewed" · unrelated popular media rejected · anonymous comments never solely support a factual claim · reader state survives reload · Library status changes immediately affect Curriculum and Graph · cost warnings and hard stops fire · trash/restore/purge retry-safe · **a failed v3 publish leaves the previous edition served** · then tag `phase-9-complete`.
+
+### 34.7 Testing
+
+Pure logic unit-tested offline; the pipeline proven by canary — the Phase 8 pattern that caught seven defects unit tests could not. E2E stays **seeded and CI-safe** (no worker, GROBID or API spend), as `apps/web/e2e/edition.spec.ts` demonstrates. Canary from the private `eval-fixtures` Irwin PDF, then an owner-only production canary, **purging production after every run**.

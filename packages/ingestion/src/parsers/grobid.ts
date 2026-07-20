@@ -226,9 +226,38 @@ export function parseTei(tei: string): GrobidResult | null {
   return { title, authors, blocks: ctx.blocks, tei };
 }
 
+/**
+ * Concurrency limiter for the GROBID service. The CRF service is memory-bound
+ * and OOM-kills under parallel full-text requests, so calls are serialized by
+ * default.
+ *
+ * This used to be a comment claiming requests were "serialized upstream
+ * (GROBID_MAX_CONCURRENCY)" — but nothing read that variable anywhere. The
+ * claim was accidentally true only because the worker happens to process one
+ * job at a time; raising worker concurrency would have silently broken it.
+ * The guarantee is now enforced here, where it is stated.
+ */
+const grobidLimit = Math.max(1, Number(process.env.GROBID_MAX_CONCURRENCY ?? 1));
+let grobidActive = 0;
+const grobidWaiting: (() => void)[] = [];
+
+async function acquireGrobidSlot(): Promise<() => void> {
+  if (grobidActive >= grobidLimit) {
+    await new Promise<void>((resolve) => grobidWaiting.push(resolve));
+  }
+  grobidActive++;
+  let released = false;
+  return () => {
+    if (released) return; // release must be idempotent
+    released = true;
+    grobidActive--;
+    grobidWaiting.shift()?.();
+  };
+}
+
 /** Local, opt-in GROBID adapter. Missing configuration deliberately means
- * disabled, never a failed upload or a public-document transfer. Requests are
- * serialized upstream (GROBID_MAX_CONCURRENCY) since the CRF service is
+ * disabled, never a failed upload or a public-document transfer. Calls are
+ * limited to `GROBID_MAX_CONCURRENCY` (default 1) because the CRF service is
  * memory-bound; here we just call it and parse the TEI it returns. */
 export async function processWithGrobid(buffer: Buffer): Promise<GrobidResult | null> {
   const baseUrl = process.env.GROBID_URL?.replace(/\/$/, "");
@@ -250,6 +279,9 @@ export async function processWithGrobid(buffer: Buffer): Promise<GrobidResult | 
   } catch {
     // Auth failure → fall through unauthenticated; a 401 becomes null (fallback).
   }
+  // The timeout starts when the request does, not while queued behind another
+  // document — otherwise a backlog would abort work that never actually ran.
+  const release = await acquireGrobidSlot();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Number(process.env.GROBID_TIMEOUT_MS ?? 120_000));
   try {
@@ -266,5 +298,6 @@ export async function processWithGrobid(buffer: Buffer): Promise<GrobidResult | 
     return null;
   } finally {
     clearTimeout(timeout);
+    release();
   }
 }
