@@ -14,5 +14,8 @@ export * from "./creator";
 export * from "./credibilityV3";
 export * from "./discover";
 export * from "./synthesize";
+// Phase 9.3: passage-anchored annotations over the PRIMARY text, distinct
+// from synthesize.ts's notes about discovered EXTERNAL resources.
+export * from "./passageAnnotations";
 export * from "./cache";
 export * from "./adapters";

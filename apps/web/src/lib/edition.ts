@@ -8,6 +8,7 @@ import {
   generatedClaims,
   generatedNotes,
   pages,
+  passageAnnotations,
   processingRuns,
   providerAttempts,
   researchResources,
@@ -33,7 +34,7 @@ export async function getPublishedEdition(documentId: string) {
 
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
-  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans] = await Promise.all([
+  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes] = await Promise.all([
     pageIds.length ? db.select().from(textBlocks).where(inArray(textBlocks.pageId, pageIds)).orderBy(asc(textBlocks.blockOrder)) : Promise.resolve([]),
     db.select().from(docFootnotes).where(eq(docFootnotes.runId, run.id)).orderBy(asc(docFootnotes.createdAt)),
     db.select().from(generatedNotes).where(eq(generatedNotes.runId, run.id)).orderBy(asc(generatedNotes.createdAt)),
@@ -43,6 +44,10 @@ export async function getPublishedEdition(documentId: string) {
     db.select().from(editionRelations).where(eq(editionRelations.runId, run.id)),
     db.select().from(providerAttempts).where(eq(providerAttempts.runId, run.id)).orderBy(asc(providerAttempts.provider)),
     db.select().from(evidenceSpans).where(eq(evidenceSpans.runId, run.id)),
+    // Phase 9.3: only ever populated for a v3 run — empty for v1/v2, so the
+    // reader payload shape is identical either way (an empty array, not a
+    // missing field).
+    db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
   ]);
 
   const spanById = new Map(spans.map((s) => [s.id, s]));
@@ -158,6 +163,24 @@ export async function getPublishedEdition(documentId: string) {
     };
   });
 
+  // Passage annotations (9.3): anchored ones are keyed by their real
+  // text_block_id so the reader can render them inline at that exact block;
+  // whole-work guidance (no single passage applies) is a separate list the
+  // reader must label "Whole-work guidance", never mixed into the per-block
+  // ones — the two have different display rules, not just different data.
+  const passageAnnotationsOut = passageNotes.map((p) => ({
+    id: p.id,
+    textBlockId: p.textBlockId,
+    isWholeWork: p.isWholeWork,
+    quote: p.quote,
+    summary: p.summary,
+    explanation: p.explanation,
+    annotationType: p.annotationType,
+    relationship: p.relationship,
+    readerLevel: p.readerLevel,
+    confidence: p.confidence,
+  }));
+
   return {
     run: {
       id: run.id,
@@ -174,6 +197,8 @@ export async function getPublishedEdition(documentId: string) {
     pages: editionPages,
     blocks,
     authorialNotes,
+    passageAnnotations: passageAnnotationsOut.filter((p) => !p.isWholeWork),
+    wholeWorkGuidance: passageAnnotationsOut.filter((p) => p.isWholeWork),
     generatedNotes: generated,
     resources: resourceOut,
     works,

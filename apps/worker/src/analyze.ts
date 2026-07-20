@@ -12,6 +12,7 @@ import {
   generatedClaims,
   generatedNotes,
   graphEdges,
+  passageAnnotations,
   processingRuns,
   providerAttempts,
   researchCache,
@@ -25,6 +26,7 @@ import {
   CLASSIFY_PROMPT_VERSION,
   estimateCostUsd,
   OpenAIResponsesClient,
+  RELATIONSHIP_CATEGORIES,
   safetyIdentifierFor,
   type RelationshipCategory,
 } from "@ice/ai-adapters";
@@ -58,6 +60,7 @@ import {
   deriveWorkIdentity,
   type WorkIdentity,
   synthesizeNote,
+  synthesizePassageAnnotations,
   withCache,
   type CacheStore,
   type RawResource,
@@ -473,6 +476,8 @@ export async function analyzeEditionRun(input: {
   documentId: string;
   text: string;
   pipeline?: "v1" | "v2" | "v3";
+  /** v3 only: real (id, text) of every body block, in document order — see index.ts. */
+  bodyBlocks?: { id: string; text: string }[];
 }): Promise<void> {
   const [doc] = await db
     .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName })
@@ -532,6 +537,55 @@ export async function analyzeEditionRun(input: {
       estimatedCostUsd: cost,
     });
   };
+
+  // v3 only, and only when the extraction stage found real body blocks to
+  // anchor to (see index.ts: `bodyBlocks` is only ever the actually-inserted
+  // text_block rows). One bulk call regardless of document length keeps cost
+  // bounded — a per-block loop would scale with page count, which nothing
+  // else in this pipeline does either. No heuristic fallback when unavailable:
+  // "zero passage annotations this run" is the honest degraded state, not a
+  // guess dressed up as one (see synthesizePassageAnnotations's doc comment).
+  if (isV3 && input.bodyBlocks?.length) {
+    // Cap both block COUNT and total characters sent, independent of NOTE_COST_ESTIMATE
+    // below (that constant is scoped to the per-resource note loop).
+    const candidateBlocks: { blockId: string; text: string }[] = [];
+    let totalChars = 0;
+    for (const b of input.bodyBlocks) {
+      if (candidateBlocks.length >= 60 || totalChars >= 12_000) break;
+      candidateBlocks.push({ blockId: b.id, text: b.text });
+      totalChars += b.text.length;
+    }
+    const PASSAGE_ANNOTATION_COST_ESTIMATE = 0.01;
+    if (canAfford(budget, PASSAGE_ANNOTATION_COST_ESTIMATE)) {
+      const synthesized = await synthesizePassageAnnotations(responses, {
+        primary: { title: resolvedTitle, author: resolvedAuthorName },
+        blocks: candidateBlocks,
+        validRelationships: RELATIONSHIP_CATEGORIES,
+        model: cheapModel,
+        safetyIdentifier,
+      });
+      if (synthesized.usedModel) {
+        logUsage("passage_annotation_synthesis", "section-passage-anchors", cheapModel, synthesized.promptTokens, synthesized.completionTokens);
+      }
+      if (synthesized.annotations.length) {
+        await db.insert(passageAnnotations).values(
+          synthesized.annotations.map((a) => ({
+            runId: input.runId,
+            textBlockId: a.blockId,
+            isWholeWork: a.isWholeWork,
+            quote: a.quote,
+            summary: a.summary,
+            explanation: a.explanation,
+            annotationType: a.annotationType,
+            relationship: a.relationship as RelationshipCategory,
+            readerLevel: a.readerLevel,
+            confidence: a.confidence,
+          })),
+        );
+        console.log(`[analyze] wrote ${synthesized.annotations.length} passage annotation(s) for run ${input.runId}`);
+      }
+    }
+  }
 
   await setStage("research-discovery", "explicit-citations");
 

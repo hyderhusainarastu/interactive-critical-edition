@@ -13,6 +13,7 @@ import {
   highlights,
   notes,
   pages,
+  passageAnnotations,
   processingRuns,
   providerAttempts,
   researchResources,
@@ -191,10 +192,45 @@ export async function seedPublishedEdition(userId: string): Promise<{
     .insert(pages)
     .values({ runId: run.id, pageIndex: 0, isOcr: false, text: "Vicious people act on decision." })
     .returning({ id: pages.id });
-  await db.insert(textBlocks).values([
-    { pageId: page.id, blockOrder: 0, kind: "header", text: "A Gap in Aristotle's Moral Psychology" },
-    { pageId: page.id, blockOrder: 1, kind: "body", text: "Vicious people act on decision, yet live according to passion." },
+  const blocks = await db
+    .insert(textBlocks)
+    .values([
+      { pageId: page.id, blockOrder: 0, kind: "header", text: "A Gap in Aristotle's Moral Psychology" },
+      { pageId: page.id, blockOrder: 1, kind: "body", text: "Vicious people act on decision, yet live according to passion." },
+    ])
+    .returning({ id: textBlocks.id, blockOrder: textBlocks.blockOrder });
+  const bodyBlock = blocks.find((b) => b.blockOrder === 1)!;
+
+  // Phase 9.3: one anchored passage annotation (a real quote from the body
+  // block above) and one whole-work guidance note — the two forms the reader
+  // renders differently.
+  await db.insert(passageAnnotations).values([
+    {
+      runId: run.id,
+      textBlockId: bodyBlock.id,
+      isWholeWork: false,
+      quote: "live according to passion",
+      summary: "Flags the gap between decision and passion.",
+      explanation: "The passage attributes vicious action to decision while describing the vicious agent as living by passion — the tension Irwin's paper investigates.",
+      annotationType: "clarification",
+      relationship: "interpretive_aid",
+      readerLevel: "undergraduate",
+      confidence: 0.75,
+    },
+    {
+      runId: run.id,
+      textBlockId: null,
+      isWholeWork: true,
+      quote: null,
+      summary: "The paper argues vice and akrasia are distinct psychological states.",
+      explanation: "Across the whole paper, Irwin distinguishes the vicious agent (who acts on a settled, mistaken decision) from the akratic agent (who acts against their own better judgment) — no single passage states this thesis on its own.",
+      annotationType: "context",
+      relationship: "interpretive_aid",
+      readerLevel: null,
+      confidence: 0.68,
+    },
   ]);
+
   await db.insert(docFootnotes).values({
     runId: run.id,
     marker: "1",

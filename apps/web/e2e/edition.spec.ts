@@ -97,6 +97,28 @@ test("Sources consulted lists one entry per work, not one per record", async ({ 
   await expect(bookEntry).toContainText(/Recensão a/i);
 });
 
+test("a passage annotation renders inline at its own paragraph, collapsed until expanded", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /published critical edition/i });
+  const anchoredNote = edition.locator("li").filter({ hasText: "Flags the gap between decision and passion" });
+  await expect(anchoredNote).toBeVisible();
+  // The explanation is not shown until the reader asks for it.
+  await expect(anchoredNote).not.toContainText(/tension Irwin's paper investigates/i);
+  await anchoredNote.getByRole("button", { name: /read more/i }).click();
+  await expect(anchoredNote).toContainText(/tension Irwin's paper investigates/i);
+  await expect(anchoredNote).toContainText(/live according to passion/i);
+});
+
+test("whole-work guidance is labelled and kept separate from passage-anchored notes", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /published critical edition/i });
+  await expect(edition.getByRole("region", { name: /whole-work guidance/i })).toBeVisible();
+  const guidance = edition.getByRole("region", { name: /whole-work guidance/i });
+  await expect(guidance).toContainText(/vice and akrasia are distinct psychological states/i);
+  // It never carries a page/block anchor — no quoted excerpt is shown even
+  // after expanding, because it genuinely has none.
+  await guidance.getByRole("button", { name: /read more/i }).click();
+  await expect(guidance).not.toContainText(/“/);
+});
+
 test("provider reports are honest about what was not consulted", async ({ page }) => {
   const edition = page.getByRole("region", { name: /published critical edition/i });
   // Silence must never look like "nothing was found": a rate-limited or

@@ -1,5 +1,6 @@
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -1257,3 +1258,65 @@ export const resourceRoles = pgTable("resource_role", {
     .on(t.learningResourceId, t.workIdentityId, t.readerLevel)
     .nullsNotDistinct(),
 ]);
+
+/**
+ * What KIND of note a passage annotation is making about the primary text —
+ * distinct from `relationship`, which describes how a cited/related source
+ * bears on the work. A passage annotation always has a type; it only
+ * sometimes has a related source to relate to.
+ */
+export const passageAnnotationTypeEnum = pgEnum("passage_annotation_type", [
+  "context",
+  "clarification",
+  "connection",
+  "critique",
+  "definition",
+]);
+
+/**
+ * An explanatory note anchored to one block of the PRIMARY text (plan §34.4
+ * 9.3) — distinct from `generated_note`/`generated_claim`, which explain how
+ * a discovered EXTERNAL resource relates to the work. A passage annotation
+ * explains the passage itself: why it matters, what it presupposes, where it
+ * disagrees with something, what a term means here.
+ *
+ * `textBlockId` is the real anchor; `page` is intentionally NOT duplicated
+ * here — it is one join away via `text_block.page_id` — because storing it
+ * twice would let the two drift. Whole-work guidance (no single passage
+ * applies) is `isWholeWork = true` with no block, never a block chosen
+ * because none fit better; the check constraint makes "anchored but
+ * pointing nowhere real" and "whole-work but carrying a fake anchor" both
+ * impossible at the database level, not just an app-level convention.
+ */
+export const passageAnnotations = pgTable(
+  "passage_annotation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id").notNull().references(() => processingRuns.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "cascade" }),
+    isWholeWork: boolean("is_whole_work").notNull().default(false),
+    /** Verbatim excerpt from the anchored block's own text — never invented, only ever a substring the pipeline already found there. Required unless whole-work. */
+    quote: text("quote"),
+    /** Reader-facing, app+DB length-checked (<=240 chars). */
+    summary: text("summary").notNull(),
+    explanation: text("explanation").notNull(),
+    annotationType: passageAnnotationTypeEnum("annotation_type").notNull(),
+    relationship: relationshipCategoryEnum("relationship").notNull(),
+    /** Null means "shown at every level", same convention as `resource_role.reader_level`. */
+    readerLevel: readerLevelEnum("reader_level"),
+    confidence: real("confidence").notNull().default(0),
+    /** Set when this note draws on a resource this run already discovered. */
+    relatedResourceId: uuid("related_resource_id").references(() => researchResources.id, { onDelete: "set null" }),
+    createdBy: provenanceEnum("created_by").notNull().default("system"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("passage_annotation_run_idx").on(t.runId),
+    index("passage_annotation_block_idx").on(t.textBlockId),
+    check(
+      "passage_annotation_anchor_or_whole_work",
+      sql`(${t.isWholeWork} = true AND ${t.textBlockId} IS NULL) OR (${t.isWholeWork} = false AND ${t.textBlockId} IS NOT NULL AND ${t.quote} IS NOT NULL)`,
+    ),
+    check("passage_annotation_summary_length", sql`char_length(${t.summary}) <= 240`),
+  ],
+);

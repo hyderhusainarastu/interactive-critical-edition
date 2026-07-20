@@ -55,12 +55,36 @@ export interface EditionResource {
   } | null;
 }
 
+/** What KIND of note a passage annotation is making about the passage itself
+ *  — distinct from `relationship`, which describes how a cited/related source
+ *  bears on the work (plan §34.4 9.3). */
+export type PassageAnnotationType = "context" | "clarification" | "connection" | "critique" | "definition";
+export type ReaderLevel = "beginner" | "undergraduate" | "advanced" | "research";
+
+export interface EditionPassageAnnotation {
+  id: string;
+  textBlockId: string | null;
+  isWholeWork: boolean;
+  quote: string | null;
+  summary: string;
+  explanation: string;
+  annotationType: PassageAnnotationType;
+  relationship: string;
+  readerLevel: ReaderLevel | null;
+  confidence: number;
+}
+
 export interface EditionPayload {
   run: { version: number; structureState: "full" | "limited"; note: string | null; status: string; stage: string | null };
   cost: { aiCostUsd: number; degraded: boolean; saturationNote: string | null };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
   blocks: Array<{ id: string; pageId: string; blockOrder: number; kind: string; text: string }>;
   authorialNotes: Array<{ id: string; marker: string; text: string }>;
+  /** Anchored to a real text_block_id — never a fabricated one (DB-enforced). */
+  passageAnnotations: EditionPassageAnnotation[];
+  /** No single passage applies; always rendered under the literal label
+   *  "Whole-work guidance" (plan §34.4 9.3), never mixed with the anchored ones. */
+  wholeWorkGuidance: EditionPassageAnnotation[];
   generatedNotes: Array<{
     id: string;
     noteType: string;
@@ -93,6 +117,19 @@ const AGREEMENT_LABEL: Record<Agreement, string> = {
   contested: "contested",
   mixed: "mixed evidence",
   insufficient: "insufficient corroboration",
+};
+const PASSAGE_TYPE_LABEL: Record<PassageAnnotationType, string> = {
+  context: "Context",
+  clarification: "Clarification",
+  connection: "Connection",
+  critique: "Critique",
+  definition: "Definition",
+};
+const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
 };
 
 function AuthorityBadge({ authority }: { authority: Authority | null }) {
@@ -153,6 +190,33 @@ function ClaimView({ claim }: { claim: EditionClaim }) {
   );
 }
 
+/** A passage-anchored explanatory note (plan §34.4 9.3): summary always
+ *  visible, explanation expandable, never claiming an anchor it doesn't have —
+ *  `isWholeWork` items are rendered separately, under the literal label
+ *  "Whole-work guidance", by the caller (never passed here mixed in). */
+function PassageAnnotationNote({ note }: { note: EditionPassageAnnotation }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <li className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs font-medium">{PASSAGE_TYPE_LABEL[note.annotationType]}</span>
+        {note.readerLevel && <span className="text-xs text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
+        <span className="ml-auto text-xs text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}% confidence</span>
+      </div>
+      <p className="mt-1">{note.summary}</p>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="mt-1 text-xs underline">
+        {open ? "Hide explanation" : "Read more"}
+      </button>
+      {open && (
+        <div className="mt-2 border-t border-[var(--color-border)] pt-2">
+          <p>{note.explanation}</p>
+          {note.quote && <p className="mt-1.5 border-l-2 border-[var(--color-border)] pl-2 text-xs italic text-[var(--color-text-muted)]">“{note.quote}”</p>}
+        </div>
+      )}
+    </li>
+  );
+}
+
 /** Published-run reader: authorial (source) notes and AI-generated editorial
  * material are visibly distinct; every generated claim exposes its source-
  * grounded evidence, credibility, and agreement (plan §33 §3.4). */
@@ -164,6 +228,16 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
     [edition.blocks, page?.id],
   );
   const resourceById = useMemo(() => new Map(edition.resources.map((r) => [r.id, r])), [edition.resources]);
+  const passageAnnotationsByBlock = useMemo(() => {
+    const map = new Map<string, EditionPassageAnnotation[]>();
+    for (const a of edition.passageAnnotations) {
+      if (!a.textBlockId) continue;
+      const list = map.get(a.textBlockId) ?? [];
+      list.push(a);
+      map.set(a.textBlockId, list);
+    }
+    return map;
+  }, [edition.passageAnnotations]);
 
   return (
     <section aria-label="Published critical edition" className="mx-auto max-w-[72ch]">
@@ -182,13 +256,35 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
       </div>
       {edition.run.note && <p className="mb-5 rounded-md border border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">{edition.run.note}</p>}
 
+      {edition.wholeWorkGuidance.length > 0 && (
+        <section aria-label="Whole-work guidance" className="mb-5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <h2 className="text-sm font-semibold">Whole-work guidance</h2>
+          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+            True of this work as a whole — no single passage captures it, so it carries no page/block anchor.
+          </p>
+          <ul className="mt-2 flex flex-col gap-2">
+            {edition.wholeWorkGuidance.map((note) => <PassageAnnotationNote key={note.id} note={note} />)}
+          </ul>
+        </section>
+      )}
+
       {page && (
         <article className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]">
           {(pageBlocks.length ? pageBlocks : [{ id: "fallback", kind: "body", text: page.text ?? "" }]).map((block) => {
+            const blockNotes = passageAnnotationsByBlock.get(block.id);
             if (block.kind === "title") return <h1 key={block.id} className="font-serif text-3xl font-semibold">{block.text}</h1>;
             if (block.kind === "header") return <h2 key={block.id} className="mt-4 font-serif text-xl font-semibold">{block.text}</h2>;
             if (block.kind === "footnote") return <aside key={block.id} className="border-l-2 border-[var(--color-accent-ink)] pl-3 text-sm">{block.text}</aside>;
-            return <p key={block.id} className="whitespace-pre-wrap">{block.text}</p>;
+            return (
+              <div key={block.id}>
+                <p className="whitespace-pre-wrap">{block.text}</p>
+                {blockNotes && blockNotes.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-2 border-l-2 border-[var(--color-accent-green)] pl-3">
+                    {blockNotes.map((note) => <PassageAnnotationNote key={note.id} note={note} />)}
+                  </ul>
+                )}
+              </div>
+            );
           })}
         </article>
       )}

@@ -175,6 +175,12 @@ async function handleEditionExtraction(documentId: string) {
       })));
     }
 
+    // v3 only: the real (id, text) of every body block, in document order —
+    // what passage-annotation synthesis anchors to. Collected here rather than
+    // re-queried later so an annotation can only ever reference a block that
+    // genuinely exists (the same real IDs that were just inserted).
+    const bodyBlocksForV3: { id: string; text: string }[] = [];
+
     for (const parsedPage of parsed.pages) {
       const [page] = await db.insert(pages).values({
         runId: run.id,
@@ -183,13 +189,20 @@ async function handleEditionExtraction(documentId: string) {
         isOcr: parsedPage.isOcr,
         extractionConfidence: parsedPage.extractionConfidence,
       }).returning({ id: pages.id });
-      if (parsedPage.blocks.length) await db.insert(textBlocks).values(parsedPage.blocks.map((block, blockOrder) => ({
-        pageId: page.id,
-        blockOrder,
-        kind: block.kind,
-        text: block.text,
-        bbox: block.bbox ?? null,
-      })));
+      if (parsedPage.blocks.length) {
+        const insertedBlocks = await db.insert(textBlocks).values(parsedPage.blocks.map((block, blockOrder) => ({
+          pageId: page.id,
+          blockOrder,
+          kind: block.kind,
+          text: block.text,
+          bbox: block.bbox ?? null,
+        }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text });
+        if (pipeline === "v3") {
+          for (const b of insertedBlocks) {
+            if (b.kind === "body" && b.text.trim().length >= 40) bodyBlocksForV3.push({ id: b.id, text: b.text });
+          }
+        }
+      }
       // Structural (GROBID) footnotes become page-anchored authorial notes,
       // kept distinct from AI-generated notes (plan §33 §3.4).
       const footnoteBlocks = parsedPage.blocks.filter((block) => block.kind === "footnote");
@@ -213,7 +226,7 @@ async function handleEditionExtraction(documentId: string) {
     if (pipeline === "v3") {
       await db.update(processingRuns).set({ stage: "section-passage-anchors", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
     }
-    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline });
+    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks: bodyBlocksForV3 });
 
     // Reprocessing a work the reader already confirmed must not send it back
     // through metadata review just because the new extractor has lower title
