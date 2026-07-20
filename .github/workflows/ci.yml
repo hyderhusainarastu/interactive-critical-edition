@@ -71,9 +71,11 @@ jobs:
         run: pnpm --filter web build
 
       # E2E: only the specs that need web + Postgres (no worker, no live
-      # bibliographic APIs) run in CI — landing/onboarding (a11y) and the
-      # authorization matrix. The analysis/reader/roadmap specs still run
-      # manually against the full local stack (documented in CLAUDE.md).
+      # bibliographic APIs) run in CI — landing/onboarding (a11y), the
+      # authorization matrix, and the v2 edition reader (which seeds a
+      # published run directly, so it needs no worker, no GROBID and no API
+      # spend). The analysis/reader/roadmap specs still run manually against
+      # the full local stack (documented in CLAUDE.md).
       - name: Install Playwright browser
         run: pnpm --filter web exec playwright install --with-deps chromium
 
@@ -85,7 +87,7 @@ jobs:
             curl -sf http://localhost:3000/login > /dev/null && break
             sleep 2
           done
-          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts
+          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts edition.spec.ts
           STATUS=$?
           kill $SERVER_PID 2>/dev/null || true
           exit $STATUS
