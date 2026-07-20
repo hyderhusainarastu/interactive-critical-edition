@@ -258,6 +258,74 @@ describe("relevance gate — a shared concept WORD is not a shared subject", () 
   });
 });
 
+// -------------------------------------------------------------- recall paths
+
+describe("relevance gate — recall without losing precision", () => {
+  it("reads entity evidence from the abstract when the title names no one", () => {
+    // Observed in the canary: Hume's section on "the use of reason concerning
+    // virtue and vice" is squarely on-subject but its title names nobody, so a
+    // title-only entity rule quarantined it.
+    const a = assessCandidate(
+      R({
+        title: "Section IV. Showing the use of reason concerning virtue and vice",
+        snippet: "Hume's answer to the rationalists, developed against Aristotle's account of moral virtue and the mean.",
+      }),
+      irwin,
+      "historical_background",
+    );
+    expect(a.verdict).toBe("accepted");
+  });
+
+  it("does not let a name-dropping abstract rescue an off-subject title", () => {
+    // The abstract mentions Aristotle; the paper is still about consumer
+    // choice. A passing mention is not evidence of subject, so the title must
+    // itself be substantially on-vocabulary before context counts.
+    const a = assessCandidate(
+      R({
+        title: "Variety, Vice, and Virtue: How Assortment Size Influences Option Choice",
+        venue: "Journal of Consumer Research",
+        snippet: "We draw loosely on Aristotle's distinction between virtue and vice to frame consumer self-control.",
+      }),
+      irwin,
+      "scholarly_debate",
+    );
+    expect(a.verdict).not.toBe("accepted");
+  });
+
+  it("recognises a citation from an abbreviated reference entry via author+year", () => {
+    // Reference entries routinely abbreviate or line-wrap a title. Demanding
+    // near-total title containment against them was losing genuine citations —
+    // the one category that must never be lost. Author AND year agreeing is
+    // independent corroboration, so a substantial title overlap suffices.
+    const withRefs: WorkIdentity = {
+      ...irwin,
+      explicitCitationTexts: [
+        'Julia Annas, "Plato and Aristotle on Friendship," Mind 86 (1977), pp. 532-554.',
+      ],
+    };
+    const a = assessCandidate(
+      R({ title: "Plato and Aristotle on Friendship and Altruism", authors: ["Julia Annas"], year: 1977 }),
+      withRefs,
+      "scholarly_debate",
+    );
+    expect(a.signals.isExplicitCitation).toBe(true);
+    expect(a.verdict).toBe("accepted");
+  });
+
+  it("still refuses author+year corroboration when the title disagrees", () => {
+    const withRefs: WorkIdentity = {
+      ...irwin,
+      explicitCitationTexts: ["Julia Annas, \"Plato and Aristotle on Friendship and Altruism,\" Mind 86 (1977)."],
+    };
+    const a = assessCandidate(
+      R({ title: "Ancient Scepticism and the Sceptical Tradition", authors: ["Julia Annas"], year: 1977 }),
+      withRefs,
+      "scholarly_debate",
+    );
+    expect(a.signals.isExplicitCitation).toBe(false);
+  });
+});
+
 // --------------------------------------------------------------- quarantine
 
 describe("relevance gate — uncertainty quarantines rather than guessing", () => {

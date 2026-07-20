@@ -159,6 +159,10 @@ export const PUBLIC_LANE_MIN_OVERLAP = 0.5;
  *  than it appears lowercase, to count as a named entity of the work. */
 const ENTITY_MIN_MENTIONS = 3;
 const ENTITY_CAP_RATIO = 3;
+/** An entity named only in the abstract/venue (not the title) counts only when
+ *  the title is itself substantially on-vocabulary — a passing mention of
+ *  "Aristotle" in an abstract is not by itself evidence of subject. */
+const CONTEXT_ENTITY_MIN_OVERLAP = 0.5;
 
 /**
  * Words the capitalization test flags but which name nothing: sentence-initial
@@ -279,6 +283,9 @@ const CITATION_MATCH_MIN_TOKENS_WITH_AUTHOR = 2;
 /** Fraction of the candidate's title tokens that must appear in the reference
  *  entry. Deliberately high: a false positive here bypasses the whole gate. */
 const CITATION_MATCH_MIN_CONTAINMENT = 0.8;
+/** Relaxed bar when the reference entry independently names the same author
+ *  AND the same year — two corroborating signals, not one guess. */
+const CITATION_MATCH_CORROBORATED_CONTAINMENT = 0.6;
 
 /**
  * Does a discovered resource correspond to an entry in the document's own
@@ -294,16 +301,26 @@ export function matchesCitationText(
   titleTokens: string[],
   citationTexts: string[] | undefined,
   authorSurnames: string[] = [],
+  year: number | null = null,
 ): boolean {
   if (!citationTexts?.length || titleTokens.length < CITATION_MATCH_MIN_TOKENS_WITH_AUTHOR) return false;
   for (const entry of citationTexts) {
     const entryTokens = new Set(terms(entry));
     if (!entryTokens.size) continue;
     const contained = titleTokens.filter((t) => entryTokens.has(t)).length;
-    if (contained / titleTokens.length < CITATION_MATCH_MIN_CONTAINMENT) continue;
+    const ratio = contained / titleTokens.length;
+    const authorNamed = authorSurnames.some((s) => entryTokens.has(s));
+    // A reference entry that names the same author AND the same year is
+    // strong corroboration on its own, so the title need only substantially
+    // overlap. Extracted reference entries are frequently truncated or
+    // line-wrapped, and demanding near-total title containment against them
+    // was losing genuine citations — the one category that must not be lost.
+    const yearNamed = year != null && entry.includes(String(year));
+    if (authorNamed && yearNamed && ratio >= CITATION_MATCH_CORROBORATED_CONTAINMENT) return true;
+    if (ratio < CITATION_MATCH_MIN_CONTAINMENT) continue;
     if (titleTokens.length >= CITATION_MATCH_MIN_TOKENS) return true;
     // Short title: require the entry to name the same author too.
-    if (authorSurnames.some((s) => entryTokens.has(s))) return true;
+    if (authorNamed) return true;
   }
   return false;
 }
@@ -334,7 +351,18 @@ export function assessCandidate(
   const matchedTerms = candidateTerms.filter((t) => vocab.has(t));
   const topicOverlap = candidateTerms.length ? matchedTerms.length / candidateTerms.length : 0;
   const coreConceptMatches = collectCoreMatches(candidateTerms, identity.coreConceptTerms, candidate.title);
-  const entityHit = candidateTerms.some((t) => identity.entityTerms.includes(t));
+
+  // Entity evidence: a title names an entity, or the abstract/venue does.
+  // Titles are short and often name nothing — Hume's "Showing the use of
+  // reason concerning virtue and vice" is squarely on-subject and mentions no
+  // one — so refusing to read the abstract costs real recall. But a passing
+  // mention in an abstract is weaker than a title, and is trusted only when
+  // the title is itself largely on-vocabulary.
+  const entitySet = new Set(identity.entityTerms.map((t) => t.toLowerCase()));
+  const titleEntityHit = candidateTerms.some((t) => entitySet.has(t));
+  const contextTerms = new Set([...terms(candidate.snippet), ...terms(candidate.venue)]);
+  const contextEntityHit = !titleEntityHit && [...contextTerms].some((t) => entitySet.has(t));
+  const entityHit = titleEntityHit || (contextEntityHit && topicOverlap >= CONTEXT_ENTITY_MIN_OVERLAP);
 
   // ---- Identity signals ----
   const targetSurnames = new Set(identity.authors.map(surname).filter(Boolean));
@@ -350,7 +378,7 @@ export function assessCandidate(
 
   const isExplicitCitation =
     Boolean(key && identity.explicitCitationKeys.has(key)) ||
-    matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames);
+    matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames, candidate.year);
   const inCitationGraph = Boolean(key && identity.citationGraphKeys?.has(key));
   const citedAuthorHit = candidateSurnames.some((s) => identity.citedAuthorSurnames.has(s));
 
