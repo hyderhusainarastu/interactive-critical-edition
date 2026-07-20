@@ -96,6 +96,10 @@ export function providersForLane(lane: QueryLane): ReadonlySet<ProviderName> {
   }
 }
 
+/** How many of a document's own citations get an individual catalogue lookup.
+ *  Bounded so a reference-heavy work cannot fan out without limit. */
+const MAX_CITATION_LOOKUPS = Number(process.env.RESEARCH_MAX_CITATION_LOOKUPS ?? 30);
+
 /** A discovery round scoped to one lane. */
 export interface LaneRound {
   lane: QueryLane;
@@ -137,9 +141,19 @@ export async function runDiscovery(input: {
   let saturationNote: string | null = null;
   let roundsRun = 0;
 
-  const normalized: LaneRound[] = input.rounds.map((r) =>
-    Array.isArray(r) ? ({ lane: undefined as unknown as QueryLane, queries: r }) : r,
-  );
+  const normalized: LaneRound[] = input.rounds.flatMap((r) => {
+    if (Array.isArray(r)) return [{ lane: undefined as unknown as QueryLane, queries: r }];
+    // Adapters deliberately issue ONE query per call to stay polite with the
+    // free APIs, so a lane's extra queries are never searched. That is fine for
+    // exploratory lanes, where the queries are rephrasings of one question —
+    // but in the explicit-citation lane every query is a DIFFERENT work the
+    // document actually cites. Collapsing them to one search is why a run with
+    // nine extracted citations only ever looked up the first.
+    if (r.lane === "explicit_citation" && r.queries.length > 1) {
+      return r.queries.slice(0, MAX_CITATION_LOOKUPS).map((q) => ({ lane: r.lane, queries: [q] }));
+    }
+    return [r];
+  });
 
   for (const round of normalized) {
     const { lane, queries } = round;
@@ -171,6 +185,12 @@ export async function runDiscovery(input: {
       }
     }
     resources = dedupeResources(resources).slice(0, RESEARCH_LIMITS.maxResourcesPreDedup);
+
+    // Explicit-citation lookups are exempt from saturation: each one targets a
+    // specific known work, so "this round added few new resources" means the
+    // catalogue lacks that book, not that discovery has converged. Letting it
+    // trip the saturation stop would abandon the remaining citations.
+    if (lane === "explicit_citation") continue;
 
     const added = resources.length - before;
     const growth = before === 0 ? 1 : added / before;

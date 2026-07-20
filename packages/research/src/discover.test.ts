@@ -216,3 +216,60 @@ describe("lane-scoped discovery", () => {
     expect(r.laneByKey.size).toBe(0);
   });
 });
+
+describe("explicit-citation lane searches every cited work", () => {
+  const spy = (log: string[][]): SourceAdapter => ({
+    provider: "crossref",
+    isEnabled: () => true,
+    async search(queries) {
+      log.push([...queries]);
+      return {
+        attempt: { provider: "crossref", status: "queried", queries, resultCount: 0, inspectionDepth: 0, latencyMs: 1 },
+        resources: [],
+      };
+    },
+  });
+
+  it("issues one lookup per cited work, not one for the whole lane", async () => {
+    // Adapters query only the first entry to stay polite, so a lane holding
+    // nine distinct citations previously searched exactly one of them.
+    const log: string[][] = [];
+    await runDiscovery({
+      adapters: [spy(log)],
+      rounds: [{
+        lane: "explicit_citation",
+        queries: [
+          'Julia Annas, "Plato and Aristotle on Friendship" 1977',
+          "Sarah Broadie, Ethics with Aristotle 1991",
+          "W.F.R. Hardie, Aristotle's Ethical Theory 1980",
+        ],
+      }],
+    });
+    expect(log).toHaveLength(3);
+    expect(log.map((q) => q[0])).toEqual([
+      'Julia Annas, "Plato and Aristotle on Friendship" 1977',
+      "Sarah Broadie, Ethics with Aristotle 1991",
+      "W.F.R. Hardie, Aristotle's Ethical Theory 1980",
+    ]);
+  });
+
+  it("does not split exploratory lanes, whose queries rephrase one question", async () => {
+    const log: string[][] = [];
+    await runDiscovery({
+      adapters: [spy(log)],
+      rounds: [{ lane: "scholarly_debate", queries: ["vice and reason", "vice and reason criticism"] }],
+    });
+    expect(log).toHaveLength(1);
+  });
+
+  it("does not let a citation miss trip the saturation stop", async () => {
+    // Each lookup targets a specific known work; several returning nothing
+    // means the catalogue lacks those books, not that discovery converged.
+    const log: string[][] = [];
+    await runDiscovery({
+      adapters: [spy(log)],
+      rounds: [{ lane: "explicit_citation", queries: ["a book 1980", "b book 1984", "c book 1989", "d book 1991"] }],
+    });
+    expect(log).toHaveLength(4);
+  });
+});
