@@ -282,9 +282,21 @@ function escapeRe(s: string): string {
  */
 export function citedSurnamesFrom(citationTexts: string[]): Set<string> {
   const out = new Set<string>();
-  for (const entry of citationTexts) {
-    const m = entry.trim().match(/^([A-Z][A-Za-zÀ-ÿ'’-]{2,})/);
-    if (m) out.add(m[1].toLowerCase());
+  for (const raw of citationTexts) {
+    // The author segment is whatever precedes the title — the first quote, or
+    // the comma that introduces it.
+    const entry = raw.trim().replace(/^(?:see\s+also|see|cf\.?|compare|e\.g\.?,?)\s+/i, "");
+    const head = entry.split(/["“]|,\s*(?=[A-Z][a-z])/)[0] ?? entry;
+    // Take EVERY capitalized name token in that segment, not just the first.
+    // Reference styles disagree about order — "Annas, Julia" and "Julia Annas"
+    // are both common — so assuming the leading token is the surname collected
+    // given names instead. Observed in production: the set held "Sarah" rather
+    // than "Broadie", which silently weakened every check that relies on
+    // knowing whom the document cites.
+    for (const m of head.slice(0, 60).matchAll(/\b([A-Z][A-Za-zÀ-ÿ'’-]{2,})\b/g)) {
+      const token = m[1].toLowerCase();
+      if (token.length > 2) out.add(token);
+    }
   }
   return out;
 }

@@ -501,13 +501,22 @@ describe("relevance gate — structural guarantees", () => {
     expect(real.verdict).toBe("accepted");
   });
 
-  it("extracts cited surnames from reference entries", () => {
+  it("extracts cited names whichever order the reference style uses", () => {
+    // Reference styles disagree about name order, and taking only the leading
+    // token collected given names instead of surnames. Observed in production:
+    // the set held "Sarah" rather than "Broadie", silently weakening every
+    // check that depends on knowing whom the document cites.
     const s = citedSurnamesFrom([
-      "Annas, Julia. \"Plato and Aristotle on Friendship and Altruism.\" Mind 86 (1977).",
-      "Broadie, Sarah. Ethics with Aristotle. Oxford, 1991.",
+      'Annas, Julia. "Plato and Aristotle on Friendship and Altruism." Mind 86 (1977).',
+      "Sarah Broadie, Ethics with Aristotle (Oxford: Oxford University Press, 1991).",
+      "See W.F.R. Hardie, Aristotle's Ethical Theory, ed. 2 (Oxford, 1980).",
       "   ",
     ]);
-    expect(s).toEqual(new Set(["annas", "broadie"]));
+    expect(s).toContain("annas");
+    expect(s).toContain("broadie");
+    expect(s).toContain("hardie");
+    // The leading cue word is not a name.
+    expect(s).not.toContain("see");
   });
 
   it("routes resources to a defensible lane", () => {
