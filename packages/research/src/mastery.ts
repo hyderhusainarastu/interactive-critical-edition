@@ -80,3 +80,21 @@ export function effectiveMastery(input: { existing: { score: number } | null; re
   if (input.existing) return input.existing.score;
   return defaultMasteryForReaderLevel(input.readerLevel);
 }
+
+/**
+ * The "completed prerequisites (weak evidence only)" step of the precedence
+ * chain: has the reader completed ANOTHER work (not necessarily this one)
+ * that also presupposes the target concept? Pure over caller-supplied data
+ * (this package has no DB access) — the caller fetches the reader's
+ * completed work ids and their `work -[presupposes]-> concept` edges once
+ * and reuses them across every concept being checked, rather than one query
+ * per concept.
+ */
+export function inferMasteryFromCompletedWorks(input: {
+  targetConceptId: string;
+  completedWorkIds: readonly string[];
+  workConceptEdges: readonly { workId: string; conceptId: string }[];
+}): boolean {
+  const completed = new Set(input.completedWorkIds);
+  return input.workConceptEdges.some((e) => e.conceptId === input.targetConceptId && completed.has(e.workId));
+}

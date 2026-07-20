@@ -82,6 +82,25 @@ test.describe("Per-work diagnostic (Phase 9.4)", () => {
     expect(row).toMatchObject({ source: "explicit", score: 40 });
   });
 
+  test("a concept from a completed prerequisite work is weakly pre-filled, not left at the coarse default", async ({ page }) => {
+    // The "prerequisite" work: shares its concepts with the second work
+    // below, and the reader has already completed it.
+    const prereq = await seedWorkWithConcepts(userId, { title: "Prerequisite Work", readingStatus: "completed" });
+    // The work actually being diagnosed: shares the SAME concept catalog
+    // (via reuseConceptIds) but has no concept_mastery of its own yet.
+    const { workId } = await seedWorkWithConcepts(userId, { title: "Current Work", reuseConceptIds: prereq.conceptIds });
+
+    await login(page);
+    await page.goto(`/works/${workId}/diagnostic`);
+    await expect(page.getByText("Akrasia", { exact: true })).toBeVisible();
+
+    // INFERRED_FROM_COMPLETION_SCORE (65) maps to "basics" in the UI bucket.
+    await expect(page.getByRole("radio", { name: "Understand the basics" }).first()).toBeChecked();
+
+    const [row] = await db.select().from(conceptMastery).where(eq(conceptMastery.conceptId, prereq.conceptIds[0]));
+    expect(row).toMatchObject({ source: "inferred", score: 65 });
+  });
+
   test("an empty concept catalog shows an honest empty state, not a broken quiz", async ({ page }) => {
     // A work with no work→concept edges at all (e.g. a v2-pipeline document).
     const { workId } = await seedOwnedWork(userId);

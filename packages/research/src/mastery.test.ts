@@ -3,6 +3,7 @@ import {
   INFERRED_FROM_COMPLETION_SCORE,
   defaultMasteryForReaderLevel,
   effectiveMastery,
+  inferMasteryFromCompletedWorks,
   shouldOverwriteMastery,
 } from "./mastery";
 
@@ -63,5 +64,30 @@ describe("effectiveMastery", () => {
 describe("INFERRED_FROM_COMPLETION_SCORE", () => {
   it("crosses the roadmap's KNOWN_THRESHOLD (60) so 'weakly known' is still known", () => {
     expect(INFERRED_FROM_COMPLETION_SCORE).toBeGreaterThanOrEqual(60);
+  });
+});
+
+describe("inferMasteryFromCompletedWorks", () => {
+  const edges = [
+    { workId: "kant-work", conceptId: "categorical-imperative" },
+    { workId: "hume-work", conceptId: "is-ought-problem" },
+  ];
+
+  it("infers true when a completed work presupposes the target concept", () => {
+    expect(
+      inferMasteryFromCompletedWorks({ targetConceptId: "categorical-imperative", completedWorkIds: ["kant-work"], workConceptEdges: edges }),
+    ).toBe(true);
+  });
+
+  it("infers false when no completed work presupposes the target concept", () => {
+    expect(
+      inferMasteryFromCompletedWorks({ targetConceptId: "categorical-imperative", completedWorkIds: ["hume-work"], workConceptEdges: edges }),
+    ).toBe(false);
+  });
+
+  it("infers false with no completed works at all", () => {
+    expect(
+      inferMasteryFromCompletedWorks({ targetConceptId: "categorical-imperative", completedWorkIds: [], workConceptEdges: edges }),
+    ).toBe(false);
   });
 });

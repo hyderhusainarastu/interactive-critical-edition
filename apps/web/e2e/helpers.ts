@@ -19,6 +19,7 @@ import {
   passageAnnotations,
   processingRuns,
   providerAttempts,
+  readingRecords,
   researchResources,
   textBlocks,
   users,
@@ -344,12 +345,19 @@ export async function seedPublishedEdition(userId: string): Promise<{
  */
 export async function seedWorkWithConcepts(
   userId: string,
-  opts: { existingMastery?: { conceptIndex: 0 | 1; score: number; source: "explicit" | "diagnostic" | "inferred" } } = {},
+  opts: {
+    existingMastery?: { conceptIndex: 0 | 1; score: number; source: "explicit" | "diagnostic" | "inferred" };
+    /** Reuse an existing concept pair (e.g. from a prior call) instead of
+     *  creating new ones — for testing two works that share a concept. */
+    reuseConceptIds?: [string, string];
+    title?: string;
+    readingStatus?: "planned" | "reading" | "completed" | "abandoned";
+  } = {},
 ): Promise<{ workId: string; documentId: string; conceptIds: [string, string] }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const [work] = await db
     .insert(works)
-    .values({ userId, title: "Nicomachean Ethics", authorName: "Aristotle" })
+    .values({ userId, title: opts.title ?? "Nicomachean Ethics", authorName: "Aristotle" })
     .returning({ id: works.id });
   const [doc] = await db
     .insert(documents)
@@ -366,14 +374,19 @@ export async function seedWorkWithConcepts(
     })
     .returning({ id: documents.id });
 
-  const inserted = await db
-    .insert(concepts)
-    .values([
-      { slug: `akrasia-${suffix}`, kind: "concept", label: "Akrasia", summary: "Weakness of will — acting against one's own better judgment." },
-      { slug: `sophrosyne-${suffix}`, kind: "concept", label: "Sophrosyne", summary: "Temperance, as understood in the Peripatetic tradition." },
-    ])
-    .returning({ id: concepts.id });
-  const conceptIds: [string, string] = [inserted[0].id, inserted[1].id];
+  let conceptIds: [string, string];
+  if (opts.reuseConceptIds) {
+    conceptIds = opts.reuseConceptIds;
+  } else {
+    const inserted = await db
+      .insert(concepts)
+      .values([
+        { slug: `akrasia-${suffix}`, kind: "concept", label: "Akrasia", summary: "Weakness of will — acting against one's own better judgment." },
+        { slug: `sophrosyne-${suffix}`, kind: "concept", label: "Sophrosyne", summary: "Temperance, as understood in the Peripatetic tradition." },
+      ])
+      .returning({ id: concepts.id });
+    conceptIds = [inserted[0].id, inserted[1].id];
+  }
 
   await db.insert(graphEdges).values([
     {
@@ -394,6 +407,10 @@ export async function seedWorkWithConcepts(
       source: opts.existingMastery.source,
       evidence: "seeded for test",
     });
+  }
+
+  if (opts.readingStatus) {
+    await db.insert(readingRecords).values({ userId, workId: work.id, status: opts.readingStatus });
   }
 
   return { workId: work.id, documentId: doc.id, conceptIds };

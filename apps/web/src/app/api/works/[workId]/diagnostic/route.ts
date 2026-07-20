@@ -1,5 +1,5 @@
-import { concepts, conceptMastery, db, graphEdges } from "@ice/db";
-import { shouldOverwriteMastery, type MasterySource } from "@ice/research";
+import { concepts, conceptMastery, db, graphEdges, readingRecords } from "@ice/db";
+import { INFERRED_FROM_COMPLETION_SCORE, inferMasteryFromCompletedWorks, shouldOverwriteMastery, type MasterySource } from "@ice/research";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
@@ -48,12 +48,38 @@ export async function GET(_request: Request, { params }: { params: Promise<{ wor
 
   const relevant = await workRelevantConcepts(workId);
   const conceptIds = relevant.map((c) => c.id);
-  const existing = conceptIds.length
+  let existing = conceptIds.length
     ? await db
         .select({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source })
         .from(conceptMastery)
         .where(and(eq(conceptMastery.userId, userId), inArray(conceptMastery.conceptId, conceptIds)))
     : [];
+
+  // Precedence chain's third step (plan §34.4): a concept with no recorded
+  // mastery yet, but which the reader implicitly demonstrated by completing
+  // ANOTHER work that also presupposes it, gets a weak inferred score
+  // rather than falling straight to the coarse reader-level default.
+  // Opportunistic write, not silent: it only ever fills a genuinely empty
+  // slot (shouldOverwriteMastery(null, "inferred") is always true, and
+  // nothing here ever touches a concept that already has a row).
+  const uncoveredConceptIds = conceptIds.filter((id) => !existing.some((e) => e.conceptId === id));
+  if (uncoveredConceptIds.length) {
+    const [completed, allEdges] = await Promise.all([
+      db.select({ workId: readingRecords.workId }).from(readingRecords).where(and(eq(readingRecords.userId, userId), eq(readingRecords.status, "completed"))),
+      db.select({ workId: graphEdges.sourceId, conceptId: graphEdges.targetId }).from(graphEdges).where(and(eq(graphEdges.userId, userId), eq(graphEdges.sourceType, "work"), eq(graphEdges.targetType, "concept"), eq(graphEdges.edgeType, "presupposes"))),
+    ]);
+    const completedWorkIds = completed.map((c) => c.workId).filter((id): id is string => id !== null);
+    const inferred: (typeof conceptMastery.$inferInsert)[] = [];
+    for (const conceptId of uncoveredConceptIds) {
+      if (inferMasteryFromCompletedWorks({ targetConceptId: conceptId, completedWorkIds, workConceptEdges: allEdges })) {
+        inferred.push({ userId, conceptId, score: INFERRED_FROM_COMPLETION_SCORE, source: "inferred", evidence: "Inferred from a completed prerequisite work." });
+      }
+    }
+    if (inferred.length) {
+      const written = await db.insert(conceptMastery).values(inferred).onConflictDoNothing().returning({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source });
+      existing = [...existing, ...written];
+    }
+  }
 
   return NextResponse.json({
     concepts: relevant.map((c) => ({
