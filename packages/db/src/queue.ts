@@ -44,9 +44,24 @@ export function getQueue(): Promise<PgBoss> {
   return bossPromise;
 }
 
+/**
+ * Extraction is long-running (GROBID + OCR + research) and the worker processes
+ * one job at a time, so a queued job's clock includes everything ahead of it.
+ * pg-boss's 15-minute default expiration measures from when the job is fetched,
+ * and a backlog pushes real work past it: a 10-document load test produced two
+ * DUPLICATE runs because jobs still in progress were treated as expired and
+ * retried. The generous window below is sized for a realistic backlog rather
+ * than a single document.
+ */
+const EXTRACT_EXPIRE_MINUTES = Number(process.env.EXTRACT_EXPIRE_MINUTES ?? 60);
+
 export async function enqueueExtractText(documentId: string) {
   const boss = await getQueue();
-  return boss.send(QUEUE_EXTRACT_TEXT, { documentId } satisfies ExtractTextJob);
+  return boss.send(
+    QUEUE_EXTRACT_TEXT,
+    { documentId } satisfies ExtractTextJob,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
 }
 
 export async function enqueueAnalyzeWork(documentId: string) {

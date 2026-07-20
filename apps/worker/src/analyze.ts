@@ -801,7 +801,16 @@ export async function analyzeEditionRun(input: {
 
   if (usageLogs.length) await db.insert(aiUsageLogs).values(usageLogs);
 
-  const degraded = Boolean(discovery.saturationNote) || overSoftCap(budget);
+  // `degraded` means the edition is WORSE than it should be — not that
+  // discovery finished within its budget. Hitting the pre-dedup resource cap
+  // or saturating are healthy outcomes: they mean enough was found and the run
+  // stopped on purpose. A 10-document load test had all ten successful,
+  // full-structure editions telling the reader they were degraded, which is
+  // crying wolf: a warning shown on every run carries no information.
+  //
+  // The soft cap is different in kind — passing it means synthesis was cut
+  // short, so the edition genuinely has less in it than intended.
+  const degraded = overSoftCap(budget);
   await db
     .update(processingRuns)
     .set({ stage: "validation", aiCostUsd: budget.spentUsd, degraded, saturationNote: discovery.saturationNote, updatedAt: new Date() })
