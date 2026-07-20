@@ -14,6 +14,18 @@ export interface EditionClaim {
   evidence: Array<{ stance: string; quote: string | null; resourceId: string | null }>;
 }
 
+/** How a record relates to the work it belongs to. */
+export type RecordRole = "primary" | "review" | "edition" | "translation" | "excerpt";
+
+/** One work, with the records that describe it attached rather than repeated. */
+export interface EditionWork {
+  key: string;
+  title: string;
+  authorSurname: string | null;
+  primary: EditionResource;
+  related: Array<{ id: string; title: string; role: RecordRole; evidence: string | null; url: string | null; provider: string }>;
+}
+
 export interface EditionResource {
   id: string;
   title: string;
@@ -24,6 +36,14 @@ export interface EditionResource {
   year: number | null;
   authors: unknown;
   inspectionDepth: number;
+  /** Canonical work identity (migration 0014); null for pre-0014 rows. */
+  work: {
+    key: string;
+    role: RecordRole;
+    canonicalTitle: string | null;
+    authorSurname: string | null;
+    evidence: string | null;
+  } | null;
   credibility: {
     authority: Authority | null;
     agreement: Agreement | null;
@@ -49,7 +69,14 @@ export interface EditionPayload {
     evidence: { quote: string | null; resourceId: string | null } | null;
     claims: EditionClaim[];
   }>;
+  /** Every record, unchanged — nothing is hidden from the payload. */
   resources: EditionResource[];
+  /**
+   * The same records grouped into WORKS, which is what the Library lists. A
+   * book, a review of it and its second edition are three real records but one
+   * work; `related` keeps the others visible, attached to the work.
+   */
+  works: EditionWork[];
   relations: Array<{ id: string; resourceId: string | null; relatedResourceId: string | null; relationType: string; depth: number; importance: number | null }>;
   providerReports: Array<{ provider: string; status: string; resultCount: number; inspectionDepth: number; latencyMs: number; error: string | null }>;
 }
@@ -211,16 +238,41 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
 
       {edition.resources.length > 0 && (
         <section className="mt-8 border-t border-[var(--color-border)] pt-4">
-          <h2 className="font-semibold">Sources consulted <span className="text-xs font-normal text-[var(--color-text-muted)]">({edition.resources.length})</span></h2>
+          <h2 className="font-semibold">
+            Sources consulted{" "}
+            <span className="text-xs font-normal text-[var(--color-text-muted)]">
+              ({edition.works.length} work{edition.works.length === 1 ? "" : "s"}
+              {edition.resources.length !== edition.works.length ? `, ${edition.resources.length} records` : ""})
+            </span>
+          </h2>
+          {/* One entry per WORK. A book, a review of it and its second edition
+              are three real records but one work, and repeating the same book
+              five times makes the list unusable. Related records stay visible,
+              attached to the work rather than listed beside it. */}
           <ul className="mt-2 flex flex-col gap-2 text-sm">
-            {edition.resources.map((resource) => (
-              <li key={resource.id} className="flex flex-wrap items-center gap-2">
-                {resource.url ? <a className="underline" href={resource.url} target="_blank" rel="noreferrer">{resource.title}</a> : resource.title}
-                <span className="text-xs text-[var(--color-text-muted)]">· {resource.provider}{resource.year ? ` · ${resource.year}` : ""}</span>
-                {resource.credibility?.authority && <AuthorityBadge authority={resource.credibility.authority} />}
-                {resource.credibility?.agreement && <span className="text-xs text-[var(--color-text-muted)]">{AGREEMENT_LABEL[resource.credibility.agreement]}</span>}
-              </li>
-            ))}
+            {edition.works.map((work) => {
+              const resource = work.primary;
+              return (
+                <li key={work.key} className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {resource.url ? <a className="underline" href={resource.url} target="_blank" rel="noreferrer">{work.title}</a> : work.title}
+                    <span className="text-xs text-[var(--color-text-muted)]">· {resource.provider}{resource.year ? ` · ${resource.year}` : ""}</span>
+                    {resource.credibility?.authority && <AuthorityBadge authority={resource.credibility.authority} />}
+                    {resource.credibility?.agreement && <span className="text-xs text-[var(--color-text-muted)]">{AGREEMENT_LABEL[resource.credibility.agreement]}</span>}
+                  </div>
+                  {work.related.length > 0 && (
+                    <ul className="ml-4 flex flex-col gap-0.5 border-l border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]">
+                      {work.related.map((rel) => (
+                        <li key={rel.id} title={rel.evidence ?? undefined}>
+                          <span className="capitalize">{rel.role}</span>:{" "}
+                          {rel.url ? <a className="underline" href={rel.url} target="_blank" rel="noreferrer">{rel.title}</a> : rel.title}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}

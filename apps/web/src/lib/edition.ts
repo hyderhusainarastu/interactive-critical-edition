@@ -98,6 +98,17 @@ export async function getPublishedEdition(documentId: string) {
       authors: r.authors,
       inspectionDepth: r.inspectionDepth,
       bibRecordId: r.bibRecordId,
+      // Canonical work identity (migration 0014). Null-safe: rows written
+      // before 0014 have no work key and simply stand alone.
+      work: r.workKey
+        ? {
+            key: r.workKey,
+            role: r.workRole,
+            canonicalTitle: r.workCanonicalTitle,
+            authorSurname: r.workAuthorSurname,
+            evidence: r.workEvidence,
+          }
+        : null,
       credibility: c
         ? {
             authority: c.authority,
@@ -109,6 +120,41 @@ export async function getPublishedEdition(documentId: string) {
             rationale: c.rationale,
           }
         : null,
+    };
+  });
+
+  // Group records into WORKS for display. A cited book, a review of it and its
+  // second edition are three correct records but one work, and a reader who
+  // sees the same book five times cannot use the Library. The individual
+  // records stay in `resources` — nothing is hidden — while `works` is what the
+  // Library lists: the book, with its reviews and editions attached to it.
+  const byWork = new Map<string, typeof resourceOut>();
+  for (const r of resourceOut) {
+    // A record with no work key (nothing usable to group on) stands alone
+    // rather than being lumped into a shared bucket.
+    const key = r.work?.key ?? `resource:${r.id}`;
+    const bucket = byWork.get(key);
+    if (bucket) bucket.push(r);
+    else byWork.set(key, [r]);
+  }
+  const works = [...byWork.entries()].map(([key, members]) => {
+    // The representative is chosen the same way the worker chose it: a primary
+    // record beats a review, then richer metadata wins.
+    const ranked = [...members].sort((a, b) => rankForDisplay(b) - rankForDisplay(a));
+    const [primary, ...related] = ranked;
+    return {
+      key,
+      title: primary.work?.canonicalTitle ?? primary.title,
+      authorSurname: primary.work?.authorSurname ?? null,
+      primary,
+      related: related.map((r) => ({
+        id: r.id,
+        title: r.title,
+        role: r.work?.role ?? "primary",
+        evidence: r.work?.evidence ?? null,
+        url: r.url,
+        provider: r.provider,
+      })),
     };
   });
 
@@ -130,6 +176,7 @@ export async function getPublishedEdition(documentId: string) {
     authorialNotes,
     generatedNotes: generated,
     resources: resourceOut,
+    works,
     relations: relations.map((rel) => ({
       id: rel.id,
       resourceId: rel.resourceId,
@@ -152,3 +199,16 @@ export async function getPublishedEdition(documentId: string) {
 }
 
 export type PublishedEdition = NonNullable<Awaited<ReturnType<typeof getPublishedEdition>>>;
+
+/** Display ranking for choosing which record represents a work: a primary
+ *  record always beats a review, then richer metadata wins. Mirrors the
+ *  worker's own choice so the reader and the pipeline agree. */
+function rankForDisplay(r: {
+  work: { role: string | null } | null;
+  doi: string | null;
+  isbn: string | null;
+  year: number | null;
+}): number {
+  const role = r.work?.role ?? "primary";
+  return (role === "primary" ? 100 : role === "edition" ? 50 : 0) + (r.doi ? 4 : 0) + (r.isbn ? 3 : 0) + (r.year ? 2 : 0);
+}
