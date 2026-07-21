@@ -9,7 +9,7 @@ import type { ProviderName } from "./types";
 export const RESEARCH_LIMITS = {
   /** Soft AI-cost ceiling per work: past this, only already-started work
    *  finishes; no new discovery batches begin. */
-  costSoftCapUsd: Number(process.env.RESEARCH_COST_SOFT_CAP ?? 2),
+  costSoftCapUsd: Number(process.env.RESEARCH_COST_SOFT_CAP ?? 1),
   /** Hard AI-cost ceiling: never START a call projected to exceed this. */
   costHardCapUsd: Number(process.env.RESEARCH_COST_HARD_CAP ?? 5),
   /** Max explicit-citation candidates parsed from the document. */
