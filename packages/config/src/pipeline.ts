@@ -12,14 +12,14 @@
  * ordered ones ("is this at least the edition pipeline?"), not equality ones.
  */
 
-export const PIPELINE_VERSIONS = ["v1", "v2", "v3"] as const;
+export const PIPELINE_VERSIONS = ["v1", "v2", "v3", "v4"] as const;
 export type PipelineVersion = (typeof PIPELINE_VERSIONS)[number];
 
 /** What an unset or unrecognized `ANALYSIS_PIPELINE` means. Unchanged from the
  *  pre-9.1 behaviour: absent config runs the original pipeline. */
 export const DEFAULT_PIPELINE_VERSION: PipelineVersion = "v1";
 
-const RANK: Record<PipelineVersion, number> = { v1: 1, v2: 2, v3: 3 };
+const RANK: Record<PipelineVersion, number> = { v1: 1, v2: 2, v3: 3, v4: 4 };
 
 const warned = new Set<string>();
 

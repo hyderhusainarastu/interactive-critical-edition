@@ -1,4 +1,4 @@
-import { isEditionPipeline, phase12FeatureEnabled, pipelineVersion } from "@ice/config";
+import { isEditionPipeline, phase12FeatureEnabled, pipelineAtLeast, pipelineVersion, type PipelineVersion } from "@ice/config";
 import { createHash } from "node:crypto";
 import {
   type AnalyzeWorkJob,
@@ -17,7 +17,7 @@ import {
   researchCache,
   textBlocks,
 } from "@ice/db";
-import { detectFootnotes, downloadDocumentFile, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
+import { detectFootnotes, downloadDocumentFile, extractAuthorApparatus, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
@@ -25,6 +25,16 @@ import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 
 function sha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+/** v4 cannot reach a deployment until its independently controlled flag is on. */
+function activePipelineVersion(): PipelineVersion {
+  const configured = pipelineVersion();
+  if (configured === "v4" && !phase12FeatureEnabled("pipelineV4")) {
+    console.warn("[worker] ANALYSIS_PIPELINE=v4 requested while PHASE_12_PIPELINE_V4_ENABLED is off; using v3.");
+    return "v3";
+  }
+  return configured;
 }
 
 async function handleExtractText(documentId: string) {
@@ -150,8 +160,8 @@ async function handleEditionExtraction(documentId: string) {
 
   // Allocate the next run version under a per-document advisory lock (see
   // runLifecycle) so two concurrent reprocesses never claim the same version.
-  const pipeline = pipelineVersion();
-  const run = await allocateEditionRun(documentId, pipeline === "v3" ? "v3" : "v2");
+  const pipeline = activePipelineVersion();
+  const run = await allocateEditionRun(documentId, pipeline === "v4" ? "v4" : pipeline === "v3" ? "v3" : "v2");
 
   await db.update(documents).set({ processingStatus: "processing", processingError: null, updatedAt: new Date() }).where(eq(documents.id, documentId));
   if (job) await db.update(processingJobs).set({ status: "running", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
@@ -164,7 +174,7 @@ async function handleEditionExtraction(documentId: string) {
     const parsed = await parseDocument(buffer, doc.mimeType);
     if (!parsed.text.trim()) throw new Error("No extractable text found. OCR was unavailable or produced no text.");
 
-    if (pipeline === "v3") {
+    if (pipelineAtLeast(pipeline, "v3")) {
       await db.update(processingRuns).set({ stage: "structural-outline", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
     }
 
@@ -181,11 +191,13 @@ async function handleEditionExtraction(documentId: string) {
       })));
     }
 
-    // v3 only: the real (id, text) of every body block, in document order —
+    // v3/v4: the real (id, text) of every body block, in document order —
     // what passage-annotation synthesis anchors to. Collected here rather than
     // re-queried later so an annotation can only ever reference a block that
     // genuinely exists (the same real IDs that were just inserted).
-    const bodyBlocksForV3: { id: string; text: string }[] = [];
+    const bodyBlocks: { id: string; text: string; pageIndex: number; blockOrder: number; sectionTitle: string | null }[] = [];
+    const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "caption" | "bibliography" | "reference"; text: string; pageIndex: number; blockOrder: number }[] = [];
+    let currentSectionTitle: string | null = null;
 
     for (const parsedPage of parsed.pages) {
       const [page] = await db.insert(pages).values({
@@ -202,10 +214,26 @@ async function handleEditionExtraction(documentId: string) {
           kind: block.kind,
           text: block.text,
           bbox: block.bbox ?? null,
-        }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text });
-        if (pipeline === "v3") {
+        }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text, blockOrder: textBlocks.blockOrder });
+        if (pipelineAtLeast(pipeline, "v3")) {
           for (const b of insertedBlocks) {
-            if (b.kind === "body" && b.text.trim().length >= 40) bodyBlocksForV3.push({ id: b.id, text: b.text });
+            apparatusBlocks.push({
+              blockId: b.id,
+              kind: b.kind,
+              text: b.text,
+              pageIndex: parsedPage.pageIndex,
+              blockOrder: b.blockOrder,
+            });
+            if ((b.kind === "title" || b.kind === "header") && b.text.trim()) currentSectionTitle = b.text.trim();
+            if (b.kind === "body" && b.text.trim().length >= 40) {
+              bodyBlocks.push({
+                id: b.id,
+                text: b.text,
+                pageIndex: parsedPage.pageIndex,
+                blockOrder: b.blockOrder,
+                sectionTitle: currentSectionTitle,
+              });
+            }
           }
         }
       }
@@ -229,10 +257,14 @@ async function handleEditionExtraction(documentId: string) {
       source: parsed.structureState === "full" ? "grobid" : "embedded/title-page",
     });
 
-    if (pipeline === "v3") {
-      await db.update(processingRuns).set({ stage: "section-passage-anchors", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
+    if (pipelineAtLeast(pipeline, "v3")) {
+      await db.update(processingRuns).set({
+        stage: pipeline === "v4" ? "section-aware-annotations" : "section-passage-anchors",
+        updatedAt: new Date(),
+      }).where(eq(processingRuns.id, run.id));
     }
-    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks: bodyBlocksForV3 });
+    const apparatus = pipeline === "v4" ? extractAuthorApparatus({ blocks: apparatusBlocks, text: parsed.text }) : [];
+    await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks, apparatus });
 
     // Reprocessing a work the reader already confirmed must not send it back
     // through metadata review just because the new extractor has lower title
@@ -307,7 +339,7 @@ async function main() {
   await boss.work<ExtractTextJob>(QUEUE_EXTRACT_TEXT, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
-      if (isEditionPipeline()) await handleEditionExtraction(job.data.documentId);
+      if (isEditionPipeline(activePipelineVersion())) await handleEditionExtraction(job.data.documentId);
       else await handleExtractText(job.data.documentId);
     }
   });
@@ -324,7 +356,7 @@ async function main() {
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary
   // runs to production quietly running something other than what was assumed.
   console.log(
-    `[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs (pipeline ${pipelineVersion()})`,
+    `[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs (pipeline ${activePipelineVersion()})`,
   );
 }
 

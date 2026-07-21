@@ -8,6 +8,7 @@ import type { ClassificationInput, ClassificationResult, LLMProvider } from "./t
 export * from "./types";
 export { CLASSIFY_PROMPT_VERSION } from "./classify";
 export { estimateCostUsd, RESEARCH_ROUTE } from "./routing";
+export { OpenAIEmbeddingsClient, estimateEmbeddingCostUsd, type EmbeddingResult } from "./embeddings";
 export { heuristicClassify } from "./providers/heuristic";
 export {
   OpenAIResponsesClient,

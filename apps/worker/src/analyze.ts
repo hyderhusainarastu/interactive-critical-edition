@@ -7,6 +7,7 @@ import {
   concepts as conceptsTable,
   db,
   documents,
+  documentApparatus,
   docMetadata,
   editionRelations,
   evidenceSpans,
@@ -21,6 +22,7 @@ import {
   researchCandidates,
   credibilityAssessments,
   works,
+  workClaims,
   workIdentities,
   learningResources,
   resourceRoles,
@@ -36,7 +38,7 @@ import {
   type RelationshipCategory,
 } from "@ice/ai-adapters";
 import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
-import { extractCitations, type RawCitation } from "@ice/ingestion";
+import { extractCitations, type ExtractedAuthorApparatus, type RawCitation } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import {
   allAdapters,
@@ -69,6 +71,10 @@ import {
   synthesizeConcepts,
   synthesizeNote,
   synthesizePassageAnnotations,
+  annotationScope,
+  chunkSectionAwareBlocks,
+  dedupePassageAnnotations,
+  type SectionAwareBlock,
   withCache,
   type CacheStore,
   type RawResource,
@@ -76,6 +82,7 @@ import {
 } from "@ice/research";
 import { and, eq, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
+import { compactWorkSignal, persistV4WorkSignals } from "./v4";
 
 /**
  * Scholarly-analysis pipeline (plan §10–§12), the two-stage design:
@@ -583,9 +590,11 @@ export async function analyzeEditionRun(input: {
   runId: string;
   documentId: string;
   text: string;
-  pipeline?: "v1" | "v2" | "v3";
-  /** v3 only: real (id, text) of every body block, in document order — see index.ts. */
-  bodyBlocks?: { id: string; text: string }[];
+  pipeline?: "v1" | "v2" | "v3" | "v4";
+  /** Real body blocks in document order. v4 adds page/section scope. */
+  bodyBlocks?: { id: string; text: string; pageIndex?: number; blockOrder?: number; sectionTitle?: string | null }[];
+  /** v4-only, deterministic source apparatus extracted from structural blocks. */
+  apparatus?: ExtractedAuthorApparatus[];
 }): Promise<void> {
   const [doc] = await db
     .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName })
@@ -594,9 +603,13 @@ export async function analyzeEditionRun(input: {
     .where(eq(documents.id, input.documentId))
     .limit(1);
   if (!doc) throw new Error(`Document ${input.documentId} not found for edition research`);
-  const isV3 = input.pipeline === "v3";
-  const setStage = async (v2Stage: string, v3Stage: string) => {
-    await db.update(processingRuns).set({ stage: isV3 ? v3Stage : v2Stage, updatedAt: new Date() }).where(eq(processingRuns.id, input.runId));
+  const isV4 = input.pipeline === "v4";
+  const isModernPipeline = input.pipeline === "v3" || isV4;
+  const setStage = async (v2Stage: string, v3Stage: string, v4Stage = v3Stage) => {
+    await db.update(processingRuns).set({
+      stage: isV4 ? v4Stage : isModernPipeline ? v3Stage : v2Stage,
+      updatedAt: new Date(),
+    }).where(eq(processingRuns.id, input.runId));
   };
 
   // Prefer the metadata THIS run actually extracted over the work's provisional
@@ -628,7 +641,7 @@ export async function analyzeEditionRun(input: {
   // re-deriving/matching workKey strings in application code. Lazy and
   // idempotent: only set once, harmless to repeat on reprocess.
   let primaryWorkIdentityId: string | null = null;
-  if (isV3) {
+  if (isModernPipeline) {
     const primaryIdentity = deriveWorkIdentity({
       title: resolvedTitle,
       authors: resolvedAuthors,
@@ -655,8 +668,8 @@ export async function analyzeEditionRun(input: {
   // only for the hard-cap affordability gate before starting a synthesis call.
   const NOTE_COST_ESTIMATE = 0.01;
   const usageLogs: (typeof aiUsageLogs.$inferInsert)[] = [];
-  const logUsage = (task: string, stage: string, model: string, pTok: number, cTok: number) => {
-    const cost = estimateCostUsd(model, pTok, cTok);
+  const logUsage = (task: string, stage: string, model: string, pTok: number, cTok: number, costOverride?: number) => {
+    const cost = costOverride ?? estimateCostUsd(model, pTok, cTok);
     charge(budget, cost);
     usageLogs.push({
       documentId: input.documentId,
@@ -678,7 +691,64 @@ export async function analyzeEditionRun(input: {
   // else in this pipeline does either. No heuristic fallback when unavailable:
   // "zero passage annotations this run" is the honest degraded state, not a
   // guess dressed up as one (see synthesizePassageAnnotations's doc comment).
-  if (isV3 && input.bodyBlocks?.length) {
+  const v4Claims: { textBlockId: string | null; claim: string; claimType: string; supportingExcerpt: string; confidence: number }[] = [];
+  if (isV4 && input.bodyBlocks?.length) {
+    const scopedBlocks: SectionAwareBlock[] = input.bodyBlocks.map((block, index) => ({
+      blockId: block.id,
+      text: block.text,
+      pageIndex: block.pageIndex ?? 0,
+      blockOrder: block.blockOrder ?? index,
+      sectionTitle: block.sectionTitle ?? null,
+    }));
+    const chunks = chunkSectionAwareBlocks(scopedBlocks);
+    const blocksById = new Map(scopedBlocks.map((block) => [block.blockId, block]));
+    const annotations = [];
+    const PASSAGE_ANNOTATION_COST_ESTIMATE = 0.01;
+    for (const chunk of chunks) {
+      if (!canAfford(budget, PASSAGE_ANNOTATION_COST_ESTIMATE) || overSoftCap(budget)) break;
+      const synthesized = await synthesizePassageAnnotations(responses, {
+        primary: { title: resolvedTitle, author: resolvedAuthorName },
+        blocks: chunk.blocks,
+        validRelationships: RELATIONSHIP_CATEGORIES,
+        model: cheapModel,
+        safetyIdentifier,
+        maxAnnotations: 5,
+        includeHelpfulFor: true,
+        maxBlockChars: 12_000,
+      });
+      if (synthesized.usedModel) {
+        logUsage("passage_annotation_synthesis", "section-aware-annotations", cheapModel, synthesized.promptTokens, synthesized.completionTokens);
+      }
+      annotations.push(...synthesized.annotations);
+    }
+    const deduped = dedupePassageAnnotations(annotations);
+    if (deduped.length) {
+      await db.insert(passageAnnotations).values(deduped.map((annotation) => ({
+        runId: input.runId,
+        textBlockId: annotation.blockId,
+        isWholeWork: annotation.isWholeWork,
+        quote: annotation.quote,
+        summary: annotation.summary,
+        explanation: annotation.explanation,
+        helpfulFor: annotation.helpfulFor,
+        scope: annotationScope(annotation, blocksById),
+        annotationType: annotation.annotationType,
+        relationship: annotation.relationship as RelationshipCategory,
+        readerLevel: annotation.readerLevel,
+        confidence: annotation.confidence,
+      })));
+      v4Claims.push(...deduped
+        .filter((annotation) => annotation.annotationType === "argument" || annotation.annotationType === "evidence")
+        .map((annotation) => ({
+          textBlockId: annotation.blockId,
+          claim: annotation.summary,
+          claimType: annotation.annotationType,
+          supportingExcerpt: annotation.quote ?? annotation.explanation,
+          confidence: annotation.confidence,
+        })));
+      console.log(`[analyze] wrote ${deduped.length} section-aware passage annotation(s) for run ${input.runId}`);
+    }
+  } else if (input.pipeline === "v3" && input.bodyBlocks?.length) {
     // Cap both block COUNT and total characters sent, independent of NOTE_COST_ESTIMATE
     // below (that constant is scoped to the per-resource note loop).
     const candidateBlocks: { blockId: string; text: string }[] = [];
@@ -720,7 +790,21 @@ export async function analyzeEditionRun(input: {
     }
   }
 
-  await setStage("research-discovery", "explicit-citations");
+  if (isV4 && input.apparatus?.length) {
+    await setStage("research-discovery", "explicit-citations", "author-apparatus");
+    await db.insert(documentApparatus).values(input.apparatus.map((entry) => ({
+      runId: input.runId,
+      textBlockId: entry.textBlockId,
+      kind: entry.kind,
+      marker: entry.marker,
+      text: entry.text,
+      scope: entry.scope,
+      source: entry.source,
+    })));
+    console.log(`[analyze] wrote ${input.apparatus.length} author apparatus record(s) for run ${input.runId}`);
+  }
+
+  await setStage("research-discovery", "explicit-citations", "explicit-citations");
 
   // Stage 1 (cheap, deterministic): candidate citations seed the query set.
   const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
@@ -746,7 +830,7 @@ export async function analyzeEditionRun(input: {
   // the resolvedTitle-only placeholder with the work's actual vocabulary.
   await setStage("research-discovery", "concepts-people-debates");
   let extractedConceptLabels: string[] = [];
-  if (isV3) {
+  if (isModernPipeline) {
     const CONCEPT_EXTRACTION_COST_ESTIMATE = 0.01;
     if (canAfford(budget, CONCEPT_EXTRACTION_COST_ESTIMATE)) {
       const synthesizedConcepts = await synthesizeConcepts(responses, {
@@ -817,11 +901,41 @@ export async function analyzeEditionRun(input: {
     }
   }
 
+  if (isV4) {
+    await setStage("research-discovery", "lane-discovery", "lightweight-work-signals");
+    if (v4Claims.length) {
+      await db.insert(workClaims).values(v4Claims.map((claim) => ({
+        runId: input.runId,
+        workId: doc.workId,
+        textBlockId: claim.textBlockId,
+        claim: claim.claim,
+        claimType: claim.claimType,
+        supportingExcerpt: claim.supportingExcerpt,
+        confidence: claim.confidence,
+      })));
+    }
+    const signal = compactWorkSignal({
+      title: resolvedTitle,
+      author: resolvedAuthorName,
+      concepts: extractedConceptLabels,
+      claims: v4Claims.map((claim) => ({ claim: claim.claim, supportingExcerpt: claim.supportingExcerpt })),
+    });
+    const workSignals = await persistV4WorkSignals({
+      runId: input.runId,
+      workId: doc.workId,
+      userId: doc.userId,
+      signal,
+      budget,
+      logUsage: (model, inputTokens, cost) => logUsage("work_embedding", "lightweight-work-signals", model, inputTokens, 0, cost),
+    });
+    console.log(`[analyze] v4 work signals for run ${input.runId}: ${workSignals.embedded ? "embedded" : "no embedding"}, ${workSignals.candidates} candidate(s)`);
+  }
+
   // Lane-specific query generation (LLM cheap-tier or heuristic fallback).
   // Running discovery per lane means a candidate is judged against the question
   // that surfaced it, and each lane only queries providers that can serve it.
   const concepts = extractedConceptLabels.length ? extractedConceptLabels : [resolvedTitle];
-  await setStage("research-discovery", "lane-discovery");
+  await setStage("research-discovery", "lane-discovery", "lane-discovery");
   const qg = await generateLaneQueries(responses, {
     primary: { title: resolvedTitle, author: resolvedAuthorName },
     citationTexts: citationQueries,
@@ -973,11 +1087,11 @@ export async function analyzeEditionRun(input: {
     // earns relevance, creator evidence, citation expansion, credibility and
     // grounded claims; only then may an AI-assisted relationship label be
     // attached. Until then the note carries the honest generic aid label.
-    let classification = isV3 ? null : await classify();
+    let classification = isModernPipeline ? null : await classify();
     if (classification && !classification.heuristic) {
       logUsage("relationship_classification", "classification", classification.model, classification.promptTokens, classification.completionTokens);
     }
-    const relevanceConfidence = isV3 ? assessment.confidence : classification!.confidence;
+    const relevanceConfidence = isModernPipeline ? assessment.confidence : classification!.confidence;
     const provisionalCategory: RelationshipCategory = classification?.category ?? "interpretive_aid";
 
     const isScholarly = r.resourceType === "book" || r.resourceType === "article";
@@ -1030,7 +1144,7 @@ export async function analyzeEditionRun(input: {
     // Single independent source at this stage → agreement is honestly insufficient.
     const agreement = computeAgreement(1, 0);
     const creatorKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }) ?? r.title;
-    const v3Credibility = isV3
+    const v3Credibility = isModernPipeline
       ? assessCredibilityV3(r, {
           relevance: Math.max(0, Math.min(1, relevanceConfidence)),
           evidenceStrength: evidenceStrengthSignal.score,
@@ -1117,14 +1231,14 @@ export async function analyzeEditionRun(input: {
 
     // Catalogue/graph projection for scholarly targets (roadmap + graph reuse).
     await setStage("classification", "conservative-influence-classification");
-    if (isV3) classification = await classify();
-    if (!classification!.heuristic && isV3) {
+    if (isModernPipeline) classification = await classify();
+    if (!classification!.heuristic && isModernPipeline) {
       logUsage("relationship_classification", "conservative-influence-classification", classification!.model, classification!.promptTokens, classification!.completionTokens);
     }
-    const conservativeCategory = isV3
+    const conservativeCategory = isModernPipeline
       ? conservativeInfluenceClassification(classification!.category, evidenceText)
       : classification!.category;
-    if (isV3) {
+    if (isModernPipeline) {
       await db.update(editionRelations).set({
         relationType: conservativeCategory,
         evidence: { category: conservativeCategory, sourceText: evidenceText.slice(0, 300), citationFrequency },
@@ -1153,7 +1267,7 @@ export async function analyzeEditionRun(input: {
     // `unresolved-citation` stubs (no real content) and a resource whose title
     // has no normalizable identity (rare — see `normalizedKey`'s doc comment)
     // are skipped rather than promoted as unreadable/unkeyable ghost entries.
-    if (isV3 && primaryWorkIdentityId && r.resourceType !== "unresolved-citation") {
+    if (isModernPipeline && primaryWorkIdentityId && r.resourceType !== "unresolved-citation") {
       const libraryKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
       if (libraryKey) {
         const resourceIdentity = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });

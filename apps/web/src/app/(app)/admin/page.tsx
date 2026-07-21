@@ -1,6 +1,7 @@
 import { aiUsageLogs, bibliographicRecords, db, processingJobs, processingRuns, providerAttempts, researchCache, researchCandidates } from "@ice/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
+import { getV4BackfillForecast } from "@/lib/v4Backfill";
 
 /**
  * Admin dashboard (plan §20): platform counts, the AI cost/usage view over
@@ -141,6 +142,7 @@ export default async function AdminPage() {
   }
   const providerRows = [...providerPivot.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const PROVIDER_STATUSES = ["queried", "rate_limited", "unavailable", "failed", "disabled"] as const;
+  const v4BackfillForecast = await getV4BackfillForecast();
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -224,6 +226,24 @@ export default async function AdminPage() {
             </ul>
           </div>
         )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Pipeline v4 backfill forecast
+        </h2>
+        <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+          Read-only dry run for Phase 12.3. It never queues reprocessing or starts a paid provider call.
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Eligible works" value={v4BackfillForecast.eligibleWorks} />
+          <Stat label="Annotation chunks" value={v4BackfillForecast.estimatedAnnotationChunks} />
+          <Stat label="Incremental v4 cost" value={`$${v4BackfillForecast.estimatedIncrementalCostUsd.toFixed(4)}`} />
+          <Stat label="Highest work estimate" value={`$${v4BackfillForecast.maxEstimatedPerWorkUsd.toFixed(4)}`} />
+        </div>
+        <p className="text-xs text-[var(--color-text-muted)]">
+          Forecast total: ${v4BackfillForecast.estimatedTotalCostUsd.toFixed(4)}. A separately approved execution is required.
+        </p>
       </section>
 
       <section className="mt-8">

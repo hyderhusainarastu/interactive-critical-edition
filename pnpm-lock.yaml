@@ -16,6 +16,9 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.7.4
         version: 1.11.2
+      '@ice/ai-adapters':
+        specifier: workspace:*
+        version: link:../../packages/ai-adapters
       '@ice/config':
         specifier: workspace:*
         version: link:../../packages/config

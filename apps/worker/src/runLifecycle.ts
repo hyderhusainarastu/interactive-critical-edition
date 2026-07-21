@@ -13,7 +13,7 @@ import { eq, sql } from "drizzle-orm";
 
 export async function allocateEditionRun(
   documentId: string,
-  pipeline: "v2" | "v3" = "v2",
+  pipeline: "v2" | "v3" | "v4" = "v2",
 ): Promise<{ id: string; version: number }> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${documentId}))`);
@@ -28,7 +28,7 @@ export async function allocateEditionRun(
         version: nextVersion,
         pipelineVersion: pipeline,
         status: "running",
-        stage: pipeline === "v3" ? "canonical-identity" : "extracting",
+        stage: pipeline === "v2" ? "extracting" : "canonical-identity",
         structureState: "limited",
         startedAt: new Date(),
       })

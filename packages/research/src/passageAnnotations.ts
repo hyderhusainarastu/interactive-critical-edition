@@ -14,7 +14,18 @@ import { quoteIsGrounded } from "./synthesize";
  * boundary `apps/worker/src/v3.ts` keeps), so the enum lives on the caller side.
  */
 
-export const PASSAGE_ANNOTATION_TYPES = ["context", "clarification", "connection", "critique", "definition"] as const;
+export const PASSAGE_ANNOTATION_TYPES = [
+  "context",
+  "clarification",
+  "connection",
+  "critique",
+  "definition",
+  "key_term",
+  "concept",
+  "argument",
+  "evidence",
+  "relationship",
+] as const;
 export type PassageAnnotationType = (typeof PASSAGE_ANNOTATION_TYPES)[number];
 
 export const READER_LEVELS = ["beginner", "undergraduate", "advanced", "research"] as const;
@@ -40,46 +51,57 @@ export interface PassageAnnotation {
   quote: string | null;
   summary: string;
   explanation: string;
+  helpfulFor: string;
   annotationType: PassageAnnotationType;
   relationship: string;
   readerLevel: ReaderLevelName | null;
   confidence: number;
 }
 
-const PASSAGE_ANNOTATION_SCHEMA = {
+function passageAnnotationSchema(includeHelpfulFor: boolean) {
+  const properties: Record<string, unknown> = {
+    // Empty string ("") means "no specific block" — the sentinel for
+    // whole-work guidance, since OpenAI's strict JSON-schema mode here
+    // is exercised only with plain (non-nullable) property types.
+    block_id: { type: "string" },
+    quote: { type: "string" },
+    summary: { type: "string" },
+    explanation: { type: "string" },
+    annotation_type: { type: "string", enum: [...PASSAGE_ANNOTATION_TYPES] },
+    relationship: { type: "string" },
+    reader_level: { type: "string" },
+    confidence: { type: "number" },
+  };
+  const required = ["block_id", "quote", "summary", "explanation", "annotation_type", "relationship", "reader_level", "confidence"];
+  if (includeHelpfulFor) {
+    properties.helpful_for = { type: "string" };
+    required.push("helpful_for");
+  }
+
+  return {
   type: "object",
   properties: {
     annotations: {
       type: "array",
       items: {
         type: "object",
-        properties: {
-          // Empty string ("") means "no specific block" — the sentinel for
-          // whole-work guidance, since OpenAI's strict JSON-schema mode here
-          // is exercised only with plain (non-nullable) property types.
-          block_id: { type: "string" },
-          quote: { type: "string" },
-          summary: { type: "string" },
-          explanation: { type: "string" },
-          annotation_type: { type: "string", enum: [...PASSAGE_ANNOTATION_TYPES] },
-          relationship: { type: "string" },
-          reader_level: { type: "string" },
-          confidence: { type: "number" },
-        },
-        required: ["block_id", "quote", "summary", "explanation", "annotation_type", "relationship", "reader_level", "confidence"],
+        properties,
+        required,
         additionalProperties: false,
       },
     },
   },
   required: ["annotations"],
   additionalProperties: false,
-};
+  };
+}
 
 interface DraftAnnotation {
   blockId: string;
   quote: string;
   summary: string;
   explanation: string;
+  helpfulFor: string;
   annotationType: string;
   relationship: string;
   readerLevel: string;
@@ -97,6 +119,7 @@ function normalizeDraft(parsed: unknown): DraftAnnotation[] {
       quote: typeof a.quote === "string" ? a.quote.trim() : "",
       summary: String(a.summary).trim(),
       explanation: String(a.explanation).trim(),
+      helpfulFor: typeof a.helpful_for === "string" ? a.helpful_for.trim() : "",
       annotationType: typeof a.annotation_type === "string" ? a.annotation_type : "",
       relationship: typeof a.relationship === "string" ? a.relationship : "",
       readerLevel: typeof a.reader_level === "string" ? a.reader_level : "",
@@ -146,6 +169,7 @@ function validateDraft(
     quote: isWholeWork ? null : draft.quote,
     summary,
     explanation: draft.explanation,
+    helpfulFor: draft.helpfulFor.slice(0, 180) || "Understand this passage in context.",
     annotationType,
     relationship,
     readerLevel,
@@ -177,19 +201,26 @@ export async function synthesizePassageAnnotations(
     model: string;
     safetyIdentifier?: string;
     maxAnnotations?: number;
+    /** Phase 12.3 asks for an explicit reader-facing purpose. */
+    includeHelpfulFor?: boolean;
+    /** v3 preserves its conservative 1k-per-block prompt; v4 chunks have a
+     * bounded 12k total and may safely show the complete chunk. */
+    maxBlockChars?: number;
   },
 ): Promise<SynthesizedPassageAnnotations> {
   const empty = (): SynthesizedPassageAnnotations => ({ annotations: [], promptTokens: 0, completionTokens: 0, usedModel: false });
   if (!caller.available || input.blocks.length === 0) return empty();
 
   const maxAnnotations = input.maxAnnotations ?? 8;
+  const maxBlockChars = input.maxBlockChars ?? 1_000;
+  const includeHelpfulFor = input.includeHelpfulFor ?? false;
   const blocksById = new Map(input.blocks.map((b) => [b.blockId, b.text]));
 
   try {
     const r = await caller.call({
       model: input.model,
       schemaName: "passage_annotations",
-      schema: PASSAGE_ANNOTATION_SCHEMA,
+      schema: passageAnnotationSchema(includeHelpfulFor),
       safetyIdentifier: input.safetyIdentifier,
       // Generous headroom over what a full batch of annotations actually needs
       // (~1100–1300 tokens observed for 7-8 annotations) — a canary caught this
@@ -217,11 +248,17 @@ export async function synthesizePassageAnnotations(
         `dictionary definition. annotation_type is what KIND of note this is about the passage itself. ` +
         `relationship is only relevant when the note draws a comparison to another work or thinker; otherwise ` +
         `use "interpretive_aid". reader_level is who most needs this note — leave it empty if it's useful at ` +
-        `every level.`,
+        `every level.` +
+        (includeHelpfulFor
+          ? ` Cover the section rather than only its opening: look for key terms, concepts, arguments, evidence, ` +
+            `context, definitions, critiques, and relationships where the text genuinely supports them. Use the ` +
+            `most specific annotation_type available. helpful_for must be a short action-oriented phrase describing ` +
+            `why this note helps a reader, such as "Clarify an unfamiliar term" or "Track the author's evidence".`
+          : ""),
       input: JSON.stringify({
         title: input.primary.title,
         author: input.primary.author ?? null,
-        blocks: input.blocks.map((b) => ({ block_id: b.blockId, text: b.text.slice(0, 1000) })),
+        blocks: input.blocks.map((b) => ({ block_id: b.blockId, text: b.text.slice(0, maxBlockChars) })),
       }),
       validate: normalizeDraft,
     });

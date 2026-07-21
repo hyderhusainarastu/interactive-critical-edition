@@ -814,6 +814,42 @@ export const docFootnotes = pgTable(
 );
 
 /**
+ * Phase 12.3: source-authored apparatus remains distinct from AI annotations.
+ * It preserves the structural kind and real block/page scope so a reader can
+ * filter footnotes, endnotes, bibliography entries, and citation blocks
+ * independently without treating any of them as generated commentary.
+ */
+export const authorApparatusKindEnum = pgEnum("author_apparatus_kind", [
+  "footnote",
+  "endnote",
+  "bibliography_entry",
+  "citation_block",
+]);
+
+export const documentApparatus = pgTable(
+  "document_apparatus",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "set null" }),
+    kind: authorApparatusKindEnum("kind").notNull(),
+    marker: text("marker"),
+    text: text("text").notNull(),
+    /** { pageIndex, blockOrder, sectionTitle? } or a citation heuristic scope. */
+    scope: jsonb("scope"),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("document_apparatus_run_idx").on(t.runId),
+    index("document_apparatus_kind_idx").on(t.runId, t.kind),
+    index("document_apparatus_block_idx").on(t.textBlockId),
+  ],
+);
+
+/**
  * Auto-resolved document metadata for a run, with the winning source and a
  * confidence. High confidence lets the pipeline auto-advance past the
  * manual metadata form (Phase 8 auto-advance); low confidence keeps the
@@ -1336,6 +1372,11 @@ export const passageAnnotationTypeEnum = pgEnum("passage_annotation_type", [
   "connection",
   "critique",
   "definition",
+  "key_term",
+  "concept",
+  "argument",
+  "evidence",
+  "relationship",
 ]);
 
 /**
@@ -1365,6 +1406,10 @@ export const passageAnnotations = pgTable(
     /** Reader-facing, app+DB length-checked (<=240 chars). */
     summary: text("summary").notNull(),
     explanation: text("explanation").notNull(),
+    /** Brief reader-facing purpose, e.g. "Clarify an unfamiliar term". */
+    helpfulFor: text("helpful_for"),
+    /** { sectionTitle, pageIndex, blockOrder }; null for legacy/whole-work rows. */
+    scope: jsonb("scope"),
     annotationType: passageAnnotationTypeEnum("annotation_type").notNull(),
     relationship: relationshipCategoryEnum("relationship").notNull(),
     /** Null means "shown at every level", same convention as `resource_role.reader_level`. */
@@ -1383,5 +1428,85 @@ export const passageAnnotations = pgTable(
       sql`(${t.isWholeWork} = true AND ${t.textBlockId} IS NULL) OR (${t.isWholeWork} = false AND ${t.textBlockId} IS NOT NULL AND ${t.quote} IS NOT NULL)`,
     ),
     check("passage_annotation_summary_length", sql`char_length(${t.summary}) <= 240`),
+  ],
+);
+
+/**
+ * A grounded claim derived from a v4 passage annotation. These are not model
+ * assertions detached from the text: every row carries the excerpt and, when
+ * present, a text-block FK that produced it. Phase 12.5 will compare these
+ * rows across works; v4 only prepares and persists the source evidence.
+ */
+export const workClaims = pgTable(
+  "work_claim",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    workId: uuid("work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "set null" }),
+    claim: text("claim").notNull(),
+    claimType: text("claim_type").notNull(),
+    supportingExcerpt: text("supporting_excerpt").notNull(),
+    confidence: real("confidence").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("work_claim_run_idx").on(t.runId), index("work_claim_work_idx").on(t.workId)],
+);
+
+/**
+ * One compact v4 representation per work/run input. `embedding` is JSONB
+ * deliberately: adding pgvector is a production infrastructure decision and
+ * the phase must remain additive and rollback-safe. The later graph phase can
+ * migrate these vectors into an indexed representation without re-embedding.
+ */
+export const workEmbeddings = pgTable(
+  "work_embedding",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    workId: uuid("work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    inputHash: text("input_hash").notNull(),
+    embedding: jsonb("embedding").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("work_embedding_work_idx").on(t.workId),
+    uniqueIndex("work_embedding_work_model_input_unique").on(t.workId, t.model, t.inputHash),
+  ],
+);
+
+/**
+ * Cheap, unjudged cross-work candidates. They are only a retrieval cache —
+ * no relationship claim is made until Phase 12.5 evaluates a new pair.
+ */
+export const workRelationshipCandidates = pgTable(
+  "work_relationship_candidate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceWorkId: uuid("source_work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    targetWorkId: uuid("target_work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    method: text("method").notNull(),
+    score: real("score").notNull(),
+    basis: jsonb("basis").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("work_relationship_candidate_source_idx").on(t.sourceWorkId),
+    index("work_relationship_candidate_target_idx").on(t.targetWorkId),
+    uniqueIndex("work_relationship_candidate_unique").on(t.sourceWorkId, t.targetWorkId, t.method),
+    check("work_relationship_candidate_distinct_works", sql`${t.sourceWorkId} <> ${t.targetWorkId}`),
   ],
 );

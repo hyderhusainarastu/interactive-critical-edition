@@ -17,6 +17,7 @@ export * from "./synthesize";
 // Phase 9.3: passage-anchored annotations over the PRIMARY text, distinct
 // from synthesize.ts's notes about discovered EXTERNAL resources.
 export * from "./passageAnnotations";
+export * from "./v4Annotations";
 // Phase 9.4: real extraction for the v3 "concepts/people/debates" stage,
 // feeding the global concept catalog a per-work diagnostic quizzes over.
 export * from "./concepts";

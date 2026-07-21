@@ -34,7 +34,27 @@ export const V3_STAGE_SEQUENCE = [
 ] as const;
 export type V3Stage = (typeof V3_STAGE_SEQUENCE)[number];
 
-export const STAGE_LABEL: Record<V2Stage | V3Stage, string> = {
+/** Phase 12.3's section-aware, anchored pipeline. v2/v3 remain intact so a
+ * deployment can immediately roll back by changing `ANALYSIS_PIPELINE`. */
+export const V4_STAGE_SEQUENCE = [
+  "canonical-identity",
+  "structural-outline",
+  "section-aware-annotations",
+  "author-apparatus",
+  "explicit-citations",
+  "concepts-people-debates",
+  "lightweight-work-signals",
+  "lane-discovery",
+  "relevance-gate",
+  "creator-verification",
+  "citation-graph-expansion",
+  "credibility",
+  "claims",
+  "conservative-influence-classification",
+] as const;
+export type V4Stage = (typeof V4_STAGE_SEQUENCE)[number];
+
+export const STAGE_LABEL: Record<V2Stage | V3Stage | V4Stage, string> = {
   extracting: "Extracting text and metadata",
   "research-discovery": "Discovering related sources",
   "relevance-gate": "Checking source relevance",
@@ -51,9 +71,13 @@ export const STAGE_LABEL: Record<V2Stage | V3Stage, string> = {
   credibility: "Assessing source credibility",
   claims: "Extracting claims and evidence",
   "conservative-influence-classification": "Classifying relationships conservatively",
+  "section-aware-annotations": "Anchoring section-aware annotations",
+  "author-apparatus": "Extracting author apparatus",
+  "lightweight-work-signals": "Preparing cross-work signals",
 };
 
 /** Stage sequence for a given pipeline version. v1 has no stages to show — see the file header. */
 export function stageSequenceForPipeline(pipelineVersion: string): readonly string[] {
+  if (pipelineVersion === "v4") return V4_STAGE_SEQUENCE;
   return pipelineVersion === "v3" ? V3_STAGE_SEQUENCE : V2_STAGE_SEQUENCE;
 }
