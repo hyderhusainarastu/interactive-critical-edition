@@ -677,9 +677,9 @@ Pure logic unit-tested offline; the pipeline proven by canary — the Phase 8 pa
 
 ---
 
-## 35. Phase 10 — Workspace Depth & Adaptivity Completion (approved plan)
+## 35. Phase 10 — Workspace Depth & Adaptivity Completion (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, in progress. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 (Educational Companion Site) is renumbered Phase 11 (§23, §31).
+**Status:** approved 2026-07-20, **complete 2026-07-20** — all 6 audited scope items shipped, the two AI-pipeline-touching items production-canary-verified, tagged `phase-10-complete`. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 (Educational Companion Site) is renumbered Phase 11 (§23, §31).
 
 ### 35.1 Objective
 
@@ -715,4 +715,4 @@ Full reasoning and verification for each: `docs/PROJECT-LOG.md`'s Phase 10 entry
 
 ### 35.4 Acceptance gates
 
-Every pure-UI item ships with typecheck/lint/test/build green, relevant CI-safe Playwright coverage, and a manual screenshot. Every AI-pipeline-touching item ships with the same plus a migration (if needed) and an owner-approved production canary. No regression in any 9.1–9.7 behavior. Then tag `phase-10-complete`.
+Every pure-UI item ships with typecheck/lint/test/build green, relevant CI-safe Playwright coverage, and a manual screenshot. Every AI-pipeline-touching item ships with the same plus a migration (if needed) and an owner-approved production canary. No regression in any 9.1–9.7 behavior. Then tag `phase-10-complete`. **All met, 2026-07-20** — see `docs/PROJECT-LOG.md` for the full canary narrative (cost $0.051906, non-degraded, 29 resources, 7 passage annotations, 4 correctly typed `definition`).

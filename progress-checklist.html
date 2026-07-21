@@ -162,14 +162,14 @@
     <section class="overview" aria-labelledby="overview-title">
       <div>
         <p class="eyebrow">Current position</p>
-        <h2 id="overview-title">Phase 10 is underway</h2>
-        <p>Phases 0–9 are complete. Phase 9's originally-planned 9.8 sub-phase was retired before implementation (never enumerated anywhere despite being referenced by count, and not worth guessing at given the real AI-spend stakes attached to it); Phase 9's own original objective — full-depth adaptivity without ever hiding depth — is instead being completed by Phase 10.</p>
+        <h2 id="overview-title">Phase 10 is complete</h2>
+        <p>Phases 0–10 are complete. Phase 9's originally-planned 9.8 sub-phase was retired before implementation (never enumerated anywhere despite being referenced by count, and not worth guessing at given the real AI-spend stakes attached to it); Phase 9's own original objective — full-depth adaptivity without ever hiding depth — was completed by Phase 10 instead, including an owner-approved production canary confirming the AI-pipeline-touching changes.</p>
         <div class="progress">
-          <div class="progress-label"><span>Phase 10 scope items</span><span>5 of 6 complete</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 10 scope items complete" aria-valuemin="0" aria-valuemax="6" aria-valuenow="5"><span></span></div>
+          <div class="progress-label"><span>Phase 10 scope items</span><span>6 of 6 complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 10 scope items complete" aria-valuemin="0" aria-valuemax="6" aria-valuenow="6"><span></span></div>
         </div>
       </div>
-      <div class="metric"><strong>10 / 12</strong><span>numbered phases complete</span></div>
+      <div class="metric"><strong>11 / 12</strong><span>numbered phases complete</span></div>
     </section>
 
     <section aria-labelledby="phase-index-title">
@@ -188,13 +188,13 @@
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 7</div><h3>Hardening &amp; deployment</h3></div><span class="status complete">Complete</span></div><p>Authorization coverage, evaluation harness, admin tools, CI, recovery drill, and documentation completed.</p><div class="meta">tag · phase-7-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 8</div><h3>Autonomous critical edition</h3></div><span class="status complete">Complete</span></div><p>Page-aware extraction, evidence-first research, relevance gating, source grouping, and reliable v2 publishing verified in production.</p><div class="meta">tag · phase-8-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>All seven planned sub-phases shipped and production-verified. The originally-planned 9.8 was retired as a phantom requirement; see Phase 10.</p><div class="meta">tag · phase-9-complete</div></li>
-        <li class="phase active"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status active">In progress</span></div><p>Returns to and completes Phase 9's own original objective by closing the concrete gaps its sub-phases left open.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete gaps 9.1–9.7 left in Phase 9's own original objective; the two AI-pipeline-touching items are production-canary-verified.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 10</div></li>
       </ol>
     </section>
 
     <section class="focus" aria-labelledby="phase-ten-title">
-      <div class="focus-header"><div><p class="eyebrow">Active phase</p><h2 id="phase-ten-title">Workspace Depth &amp; Adaptivity Completion</h2></div><span class="status active">In progress</span></div>
+      <div class="focus-header"><div><p class="eyebrow">Most recently completed phase</p><h2 id="phase-ten-title">Workspace Depth &amp; Adaptivity Completion</h2></div><span class="status complete">Complete</span></div>
       <p>Phase 10 returns to and completes Phase 9's own original objective — a workspace that adapts to the reader's level without ever hiding depth — by closing the concrete gaps audited against the shipped 9.1–9.7 codebase, rather than inventing new scope.</p>
       <ol class="subphases">
         <li class="subphase complete"><h3>Annotation relationship &amp; source link</h3><p>Surface each passage annotation's relationship category and a link to its related resource. Pure UI, no new schema or AI call. Complete.</p></li>
@@ -202,7 +202,7 @@
         <li class="subphase complete"><h3>Library default-scoping</h3><p>Reader-level scoping becomes the default view (with an explicit "show all"), matching Roadmap and Curriculum's established pattern. Complete.</p></li>
         <li class="subphase complete"><h3>3D graph visual richness</h3><p>Directional link particles, neighbor-subgraph hover highlight, click-to-focus camera fly-to — still driven by the same palette tokens. The accessible table stays an equal, unchanged fallback. Complete.</p></li>
         <li class="subphase complete"><h3>Suggested reader level</h3><p>A level nudge derived from aggregate Library completion patterns — a suggestion the reader can accept or ignore, never a silent overwrite. Complete as a pure read-time feature; no canary needed.</p></li>
-        <li class="subphase current"><h3>Jargon-extraction tightening</h3><p>Verify and, if needed, tighten the passage-annotation extraction prompt so it reliably targets terminology/jargon, not just general commentary. Code complete; awaiting an owner-approved production canary.</p></li>
+        <li class="subphase complete"><h3>Jargon-extraction tightening</h3><p>Verify and, if needed, tighten the passage-annotation extraction prompt so it reliably targets terminology/jargon, not just general commentary. Complete; production-canary-verified (4 of 7 seeded annotations correctly typed "definition" against real Greek/Latin technical vocabulary).</p></li>
       </ol>
       <details>
         <summary>What “complete” means for this phase</summary>
