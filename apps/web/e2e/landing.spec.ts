@@ -10,6 +10,9 @@ test.describe("Landing & policy pages (Phase 6)", () => {
   test("landing page communicates the product and has no accessibility violations", async ({ page }) => {
     await page.goto("/");
 
+    // Brand name is present in the header (Phase 11.1 rename).
+    await expect(page.getByRole("link", { name: "Palimnote" })).toBeVisible();
+
     // Value proposition is legible from the page alone.
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/whole conversation around them/i);
     await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();

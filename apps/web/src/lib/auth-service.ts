@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { and, eq, sql } from "drizzle-orm";
 import { mailProvider, passwordResetEmailHtml, verificationEmailHtml } from "@/lib/mail";
 import { generateToken, hashToken } from "@/lib/tokens";
+import { SITE_NAME } from "@/lib/brand";
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 60 * 60 * 1000;
@@ -41,7 +42,7 @@ export async function registerUser(params: {
   const link = `${appUrl()}/verify-email?token=${raw}&email=${encodeURIComponent(email)}`;
   await mailProvider.send({
     to: email,
-    subject: "Verify your email — Interactive Critical Edition",
+    subject: `Verify your email — ${SITE_NAME}`,
     html: verificationEmailHtml(link),
   });
 }
@@ -102,7 +103,7 @@ export async function requestPasswordReset(email: string) {
   const link = `${appUrl()}/reset-password?token=${raw}&email=${encodeURIComponent(normalizedEmail)}`;
   await mailProvider.send({
     to: normalizedEmail,
-    subject: "Reset your password — Interactive Critical Edition",
+    subject: `Reset your password — ${SITE_NAME}`,
     html: passwordResetEmailHtml(link),
   });
 }

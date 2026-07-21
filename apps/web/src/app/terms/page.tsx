@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { SITE_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Terms — Interactive Critical Edition",
-  description: "The terms of use for the Interactive Critical Edition reader.",
+  title: `Terms — ${SITE_NAME}`,
+  description: `The terms of use for the ${SITE_NAME} reader.`,
 };
 
 export default function TermsPage() {

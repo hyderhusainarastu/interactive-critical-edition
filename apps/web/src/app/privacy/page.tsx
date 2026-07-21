@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { SITE_NAME } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Privacy & Copyright — Interactive Critical Edition",
+  title: `Privacy & Copyright — ${SITE_NAME}`,
   description: "How your data, uploads, and AI-generated content are handled.",
 };
 

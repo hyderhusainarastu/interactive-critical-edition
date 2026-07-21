@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SITE_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Interactive Critical Edition",
+  title: SITE_NAME,
   description:
     "An AI-assisted scholarly reader: annotated critical editions and personalized reading roadmaps for difficult texts.",
 };

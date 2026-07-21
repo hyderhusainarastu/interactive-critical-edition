@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Implementation progress for Interactive Critical Edition.">
-  <title>Progress · Interactive Critical Edition</title>
+  <meta name="description" content="Implementation progress for Palimnote.">
+  <title>Progress · Palimnote</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -150,7 +150,7 @@
 <body>
   <main class="page">
     <header>
-      <p class="eyebrow">Interactive Critical Edition · Project record</p>
+      <p class="eyebrow">Palimnote · Project record</p>
       <h1>Build progress, plainly accounted for.</h1>
       <p class="lede">A concise record of what has shipped, what is underway, and what comes next. The canonical detail lives in <code>docs/PROJECT-LOG.md</code>; the approved delivery plan lives in <code>docs/architecture/plan.md</code>.</p>
       <nav class="links" aria-label="Project links">
@@ -162,14 +162,14 @@
     <section class="overview" aria-labelledby="overview-title">
       <div>
         <p class="eyebrow">Current position</p>
-        <h2 id="overview-title">Phase 10 is complete</h2>
-        <p>Phases 0–10 are complete. Phase 9's originally-planned 9.8 sub-phase was retired before implementation (never enumerated anywhere despite being referenced by count, and not worth guessing at given the real AI-spend stakes attached to it); Phase 9's own original objective — full-depth adaptivity without ever hiding depth — was completed by Phase 10 instead, including an owner-approved production canary confirming the AI-pipeline-touching changes.</p>
+        <h2 id="overview-title">Phase 11 is in progress</h2>
+        <p>Phases 0–10 are complete. Phase 11 (Rebrand, UI/UX Overhaul, Reader/Relevance Fixes) started 2026-07-21: sub-phase 11.1 (the "Palimnote" rebrand) is complete; 11.2–11.9 (theming, upload progress, Library work-scoping, a two-part reader overhaul, a relevance/classification fix, and a graph/visualization merge) are not yet started. The previously-Phase-11 Educational Companion Site is renumbered to Phase 12.</p>
         <div class="progress">
-          <div class="progress-label"><span>Phase 10 scope items</span><span>6 of 6 complete</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 10 scope items complete" aria-valuemin="0" aria-valuemax="6" aria-valuenow="6"><span></span></div>
+          <div class="progress-label"><span>Phase 11 scope items</span><span>1 of 9 complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 11 scope items complete" aria-valuemin="0" aria-valuemax="9" aria-valuenow="1"><span></span></div>
         </div>
       </div>
-      <div class="metric"><strong>11 / 12</strong><span>numbered phases complete</span></div>
+      <div class="metric"><strong>11 / 13</strong><span>numbered phases complete</span></div>
     </section>
 
     <section aria-labelledby="phase-index-title">
@@ -189,13 +189,40 @@
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 8</div><h3>Autonomous critical edition</h3></div><span class="status complete">Complete</span></div><p>Page-aware extraction, evidence-first research, relevance gating, source grouping, and reliable v2 publishing verified in production.</p><div class="meta">tag · phase-8-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>All seven planned sub-phases shipped and production-verified. The originally-planned 9.8 was retired as a phantom requirement; see Phase 10.</p><div class="meta">tag · phase-9-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete gaps 9.1–9.7 left in Phase 9's own original objective; the two AI-pipeline-touching items are production-canary-verified.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 10</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Rebrand, UI/UX overhaul &amp; reader/relevance fixes</h3></div><span class="status active">In progress</span></div><p>Palimnote rebrand, stronger theming, honest upload progress, Library work-scoping, a two-part reader overhaul, a classification fix, and a merged graph/table visualization.</p><div class="meta">plan · docs/architecture/plan.md §36</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 11</div></li>
       </ol>
     </section>
 
     <section class="focus" aria-labelledby="phase-ten-title">
-      <div class="focus-header"><div><p class="eyebrow">Most recently completed phase</p><h2 id="phase-ten-title">Workspace Depth &amp; Adaptivity Completion</h2></div><span class="status complete">Complete</span></div>
-      <p>Phase 10 returns to and completes Phase 9's own original objective — a workspace that adapts to the reader's level without ever hiding depth — by closing the concrete gaps audited against the shipped 9.1–9.7 codebase, rather than inventing new scope.</p>
+      <div class="focus-header"><div><p class="eyebrow">Currently active phase</p><h2 id="phase-ten-title">Rebrand, UI/UX Overhaul &amp; Reader/Relevance Fixes</h2></div><span class="status active">In progress</span></div>
+      <p>Nine sub-phases (11.1–11.9), sequenced so groundwork lands before what consumes it: branding, theming, upload progress, Library work-scoping, a two-part reader overhaul, a relevance/classification fix (ending in an owner-gated production canary), and a graph/visualization merge. 11.1 (Palimnote rebrand) is complete; 11.2–11.9 remain.</p>
+      <ol class="subphases">
+        <li class="subphase complete"><h3>11.1 · Branding rename</h3><p>Public-facing product name becomes "Palimnote", via one shared constant. Backend/DB/package/repo names unchanged. Complete.</p></li>
+        <li class="subphase"><h3>11.2 · Theming</h3><p>Harsh/bright functional accents scoped to credibility alerting, a new credibility meter, and consolidated annotation-color tokens. Not started.</p></li>
+        <li class="subphase"><h3>11.3 · Upload progress</h3><p>Real byte-level transfer progress plus an honest, stage-by-stage processing indicator shared between web and worker. Not started.</p></li>
+        <li class="subphase"><h3>11.4 · Library work-scoping</h3><p>Select one uploaded work and see everything the Library recommends for it specifically. Not started.</p></li>
+        <li class="subphase"><h3>11.5 · Reader overhaul, part 1</h3><p>The published edition becomes the default reader, with a new annotations/sources sidebar and click-to-reveal in-text markers. Not started.</p></li>
+        <li class="subphase"><h3>11.6 · Reader overhaul, part 2</h3><p>Critical notes and authorial footnotes move into the sidebar, with client-side quote-matching for in-text markers where possible. Not started.</p></li>
+        <li class="subphase"><h3>11.7 · Classification fix</h3><p>A citation-frequency signal so a pervasively-cited work (e.g. Nicomachean Ethics) correctly classifies as a prerequisite. Not started; ends with an owner-gated production canary.</p></li>
+        <li class="subphase"><h3>11.8 · Visualization: nav &amp; edge colors</h3><p>"Graph" renamed to "Visualization" and promoted in the nav; relationship-type edge coloring added. Not started.</p></li>
+        <li class="subphase"><h3>11.9 · Visualization: merged layout</h3><p>3D graph and the accessible table shown together, not toggled, plus new credibility-band and associated-work filters. Not started.</p></li>
+      </ol>
+      <details>
+        <summary>What “complete” means for this phase</summary>
+        <div class="evidence">
+          <div><strong>No regression</strong><span>Nothing built in Phases 1–10 is removed — Phase 11 only renames, restyles, adds, and fixes.</span></div>
+          <div><strong>Right discipline per item</strong><span>UI/web-only items need typecheck/lint/test/build plus CI-safe coverage; the one worker-touching item (11.7) additionally needs an owner-approved production canary.</span></div>
+          <div><strong>Traceable scope</strong><span>Every item in this phase is a concretely identified usability/correctness problem found during hands-on testing (plan.md §36), not speculative scope.</span></div>
+        </div>
+      </details>
+    </section>
+
+    <section aria-labelledby="phase-ten-title-ref" style="margin-top: 2rem;">
+      <div class="section-heading">
+        <h2 id="phase-ten-title-ref">Phase 10 — Workspace Depth &amp; Adaptivity Completion (complete)</h2>
+        <p>All six audited scope items shipped, tested, and production-canary-verified where AI-pipeline-touching. Kept here for reference.</p>
+      </div>
       <ol class="subphases">
         <li class="subphase complete"><h3>Annotation relationship &amp; source link</h3><p>Surface each passage annotation's relationship category and a link to its related resource. Pure UI, no new schema or AI call. Complete.</p></li>
         <li class="subphase complete"><h3>Annotation filter &amp; sort</h3><p>Filter/sort annotations by category and review status, plus a sort control, mirroring the Library's established pattern. Complete.</p></li>
@@ -204,14 +231,6 @@
         <li class="subphase complete"><h3>Suggested reader level</h3><p>A level nudge derived from aggregate Library completion patterns — a suggestion the reader can accept or ignore, never a silent overwrite. Complete as a pure read-time feature; no canary needed.</p></li>
         <li class="subphase complete"><h3>Jargon-extraction tightening</h3><p>Verify and, if needed, tighten the passage-annotation extraction prompt so it reliably targets terminology/jargon, not just general commentary. Complete; production-canary-verified (4 of 7 seeded annotations correctly typed "definition" against real Greek/Latin technical vocabulary).</p></li>
       </ol>
-      <details>
-        <summary>What “complete” means for this phase</summary>
-        <div class="evidence">
-          <div><strong>No regression</strong><span>Nothing built in Phase 9 (9.1–9.7) is removed or replaced — Phase 10 only adds and enhances.</span></div>
-          <div><strong>Right discipline per item</strong><span>Pure-UI items need typecheck/lint/test/build plus CI-safe coverage; AI-pipeline items additionally need a migration (if any) and an owner-approved production canary.</span></div>
-          <div><strong>Traceable scope</strong><span>Every item in this phase is a concretely audited gap against the shipped codebase (plan.md §35.2), not a guess.</span></div>
-        </div>
-      </details>
     </section>
 
     <section aria-labelledby="phase-nine-title" style="margin-top: 2rem;">
@@ -230,7 +249,7 @@
       </ol>
     </section>
 
-    <footer><p>Last reconciled with <code>docs/PROJECT-LOG.md</code> and <code>docs/architecture/plan.md</code> on 2026-07-20. This page is a milestone tracker, not a substitute for the project record.</p></footer>
+    <footer><p>Last reconciled with <code>docs/PROJECT-LOG.md</code> and <code>docs/architecture/plan.md</code> on 2026-07-21. This page is a milestone tracker, not a substitute for the project record.</p></footer>
   </main>
 </body>
 </html>

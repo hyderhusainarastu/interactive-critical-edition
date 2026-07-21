@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
+import { SITE_NAME } from "@/lib/brand";
 
 export default function Home() {
   return (
@@ -31,7 +32,7 @@ function Hero() {
         Read hard books with the whole conversation around them in view.
       </h1>
       <p className="mt-6 max-w-2xl text-lg leading-relaxed text-[var(--color-text-muted)]">
-        Upload a work of philosophy, a monograph, or a research article. It becomes an interactive critical
+        Upload a work of philosophy, a monograph, or a research article. {SITE_NAME} turns it into an annotated
         edition — the original text, its citations traced to real sources, the intellectual context it assumes,
         and a personalized, dependency-ordered plan for what to read to actually understand it.
       </p>
@@ -312,7 +313,7 @@ function FinalCta() {
           Bring the hardest thing on your shelf.
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-[var(--color-text-muted)]">
-          Create an account and turn your first difficult text into an interactive critical edition.
+          Create an account and turn your first difficult text into an annotated critical edition.
         </p>
         <div className="mt-8">
           <Link

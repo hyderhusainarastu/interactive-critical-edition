@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
+import { SITE_NAME } from "@/lib/brand";
 
 /**
  * Public site header for the landing and policy pages. Adapts its CTA to
@@ -14,7 +15,7 @@ export async function SiteHeader() {
     <header className="border-b border-[var(--color-border)]">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
         <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
-          Interactive Critical Edition
+          {SITE_NAME}
         </Link>
         <nav className="flex items-center gap-4 text-sm">
           {signedIn ? (

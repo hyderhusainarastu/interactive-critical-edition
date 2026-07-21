@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { logoutAction } from "@/lib/actions";
 import { isAdminEmail } from "@/lib/admin";
+import { SITE_NAME } from "@/lib/brand";
 
 /**
  * Single, centralized auth check for every route under (app) — replaces
@@ -29,7 +30,7 @@ export default async function AppLayout({
             href="/dashboard"
             className="font-semibold text-[var(--color-text)]"
           >
-            Interactive Critical Edition
+            {SITE_NAME}
           </Link>
           <Link href="/dashboard" className="text-[var(--color-text-muted)]">
             Dashboard

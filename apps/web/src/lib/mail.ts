@@ -6,6 +6,8 @@
  * configured, implement a documented adapter and fallback state."
  */
 
+import { SITE_NAME } from "@/lib/brand";
+
 interface MailProvider {
   send(params: { to: string; subject: string; html: string }): Promise<void>;
 }
@@ -40,9 +42,9 @@ function createMailProvider(): MailProvider {
 export const mailProvider = createMailProvider();
 
 export function verificationEmailHtml(link: string) {
-  return `<p>Confirm your email for Interactive Critical Edition:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`;
+  return `<p>Confirm your email for ${SITE_NAME}:</p><p><a href="${link}">${link}</a></p><p>This link expires in 24 hours.</p>`;
 }
 
 export function passwordResetEmailHtml(link: string) {
-  return `<p>Reset your Interactive Critical Edition password:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>`;
+  return `<p>Reset your ${SITE_NAME} password:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>`;
 }
