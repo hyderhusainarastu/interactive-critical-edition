@@ -3,6 +3,8 @@ import { dedupeResources, normalizedKey } from "./normalize";
 import type { QueryLane } from "./relevance";
 import type { ProviderAttempt, ProviderName, ProviderStatus, RawResource, SourceAdapter } from "./types";
 
+export const PROVIDER_NOT_SELECTED_ERROR = "No generated discovery lane selected this provider.";
+
 /**
  * Discovery orchestration core (plan §33). Pure over the injected adapters (which
  * are themselves mockable), so the cost/saturation/dedup guarantees are unit-
@@ -35,8 +37,15 @@ export function charge(b: CostBudget, usd: number): void {
 }
 
 // ---- Per-provider result budgets ----
-export function perProviderLimit(p: ProviderName): number {
+export function perProviderLimit(p: ProviderName, lane?: QueryLane): number {
+  // Blog discovery has two web providers. Split the existing web cap between
+  // them instead of silently increasing the source-result budget.
+  if (lane === "blog_newsletter" && (p === "tavily" || p === "blogger")) {
+    return Math.ceil(RESEARCH_LIMITS.maxWebResults / 2);
+  }
   switch (p) {
+    case "blogger":
+      return Math.ceil(RESEARCH_LIMITS.maxWebResults / 2);
     case "youtube":
       return RESEARCH_LIMITS.maxYoutubeResults;
     case "tavily":
@@ -85,7 +94,7 @@ export function providersForLane(lane: QueryLane): ReadonlySet<ProviderName> {
     case "video_podcast":
       return new Set<ProviderName>(["youtube", "tavily"]);
     case "blog_newsletter":
-      return new Set<ProviderName>(["tavily"]);
+      return new Set<ProviderName>(["tavily", "blogger"]);
     case "public_discussion":
       return new Set<ProviderName>(["mastodon", "bluesky", "tavily"]);
     case "primary_prerequisite":
@@ -170,7 +179,7 @@ export async function runDiscovery(input: {
     const active = allowed ? input.adapters.filter((a) => allowed.has(a.provider)) : input.adapters;
     const results = await Promise.all(
       active.map((a) =>
-        a.search(queries, { maxResults: perProviderLimit(a.provider), timeoutMs: input.timeoutMs }),
+        a.search(queries, { maxResults: perProviderLimit(a.provider, lane), timeoutMs: input.timeoutMs }),
       ),
     );
     for (const r of results) {
@@ -218,6 +227,7 @@ export async function runDiscovery(input: {
       resultCount: 0,
       inspectionDepth: 0,
       latencyMs: 0,
+      error: a.isEnabled() ? PROVIDER_NOT_SELECTED_ERROR : undefined,
     });
   }
 

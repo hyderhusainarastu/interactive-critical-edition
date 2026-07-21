@@ -35,9 +35,12 @@ export class TavilyAdapter implements SourceAdapter {
       try {
         const res = await fetch("https://api.tavily.com/search", {
           method: "POST",
-          headers: { "Content-Type": "application/json", "User-Agent": userAgent() },
+          headers: {
+            "Authorization": `Bearer ${process.env.TAVILY_API_KEY}`,
+            "Content-Type": "application/json",
+            "User-Agent": userAgent(),
+          },
           body: JSON.stringify({
-            api_key: process.env.TAVILY_API_KEY,
             query: first(queries),
             max_results: opts.maxResults,
             search_depth: "basic",

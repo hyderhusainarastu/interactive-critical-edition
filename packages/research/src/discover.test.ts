@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, runDiscovery } from "./discover";
+import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, PROVIDER_NOT_SELECTED_ERROR, runDiscovery } from "./discover";
 import type { AdapterResult, AdapterSearchOptions, ProviderName, RawResource, SourceAdapter } from "./types";
 
 function res(i: number, provider: ProviderName = "crossref"): RawResource {
@@ -123,6 +123,7 @@ describe("lane-scoped discovery", () => {
     expect([...providersForLane("video_podcast")]).toEqual(expect.arrayContaining(["youtube"]));
     expect([...providersForLane("video_podcast")]).not.toContain("crossref");
     expect([...providersForLane("public_discussion")]).toEqual(expect.arrayContaining(["mastodon", "bluesky"]));
+    expect([...providersForLane("blog_newsletter")]).toEqual(expect.arrayContaining(["tavily", "blogger"]));
     expect([...providersForLane("scholarly_debate")]).toEqual(expect.arrayContaining(["crossref", "openalex"]));
     expect([...providersForLane("scholarly_debate")]).not.toContain("youtube");
     // Primary texts are catalogued as books far more often than as articles.
@@ -198,6 +199,7 @@ describe("lane-scoped discovery", () => {
     // Silence must never be mistaken for "nothing was found".
     expect(yt).toBeDefined();
     expect(yt?.status).toBe("unavailable");
+    expect(yt?.error).toBe(PROVIDER_NOT_SELECTED_ERROR);
   });
 
   it("still accepts plain (lane-less) rounds", async () => {

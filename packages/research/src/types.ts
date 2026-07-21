@@ -21,6 +21,7 @@ export type ProviderName =
   | "googlebooks"
   | "semanticscholar"
   | "tavily"
+  | "blogger"
   | "youtube"
   | "mastodon"
   | "bluesky";
@@ -34,7 +35,7 @@ export const SCHOLARLY_PROVIDERS: readonly ProviderName[] = [
   "googlebooks",
   "semanticscholar",
 ];
-export const WEB_PROVIDERS: readonly ProviderName[] = ["tavily", "youtube"];
+export const WEB_PROVIDERS: readonly ProviderName[] = ["tavily", "blogger", "youtube"];
 export const SOCIAL_PROVIDERS: readonly ProviderName[] = ["mastodon", "bluesky"];
 
 /** The auditable outcome of consulting a provider (plan §33 §2.3). */

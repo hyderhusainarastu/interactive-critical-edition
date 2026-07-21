@@ -6,12 +6,14 @@ import {
   OpenLibraryAdapter,
   SemanticScholarAdapter,
 } from "./scholarly";
+import { BloggerAdapter } from "./blogger";
 import { TavilyAdapter, YouTubeAdapter } from "./web";
 import { BlueskyAdapter, MastodonAdapter } from "./social";
 
 export * from "./base";
 export * from "./scholarly";
 export * from "./web";
+export * from "./blogger";
 export * from "./social";
 
 /** Every adapter, in a stable order (scholarly → web → social). */
@@ -23,6 +25,7 @@ export function allAdapters(): SourceAdapter[] {
     new GoogleBooksAdapter(),
     new SemanticScholarAdapter(),
     new TavilyAdapter(),
+    new BloggerAdapter(),
     new YouTubeAdapter(),
     new MastodonAdapter(),
     new BlueskyAdapter(),

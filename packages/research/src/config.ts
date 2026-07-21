@@ -39,11 +39,11 @@ export const CACHE_TTL_MS = {
 } as const;
 
 /**
- * Provider enablement. Keyless scholarly sources are always on. Tavily and
- * YouTube require a FREE key (absent → the provider records a `disabled`
- * attempt, never a silent skip). Reddit and all paid social access stay
- * disabled until separately approved (plan §33). A provider can also be force
- * -disabled via `RESEARCH_DISABLED_PROVIDERS` (comma-separated).
+ * Provider enablement. Keyless scholarly sources are always on. Keyed web and
+ * social sources record an honest `disabled` attempt when their required
+ * configuration is absent. Reddit stays out of the direct-adapter surface. A
+ * provider can also be force-disabled via `RESEARCH_DISABLED_PROVIDERS`
+ * (comma-separated).
  */
 const forceDisabled = new Set(
   (process.env.RESEARCH_DISABLED_PROVIDERS ?? "").split(",").map((s) => s.trim()).filter(Boolean),
@@ -62,16 +62,30 @@ export function providerEnabled(provider: ProviderName): boolean {
     // Free-tier keys required; disabled (honestly reported) when absent.
     case "tavily":
       return Boolean(process.env.TAVILY_API_KEY);
+    case "blogger":
+      return Boolean(process.env.BLOGGER_API_KEY && configuredBloggerBlogIds().length);
     case "youtube":
       return Boolean(process.env.YOUTUBE_API_KEY);
-    // Public read access; app-level opt-in via a base URL / handle.
+    // Status search requires both the target instance and an authorized token.
     case "mastodon":
-      return Boolean(process.env.MASTODON_INSTANCE_URL);
+      return Boolean(process.env.MASTODON_INSTANCE_URL && process.env.MASTODON_ACCESS_TOKEN);
     case "bluesky":
       return Boolean(process.env.BLUESKY_IDENTIFIER && process.env.BLUESKY_APP_PASSWORD);
     default:
       return false;
   }
+}
+
+/** Explicit public blogs to search through Blogger's per-blog API. The API
+ * does not offer a web-wide blog search, so a key alone must not imply broad
+ * coverage that it cannot provide. */
+export function configuredBloggerBlogIds(): string[] {
+  return [...new Set(
+    (process.env.BLOGGER_BLOG_IDS ?? "")
+      .split(",")
+      .map((blogId) => blogId.trim())
+      .filter(Boolean),
+  )];
 }
 
 /** Polite-pool / attribution contact sent to keyless scholarly APIs. */

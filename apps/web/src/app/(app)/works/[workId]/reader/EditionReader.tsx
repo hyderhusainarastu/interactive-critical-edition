@@ -607,7 +607,7 @@ export function EditionReader({
           <ul className="mt-2 flex flex-wrap gap-2 text-xs">
             {edition.providerReports.map((report) => (
               <li key={report.provider} className="rounded border border-[var(--color-border)] px-2 py-1" title={report.error ?? undefined}>
-                <span className="font-medium">{report.provider}</span> · {report.status} · {report.resultCount} results
+                <span className="font-medium">{report.provider}</span> · {report.error === "No generated discovery lane selected this provider." ? "not selected" : report.status} · {report.resultCount} results
               </li>
             ))}
           </ul>
