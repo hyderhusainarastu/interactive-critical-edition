@@ -22,6 +22,7 @@ interface TrashedWork {
 export function TrashView() {
   const [items, setItems] = useState<TrashedWork[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingPurge, setConfirmingPurge] = useState<string | null>(null);
 
   // `load` is used by `restore`/`purgeNow` to refetch after a mutation; the
   // initial load below is inlined with the `.then` pattern instead of
@@ -64,6 +65,7 @@ export function TrashView() {
 
   async function purgeNow(workId: string) {
     await fetch(`/api/works/${workId}/purge`, { method: "POST" });
+    setConfirmingPurge(null);
     await load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load trash"));
   }
 
@@ -101,13 +103,21 @@ export function TrashView() {
                 >
                   Restore
                 </button>
-                <button
-                  type="button"
-                  onClick={() => purgeNow(item.workId)}
-                  className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
-                >
-                  Delete permanently now
-                </button>
+                {confirmingPurge === item.workId ? (
+                  <span className="flex items-center gap-2 text-sm">
+                    <span className="text-[var(--color-accent-burgundy)]">Permanent deletion cannot be undone.</span>
+                    <button type="button" onClick={() => purgeNow(item.workId)} className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-[var(--color-accent-burgundy)]">Delete now</button>
+                    <button type="button" onClick={() => setConfirmingPurge(null)} className="underline">Cancel</button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingPurge(item.workId)}
+                    className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
+                  >
+                    Delete permanently now
+                  </button>
+                )}
               </div>
             </li>
           ))}

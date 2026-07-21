@@ -169,7 +169,7 @@ export function WorkStatusPanel({
           onClick={handleRestore}
           className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
         >
-          Restore
+          Undo move to trash
         </button>
       </div>
     );

@@ -20,6 +20,7 @@
     "@ice/observability": "workspace:*",
     "@ice/research": "workspace:*",
     "@ice/roadmap": "workspace:*",
+    "@sentry/nextjs": "^10.67.0",
     "bcryptjs": "^3.0.2",
     "drizzle-orm": "^0.44.0",
     "next": "16.2.10",

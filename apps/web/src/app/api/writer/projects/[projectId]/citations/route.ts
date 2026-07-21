@@ -4,6 +4,7 @@ import { parseBibtex, parseRis } from "@/lib/writer";
 import { resolveCitation } from "@/lib/citationResolver";
 import { addWriterCitation, getOwnedLibraryCitation, getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { reportWebError } from "@/lib/telemetry";
 
 const schema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("library"), resourceId: z.string().uuid() }),
@@ -39,7 +40,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     if (!list.length) return NextResponse.json({ error: "No usable citation metadata found." }, { status: 422 });
     const saved = await Promise.all(list.map((citation) => addWriterCitation(projectId, citation, parsed.data.kind)));
     return NextResponse.json({ citations: saved.filter(Boolean), candidates: list.length }, { status: 201 });
-  } catch {
+  } catch (error) {
+    reportWebError(error, { scope: "api.writer.citation_lookup", userId, projectId, kind: parsed.data.kind });
     return NextResponse.json({ error: "Citation lookup is temporarily unavailable." }, { status: 502 });
   }
 }

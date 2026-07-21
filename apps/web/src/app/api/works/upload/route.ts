@@ -3,8 +3,10 @@ import { enqueueExtractText } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { scanWithOptionalClamAv, uploadDocumentFile, validateUploadContent } from "@ice/ingestion";
-import { reportError } from "@ice/observability";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
+import { reportWebError } from "@/lib/telemetry";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "application/epub+zip", "text/plain", "text/markdown"]);
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
@@ -15,6 +17,8 @@ export async function POST(request: Request) {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const rate = await enforceUserRateLimit({ userId, scope: "upload", limit: 20, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
 
   const formData = await request.formData().catch(() => null);
   const file = formData?.get("file");
@@ -87,7 +91,7 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     await db.delete(works).where(eq(works.id, work.id));
-    reportError(err, { scope: "api.upload", workId: work.id, userId });
+    reportWebError(err, { scope: "api.upload", workId: work.id, userId });
     return NextResponse.json(
       { error: "Upload failed — please try again." },
       { status: 500 },

@@ -27,6 +27,7 @@ import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
+import "./sentry";
 
 function sha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
@@ -382,7 +383,14 @@ async function main() {
 
   await boss.work<ExpandCrossLibraryGraphJob>(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
-    for (const job of batch) await expandCrossLibraryGraph(job.data.expansionRequestId);
+    for (const job of batch) {
+      try {
+        await expandCrossLibraryGraph(job.data.expansionRequestId);
+      } catch (error) {
+        reportError(error, { scope: "worker.expandCrossLibraryGraph", expansionRequestId: job.data.expansionRequestId });
+        throw error;
+      }
+    }
   });
 
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary

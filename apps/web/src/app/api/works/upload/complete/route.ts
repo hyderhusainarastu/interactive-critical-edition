@@ -3,12 +3,17 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
+import { reportWebError } from "@/lib/telemetry";
 
 const schema = z.object({ workId: z.string().uuid(), documentId: z.string().uuid() });
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 export async function POST(request: Request) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rate = await enforceUserRateLimit({ userId, scope: "upload-complete", limit: 30, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
   const input = schema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: "Invalid upload completion." }, { status: 400 });
   const [document] = await db.select({ id: documents.id, fileSize: documents.fileSize }).from(documents).where(and(eq(documents.id, input.data.documentId), eq(documents.workId, input.data.workId), eq(documents.userId, userId))).limit(1);
@@ -29,7 +34,7 @@ export async function POST(request: Request) {
     await db.insert(processingJobs).values({ documentId: document.id, jobType: "extract-text", status: "pending", pgBossJobId: jobId });
   } catch (error) {
     await db.update(documents).set({ processingStatus: "uploaded", updatedAt: new Date() }).where(eq(documents.id, document.id));
-    console.error("[upload/complete] could not queue extraction", error);
+    reportWebError(error, { scope: "api.upload.complete", userId, documentId: document.id, workId: input.data.workId });
     return NextResponse.json({ error: "Upload succeeded but processing could not be started. Please try again." }, { status: 500 });
   }
   return NextResponse.json({ workId: input.data.workId });

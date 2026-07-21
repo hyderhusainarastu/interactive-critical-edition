@@ -5,6 +5,9 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
+import { reportWebError } from "@/lib/telemetry";
 
 const schema = z.object({
   name: z.string().min(1).max(240),
@@ -18,6 +21,8 @@ const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 export async function POST(request: Request) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rate = await enforceUserRateLimit({ userId, scope: "upload-init", limit: 30, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
   const input = schema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: "Unsupported file or invalid upload metadata." }, { status: 400 });
   // The browser's hash is a duplicate lookup hint, not a trust boundary. The
@@ -72,7 +77,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ workId: work.id, documentId: document.id, uploadUrl: signed.url });
   } catch (error) {
     await db.delete(works).where(eq(works.id, work.id));
-    console.error("[upload/init] could not create signed upload URL", error);
+    reportWebError(error, { scope: "api.upload.init", userId, workId: work.id });
     return NextResponse.json({ error: "Could not prepare the upload. Please try again." }, { status: 500 });
   }
 }

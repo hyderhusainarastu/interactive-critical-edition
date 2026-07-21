@@ -163,10 +163,10 @@
       <div>
         <p class="eyebrow">Current position</p>
         <h2 id="overview-title">Phase 12 is underway</h2>
-        <p>Phases 0–11 are complete. Phase 12 (Production Research Workspace) began 2026-07-21. Foundation, Library/identity, v4, the interactive reader, cross-library graph, and Writer mode are complete locally: canonical sources, grounded pipeline data, processed-text reader controls, evidence-hashed graph judgments, budgeted expansion, and private MLA-ready drafts. Release flags remain off pending production migration approval. The Educational Companion Site is now Phase 13 and remains planned.</p>
+        <p>Phases 0–11 are complete. Phase 12 (Production Research Workspace) began 2026-07-21. All seven parts are complete locally: canonical sources, grounded pipeline data, processed-text reader controls, evidence-hashed graph judgments, budgeted expansion, private MLA-ready drafts, and release hardening. Production still has the pre-Phase-12 migration ledger, so release flags remain off and v4 has not been canaried or promoted. The Educational Companion Site is now Phase 13 and remains planned.</p>
         <div class="progress">
-          <div class="progress-label"><span>Phase 12 scope items</span><span>6 of 7 complete</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 12 scope items complete" aria-valuemin="0" aria-valuemax="7" aria-valuenow="6"><span style="width: 85.7143%"></span></div>
+          <div class="progress-label"><span>Phase 12 scope items</span><span>7 of 7 locally complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 12 scope items locally complete" aria-valuemin="0" aria-valuemax="7" aria-valuenow="7"><span style="width: 100%"></span></div>
         </div>
       </div>
       <div class="metric"><strong>12 / 14</strong><span>numbered phases complete</span></div>
@@ -190,14 +190,14 @@
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>All seven planned sub-phases shipped and production-verified. The originally-planned 9.8 was retired as a phantom requirement; see Phase 10.</p><div class="meta">tag · phase-9-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete gaps 9.1–9.7 left in Phase 9's own original objective; the two AI-pipeline-touching items are production-canary-verified.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Rebrand, UI/UX overhaul &amp; reader/relevance fixes</h3></div><span class="status complete">Complete</span></div><p>Palimnote rebrand, stronger theming, honest upload progress, Library work-scoping, a two-part reader overhaul, a classification fix, and a merged graph/table visualization.</p><div class="meta">plan · docs/architecture/plan.md §36</div></li>
-        <li class="phase active"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Production research workspace</h3></div><span class="status active">Active</span></div><p>A production-oriented research and writing workspace: consistent UX, canonical sources, v4, reader, evidence-grounded graph, Writer mode, and hardening. Parts 1–6 are locally complete; release flags remain off pending production approval.</p><div class="meta">plan · docs/architecture/plan.md §37</div></li>
+        <li class="phase active"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Production research workspace</h3></div><span class="status active">Active</span></div><p>A production-oriented research and writing workspace: consistent UX, canonical sources, v4, reader, evidence-grounded graph, Writer mode, and hardening. All parts are locally complete; production migration, v4 canary, and release flags remain gated.</p><div class="meta">plan · docs/architecture/plan.md §37</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 13</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 12</div></li>
       </ol>
     </section>
 
     <section class="focus" aria-labelledby="phase-twelve-title">
       <div class="focus-header"><div><p class="eyebrow">Active phase</p><h2 id="phase-twelve-title">Production Research Workspace</h2></div><span class="status active">Active</span></div>
-      <p>Seven parts turn Palimnote into a production research and writing workspace. Each is committed, verified, logged, and pushed before the next begins. Parts 1–4 establish the shell, canonical source identity, filtering rules, release-gated v4 data pipeline, and an interactive processed-text reader that later work consumes.</p>
+      <p>Seven parts turn Palimnote into a production research and writing workspace. All are committed, verified, logged, and pushed locally; production stays gated until its additive schema, guarded canary, and acceptance criteria are verified. Parts 1–4 establish the shell, canonical source identity, filtering rules, release-gated v4 data pipeline, and an interactive processed-text reader that later work consumes.</p>
       <ol class="subphases">
         <li class="subphase complete"><h3>12.1 · Foundation and site-wide UX</h3><p>Responsive shell, compact headers, mobile drawer, command palette, toasts, recovery states, feature flags, preferences, and desktop/mobile baselines. Complete.</p></li>
         <li class="subphase complete"><h3>12.2 · Library, identity &amp; source coverage</h3><p>Canonical source aggregation, verified SHA-256 duplicate resolution, transparent source labels, public Reddit web-search metadata only, and cumulative/exact level filtering. Complete locally; release flag remains off pending production migration approval.</p></li>
@@ -205,7 +205,7 @@
         <li class="subphase complete"><h3>12.4 · Interactive reader</h3><p>Release-gated processed text with original-file labels, outline/position/annotation navigation, focus mode, many-to-many note links, author apparatus filters, and verified script terms. Complete locally; production migration and flag remain off.</p></li>
         <li class="subphase complete"><h3>12.5 · Cross-library graph</h3><p>Evidence-hashed directional claim judgments, BM25/vector retrieval, accessible graph workspace, and automatic/manual cost guardrails. Complete locally; release flag remains off.</p></li>
         <li class="subphase complete"><h3>12.6 · Writer mode</h3><p>Private owner-scoped projects and ProseMirror drafts, recovery snapshots, resizable Library/reader companion, CSL-JSON citation ingestion, MLA 9 formatting, and validated DOCX/PDF exports. Complete locally; Writer flag remains off.</p></li>
-        <li class="subphase"><h3>12.7 · Production hardening</h3><p>Authenticated APIs, telemetry, audits, visual coverage, and safe destructive actions.</p></li>
+        <li class="subphase complete"><h3>12.7 · Production hardening</h3><p>Shared rate limits and idempotency, upload/API safeguards with structured error telemetry, dormant Sentry, automated accessibility/visual/load/restore checks, and confirmation/undo-safe destructive actions. Complete locally; production schema and release gates remain off.</p></li>
       </ol>
       <details>
         <summary>What has shipped in Parts 1–4</summary>

@@ -90,6 +90,8 @@ test.describe("Work trash (Phase 9.7)", () => {
     await page.goto("/works/trash");
     const row = page.locator(`[data-trash-item="${workId}"]`);
     await row.getByRole("button", { name: "Delete permanently now" }).click();
+    await expect(row).toContainText("Permanent deletion cannot be undone.");
+    await row.getByRole("button", { name: "Delete now" }).click();
     await expect(row).not.toBeVisible();
 
     const [remaining] = await db.select({ id: works.id }).from(works).where(eq(works.id, workId));

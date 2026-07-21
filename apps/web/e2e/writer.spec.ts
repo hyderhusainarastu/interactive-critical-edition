@@ -66,6 +66,15 @@ test.describe("Writer mode", () => {
     await owner.getByRole("button", { name: "New project" }).click();
     await owner.waitForURL("**/writer/*");
     const projectId = new URL(owner.url()).pathname.split("/").at(-1)!;
+    const unconfirmedArchive = await owner.request.patch(`/api/writer/projects/${projectId}`, { data: { archived: true } });
+    expect(unconfirmedArchive.status()).toBe(400);
+    owner.once("dialog", (dialog) => dialog.accept());
+    await owner.getByRole("button", { name: "Archive" }).click();
+    await owner.waitForURL((url) => url.pathname === "/writer");
+    await owner.getByRole("button", { name: "Show archived projects" }).click();
+    await expect(owner.getByRole("heading", { name: "Archived projects" })).toBeVisible();
+    await owner.getByRole("button", { name: "Restore project" }).click();
+    await expect(owner.getByRole("link", { name: "Private project" })).toBeVisible();
     await owner.close();
 
     const other = await browser.newPage();

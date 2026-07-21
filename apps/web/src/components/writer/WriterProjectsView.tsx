@@ -3,11 +3,41 @@
 import Link from "next/link";
 import { useState } from "react";
 
-type Project = { id: string; title: string; documentCount: number; updatedAt: string | Date };
+type Project = { id: string; title: string; documentCount: number; updatedAt: string | Date; archivedAt?: string | Date | null };
 
 export function WriterProjectsView({ initialProjects }: { initialProjects: Project[] }) {
-  const [projects] = useState(initialProjects);
+  const [projects, setProjects] = useState(initialProjects);
+  const [archivedProjects, setArchivedProjects] = useState<Project[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(false);
   const [creating, setCreating] = useState(false);
+
+  async function loadArchived() {
+    setLoadingArchived(true);
+    try {
+      const response = await fetch("/api/writer/projects?archived=true");
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Could not load archived projects.");
+      setArchivedProjects((body.projects as Project[]).filter((project) => project.archivedAt));
+      setShowArchived(true);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Could not load archived projects.");
+    } finally {
+      setLoadingArchived(false);
+    }
+  }
+
+  async function restoreProject(project: Project) {
+    const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: false }) });
+    const restored = await response.json();
+    if (!response.ok) {
+      window.alert(restored.error ?? "Could not restore project.");
+      return;
+    }
+    setArchivedProjects((current) => current.filter((item) => item.id !== project.id));
+    setProjects((current) => [...current, restored].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
+  }
+
   async function createProject() {
     const title = window.prompt("Project title", "Untitled project");
     if (!title?.trim()) return;
@@ -25,12 +55,13 @@ export function WriterProjectsView({ initialProjects }: { initialProjects: Proje
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="writer-title">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div><p className="text-sm font-medium text-[var(--color-accent)]">Private workspace</p><h1 id="writer-title" className="font-serif text-3xl font-semibold">Writer</h1><p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">Draft in portable ProseMirror JSON, recover revisions, and build an MLA 9 Works Cited from your Library or imported metadata.</p></div>
-        <button type="button" className="rounded bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50" onClick={createProject} disabled={creating}>{creating ? "Creating…" : "New project"}</button>
+        <div className="flex items-center gap-3"><button type="button" className="text-sm text-[var(--color-text-muted)] underline" onClick={loadArchived} disabled={loadingArchived}>{loadingArchived ? "Loading…" : "Show archived projects"}</button><button type="button" className="rounded bg-[var(--color-accent-ink)] px-4 py-2 text-sm font-medium text-[var(--color-background)] disabled:opacity-50" onClick={createProject} disabled={creating}>{creating ? "Creating…" : "New project"}</button></div>
       </div>
       <ul className="mt-7 grid gap-3 sm:grid-cols-2" aria-label="Writing projects">
         {projects.map((project) => <li key={project.id}><Link href={`/writer/${project.id}`} className="block rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition hover:border-[var(--color-accent)]"><h2 className="font-medium">{project.title}</h2><p className="mt-1 text-sm text-[var(--color-text-muted)]">{project.documentCount} {project.documentCount === 1 ? "document" : "documents"} · updated {new Date(project.updatedAt).toLocaleDateString()}</p></Link></li>)}
         {!projects.length && <li className="rounded-lg border border-dashed border-[var(--color-border)] p-6 text-sm text-[var(--color-text-muted)]">No projects yet. Start a private draft when you are ready.</li>}
       </ul>
+      {showArchived && <section className="mt-8" aria-labelledby="archived-projects-title"><div className="flex items-center justify-between gap-3"><h2 id="archived-projects-title" className="font-serif text-xl font-semibold">Archived projects</h2><button type="button" className="text-sm underline" onClick={() => setShowArchived(false)}>Hide</button></div>{archivedProjects.length ? <ul className="mt-3 grid gap-3 sm:grid-cols-2">{archivedProjects.map((project) => <li key={project.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><h3 className="font-medium">{project.title}</h3><p className="mt-1 text-sm text-[var(--color-text-muted)]">Archived {project.archivedAt ? new Date(project.archivedAt).toLocaleDateString() : "recently"}</p><button type="button" className="mt-3 rounded border border-[var(--color-border)] px-3 py-1.5 text-sm" onClick={() => restoreProject(project)}>Restore project</button></li>)}</ul> : <p className="mt-3 text-sm text-[var(--color-text-muted)]">No archived projects.</p>}</section>}
     </section>
   );
 }

@@ -5,12 +5,10 @@
  * configured it goes there, otherwise errors are logged locally in a
  * structured form — never swallowed silently.
  *
- * Sentry is intentionally NOT a hard dependency (it needs a DSN + account
- * this project doesn't have provisioned). When one exists, the drop-in is:
- * `import * as Sentry from "@sentry/node"` (or `@sentry/nextjs`), init it
- * once at process start, and call `Sentry.captureException(error, { extra:
- * context })` in the marked spot below. Until then the fallback keeps a
- * complete, structured error trail in the platform logs (Vercel / Render).
+ * The web app additionally forwards captured errors through its dormant
+ * `@sentry/nextjs` integration when a DSN exists. This shared package stays
+ * dependency-light for the worker and always preserves a structured platform
+ * log trail (Vercel / Render).
  */
 
 export interface ErrorContext {
@@ -18,6 +16,14 @@ export interface ErrorContext {
   scope: string;
   /** Any extra structured detail (ids, status) — no secrets, no user content. */
   [key: string]: unknown;
+}
+
+let externalErrorReporter: ((error: Error, context: ErrorContext) => void) | undefined;
+
+/** Runtime adapters (the worker's dormant Sentry client) register here without
+ * forcing monitoring dependencies into every package that uses the logger. */
+export function setExternalErrorReporter(reporter: ((error: Error, context: ErrorContext) => void) | undefined): void {
+  externalErrorReporter = reporter;
 }
 
 export function reportError(error: unknown, context: ErrorContext): void {
@@ -30,14 +36,17 @@ export function reportError(error: unknown, context: ErrorContext): void {
     ...context,
   };
 
-  const dsn = process.env.SENTRY_DSN;
-  if (dsn) {
-    // --- Drop-in point for Sentry.captureException(err, { extra: context }).
-    // Kept as a structured log until @sentry/* is wired, so a configured
-    // DSN never means errors vanish into an un-called SDK.
-    console.error("[reportError:sentry-configured]", JSON.stringify(record));
-    return;
-  }
-
   console.error("[reportError]", JSON.stringify(record));
+  externalErrorReporter?.(err, context);
+}
+
+/** Operational metrics are structured, content-free records rather than logs
+ * that accidentally contain source text, user prompts, or secrets. */
+export function reportEvent(event: string, context: Record<string, unknown> = {}): void {
+  console.info("[operationalEvent]", JSON.stringify({
+    level: "info",
+    ts: new Date().toISOString(),
+    event,
+    ...context,
+  }));
 }

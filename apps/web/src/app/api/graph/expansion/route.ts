@@ -5,6 +5,8 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
 import { getGraphExpansionPreview, GRAPH_JOB_HARD_CAP_USD, MANUAL_GRAPH_CANDIDATE_CAP } from "@/lib/graphExpansion";
 
 const requestSchema = z.object({
@@ -18,6 +20,8 @@ export async function POST(request: Request) {
   if (!phase12FeatureEnabled("crossLibraryGraph")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const rate = await enforceUserRateLimit({ userId, scope: "graph-expansion", limit: 12, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid graph expansion request." }, { status: 400 });
   const preview = await getGraphExpansionPreview(userId, parsed.data.workId, parsed.data.candidates);
@@ -28,7 +32,11 @@ export async function POST(request: Request) {
   if (preview.manual.requiresConfirmation && !parsed.data.confirmEstimatedCost) {
     return NextResponse.json({ error: "Explicit confirmation is required for an estimate above $1.", preview }, { status: 409 });
   }
-  const idempotencyKey = parsed.data.idempotencyKey ?? randomUUID();
+  const headerIdempotencyKey = request.headers.get("Idempotency-Key")?.trim();
+  const idempotencyKey = parsed.data.idempotencyKey ?? headerIdempotencyKey ?? randomUUID();
+  if (idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+    return NextResponse.json({ error: "Invalid idempotency key." }, { status: 400 });
+  }
   const [created] = await db
     .insert(graphExpansionRequests)
     .values({

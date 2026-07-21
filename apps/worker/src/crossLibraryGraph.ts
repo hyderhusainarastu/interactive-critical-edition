@@ -12,6 +12,7 @@ import {
 import { bm25Shortlist, canAfford, charge, makeBudget, mergeCandidateIds, type WorkSignalForRetrieval } from "@ice/research";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { reportEvent } from "@ice/observability";
 
 const AUTOMATIC_MAX_CANDIDATES = 20;
 const AUTOMATIC_MAX_COST_USD = 0.25;
@@ -96,6 +97,13 @@ export async function expandCrossLibraryGraph(expansionRequestId: string): Promi
     .where(eq(graphExpansionRequests.id, expansionRequestId));
 
   try {
+    reportEvent("graph_expansion_started", {
+      expansionRequestId: request.id,
+      mode: request.mode,
+      candidateLimit,
+      estimatedCostUsd: estimate,
+      hardCapUsd: request.hardCapUsd,
+    });
     const ownedWorks = await db
       .select({ id: works.id, title: works.title, authorName: works.authorName })
       .from(works)
@@ -169,6 +177,8 @@ export async function expandCrossLibraryGraph(expansionRequestId: string): Promi
       .where(eq(documents.workId, sourceWork.id))
       .limit(1);
 
+    let actualCostUsd = 0;
+    let newJudgments = 0;
     for (const targetWorkId of candidateIds) {
       if (!canAfford(budget, RESERVED_PAIR_COST_USD)) break;
       const targetWork = ownedWorks.find((work) => work.id === targetWorkId);
@@ -199,6 +209,7 @@ export async function expandCrossLibraryGraph(expansionRequestId: string): Promi
         resolved: false,
       });
       const actualCost = estimateCostUsd(judgement.model, judgement.promptTokens, judgement.completionTokens);
+      actualCostUsd += actualCost;
       const explanation = `${judgement.explanation} Direction: “${sourceWork.title}” → “${targetWork.title}”.`;
       const evidence = { sourceClaims, targetClaims, basisHash };
       await db
@@ -217,6 +228,7 @@ export async function expandCrossLibraryGraph(expansionRequestId: string): Promi
           estimatedCostUsd: actualCost,
         })
         .onConflictDoNothing({ target: [workRelationshipJudgments.userId, workRelationshipJudgments.sourceWorkId, workRelationshipJudgments.targetWorkId, workRelationshipJudgments.basisHash] });
+      newJudgments += 1;
       if (sourceDocument[0]) {
         await db.insert(aiUsageLogs).values({
           documentId: sourceDocument[0].id,
@@ -232,9 +244,18 @@ export async function expandCrossLibraryGraph(expansionRequestId: string): Promi
     }
 
     await db.update(graphExpansionRequests).set({ status: "complete", updatedAt: new Date() }).where(eq(graphExpansionRequests.id, expansionRequestId));
+    reportEvent("graph_expansion_completed", {
+      expansionRequestId: request.id,
+      mode: request.mode,
+      candidates: candidateIds.length,
+      newJudgments,
+      actualCostUsd,
+      hardCapUsd: request.hardCapUsd,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db.update(graphExpansionRequests).set({ status: "failed", error: message.slice(0, 500), updatedAt: new Date() }).where(eq(graphExpansionRequests.id, expansionRequestId));
+    reportEvent("graph_expansion_failed", { expansionRequestId: request.id, mode: request.mode, error: message.slice(0, 160) });
     throw error;
   }
 }

@@ -11,6 +11,7 @@ type Revision = { id: string; revision: number; reason: string; createdAt: strin
 
 export function WriterEditor({ project, initialDocuments, initialCitations }: { project: { id: string; title: string }; initialDocuments: Document[]; initialCitations: Citation[] }) {
   const [documents, setDocuments] = useState(initialDocuments);
+  const [projectTitle, setProjectTitle] = useState(project.title);
   const [activeId, setActiveId] = useState(initialDocuments[0]?.id ?? "");
   const active = documents.find((document) => document.id === activeId) ?? documents[0];
   const [title, setTitle] = useState(active?.title ?? "Untitled document");
@@ -48,6 +49,27 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     const document = await response.json(); if (!response.ok) return window.alert(document.error ?? "Could not create document.");
     setDocuments((items) => [...items, document]); setActiveId(document.id);
   }
+  async function saveProjectTitle() {
+    const next = projectTitle.trim();
+    if (!next || next === project.title) return;
+    const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: next }) });
+    if (!response.ok) { setProjectTitle(project.title); window.alert("Could not rename project."); }
+  }
+  async function archiveProject() {
+    if (!window.confirm("Archive this private project? You can restore it later from the archived-projects API.")) return;
+    const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true, confirmArchive: true }) });
+    if (response.ok) window.location.assign("/writer");
+    else window.alert("Could not archive project.");
+  }
+  async function moveDocument(direction: -1 | 1) {
+    const index = documents.findIndex((document) => document.id === activeId);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= documents.length) return;
+    const reordered = [...documents];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    setDocuments(reordered.map((document, sortOrder) => ({ ...document, sortOrder })));
+    await Promise.all(reordered.map((document, sortOrder) => fetch(`/api/writer/projects/${project.id}/documents/${document.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sortOrder }) })));
+  }
   async function importCitation(kind: "library" | "identifier" | "bibtex" | "ris", value: string, resourceId?: string) {
     const body = kind === "library" ? { kind, resourceId } : kind === "identifier" ? { kind, identifierType: importKind, value } : { kind, value };
     const response = await fetch(`/api/writer/projects/${project.id}/citations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -70,7 +92,7 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
   if (!active) return <p className="p-6">This project has no active documents.</p>;
   return (
     <section className="min-h-[calc(100vh-3.5rem)]" aria-label="Writer workspace">
-      <header className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-3"><Link href="/writer" className="text-sm text-[var(--color-text-muted)] hover:underline">← Projects</Link><input aria-label="Project title" defaultValue={project.title} className="min-w-0 flex-1 bg-transparent font-serif text-lg font-semibold" readOnly /><span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span><a className="rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=docx`}>DOCX</a><a className="rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=pdf`}>PDF</a></header>
+      <header className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] px-4 py-3"><Link href="/writer" className="text-sm text-[var(--color-text-muted)] hover:underline">← Projects</Link><input aria-label="Project title" value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} onBlur={saveProjectTitle} className="min-w-0 flex-1 bg-transparent font-serif text-lg font-semibold" /><span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span><button type="button" className="text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button><a className="rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=docx`}>DOCX</a><a className="rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=pdf`}>PDF</a></header>
       <div className="flex flex-col lg:flex-row">
         <aside className="relative shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:border-b-0 lg:border-r" style={{ width: `${sidebarWidth}px` }} aria-label="Library source sidebar">
           <h2 className="font-medium">Library sources</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
@@ -78,7 +100,7 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
           <div className="mt-5 border-t border-[var(--color-border)] pt-3"><h3 className="text-sm font-medium">Add citation</h3><div className="mt-2 flex gap-1"><select aria-label="Citation import format" value={importKind} onChange={(event) => setImportKind(event.target.value as typeof importKind)}><option value="doi">DOI</option><option value="isbn">ISBN</option><option value="title">Title</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select><button type="button" className="rounded border px-2 text-sm" onClick={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}>Add</button></div><textarea aria-label="Citation metadata" value={importValue} onChange={(event) => setImportValue(event.target.value)} className="mt-2 min-h-20 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm" placeholder="DOI, ISBN, title, BibTeX, or RIS" /></div>
           <button type="button" aria-label="Resize Library source sidebar" onMouseDown={startResize} className="absolute right-0 top-0 hidden h-full w-2 cursor-col-resize lg:block" />
         </aside>
-        <main className="min-w-0 flex-1 p-4 sm:p-6"><div className="mx-auto max-w-3xl"><div className="mb-4 flex items-center gap-2"><select aria-label="Active document" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select><button type="button" className="text-sm underline" onClick={newDocument}>New document</button></div><input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" /><p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p><textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8" /></div></main>
+        <main className="min-w-0 flex-1 p-4 sm:p-6"><div className="mx-auto max-w-3xl"><div className="mb-4 flex items-center gap-2"><select aria-label="Active document" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select><button type="button" className="text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button><button type="button" className="text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button><button type="button" className="text-sm underline" onClick={newDocument}>New document</button></div><input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" /><p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p><textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8" /></div></main>
         <aside className="w-full border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:w-80 lg:border-l lg:border-t-0" aria-label="Citations and revision recovery"><h2 className="font-medium">Citations</h2><ul className="mt-2 space-y-3">{sortMlaCitations(citationList).map((citation, index) => <li key={`${citationKey(citation)}-${index}`} className="text-sm"><button type="button" className="mr-1 underline" onClick={() => insertCitation(citation)}>Insert</button>{mlaWorksCited(citation)}</li>)}</ul><h2 className="mt-6 font-medium">Revision recovery</h2><ul className="mt-2 space-y-2 text-sm">{revisions.slice(0, 8).map((revision) => <li key={revision.id} className="flex items-center justify-between gap-2"><span>v{revision.revision} · {revision.reason}</span><button type="button" className="underline" onClick={() => restore(revision.id)}>Restore</button></li>)}</ul></aside>
       </div>
     </section>

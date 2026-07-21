@@ -11,6 +11,8 @@ overrides:
   # the package whose runtime behavior was tested against it.
   "@auth/core": 0.37.2
 allowBuilds:
+  # Runtime error capture does not need the optional source-map upload binary.
+  '@sentry/cli': false
   canvas: false
   esbuild: true
   sharp: true

@@ -1736,3 +1736,25 @@ export const writerCitations = pgTable(
     uniqueIndex("writer_citation_project_key_unique").on(t.projectId, t.normalizedKey),
   ],
 );
+
+/**
+ * Fixed-window per-user API counters. Feature-gated routes use these as the
+ * shared limiter across server instances; callers retain a small in-process
+ * fallback only while an older production database has not received this
+ * additive migration yet.
+ */
+export const apiRateLimits = pgTable(
+  "api_rate_limit",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    windowStartedAt: timestamp("window_started_at").notNull(),
+    count: integer("count").notNull().default(0),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.scope] }),
+    index("api_rate_limit_window_idx").on(t.windowStartedAt),
+    check("api_rate_limit_count_valid", sql`${t.count} >= 0`),
+  ],
+);

@@ -9,7 +9,9 @@ const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   sortOrder: z.number().int().min(0).max(100_000).optional(),
   archived: z.boolean().optional(),
-}).refine((input) => Object.keys(input).length > 0);
+  confirmArchive: z.literal(true).optional(),
+}).refine((input) => Object.keys(input).some((key) => key !== "confirmArchive"))
+  .refine((input) => input.archived !== true || input.confirmArchive === true, { message: "Archiving requires explicit confirmation." });
 
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const userId = await requireWriterApiUser();
