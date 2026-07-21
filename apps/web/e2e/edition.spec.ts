@@ -52,25 +52,30 @@ test("the published edition renders its structure and run provenance", async ({ 
 });
 
 test("authorial notes stay distinct from AI-generated ones", async ({ page }) => {
-  const edition = page.getByRole("region", { name: /published critical edition/i });
+  await page.getByRole("button", { name: /^Notes/i }).click();
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
   // The source's own footnote.
-  await expect(edition).toContainText(/Adapted from Aquinas/i);
+  await expect(sidebar.getByRole("region", { name: /author's notes/i })).toContainText(/Adapted from Aquinas/i);
   // The machine's editorial commentary, which must never be mistaken for it.
-  await expect(edition).toContainText(/reason subordinated to antecedent inclination/i);
+  await expect(sidebar.getByRole("region", { name: /AI-generated critical notes/i })).toContainText(/reason subordinated to antecedent inclination/i);
 });
 
 test("a generated claim exposes supporting AND contradicting evidence", async ({ page }) => {
-  const edition = page.getByRole("region", { name: /published critical edition/i });
-  await expect(edition).toContainText(/cannot be equated with akrasia/i);
+  await page.getByRole("button", { name: /^Notes/i }).click();
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  await expect(sidebar).toContainText(/reason subordinated to antecedent inclination/i);
   // Contested agreement has to be stated on the claim itself.
-  await expect(edition).toContainText(/contested/i);
-
-  const evidenceToggle = edition.getByRole("button", { name: /evidence \(\d+\)/i }).first();
+  const evidenceToggle = sidebar.getByRole("button", { name: /evidence and claims/i }).first();
   await evidenceToggle.click();
-  await expect(edition).toContainText(/supporting/i);
-  await expect(edition).toContainText(/contradicting/i);
-  await expect(edition).toContainText(/Vice remains a state on which one decides/i);
-  await expect(edition).toContainText(/soul is not harmonious/i);
+  await expect(sidebar).toContainText(/cannot be equated with akrasia/i);
+  await expect(sidebar).toContainText(/contested/i);
+
+  const claimEvidenceToggle = sidebar.getByRole("button", { name: /evidence \(\d+\)/i }).first();
+  await claimEvidenceToggle.click();
+  await expect(sidebar).toContainText(/supporting/i);
+  await expect(sidebar).toContainText(/contradicting/i);
+  await expect(sidebar).toContainText(/Vice remains a state on which one decides/i);
+  await expect(sidebar).toContainText(/soul is not harmonious/i);
 });
 
 test("Sources consulted lists one entry per work, not one per record, in the sidebar's Sources tab (plan §36 11.5)", async ({ page }) => {
@@ -97,7 +102,7 @@ test("Sources consulted lists one entry per work, not one per record, in the sid
 
 test("a passage annotation renders as an in-text marker; clicking it reveals its sidebar card (plan §36 11.5)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /published critical edition/i });
-  const marker = edition.locator("button[data-annotation-id]");
+  const marker = edition.locator("button[data-annotation-id][data-marker-kind='annotation']");
   await expect(marker).toHaveCount(1);
 
   const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
@@ -112,6 +117,21 @@ test("a passage annotation renders as an in-text marker; clicking it reveals its
   await marker.click();
   await expect(card).toContainText(/tension Irwin's paper investigates/i);
   await expect(card).toContainText(/live according to passion/i);
+});
+
+test("a quote-matched critical note marker opens the sidebar Notes tab (plan §36 11.6)", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /published critical edition/i });
+  const marker = edition.locator("button[data-annotation-id][data-marker-kind='matched-note']");
+  await expect(marker).toHaveCount(1);
+
+  await page.getByRole("button", { name: /^Sources/i }).click();
+  await marker.click();
+
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  await expect(sidebar.getByRole("button", { name: /^Notes/i })).toHaveAttribute("aria-pressed", "true");
+  await expect(sidebar).toContainText(/quote-matched/i);
+  await expect(sidebar).toContainText(/Vice remains a state on which one decides/i);
+  await expect(sidebar).toContainText(/reason subordinated to antecedent inclination/i);
 });
 
 test("whole-work guidance is labelled and kept separate from passage-anchored notes, in the sidebar", async ({ page }) => {

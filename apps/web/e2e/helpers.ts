@@ -177,7 +177,7 @@ export async function seedPublishedEdition(userId: string): Promise<{
       fileSize: 200,
       processingStatus: "ready",
       analysisStatus: "complete",
-      extractedText: "Vicious people act on decision, yet live according to passion.",
+      extractedText: "Vicious people act on decision, yet live according to passion. Vice remains a state on which one decides.",
     })
     .returning({ id: documents.id });
 
@@ -205,13 +205,13 @@ export async function seedPublishedEdition(userId: string): Promise<{
 
   const [page] = await db
     .insert(pages)
-    .values({ runId: run.id, pageIndex: 0, isOcr: false, text: "Vicious people act on decision." })
+    .values({ runId: run.id, pageIndex: 0, isOcr: false, text: "Vicious people act on decision. Vice remains a state on which one decides." })
     .returning({ id: pages.id });
   const blocks = await db
     .insert(textBlocks)
     .values([
       { pageId: page.id, blockOrder: 0, kind: "header", text: "A Gap in Aristotle's Moral Psychology" },
-      { pageId: page.id, blockOrder: 1, kind: "body", text: "Vicious people act on decision, yet live according to passion." },
+      { pageId: page.id, blockOrder: 1, kind: "body", text: "Vicious people act on decision, yet live according to passion. Vice remains a state on which one decides." },
     ])
     .returning({ id: textBlocks.id, blockOrder: textBlocks.blockOrder });
   const bodyBlock = blocks.find((b) => b.blockOrder === 1)!;

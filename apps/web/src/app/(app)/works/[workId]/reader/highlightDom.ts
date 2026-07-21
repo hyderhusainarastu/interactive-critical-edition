@@ -39,7 +39,7 @@ function getTextNodeSpans(container: HTMLElement): TextNodeSpan[] {
   return spans;
 }
 
-function findQuoteOffset(
+export function findQuoteOffset(
   fullText: string,
   quote: string,
   prefix: string,
@@ -131,6 +131,9 @@ export interface AnnotationMarkerAnchor {
   colorVar: string;
   /** Short glyph shown inside the marker. */
   glyph: string;
+  /** Distinguishes DB-anchored passage annotations from inferred note matches. */
+  markerKind?: "annotation" | "matched-note";
+  ariaLabel?: string;
 }
 
 /**
@@ -164,10 +167,11 @@ export function applyAnnotationMarkers(
     const marker = document.createElement("button");
     marker.type = "button";
     marker.dataset.annotationId = a.id;
-    marker.className = "reader-annotation-marker";
+    if (a.markerKind) marker.dataset.markerKind = a.markerKind;
+    marker.className = `reader-annotation-marker${a.markerKind === "matched-note" ? " reader-annotation-marker-matched" : ""}`;
     marker.style.setProperty("--reader-annotation-color", `var(${a.colorVar})`);
     marker.textContent = a.glyph;
-    marker.setAttribute("aria-label", "AI annotation — open details");
+    marker.setAttribute("aria-label", a.ariaLabel ?? "AI annotation — open details");
     node.parentNode?.insertBefore(marker, insertionPoint);
   }
 }

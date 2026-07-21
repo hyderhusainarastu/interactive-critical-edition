@@ -140,6 +140,11 @@
 .reader-annotation-marker:hover {
   transform: scale(1.15);
 }
+.reader-annotation-marker-matched {
+  border-radius: 2px;
+  outline: 1px dashed color-mix(in srgb, var(--reader-annotation-color, var(--color-credibility-warning)) 70%, transparent);
+  outline-offset: 1px;
+}
 
 /*
   Minimal pdf.js text-layer CSS (not importing pdf.js's own stylesheet

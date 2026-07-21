@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META } from "./annotationMeta";
 import { applyAnnotationMarkers, clearAnnotationMarkers } from "./highlightDom";
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
+import { matchNoteToBlock } from "./matchNoteToBlock";
 import type { RelationshipCategory } from "./types";
 
 export type Authority = "A" | "B" | "C" | "D" | "E";
@@ -79,6 +80,15 @@ export interface EditionPassageAnnotation {
   confidence: number;
 }
 
+export interface EditionGeneratedNote {
+  id: string;
+  noteType: string;
+  body: string;
+  confidence: number;
+  evidence: { quote: string | null; resourceId: string | null } | null;
+  claims: EditionClaim[];
+}
+
 export interface EditionPayload {
   run: { version: number; structureState: "full" | "limited"; note: string | null; status: string; stage: string | null };
   cost: {
@@ -96,14 +106,7 @@ export interface EditionPayload {
   /** No single passage applies; always rendered under the literal label
    *  "Whole-work guidance" (plan §34.4 9.3), never mixed with the anchored ones. */
   wholeWorkGuidance: EditionPassageAnnotation[];
-  generatedNotes: Array<{
-    id: string;
-    noteType: string;
-    body: string;
-    confidence: number;
-    evidence: { quote: string | null; resourceId: string | null } | null;
-    claims: EditionClaim[];
-  }>;
+  generatedNotes: EditionGeneratedNote[];
   /** Every record, unchanged — nothing is hidden from the payload. */
   resources: EditionResource[];
   /**
@@ -153,12 +156,12 @@ export function AuthorityBadge({ authority }: { authority: Authority | null }) {
   );
 }
 
-function ClaimTypeBadge({ type }: { type: EditionClaim["claimType"] }) {
+export function ClaimTypeBadge({ type }: { type: EditionClaim["claimType"] }) {
   const label = type === "factual" ? "factual" : type === "inferred" ? "AI-inferred" : "interpretive";
   return <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs text-[var(--color-text-muted)]">{label}</span>;
 }
 
-function ClaimView({ claim }: { claim: EditionClaim }) {
+export function ClaimView({ claim }: { claim: EditionClaim }) {
   const [open, setOpen] = useState(false);
   const supporting = claim.evidence.filter((e) => e.stance === "supports" && e.quote);
   const contradicting = claim.evidence.filter((e) => e.stance === "contradicts" && e.quote);
@@ -237,20 +240,51 @@ export function EditionReader({
     }
     return map;
   }, [edition.passageAnnotations]);
-  const noteById = useMemo(() => new Map(edition.passageAnnotations.map((a) => [a.id, a])), [edition.passageAnnotations]);
-  const resourceById = useMemo(() => new Map(edition.resources.map((r) => [r.id, r])), [edition.resources]);
+  const matchedNotesByBlock = useMemo(() => {
+    const map = new Map<string, EditionGeneratedNote[]>();
+    for (const note of edition.generatedNotes) {
+      const match = matchNoteToBlock(note, edition.blocks);
+      if (!match) continue;
+      const list = map.get(match.blockId) ?? [];
+      list.push(note);
+      map.set(match.blockId, list);
+    }
+    return map;
+  }, [edition.blocks, edition.generatedNotes]);
+  const previewById = useMemo(() => {
+    const map = new Map<string, { glyph: string; colorVar: string; categoryLabel: string; summary: string }>();
+    for (const a of edition.passageAnnotations) {
+      map.set(a.id, {
+        glyph: CATEGORY_META[a.relationship].glyph,
+        colorVar: CATEGORY_META[a.relationship].colorVar,
+        categoryLabel: CATEGORY_META[a.relationship].label,
+        summary: a.summary,
+      });
+    }
+    for (const note of edition.generatedNotes) {
+      map.set(note.id, {
+        glyph: "✣",
+        colorVar: "--color-credibility-warning",
+        categoryLabel: "Matched critical note",
+        summary: note.body,
+      });
+    }
+    return map;
+  }, [edition.generatedNotes, edition.passageAnnotations]);
 
   const blockRefs = useRef(new Map<string, HTMLParagraphElement>());
   useEffect(() => {
     for (const [blockId, el] of blockRefs.current) {
       const notes = passageAnnotationsByBlock.get(blockId);
-      if (!notes || notes.length === 0) {
+      const matchedNotes = matchedNotesByBlock.get(blockId);
+      if ((!notes || notes.length === 0) && (!matchedNotes || matchedNotes.length === 0)) {
         clearAnnotationMarkers(el);
         continue;
       }
       applyAnnotationMarkers(
         el,
-        notes
+        [
+          ...(notes ?? [])
           .filter((n): n is EditionPassageAnnotation & { quote: string } => n.quote !== null)
           .map((n) => ({
             id: n.id,
@@ -259,12 +293,26 @@ export function EditionReader({
             suffix: "",
             colorVar: CATEGORY_META[n.relationship].colorVar,
             glyph: CATEGORY_META[n.relationship].glyph,
+            markerKind: "annotation" as const,
           })),
+          ...(matchedNotes ?? [])
+            .filter((n): n is EditionGeneratedNote & { evidence: { quote: string; resourceId: string | null } } => n.evidence?.quote !== null && n.evidence?.quote !== undefined)
+            .map((n) => ({
+              id: n.id,
+              quote: n.evidence.quote,
+              prefix: "",
+              suffix: "",
+              colorVar: "--color-credibility-warning",
+              glyph: "✣",
+              markerKind: "matched-note" as const,
+              ariaLabel: "Matched critical note — open details",
+            })),
+        ],
       );
     }
-  }, [pageBlocks, passageAnnotationsByBlock]);
+  }, [matchedNotesByBlock, pageBlocks, passageAnnotationsByBlock]);
 
-  const hoverNote = hover ? noteById.get(hover.id) : null;
+  const hoverNote = hover ? previewById.get(hover.id) : null;
 
   return (
     <section aria-label="Published critical edition" className="mx-auto max-w-[72ch]">
@@ -342,56 +390,19 @@ export function EditionReader({
 
       {hover && hoverNote && (
         <AnnotationHoverPreview
-          glyph={CATEGORY_META[hoverNote.relationship].glyph}
-          colorVar={CATEGORY_META[hoverNote.relationship].colorVar}
-          categoryLabel={CATEGORY_META[hoverNote.relationship].label}
+          glyph={hoverNote.glyph}
+          colorVar={hoverNote.colorVar}
+          categoryLabel={hoverNote.categoryLabel}
           summary={hoverNote.summary}
           anchorRect={hover.rect}
         />
       )}
 
-      {edition.authorialNotes.length > 0 && (
-        <section className="mt-8 border-t border-[var(--color-border)] pt-4">
-          <h2 className="font-semibold">Author’s notes <span className="text-xs font-normal text-[var(--color-text-muted)]">(from the source text)</span></h2>
-          <ol className="mt-2 flex flex-col gap-2 text-sm">
-            {edition.authorialNotes.map((note) => <li key={note.id}><sup>{note.marker}</sup> {note.text}</li>)}
-          </ol>
-        </section>
-      )}
-
-      {edition.generatedNotes.length > 0 && (
-        <section className="mt-8 rounded-md border-2 border-dashed border-[var(--color-accent-green)] bg-[var(--color-surface)] p-4">
-          <h2 className="font-semibold">AI-generated critical notes</h2>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-            Generated research aids, not settled scholarship. Every claim shows its source-grounded evidence, authority, and agreement — verify against the primary sources.
-          </p>
-          <ul className="mt-3 flex flex-col gap-4 text-sm">
-            {edition.generatedNotes.map((note) => {
-              const src = note.evidence?.resourceId ? resourceById.get(note.evidence.resourceId) : null;
-              return (
-                <li key={note.id} className="border-t border-[var(--color-border)] pt-3 first:border-t-0 first:pt-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs">{note.noteType.replace(/_/g, " ")}</span>
-                    {src?.credibility?.authority && <AuthorityBadge authority={src.credibility.authority} />}
-                    <span className="ml-auto text-xs text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}% confidence</span>
-                  </div>
-                  <p className="mt-1.5">{note.body}</p>
-                  {src && (
-                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                      Source: {src.url ? <a className="underline" href={src.url} target="_blank" rel="noreferrer">{src.title}</a> : src.title} · {src.provider} · inspection depth {src.inspectionDepth}
-                    </p>
-                  )}
-                  {note.claims.length > 0 && (
-                    <ul className="mt-2 flex flex-col gap-2">
-                      {note.claims.map((claim) => <ClaimView key={claim.id} claim={claim} />)}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {/* Authorial notes and AI-generated critical notes moved to the
+       *  sidebar's "Notes" tab (plan §36 11.6). Generated notes may also
+       *  receive visibly-inferred in-text markers when their evidence quote
+       *  matches exactly one block; authorial notes remain page/sidebar-only
+       *  because they carry no block anchor. */}
 
       {/* "Sources consulted" moved to the sidebar's "Sources" tab (plan §36
        *  11.5, `EditionAnnotationsPanel.tsx`) — same content, no longer
