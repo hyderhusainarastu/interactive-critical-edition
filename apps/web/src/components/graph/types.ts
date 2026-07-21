@@ -1,5 +1,5 @@
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
-export type NodeType = "work" | "reference" | "concept" | "section";
+export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
 
 export interface GraphNode {
   id: string;
@@ -17,6 +17,12 @@ export interface GraphNode {
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
   kind?: string | null;
+  /** Access and retrieval provenance for external sources. */
+  accessStatus?: string | null;
+  sourceTextStatus?: string | null;
+  license?: string | null;
+  sourceUrl?: string | null;
+  provenance?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number } | null;
 }
 
 export interface GraphLink {
@@ -27,6 +33,7 @@ export interface GraphLink {
   confidence: number;
   explanation?: string | null;
   evidence?: unknown;
+  provenance?: { relationId: string; runId: string; depth: number } | null;
 }
 
 export interface GraphData {
@@ -34,7 +41,7 @@ export interface GraphData {
   analysisStatus?: string;
   nodes: GraphNode[];
   links: GraphLink[];
-  stats: { works: number; references: number; concepts: number; missing: number; read: number };
+  stats: { works: number; references: number; sources: number; concepts: number; people: number; missing: number; read: number };
 }
 
 // State → palette token + human label. Color is never the only signal —
@@ -56,8 +63,23 @@ export const STATE_ORDER: NodeState[] = ["primary", "reading", "unread", "read",
 export const TYPE_LABEL: Record<NodeType, string> = {
   work: "Work",
   reference: "Reference",
+  peer_reviewed_source: "Peer-reviewed source",
+  online_source: "Online source",
   concept: "Concept",
+  person: "Person",
   section: "Section",
+};
+
+// The 3D projection is type-coloured. Read state remains a textual/table
+// label, avoiding the old situation where one colour tried to mean two things.
+export const TYPE_META: Record<NodeType, { colorVar: string }> = {
+  work: { colorVar: "--color-accent-ink" },
+  reference: { colorVar: "--color-accent-umber" },
+  peer_reviewed_source: { colorVar: "--color-accent-green" },
+  online_source: { colorVar: "--color-highlight" },
+  concept: { colorVar: "--color-accent-burgundy" },
+  person: { colorVar: "--color-credibility-warning" },
+  section: { colorVar: "--color-text-muted" },
 };
 
 export function edgeTypeLabel(edgeType: string): string {
@@ -152,7 +174,7 @@ export function credibilityBandFor(score: number | null | undefined): Credibilit
  * node — a stricter, more consistent guarantee than filtering nodes and
  * links independently.
  */
-export function filterGraphData(data: GraphData, filters: GraphFilters): GraphData {
+export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWorkIds: readonly string[] = []): GraphData {
   const byNode = edgeTypesByNode(data);
   const associatedIds =
     filters.associatedWork === "all"
@@ -168,8 +190,14 @@ export function filterGraphData(data: GraphData, filters: GraphFilters): GraphDa
           }),
         ]);
   const normalizedSearch = filters.search.trim().toLocaleLowerCase();
+  const pinned = new Set(pinnedWorkIds);
   const nodes = data.nodes.filter(
     (n) =>
+      // Pinned uploaded works remain visible in both projections even when a
+      // filter would otherwise exclude them. Their connected nodes remain
+      // honestly filtered; pinning is a selection affordance, not a claim
+      // that every relationship matches the filter.
+      (pinned.has(n.id) ||
       (!normalizedSearch || `${n.label} ${n.authors ?? ""} ${n.kind ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) &&
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
@@ -177,7 +205,7 @@ export function filterGraphData(data: GraphData, filters: GraphFilters): GraphDa
       (filters.provider === "all" || n.provider === filters.provider) &&
       (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation)) &&
       (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand) &&
-      (!associatedIds || associatedIds.has(n.id)),
+      (!associatedIds || associatedIds.has(n.id))),
   );
   const visibleIds = new Set(nodes.map((n) => n.id));
   const links = data.links.filter((l) => visibleIds.has(linkEndpointId(l.source)) && visibleIds.has(linkEndpointId(l.target)));

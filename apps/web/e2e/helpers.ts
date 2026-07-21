@@ -10,6 +10,7 @@ import {
   db,
   docFootnotes,
   documents,
+  editionRelations,
   evidenceSpans,
   generatedClaims,
   generatedNotes,
@@ -23,6 +24,8 @@ import {
   providerAttempts,
   readingRecords,
   researchResources,
+  researchResourceContents,
+  resourceProvenance,
   resourceRoles,
   textBlocks,
   users,
@@ -439,11 +442,13 @@ export async function seedWorkWithConcepts(
  */
 export async function seedWorkWithGraphData(
   userId: string,
-): Promise<{ workId: string; documentId: string; bibId: string; conceptId: string; sectionBlockId: string }> {
+  options: { title?: string; withRelatedSource?: boolean } = {},
+): Promise<{ workId: string; documentId: string; bibId: string; resourceId: string; relatedResourceId?: string; conceptId: string; sectionBlockId: string }> {
   const suffix = crypto.randomUUID().slice(0, 8);
+  const workTitle = options.title ?? "On the Soul";
   const [work] = await db
     .insert(works)
-    .values({ userId, title: "On the Soul", authorName: "Aristotle" })
+    .values({ userId, title: workTitle, authorName: "Aristotle" })
     .returning({ id: works.id });
   const [doc] = await db
     .insert(documents)
@@ -514,6 +519,64 @@ export async function seedWorkWithGraphData(
     agreement: "strong",
     rationale: "seeded graph test",
   });
+  await db.insert(resourceProvenance).values({
+    resourceId: resource.id,
+    provider: "crossref",
+    query: "On the Soul Physics",
+    inspectionDepth: 1,
+    inspectedAt: new Date("2026-07-21T12:00:00.000Z"),
+  });
+  await db.insert(researchResourceContents).values({
+    resourceId: resource.id,
+    status: "open_access_indexed",
+    sourceUrl: "https://example.test/open-physics",
+    license: "CC BY 4.0",
+    licenseEvidence: { providerLicense: "CC BY 4.0", seeded: true },
+    text: "An openly licensed source excerpt for graph provenance testing.",
+    contentHash: `seeded-hash-${suffix}`,
+    retrievedAt: new Date("2026-07-21T12:00:01.000Z"),
+  });
+  await db.insert(editionRelations).values({
+    runId: run.id,
+    resourceId: resource.id,
+    relationType: "explicit_reference",
+    depth: 1,
+    importance: 0.82,
+    evidence: { category: "explicit_reference", sourceText: "Physics is cited in the source work." },
+    confidence: 0.85,
+  });
+  let relatedResourceId: string | undefined;
+  if (options.withRelatedSource) {
+    const [review] = await db.insert(researchResources).values({
+      runId: run.id,
+      title: "Physics: a peer review",
+      url: "https://example.test/physics-review",
+      provider: "openalex",
+      resourceType: "article",
+      accessStatus: "metadata_only",
+      year: -349,
+      authors: ["Theophrastus"],
+      normalizedKey: `seeded-physics-review-${suffix}`,
+      workKey: `work:physics:aristotle:${suffix}`,
+      workRole: "review",
+      workCanonicalTitle: "Physics",
+      workAuthorSurname: "aristotle",
+      workEvidence: "seeded review grouping",
+    }).returning({ id: researchResources.id });
+    relatedResourceId = review.id;
+    await db.insert(credibilityAssessments).values({ resourceId: review.id, score: 0.71, authority: "B", peerReviewed: true });
+    await db.insert(resourceProvenance).values({ resourceId: review.id, provider: "openalex", query: "Physics review", inspectionDepth: 1, inspectedAt: new Date("2026-07-21T12:01:00.000Z") });
+    await db.insert(editionRelations).values({
+      runId: run.id,
+      resourceId: review.id,
+      relatedResourceId: resource.id,
+      relationType: "review_of",
+      depth: 1,
+      importance: 0.71,
+      evidence: { provenance: "seeded shared work identity" },
+      confidence: 1,
+    });
+  }
   const [concept] = await db
     .insert(concepts)
     .values({ slug: `hylomorphism-${suffix}`, kind: "doctrine", label: "Hylomorphism", summary: "Matter and form as co-constituents of a substance." })
@@ -530,7 +593,7 @@ export async function seedWorkWithGraphData(
     },
   ]);
 
-  return { workId: work.id, documentId: doc.id, bibId: bib.id, conceptId: concept.id, sectionBlockId: sectionBlock.id };
+  return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, conceptId: concept.id, sectionBlockId: sectionBlock.id };
 }
 
 /**

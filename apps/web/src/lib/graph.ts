@@ -41,7 +41,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
  */
 
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
-export type NodeType = "work" | "reference" | "concept" | "section";
+export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
 
 export interface GraphNode {
   id: string;
@@ -59,6 +59,12 @@ export interface GraphNode {
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
   kind: string | null;
+  /** External-source access is deliberately distinct from node read state. */
+  accessStatus?: string | null;
+  sourceTextStatus?: string | null;
+  license?: string | null;
+  sourceUrl?: string | null;
+  provenance?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number } | null;
 }
 
 export interface GraphLink {
@@ -70,13 +76,14 @@ export interface GraphLink {
   /** Cross-library judgement explanation and grounded claim anchors, when present. */
   explanation?: string | null;
   evidence?: unknown;
+  provenance?: { relationId: string; runId: string; depth: number } | null;
 }
 
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
   /** Counts for the legend / summary. */
-  stats: { works: number; references: number; concepts: number; missing: number; read: number };
+  stats: { works: number; references: number; sources: number; concepts: number; people: number; missing: number; read: number };
 }
 
 interface WorkRow {
@@ -109,8 +116,49 @@ interface SectionRow {
   kind: string;
   block_order: number;
 }
+interface SourceRow {
+  id: string;
+  run_id: string;
+  work_id: string;
+  bib_record_id: string | null;
+  title: string;
+  authors: unknown;
+  year: number | null;
+  url: string | null;
+  resource_type: string;
+  provider: string;
+  access_status: string;
+  authority: string | null;
+  score: number | null;
+  peer_reviewed: boolean | null;
+  content_status: string | null;
+  license: string | null;
+  source_url: string | null;
+  provenance_provider: string | null;
+  inspected_at: Date | null;
+  provenance_depth: number | null;
+}
+interface ResourceRelationRow {
+  id: string;
+  run_id: string;
+  resource_id: string | null;
+  related_resource_id: string | null;
+  relation_type: string;
+  depth: number;
+  importance: number | null;
+  evidence: unknown;
+  confidence: number;
+}
 
 const NORM = (c: string) => sql.raw(`regexp_replace(lower(${c}), '[^a-z0-9]', '', 'g')`);
+
+function displayAuthors(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const names = value.filter((name): name is string => typeof name === "string" && Boolean(name.trim()));
+    return names.length ? names.join(", ") : null;
+  }
+  return typeof value === "string" && value.trim() ? value : null;
+}
 
 export async function buildGraph(userId: string, rootWorkId?: string): Promise<GraphData> {
   // 1) Work nodes (all the user's, or just the root when work-scoped).
@@ -122,7 +170,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   `)) as unknown as WorkRow[];
 
   if (works.length === 0) {
-    return { nodes: [], links: [], stats: { works: 0, references: 0, concepts: 0, missing: 0, read: 0 } };
+    return { nodes: [], links: [], stats: { works: 0, references: 0, sources: 0, concepts: 0, people: 0, missing: 0, read: 0 } };
   }
 
   // 2) Edges out of those works.
@@ -208,6 +256,46 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       : [];
   const masteryByConcept = new Map(masteryRows.map((r) => [r.conceptId, r.score]));
 
+  // 5b) Published, owner-scoped research sources. Unlike the older
+  // bibliographic projection above, these retain provider/run/access/text
+  // provenance and include web sources that do not have catalogue records.
+  // The LATERAL join deliberately picks one provenance record per source so
+  // a source node is never duplicated by its audit trail.
+  const sourceRows = (await db.execute(sql`
+    SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.title, rr.authors,
+      rr.year, rr.url, rr.resource_type, rr.provider, rr.access_status,
+      ca.authority, ca.score, ca.peer_reviewed,
+      rrc.status AS content_status, rrc.license, rrc.source_url,
+      rp.provider AS provenance_provider, rp.inspected_at, rp.inspection_depth AS provenance_depth
+    FROM research_resource rr
+    JOIN processing_run pr ON pr.id = rr.run_id
+    JOIN document d ON d.id = pr.document_id
+    LEFT JOIN credibility_assessment ca ON ca.resource_id = rr.id
+    LEFT JOIN research_resource_content rrc ON rrc.resource_id = rr.id
+    LEFT JOIN LATERAL (
+      SELECT provider, inspected_at, inspection_depth
+      FROM resource_provenance
+      WHERE resource_id = rr.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) rp ON true
+    WHERE d.user_id = ${userId} AND pr.is_published = true
+    ${rootWorkId ? sql`AND d.work_id = ${rootWorkId}` : sql``}
+    ORDER BY rr.created_at ASC
+  `)) as unknown as SourceRow[];
+
+  const sourceIds = new Set(sourceRows.map((row) => row.id));
+  const resourceRelations = (await db.execute(sql`
+    SELECT er.id, er.run_id, er.resource_id, er.related_resource_id,
+      er.relation_type, er.depth, er.importance, er.evidence, er.confidence
+    FROM edition_relation er
+    JOIN processing_run pr ON pr.id = er.run_id
+    JOIN document d ON d.id = pr.document_id
+    WHERE d.user_id = ${userId} AND pr.is_published = true
+    ${rootWorkId ? sql`AND d.work_id = ${rootWorkId}` : sql``}
+    ORDER BY er.created_at ASC
+  `)) as unknown as ResourceRelationRow[];
+
   // 6) Section outline nodes — work-scoped ONLY (see the module doc comment
   // for why this isn't attempted for the global graph). Pulled straight
   // from the primary work's own published run, same read-time-join pattern
@@ -280,7 +368,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     nodes.push({
       id: `concept:${c.id}`,
       label: c.label,
-      type: "concept",
+      type: c.kind === "person" ? "person" : "concept",
       state,
       authors: null,
       year: null,
@@ -310,6 +398,52 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     });
   }
 
+  const sourceTypeFor = (source: SourceRow): NodeType => {
+    if (source.peer_reviewed) return "peer_reviewed_source";
+    if (["webpage", "video", "social_post", "dataset"].includes(source.resource_type)) return "online_source";
+    return "reference";
+  };
+  for (const source of sourceRows) {
+    const sourceBibStatus = source.bib_record_id ? statusByBib.get(source.bib_record_id) : undefined;
+    const sourceBibScore = source.bib_record_id ? scoreByBib.get(source.bib_record_id) ?? 0 : 0;
+    const state: NodeState = sourceBibStatus === "completed" || sourceBibScore >= KNOWN_THRESHOLD
+      ? "read"
+      : sourceBibStatus === "reading"
+        ? "reading"
+        : "unread";
+    if (state === "read") read++;
+    nodes.push({
+      id: `source:${source.id}`,
+      label: source.title,
+      type: sourceTypeFor(source),
+      state,
+      authors: displayAuthors(source.authors),
+      year: source.year,
+      url: source.url,
+      authority: source.authority,
+      credibilityScore: source.score,
+      provider: source.provider,
+      kind: source.resource_type,
+      accessStatus: source.access_status,
+      sourceTextStatus: source.content_status ?? "metadata_only",
+      license: source.license,
+      sourceUrl: source.source_url,
+      provenance: {
+        runId: source.run_id,
+        provider: source.provenance_provider ?? source.provider,
+        inspectedAt: source.inspected_at ? new Date(source.inspected_at).toISOString() : null,
+        inspectionDepth: source.provenance_depth ?? 0,
+      },
+    });
+  }
+
+  const directRelationBySource = new Map<string, ResourceRelationRow>();
+  for (const relation of resourceRelations) {
+    if (relation.resource_id && !relation.related_resource_id && sourceIds.has(relation.resource_id) && !directRelationBySource.has(relation.resource_id)) {
+      directRelationBySource.set(relation.resource_id, relation);
+    }
+  }
+
   const links: GraphLink[] = [
     ...edges.map((e) => ({
       source: `work:${e.source_id}`,
@@ -336,6 +470,29 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
           confidence: 1,
         }))
       : []),
+    ...sourceRows.map((source) => {
+      const relation = directRelationBySource.get(source.id);
+      return {
+        source: `work:${source.work_id}`,
+        target: `source:${source.id}`,
+        edgeType: relation?.relation_type ?? "discovered_source",
+        category: relation?.relation_type ?? null,
+        confidence: relation?.confidence ?? 0,
+        evidence: relation?.evidence,
+        provenance: relation ? { relationId: relation.id, runId: relation.run_id, depth: relation.depth } : null,
+      };
+    }),
+    ...resourceRelations
+      .filter((relation) => relation.resource_id && relation.related_resource_id && sourceIds.has(relation.resource_id) && sourceIds.has(relation.related_resource_id))
+      .map((relation) => ({
+        source: `source:${relation.resource_id!}`,
+        target: `source:${relation.related_resource_id!}`,
+        edgeType: relation.relation_type,
+        category: "source_provenance",
+        confidence: relation.confidence,
+        evidence: relation.evidence,
+        provenance: { relationId: relation.id, runId: relation.run_id, depth: relation.depth },
+      })),
   ];
 
   // Phase 12.5: only a durable, evidence-hashed judgement becomes a
@@ -380,6 +537,14 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   return {
     nodes,
     links,
-    stats: { works: works.length, references: refs.length, concepts: conceptRows.length, missing, read },
+    stats: {
+      works: works.length,
+      references: refs.length,
+      sources: sourceRows.length,
+      concepts: conceptRows.filter((concept) => concept.kind !== "person").length,
+      people: conceptRows.filter((concept) => concept.kind === "person").length,
+      missing,
+      read,
+    },
   };
 }

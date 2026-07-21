@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { edgeTypeLabel, STATE_META, type GraphData } from "./types";
+import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode } from "./types";
 
 /**
  * The mandatory non-3D fallback (plan §20): the identical node/edge data
@@ -14,7 +14,15 @@ import { edgeTypeLabel, STATE_META, type GraphData } from "./types";
  */
 type SortKey = "label" | "state" | "type" | "connections";
 
-export function GraphAccessibleFallback({ data }: { data: GraphData }) {
+export function GraphAccessibleFallback({
+  data,
+  selectedNodeId,
+  onNodeClick,
+}: {
+  data: GraphData;
+  selectedNodeId?: string | null;
+  onNodeClick?: (node: GraphNode) => void;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>("state");
   const [asc, setAsc] = useState(true);
 
@@ -71,7 +79,7 @@ export function GraphAccessibleFallback({ data }: { data: GraphData }) {
         </thead>
         <tbody>
           {rows.map((n) => (
-            <NodeRow key={n.id} node={n} connections={connections.get(n.id) ?? []} />
+            <NodeRow key={n.id} node={n} connections={connections.get(n.id) ?? []} selected={selectedNodeId === n.id} onNodeClick={onNodeClick} />
           ))}
         </tbody>
       </table>
@@ -102,24 +110,35 @@ function SortHeader({
   );
 }
 
-function NodeRow({ node, connections }: { node: GraphData["nodes"][number]; connections: string[] }) {
+function NodeRow({
+  node,
+  connections,
+  selected,
+  onNodeClick,
+}: {
+  node: GraphData["nodes"][number];
+  connections: string[];
+  selected: boolean;
+  onNodeClick?: (node: GraphNode) => void;
+}) {
   const meta = STATE_META[node.state];
   return (
-    <tr data-graph-node={node.id} className="border-b border-[var(--color-border)] align-top">
+    <tr
+      data-graph-node={node.id}
+      data-selected={selected ? "true" : "false"}
+      aria-current={selected ? "true" : undefined}
+      onClick={() => onNodeClick?.(node)}
+      className={`cursor-pointer border-b border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""}`}
+    >
       <td className="py-2 pr-4">
-        <div className="font-medium text-[var(--color-text)]">
-          {node.url ? (
-            <a href={node.url} target="_blank" rel="noopener noreferrer" className="underline">
-              {node.label}
-            </a>
-          ) : (
-            node.label
-          )}
+        <button type="button" onClick={(event) => { event.stopPropagation(); onNodeClick?.(node); }} className="font-medium text-[var(--color-text)] underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]">
+          {node.label}
           {node.year ? <span className="text-[var(--color-text-muted)]"> ({node.year})</span> : null}
-        </div>
+        </button>
         {node.authors && <div className="text-xs text-[var(--color-text-muted)]">{node.authors}</div>}
+        {node.url && <a href={node.url} target="_blank" rel="noopener noreferrer" className="text-xs underline" onClick={(event) => event.stopPropagation()}>open source ↗</a>}
       </td>
-      <td className="py-2 pr-4 text-[var(--color-text-muted)]">{node.type}</td>
+      <td className="py-2 pr-4 text-[var(--color-text-muted)]">{TYPE_LABEL[node.type]}</td>
       <td className="py-2 pr-4">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `var(${meta.colorVar})` }} />

@@ -1030,6 +1030,45 @@ export const researchResources = pgTable("research_resource", {
   index("research_resource_normalized_key_idx").on(t.normalizedKey),
 ]);
 
+/**
+ * Phase 15's deliberately narrow full-text record. A discovered source stays
+ * metadata-only unless the provider metadata contains a recognizable, explicit
+ * open license; an accessible landing page by itself is not enough evidence to
+ * copy or index its text. The text is separate from `research_resource.raw` so
+ * provenance, deletion propagation, and future owner-scoped retrieval can be
+ * reasoned about without treating provider metadata as content.
+ */
+export const researchResourceContentStatusEnum = pgEnum("research_resource_content_status", [
+  "metadata_only",
+  "open_access_available",
+  "open_access_indexed",
+  "retrieval_failed",
+]);
+
+export const researchResourceContents = pgTable("research_resource_content", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  resourceId: uuid("resource_id")
+    .notNull()
+    .references(() => researchResources.id, { onDelete: "cascade" }),
+  status: researchResourceContentStatusEnum("status").notNull().default("metadata_only"),
+  /** Canonical full-text endpoint selected from explicit provider metadata. */
+  sourceUrl: text("source_url"),
+  /** Normalized human-readable license, for example `CC BY 4.0`. */
+  license: text("license"),
+  /** Exact provider fields used to decide the source was eligible. */
+  licenseEvidence: jsonb("license_evidence"),
+  /** Extracted text only when status is `open_access_indexed`. */
+  text: text("text"),
+  contentHash: text("content_hash"),
+  retrievedAt: timestamp("retrieved_at"),
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("research_resource_content_resource_unique").on(t.resourceId),
+  index("research_resource_content_status_idx").on(t.status),
+]);
+
 /** One row per (run, provider): the auditable evidence of which sources were
  * actually consulted, with query count, depth, latency and error (plan §33). */
 export const providerAttempts = pgTable("provider_attempt", {

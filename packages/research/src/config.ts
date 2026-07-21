@@ -25,6 +25,9 @@ export const RESEARCH_LIMITS = {
   /** Max resources promoted to a full (content-level) inspection. Env-
    *  overridable so ops/tests can bound per-run LLM spend. */
   maxFullInspections: Number(process.env.RESEARCH_MAX_INSPECTIONS ?? 120),
+  /** License-evidenced source-text retrievals are network-only (no AI cost),
+   *  but still capped to keep a run responsive and bounded. */
+  maxOpenAccessRetrievals: Number(process.env.RESEARCH_MAX_OPEN_ACCESS_RETRIEVALS ?? 12),
   /** Saturation: stop after this many consecutive discovery batches each add
    *  fewer than `saturationMinNewFraction` new relevant non-duplicates. */
   saturationBatches: 2,

@@ -37,8 +37,8 @@ test.describe("Visualization graph", () => {
     await deleteTestUser(EMAIL);
   });
 
-  test("renders work, reference, concept, and section nodes together", async ({ page }) => {
-    const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
+  test("renders work, reference, provenance-backed source, concept, and section nodes together", async ({ page }) => {
+    const { workId, bibId, resourceId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
     await page.goto(`/works/${workId}/graph`);
@@ -46,11 +46,12 @@ test.describe("Visualization graph", () => {
 
     await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toContainText("On the Soul");
     await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toContainText("Physics");
+    await expect(page.locator(`[data-graph-node="source:${resourceId}"]`)).toContainText("Physics");
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toContainText("Hylomorphism");
     await expect(page.locator(`[data-graph-node="section:${sectionBlockId}"]`)).toContainText("Book II");
 
     // Legend/summary reports the new concept count alongside the existing ones.
-    await expect(page.getByText(/1 concepts/)).toBeVisible();
+    await expect(page.getByText(/1 sources · 1 concepts/)).toBeVisible();
   });
 
   test("promotes Visualization in the main nav and shows relationship-family colors", async ({ page }) => {
@@ -93,7 +94,7 @@ test.describe("Visualization graph", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/graph?type=concept`);
-    await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    await expect(page.getByText("1 of 5 shown")).toBeVisible();
     await expect(page.getByLabel("Accessible relationship table")).toBeVisible();
     await expect(page.getByLabel("3D relationship graph")).toBeVisible();
     await expect(page.getByRole("button", { name: "3D" })).toHaveCount(0);
@@ -107,7 +108,7 @@ test.describe("Visualization graph", () => {
 
     await page.getByLabel("Credibility").selectOption("high");
     await expect(page).toHaveURL(/[?&]credibilityBand=high/);
-    await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    await expect(page.getByText("2 of 5 shown")).toBeVisible();
     await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
 
@@ -130,5 +131,65 @@ test.describe("Visualization graph", () => {
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="bib:${first.bibId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
+  });
+
+  test("a table row and a graph selection share the bounded provenance inspector", async ({ page }) => {
+    const { workId, resourceId } = await seedWorkWithGraphData(userId);
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+
+    await page.locator(`[data-graph-node="source:${resourceId}"]`).click();
+    const inspector = page.getByLabel("Graph inspector");
+    await expect(inspector).toContainText("Physics");
+    await expect(inspector).toContainText("Open-access source text indexed");
+    await expect(inspector).toContainText("License evidence: CC BY 4.0");
+    await expect(inspector).toContainText("crossref · inspection depth 1");
+    await expect(page.locator(`[data-graph-node="source:${resourceId}"]`)).toHaveAttribute("data-selected", "true");
+  });
+
+  test("the accessible table opens the same inspector by keyboard and reduced motion pauses graph effects", async ({ page }) => {
+    const { workId, resourceId } = await seedWorkWithGraphData(userId);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    const row = page.locator(`[data-graph-node="source:${resourceId}"]`);
+    await row.getByRole("button", { name: /Physics/ }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByLabel("Graph inspector")).toContainText("License evidence: CC BY 4.0");
+    await expect(page.locator("[data-graph-canvas]")).toHaveAttribute("data-graph-effects", "paused");
+  });
+
+  test("projects provenance-backed source-to-source relationships", async ({ page }) => {
+    const { workId, resourceId, relatedResourceId } = await seedWorkWithGraphData(userId, { withRelatedSource: true });
+    expect(relatedResourceId).toBeTruthy();
+    await login(page);
+    const response = await page.request.get(`/api/works/${workId}/graph`);
+    expect(response.ok()).toBeTruthy();
+    const graph = await response.json() as { nodes: { id: string; type: string }[]; links: { source: string; target: string; edgeType: string; provenance?: unknown }[] };
+    expect(graph.nodes).toEqual(expect.arrayContaining([expect.objectContaining({ id: `source:${relatedResourceId}`, type: "peer_reviewed_source" })]));
+    expect(graph.links).toEqual(expect.arrayContaining([expect.objectContaining({
+      source: `source:${relatedResourceId}`,
+      target: `source:${resourceId}`,
+      edgeType: "review_of",
+      provenance: expect.any(Object),
+    })]));
+  });
+
+  test("pinned uploaded works remain in the graph and table despite filters and survive a URL reload", async ({ page }) => {
+    const first = await seedWorkWithGraphData(userId, { title: "Pinned first work" });
+    const second = await seedWorkWithGraphData(userId, { title: "Pinned second work" });
+    await login(page);
+    await page.goto("/graph?type=concept");
+
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toHaveCount(0);
+    const pinned = page.getByLabel("Pinned uploaded works");
+    await pinned.getByLabel("Pinned first work").check();
+    await expect(page).toHaveURL(new RegExp(`pinnedWork=work%3A${first.workId}`));
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
+
+    await page.reload();
+    await expect(pinned.getByLabel("Pinned first work")).toBeChecked();
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
   });
 });

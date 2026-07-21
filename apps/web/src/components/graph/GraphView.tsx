@@ -31,6 +31,7 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
 });
 
 const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
+const PINNED_WORK_PARAM = "pinnedWork";
 
 function filtersFromParams(params: URLSearchParams): GraphFilters {
   const next = { ...DEFAULT_GRAPH_FILTERS };
@@ -62,6 +63,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<GraphFilters>(() => filtersFromParams(searchParams));
+  const [pinnedWorkIds, setPinnedWorkIds] = useState<string[]>(() => searchParams.getAll(PINNED_WORK_PARAM).filter((id) => id.startsWith("work:")));
   const graphWorkspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -97,7 +99,22 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     [filters, pathname, router, searchParams],
   );
 
-  const onNodeClick = useCallback((node: GraphNode) => setSelected(node), []);
+  const onNodeClick = useCallback((node: GraphNode) => {
+    setSelected(node);
+    setSelectedLink(null);
+  }, []);
+
+  const togglePinnedWork = useCallback((workId: string, checked: boolean) => {
+    setPinnedWorkIds((current) => {
+      const next = checked ? [...new Set([...current, workId])] : current.filter((id) => id !== workId);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete(PINNED_WORK_PARAM);
+      for (const id of next) params.append(PINNED_WORK_PARAM, id);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+      return next;
+    });
+  }, [pathname, router, searchParams]);
 
   function toggleFullscreen() {
     const target = graphWorkspaceRef.current;
@@ -115,7 +132,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     link.click();
   }
 
-  const filtered = useMemo(() => (data ? filterGraphData(data, filters) : null), [data, filters]);
+  const filtered = useMemo(() => (data ? filterGraphData(data, filters, pinnedWorkIds) : null), [data, filters, pinnedWorkIds]);
 
   // Filter option lists come from the FULL data, not the filtered set, so
   // choosing one filter never hides the options for another.
@@ -142,7 +159,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           ← {backLabel}
         </Link>
       </div>
-      <div className="mb-4"><PageHeader title="Visualization" description={`${data?.title ?? "Your library"} · works, references, concepts, and (per-work) the text’s own outline.`} /></div>
+      <div className="mb-4"><PageHeader title="Visualization" description={`${data?.title ?? "Your library"} · works, sources, concepts, people, and (per-work) the text’s own outline.`} /></div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
       {!data && !error && <p className="text-[var(--color-text-muted)]">Loading graph…</p>}
@@ -164,7 +181,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               </span>
             ))}
             <span className="ml-auto text-[var(--color-text-muted)]">
-              {data.stats.works} works · {data.stats.references} references · {data.stats.concepts} concepts ·{" "}
+              {data.stats.works} works · {data.stats.references} references · {data.stats.sources} sources · {data.stats.concepts} concepts · {data.stats.people} people ·{" "}
               {data.stats.missing} missing · {data.stats.read} read
             </span>
           </div>
@@ -323,59 +340,40 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
             </span>
           </div>
 
+          {workNodes.length > 0 && (
+            <fieldset className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm" aria-label="Pinned uploaded works">
+              <legend className="px-1 text-xs font-medium text-[var(--color-text-muted)]">Pinned uploaded works</legend>
+              <p className="mb-2 text-xs text-[var(--color-text-muted)]">Select one or more works to keep them anchored in the graph and table while you filter their surrounding research web.</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2">
+                {workNodes.map((work) => (
+                  <label key={work.id} className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={pinnedWorkIds.includes(work.id)} onChange={(event) => togglePinnedWork(work.id, event.target.checked)} />
+                    <span>{work.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           {enableExpansion && <GraphExpansionControls workNodes={workNodes} />}
 
           {filtered.nodes.length === 0 ? (
             <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
           ) : (
             <div ref={graphWorkspaceRef} className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.9fr)]">
-              <section className="order-2 lg:order-1" aria-label="3D relationship graph">
+              <section className="order-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:order-1" aria-label="3D relationship graph">
                 <div className="mb-2 flex justify-end gap-2 text-xs">
                   <button type="button" onClick={toggleFullscreen} className="rounded border border-[var(--color-border)] px-2 py-1">Fullscreen</button>
                   <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
                 </div>
-                <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} />
-              </section>
-              <section className="order-1 lg:order-2" aria-label="Accessible relationship table">
-                <GraphAccessibleFallback data={filtered} />
-              </section>
-            </div>
-          )}
-
-          {/* Node detail (from a 3D click) */}
-          {selected && (
-            <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-[var(--color-text)]">{selected.label}</p>
-                  {selected.authors && <p className="text-sm text-[var(--color-text-muted)]">{selected.authors}</p>}
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                    {STATE_META[selected.state].label}
-                    {selected.year ? ` · ${selected.year}` : ""}
-                  </p>
-                  {selected.url && (
-                    <a href={selected.url} target="_blank" rel="noopener noreferrer" className="text-sm underline">
-                      open reference ↗
-                    </a>
-                  )}
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17rem]">
+                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} />
+                  <GraphInspector selected={selected} selectedLink={selectedLink} onCloseNode={() => setSelected(null)} onCloseLink={() => setSelectedLink(null)} />
                 </div>
-                <button type="button" className="text-sm underline" onClick={() => setSelected(null)}>
-                  Close
-                </button>
-              </div>
-            </div>
-          )}
-          {selectedLink && (
-            <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4" data-graph-evidence>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium text-[var(--color-text)]">{selectedLink.edgeType.replace(/_/g, " ")}</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is available in the accessible table."}</p>
-                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}%</p>
-                  {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
-                </div>
-                <button type="button" className="text-sm underline" onClick={() => setSelectedLink(null)}>Close</button>
-              </div>
+              </section>
+              <section className="order-1 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:order-2" aria-label="Accessible relationship table">
+                <GraphAccessibleFallback data={filtered} selectedNodeId={selected?.id} onNodeClick={onNodeClick} />
+              </section>
             </div>
           )}
         </>
@@ -392,6 +390,67 @@ function EvidenceAnchors({ evidence }: { evidence: unknown }) {
   return <ul className="mt-3 space-y-2 border-l-2 border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]" aria-label="Grounded claim evidence">
     {anchors.map((anchor, index) => <li key={index}><span className="font-medium text-[var(--color-text)]">{anchor.claim}</span>{anchor.excerpt ? <span> — “{anchor.excerpt}”</span> : null}</li>)}
   </ul>;
+}
+
+function GraphInspector({
+  selected,
+  selectedLink,
+  onCloseNode,
+  onCloseLink,
+}: {
+  selected: GraphNode | null;
+  selectedLink: GraphLink | null;
+  onCloseNode: () => void;
+  onCloseLink: () => void;
+}) {
+  return (
+    <aside className="max-h-[520px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3" aria-label="Graph inspector" data-graph-inspector>
+      {!selected && !selectedLink && <p className="text-sm text-[var(--color-text-muted)]">Select a graph node or a table row to inspect its source, access, and provenance. Select a link for relationship evidence.</p>}
+      {selected && (
+        <div>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-medium text-[var(--color-text)]">{selected.label}</p>
+              {selected.authors && <p className="text-sm text-[var(--color-text-muted)]">{selected.authors}</p>}
+            </div>
+            <button type="button" className="text-xs underline" onClick={onCloseNode}>Close</button>
+          </div>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+            {TYPE_LABEL[selected.type]} · {STATE_META[selected.state].label}{selected.year ? ` · ${selected.year}` : ""}
+          </p>
+          {selected.authority && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Authority {selected.authority}{selected.credibilityScore != null ? ` · credibility ${Math.round(selected.credibilityScore * 100)}%` : ""}</p>}
+          {selected.sourceTextStatus && (
+            <div className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs">
+              <p className="font-medium text-[var(--color-text)]">Source access</p>
+              <p className="mt-1 text-[var(--color-text-muted)]">{sourceTextLabel(selected.sourceTextStatus, selected.accessStatus)}</p>
+              {selected.license && <p className="mt-1 text-[var(--color-text-muted)]">License evidence: {selected.license}</p>}
+              {selected.sourceUrl && <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block underline">open licensed source ↗</a>}
+            </div>
+          )}
+          {selected.provenance && <div className="mt-3 text-xs text-[var(--color-text-muted)]"><p className="font-medium text-[var(--color-text)]">Provenance</p><p className="mt-1">{selected.provenance.provider} · inspection depth {selected.provenance.inspectionDepth}{selected.provenance.inspectedAt ? ` · ${new Date(selected.provenance.inspectedAt).toLocaleDateString()}` : ""}</p></div>}
+          {selected.url && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">open source record ↗</a>}
+        </div>
+      )}
+      {selectedLink && (
+        <div className={selected ? "mt-5 border-t border-[var(--color-border)] pt-4" : ""} data-graph-evidence>
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium text-[var(--color-text)]">{selectedLink.edgeType.replace(/_/g, " ")}</p>
+            <button type="button" className="text-xs underline" onClick={onCloseLink}>Close</button>
+          </div>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}%{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}</p>
+          {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function sourceTextLabel(status: string, accessStatus?: string | null) {
+  if (status === "open_access_indexed") return "Open-access source text indexed from license-evidenced metadata.";
+  if (status === "open_access_available") return "Open-access source confirmed; its text was not automatically indexed.";
+  if (status === "retrieval_failed") return "Open-access source confirmed; automatic retrieval failed, so it remains metadata-only.";
+  return accessStatus === "open" ? "Open source record; no eligible source text has been indexed." : "Metadata only — Palimnote did not retrieve source text without license evidence.";
 }
 
 interface ExpansionPreview {

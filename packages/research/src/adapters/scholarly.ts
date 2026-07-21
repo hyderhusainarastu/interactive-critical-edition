@@ -70,6 +70,8 @@ interface OpenAlexWork {
   publication_year?: number;
   authorships?: { author?: { display_name?: string } }[];
   primary_location?: { landing_page_url?: string; source?: { display_name?: string } };
+  open_access?: { is_oa?: boolean; oa_url?: string };
+  best_oa_location?: { landing_page_url?: string; pdf_url?: string; license?: string };
   abstract_inverted_index?: Record<string, number[]>;
   cited_by_count?: number;
   type?: string;
@@ -97,7 +99,7 @@ export class OpenAlexAdapter implements SourceAdapter {
           title: w.title ?? w.display_name ?? "",
           authors: (w.authorships ?? []).map((a) => a.author?.display_name ?? "").filter(Boolean),
           year: w.publication_year ?? null,
-          url: w.primary_location?.landing_page_url ?? (w.doi ?? null),
+          url: w.best_oa_location?.landing_page_url ?? w.primary_location?.landing_page_url ?? (w.doi ?? null),
           doi: w.doi ?? null,
           isbn: null,
           snippet: reconstructInvertedAbstract(w.abstract_inverted_index),

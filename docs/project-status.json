@@ -8,10 +8,10 @@
   },
   "updated": "2026-07-21",
   "current": {
-    "phase": 14,
-    "headline": "Phase 14 complete — confirmation required",
-    "summary": "The focused Library, shared reduced-motion-safe interaction patterns, and sequential private batch upload are implemented and fully verified locally.",
-    "nextAction": "Review the Phase 14 handoff and confirm whether to begin Phase 15."
+    "phase": 15,
+    "headline": "Phase 15 complete — confirmation required",
+    "summary": "Visualization is now an owner-scoped, provenance-backed research web with bounded licensed-source retrieval, multi-work pinning, and a shared graph/table inspector.",
+    "nextAction": "Review the Phase 15 handoff and confirm whether to begin Phase 16."
   },
   "phases": [
     {
@@ -165,10 +165,10 @@
     {
       "number": 14,
       "title": "Library focus, interface, motion, and multi-work upload",
-      "state": "awaiting_confirmation",
+      "state": "complete",
       "summary": "Focused Library ranking, shared warm-academic interactions, and sequential private multi-work upload are complete and locally verified.",
       "tag": "phase-14-complete",
-      "confirmation": "Closeout confirmation is required before Phase 15 begins.",
+      "confirmation": "Phase 15 authorization received 2026-07-21.",
       "evidence": [
         "The Library payload now includes every active upload plus per-focus relationship relevance and work-scoped credibility evidence.",
         "12 targeted Chromium checks passed for Library focus/ranking/accessibility and the batch-upload queue, duplicate decisions, and file-level errors.",
@@ -204,9 +204,41 @@
     {
       "number": 15,
       "title": "Visualization as a connected research web",
-      "state": "planned",
-      "summary": "Expand provenance-backed graph relationships, open-access retrieval, and accessible graph interaction.",
-      "confirmation": "Closeout confirmation is required before Phase 16 begins."
+      "state": "awaiting_confirmation",
+      "summary": "Expanded the owner-scoped graph to sources, people, and provenance-backed source relationships; added strictly license-evidenced, bounded source-text retrieval and synchronized accessible graph interaction.",
+      "tag": "phase-15-complete",
+      "confirmation": "Closeout confirmation is required before Phase 16 begins.",
+      "evidence": [
+        "Additive migration 0026 is applied locally and in production (Drizzle ledger 27); source text has a separate cascading provenance/content record.",
+        "Automatic retrieval accepts explicit approved license metadata only, is capped at 12 source texts per run, and adds no AI spend to the existing $1 normal / $5 hard limits.",
+        "Workspace typecheck, all unit tests, web lint, production build, 10 focused Visualization Chromium checks, and 2 graph-route ownership checks passed locally."
+      ],
+      "subphases": [
+        {
+          "id": "15.1",
+          "title": "Connected provenance model",
+          "state": "complete",
+          "summary": "Projected published owner-scoped research sources, peer-reviewed sources, online sources, people, concepts, and sections; retained run/provider/access provenance and persisted deterministic source-to-source links."
+        },
+        {
+          "id": "15.2",
+          "title": "License-evidenced source retrieval",
+          "state": "complete",
+          "summary": "Added explicit-license eligibility, bounded HTML/plain-text retrieval, hash/evidence persistence, and honest open-available, failed, or metadata-only states."
+        },
+        {
+          "id": "15.3",
+          "title": "Research-web interaction",
+          "state": "complete",
+          "summary": "Added multi-work pinned selection, a bounded shared inspector, type-coloured directional graph styling, linked table focus, and reduced-motion/hidden-tab/large-graph effect safeguards."
+        },
+        {
+          "id": "15.4",
+          "title": "Verification and closeout",
+          "state": "complete",
+          "summary": "Passed unit, type, lint, build, targeted graph provenance/pinning/keyboard/reduced-motion checks, and graph ownership isolation; production schema was verified before rollout."
+        }
+      ]
     },
     {
       "number": 16,

@@ -19,8 +19,10 @@ import {
   providerAttempts,
   researchCache,
   researchResources,
+  researchResourceContents,
   researchCandidates,
   credibilityAssessments,
+  resourceProvenance,
   works,
   workClaims,
   workIdentities,
@@ -79,6 +81,8 @@ import {
   type CacheStore,
   type RawResource,
   type SourceAuthority,
+  findOpenAccessEvidence,
+  retrieveOpenAccessText,
 } from "@ice/research";
 import { and, eq, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
@@ -1062,6 +1066,12 @@ export async function analyzeEditionRun(input: {
     .map(({ r, assessment }) => ({ r, assessment, authority: classifyAuthority(r) }))
     .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority])
     .slice(0, RESEARCH_LIMITS.maxFullInspections);
+  // Full text is never an input to the paid research stages. It is a bounded
+  // post-discovery retrieval only for records whose provider metadata carries
+  // an explicit approved license, so this cannot expand the existing $1/$5 AI
+  // budget or silently copy a paywalled source.
+  let openAccessRetrievals = 0;
+  const relationProjection: { id: string; workKey: string | null; workRole: "primary" | "review" | "edition" | "translation" | "excerpt" }[] = [];
 
   // Creator verification is a separate pass so every accepted resource gets a
   // provider-metadata-only identity before citation expansion or scoring.
@@ -1096,6 +1106,8 @@ export async function analyzeEditionRun(input: {
 
     const isScholarly = r.resourceType === "book" || r.resourceType === "article";
     const bibId = isScholarly ? await findOrCreateBibFromResource(r) : null;
+    const openAccess = findOpenAccessEvidence(r.raw, r.url);
+    const resourceWork = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
 
     const [resourceRow] = await db
       .insert(researchResources)
@@ -1105,7 +1117,7 @@ export async function analyzeEditionRun(input: {
         url: r.url,
         resourceType: r.resourceType,
         provider: r.provider,
-        accessStatus: "metadata_only",
+        accessStatus: openAccess ? "open" : "metadata_only",
         inspectionDepth: r.snippet ? 1 : 0,
         doi: canonicalizeDoi(r.doi),
         isbn: canonicalizeIsbn(r.isbn),
@@ -1113,22 +1125,45 @@ export async function analyzeEditionRun(input: {
         normalizedKey: normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }),
         // Canonical WORK identity, so the Library can show one entry per work
         // with its reviews and editions attached instead of repeating a book.
-        ...(() => {
-          const w = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
-          return {
-            workKey: w.key,
-            workRole: w.role,
-            workCanonicalTitle: w.canonicalTitle,
-            workAuthorSurname: w.authorSurname,
-            workEvidence: w.evidence,
-          };
-        })(),
+        workKey: resourceWork.key,
+        workRole: resourceWork.role,
+        workCanonicalTitle: resourceWork.canonicalTitle,
+        workAuthorSurname: resourceWork.authorSurname,
+        workEvidence: resourceWork.evidence,
         year: r.year,
         authors: r.authors,
         bibRecordId: bibId,
         raw: r.raw,
       })
       .returning({ id: researchResources.id });
+
+    // Provider/query provenance was already retained in raw metadata, but a
+    // first-class row makes a source node's evidence inspectable without
+    // parsing provider-specific JSON. The graph joins this run-scoped record.
+    await db.insert(resourceProvenance).values({
+      resourceId: resourceRow.id,
+      provider: r.provider,
+      query: qg.lanes.flatMap((lane) => lane.queries).join(" | ").slice(0, 2_000),
+      inspectedAt: new Date(),
+      inspectionDepth: r.snippet ? 1 : 0,
+    });
+
+    if (openAccess) {
+      const retrieved = openAccessRetrievals < RESEARCH_LIMITS.maxOpenAccessRetrievals
+        ? (openAccessRetrievals++, await retrieveOpenAccessText(openAccess))
+        : { status: "open_access_available" as const, error: "Automatic open-access retrieval cap reached for this run." };
+      await db.insert(researchResourceContents).values({
+        resourceId: resourceRow.id,
+        status: retrieved.status,
+        sourceUrl: openAccess.sourceUrl,
+        license: openAccess.license,
+        licenseEvidence: openAccess.evidence,
+        ...(retrieved.status === "open_access_indexed"
+          ? { text: retrieved.text, contentHash: retrieved.contentHash, retrievedAt: retrieved.retrievedAt }
+          : { error: retrieved.error ?? null }),
+      });
+    }
+    relationProjection.push({ id: resourceRow.id, workKey: resourceWork.key, workRole: resourceWork.role });
 
     await setStage("classification", "credibility");
     // Structural cues (study design, sample size, statistics, hedging) beat
@@ -1270,8 +1305,7 @@ export async function analyzeEditionRun(input: {
     if (isModernPipeline && primaryWorkIdentityId && r.resourceType !== "unresolved-citation") {
       const libraryKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
       if (libraryKey) {
-        const resourceIdentity = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
-        const resourceWorkIdentityId = await findOrCreateWorkIdentity(resourceIdentity, r.authors);
+        const resourceWorkIdentityId = await findOrCreateWorkIdentity(resourceWork, r.authors);
         const libraryFields = {
           workIdentityId: resourceWorkIdentityId,
           title: r.title,
@@ -1311,6 +1345,33 @@ export async function analyzeEditionRun(input: {
             set: { relationship: conservativeCategory, rationale: noteBody, confidence: classification!.confidence },
           });
       }
+    }
+  }
+
+  // Persist only deterministic, provenance-backed source-to-source links.
+  // A review/edition/translation is connected to the discovered primary record
+  // that shares its derived work identity; this is not a vector similarity
+  // guess and the exact grouping evidence remains on both resource rows.
+  const byWorkKey = new Map<string, typeof relationProjection>();
+  for (const row of relationProjection) {
+    if (!row.workKey) continue;
+    byWorkKey.set(row.workKey, [...(byWorkKey.get(row.workKey) ?? []), row]);
+  }
+  for (const [workKey, rows] of byWorkKey) {
+    const primary = rows.find((row) => row.workRole === "primary");
+    if (!primary) continue;
+    for (const related of rows) {
+      if (related.id === primary.id) continue;
+      await db.insert(editionRelations).values({
+        runId: input.runId,
+        resourceId: related.id,
+        relatedResourceId: primary.id,
+        relationType: `${related.workRole}_of`,
+        depth: 1,
+        importance: 1,
+        evidence: { provenance: "shared_work_identity", workKey, relatedRole: related.workRole },
+        confidence: 1,
+      });
     }
   }
 
