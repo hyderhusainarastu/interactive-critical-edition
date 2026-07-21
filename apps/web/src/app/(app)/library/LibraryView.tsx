@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import type { ReaderLevelFilter } from "@ice/roadmap";
 import type { LibraryItem } from "@/lib/library";
 
 const RELATIONSHIP_LABEL: Record<string, string> = {
@@ -24,6 +25,12 @@ const READER_LEVEL_LABEL: Record<string, string> = {
   research: "Research",
 };
 
+const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = {
+  ...READER_LEVEL_LABEL,
+  all: "Show all levels",
+} as Record<ReaderLevelFilter, string>;
+const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
+
 type Tab = "all" | "to_read" | "reading" | "completed";
 const TABS: { key: Tab; label: string }[] = [
   { key: "all", label: "All" },
@@ -41,16 +48,37 @@ function matchesTab(item: LibraryItem, tab: Tab): boolean {
   return item.readingStatus === tab;
 }
 
-export function LibraryView({ initialItems }: { initialItems: LibraryItem[] }) {
+export function LibraryView({
+  initialItems,
+  initialReaderLevel = "all",
+}: {
+  initialItems: LibraryItem[];
+  /** The reader's saved global level, or "all" if they never chose one.
+   *  Selecting a different level here is a page-local view filter only — it
+   *  never overwrites the saved global level (plan §35.2: bringing Library
+   *  in line with Roadmap/Curriculum's default-then-override pattern). */
+  initialReaderLevel?: ReaderLevelFilter;
+}) {
   const [items, setItems] = useState(initialItems);
   const [tab, setTab] = useState<Tab>("all");
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
-  const [readerLevel, setReaderLevel] = useState<string>("");
+  const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [sort, setSort] = useState<SortKey>("recency");
 
   const relationships = useMemo(() => [...new Set(items.map((i) => i.relationship))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
+
+  // Per-level counts for the select options, computed the same way the
+  // level filter itself matches (specific level, or no level recorded at
+  // all) so the displayed count never diverges from what picking it shows.
+  const levelCounts = useMemo(() => {
+    const counts = {} as Record<ReaderLevelFilter, number>;
+    for (const level of READER_LEVEL_FILTER_OPTIONS) {
+      counts[level] = level === "all" ? items.length : items.filter((i) => i.readerLevel === level || i.readerLevel === null).length;
+    }
+    return counts;
+  }, [items]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<Tab, number> = { all: items.length, to_read: 0, reading: 0, completed: 0 };
@@ -66,7 +94,7 @@ export function LibraryView({ initialItems }: { initialItems: LibraryItem[] }) {
     let filtered = items.filter((i) => matchesTab(i, tab));
     if (relationship) filtered = filtered.filter((i) => i.relationship === relationship);
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
-    if (readerLevel) filtered = filtered.filter((i) => i.readerLevel === readerLevel || i.readerLevel === null);
+    if (readerLevel !== "all") filtered = filtered.filter((i) => i.readerLevel === readerLevel || i.readerLevel === null);
     const sorted = [...filtered];
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
     else if (sort === "credibility") sorted.sort((a, b) => (b.credibility?.score ?? -1) - (a.credibility?.score ?? -1));
@@ -142,12 +170,22 @@ export function LibraryView({ initialItems }: { initialItems: LibraryItem[] }) {
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
-              <select value={readerLevel} onChange={(e) => setReaderLevel(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
-                <option value="">All levels</option>
-                {Object.entries(READER_LEVEL_LABEL).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
+              <span className="text-xs text-[var(--color-text-muted)]">
+                Reader level
+                {readerLevel !== "all" && (
+                  <span className="ml-1 text-[var(--color-text-muted)]">
+                    (never hides anything you can&rsquo;t also see — pick &ldquo;Show all levels&rdquo; anytime)
+                  </span>
+                )}
+              </span>
+              <select
+                value={readerLevel}
+                onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              >
+                {READER_LEVEL_FILTER_OPTIONS.map((level) => (
+                  <option key={level} value={level}>
+                    {READER_LEVEL_FILTER_LABEL[level]} ({levelCounts[level]})
                   </option>
                 ))}
               </select>

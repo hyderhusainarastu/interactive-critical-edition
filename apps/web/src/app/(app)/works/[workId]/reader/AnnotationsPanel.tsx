@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META, confidenceLabel, VERIFICATION_LABELS } from "./annotationMeta";
-import type { AnalysisStatus, AnnotationRecord, VerificationStatus } from "./types";
+import type { AnalysisStatus, AnnotationRecord, RelationshipCategory, VerificationStatus } from "./types";
+
+type SortKey = "confidence" | "category" | "verification";
+const SORT_LABEL: Record<SortKey, string> = {
+  confidence: "Confidence",
+  category: "Category",
+  verification: "Review status",
+};
 
 /**
  * The scholarly-analysis panel (plan §12): every AI annotation shown with
@@ -31,11 +38,33 @@ export function AnnotationsPanel({
 }) {
   const [showHidden, setShowHidden] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<RelationshipCategory | "">("");
+  const [verificationFilter, setVerificationFilter] = useState<VerificationStatus | "">("");
+  const [sort, setSort] = useState<SortKey>("confidence");
 
-  // Server already returns a stable confidence-desc order (see
-  // getAnnotationsForDocument); just filter, don't re-sort — re-sorting
-  // here would reintroduce tie instability across reloads.
-  const visible = annotations.filter((a) => (showHidden ? true : !a.hidden));
+  // Categories/statuses actually present, derived from the full set (not the
+  // filtered one) so option lists don't shrink as filters narrow the list.
+  const categories = useMemo(
+    () => [...new Set(annotations.map((a) => a.relationshipCategory))].sort((a, b) => CATEGORY_META[a].label.localeCompare(CATEGORY_META[b].label)),
+    [annotations],
+  );
+  const verificationStatuses = useMemo(() => [...new Set(annotations.map((a) => a.verificationStatus))], [annotations]);
+
+  const visible = useMemo(() => {
+    let filtered = annotations.filter((a) => (showHidden ? true : !a.hidden));
+    if (categoryFilter) filtered = filtered.filter((a) => a.relationshipCategory === categoryFilter);
+    if (verificationFilter) filtered = filtered.filter((a) => a.verificationStatus === verificationFilter);
+    // The server returns a stable confidence-desc order (see
+    // getAnnotationsForDocument); Array#sort is spec-stable since ES2019, so
+    // re-sorting by a different key here never scrambles ties within that key
+    // — the confidence-desc order still holds for anything not distinguished
+    // by the chosen sort, and choosing "Confidence" again is a no-op.
+    const sorted = [...filtered];
+    if (sort === "category") sorted.sort((a, b) => CATEGORY_META[a.relationshipCategory].label.localeCompare(CATEGORY_META[b.relationshipCategory].label));
+    else if (sort === "verification") sorted.sort((a, b) => VERIFICATION_LABELS[a.verificationStatus].localeCompare(VERIFICATION_LABELS[b.verificationStatus]));
+    else sorted.sort((a, b) => b.confidence - a.confidence);
+    return sorted;
+  }, [annotations, showHidden, categoryFilter, verificationFilter, sort]);
 
   const anyHeuristic = annotations.some((a) => a.isHeuristic);
 
@@ -73,6 +102,56 @@ export function AnnotationsPanel({
         >
           {analysisStatus === "analyzing" ? "Analyzing…" : "Re-analyze"}
         </button>
+      </div>
+
+      <div className="flex flex-col gap-1.5 border-b border-[var(--color-border)] px-4 py-2 text-[0.72rem]">
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[var(--color-text-muted)]">Category</span>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as RelationshipCategory | "")}
+            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>
+                {CATEGORY_META[c].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[var(--color-text-muted)]">Review status</span>
+          <select
+            value={verificationFilter}
+            onChange={(e) => setVerificationFilter(e.target.value as VerificationStatus | "")}
+            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+          >
+            <option value="">All statuses</option>
+            {verificationStatuses.map((s) => (
+              <option key={s} value={s}>
+                {VERIFICATION_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[var(--color-text-muted)]">Sort</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+          >
+            {(Object.entries(SORT_LABEL) as Array<[SortKey, string]>).map(([key, label]) => (
+              <option key={key} value={key}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="text-[var(--color-text-muted)]">
+          {visible.length} of {annotations.length}
+        </span>
       </div>
 
       {showLegend && (

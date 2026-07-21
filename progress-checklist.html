@@ -165,8 +165,8 @@
         <h2 id="overview-title">Phase 10 is underway</h2>
         <p>Phases 0–9 are complete. Phase 9's originally-planned 9.8 sub-phase was retired before implementation (never enumerated anywhere despite being referenced by count, and not worth guessing at given the real AI-spend stakes attached to it); Phase 9's own original objective — full-depth adaptivity without ever hiding depth — is instead being completed by Phase 10.</p>
         <div class="progress">
-          <div class="progress-label"><span>Phase 10 scope items</span><span>in progress</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 10 scope items complete" aria-valuemin="0" aria-valuemax="6" aria-valuenow="0"><span></span></div>
+          <div class="progress-label"><span>Phase 10 scope items</span><span>4 of 6 complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 10 scope items complete" aria-valuemin="0" aria-valuemax="6" aria-valuenow="4"><span></span></div>
         </div>
       </div>
       <div class="metric"><strong>10 / 12</strong><span>numbered phases complete</span></div>
@@ -197,10 +197,10 @@
       <div class="focus-header"><div><p class="eyebrow">Active phase</p><h2 id="phase-ten-title">Workspace Depth &amp; Adaptivity Completion</h2></div><span class="status active">In progress</span></div>
       <p>Phase 10 returns to and completes Phase 9's own original objective — a workspace that adapts to the reader's level without ever hiding depth — by closing the concrete gaps audited against the shipped 9.1–9.7 codebase, rather than inventing new scope.</p>
       <ol class="subphases">
-        <li class="subphase current"><h3>Annotation relationship &amp; source link</h3><p>Surface each passage annotation's relationship category and a link to its related resource. Pure UI, no new schema or AI call.</p></li>
-        <li class="subphase current"><h3>Annotation filter &amp; sort</h3><p>Filter/sort annotations by type, topic, relevance, and credibility, mirroring the Library's established pattern.</p></li>
-        <li class="subphase current"><h3>Library default-scoping</h3><p>Reader-level scoping becomes the default view (with an explicit "show all"), matching Roadmap and Curriculum's established pattern.</p></li>
-        <li class="subphase current"><h3>3D graph visual richness</h3><p>Directional link particles, neighbor-subgraph hover highlight, click-to-focus camera fly-to — still driven by the same palette tokens. The accessible table stays an equal, unchanged fallback.</p></li>
+        <li class="subphase complete"><h3>Annotation relationship &amp; source link</h3><p>Surface each passage annotation's relationship category and a link to its related resource. Pure UI, no new schema or AI call. Complete.</p></li>
+        <li class="subphase complete"><h3>Annotation filter &amp; sort</h3><p>Filter/sort annotations by category and review status, plus a sort control, mirroring the Library's established pattern. Complete.</p></li>
+        <li class="subphase complete"><h3>Library default-scoping</h3><p>Reader-level scoping becomes the default view (with an explicit "show all"), matching Roadmap and Curriculum's established pattern. Complete.</p></li>
+        <li class="subphase complete"><h3>3D graph visual richness</h3><p>Directional link particles, neighbor-subgraph hover highlight, click-to-focus camera fly-to — still driven by the same palette tokens. The accessible table stays an equal, unchanged fallback. Complete.</p></li>
         <li class="subphase current"><h3>Suggested reader level</h3><p>A level nudge derived from aggregate Library completion patterns — a suggestion the reader can accept or ignore, never a silent overwrite. Touches the worker; needs a production canary.</p></li>
         <li class="subphase current"><h3>Jargon-extraction tightening</h3><p>Verify and, if needed, tighten the passage-annotation extraction prompt so it reliably targets terminology/jargon, not just general commentary. Touches the worker; needs a production canary.</p></li>
       </ol>

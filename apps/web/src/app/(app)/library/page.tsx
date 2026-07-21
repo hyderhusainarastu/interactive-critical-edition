@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { getLibrary } from "@/lib/library";
+import { getUserReaderLevel } from "@/lib/readerLevel";
 import { LibraryView } from "./LibraryView";
 
 /**
@@ -11,6 +12,10 @@ import { LibraryView } from "./LibraryView";
 export default async function LibraryPage() {
   const session = await requireSession();
   const items = await getLibrary(session.user.id);
+  // Default-scope to the reader's saved global level (plan §10/§35.2, bringing
+  // Library in line with Roadmap/Curriculum's established pattern); null
+  // (never chosen) falls back to "all", same as Roadmap's own default.
+  const readerLevel = await getUserReaderLevel(session.user.id);
 
-  return <LibraryView initialItems={items} />;
+  return <LibraryView initialItems={items} initialReaderLevel={readerLevel ?? "all"} />;
 }

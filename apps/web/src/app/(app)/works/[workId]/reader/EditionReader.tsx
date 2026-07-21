@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CATEGORY_META } from "./annotationMeta";
+import type { RelationshipCategory } from "./types";
 
 type Authority = "A" | "B" | "C" | "D" | "E";
 type Agreement = "strong" | "contested" | "mixed" | "insufficient";
@@ -69,7 +71,8 @@ export interface EditionPassageAnnotation {
   summary: string;
   explanation: string;
   annotationType: PassageAnnotationType;
-  relationship: string;
+  relationship: RelationshipCategory;
+  relatedResourceId: string | null;
   readerLevel: ReaderLevel | null;
   confidence: number;
 }
@@ -200,12 +203,29 @@ function ClaimView({ claim }: { claim: EditionClaim }) {
  *  visible, explanation expandable, never claiming an anchor it doesn't have —
  *  `isWholeWork` items are rendered separately, under the literal label
  *  "Whole-work guidance", by the caller (never passed here mixed in). */
-function PassageAnnotationNote({ note }: { note: EditionPassageAnnotation }) {
+function PassageAnnotationNote({
+  note,
+  resourceById,
+}: {
+  note: EditionPassageAnnotation;
+  resourceById: Map<string, EditionResource>;
+}) {
   const [open, setOpen] = useState(false);
+  const relatedResource = note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined;
+  const category = CATEGORY_META[note.relationship];
   return (
     <li className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs font-medium">{PASSAGE_TYPE_LABEL[note.annotationType]}</span>
+        {category && (
+          <span
+            className="rounded px-1.5 py-0.5 text-xs font-medium"
+            style={{ color: `var(${category.colorVar})` }}
+            title={category.gloss}
+          >
+            {category.glyph} {category.label}
+          </span>
+        )}
         {note.readerLevel && <span className="text-xs text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
         <span className="ml-auto text-xs text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}% confidence</span>
       </div>
@@ -217,6 +237,18 @@ function PassageAnnotationNote({ note }: { note: EditionPassageAnnotation }) {
         <div className="mt-2 border-t border-[var(--color-border)] pt-2">
           <p>{note.explanation}</p>
           {note.quote && <p className="mt-1.5 border-l-2 border-[var(--color-border)] pl-2 text-xs italic text-[var(--color-text-muted)]">“{note.quote}”</p>}
+          {relatedResource && (
+            <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
+              Related source:{" "}
+              {relatedResource.url ? (
+                <a href={relatedResource.url} target="_blank" rel="noopener noreferrer" className="underline">
+                  {relatedResource.title}
+                </a>
+              ) : (
+                relatedResource.title
+              )}
+            </p>
+          )}
         </div>
       )}
     </li>
@@ -287,7 +319,7 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
             True of this work as a whole — no single passage captures it, so it carries no page/block anchor.
           </p>
           <ul className="mt-2 flex flex-col gap-2">
-            {edition.wholeWorkGuidance.map((note) => <PassageAnnotationNote key={note.id} note={note} />)}
+            {edition.wholeWorkGuidance.map((note) => <PassageAnnotationNote key={note.id} note={note} resourceById={resourceById} />)}
           </ul>
         </section>
       )}
@@ -304,7 +336,7 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
                 <p className="whitespace-pre-wrap">{block.text}</p>
                 {blockNotes && blockNotes.length > 0 && (
                   <ul className="mt-2 flex flex-col gap-2 border-l-2 border-[var(--color-accent-green)] pl-3">
-                    {blockNotes.map((note) => <PassageAnnotationNote key={note.id} note={note} />)}
+                    {blockNotes.map((note) => <PassageAnnotationNote key={note.id} note={note} resourceById={resourceById} />)}
                   </ul>
                 )}
               </div>

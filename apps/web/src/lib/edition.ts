@@ -180,6 +180,7 @@ export async function getPublishedEdition(documentId: string) {
     explanation: p.explanation,
     annotationType: p.annotationType,
     relationship: p.relationship,
+    relatedResourceId: p.relatedResourceId,
     readerLevel: p.readerLevel,
     confidence: p.confidence,
   }));
