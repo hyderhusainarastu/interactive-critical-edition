@@ -521,6 +521,8 @@ export async function seedWorkWithLibraryItem(
     resourceTitle?: string;
     relationship?: "prerequisite" | "interpretive_aid" | "secondary_scholarly_recommendation";
     readingStatus?: "planned" | "reading" | "completed" | "abandoned";
+    /** Reader level the seeded resource_role targets, or null for "every level" (the default, matching the prior hardcoded behavior). */
+    readerLevel?: "beginner" | "undergraduate" | "advanced" | "research" | null;
   } = {},
 ): Promise<{ workId: string; resourceId: string }> {
   const suffix = crypto.randomUUID().slice(0, 8);
@@ -550,7 +552,7 @@ export async function seedWorkWithLibraryItem(
     learningResourceId: resource.id,
     workIdentityId: identity.id,
     relationship: opts.relationship ?? "prerequisite",
-    readerLevel: null,
+    readerLevel: opts.readerLevel ?? null,
     rationale: "Foundational for understanding the paper's central argument.",
     confidence: 0.8,
     createdBy: "system",

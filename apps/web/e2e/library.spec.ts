@@ -1,4 +1,4 @@
-import { db, readingRecords } from "@ice/db";
+import { db, readingRecords, users } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItem } from "./helpers";
@@ -78,6 +78,72 @@ test.describe("Library (Phase 9.5)", () => {
     // Survives reload — reads back from the DB, not just component state.
     await page.reload();
     await expect(row.getByLabel(/Reading status of/)).toHaveValue("reading");
+  });
+
+  test("suggests a higher reader level after enough completions, and Switch writes users.readerLevel (plan §35.2)", async ({ page }) => {
+    const suggestEmail = `e2e-library-suggest-${Date.now()}@example.com`;
+    const suggestUserId = await createVerifiedTestUser(suggestEmail, PASSWORD);
+    await seedWorkWithLibraryItem(suggestUserId, {
+      resourceTitle: "Advanced Work One",
+      readingStatus: "completed",
+      readerLevel: "advanced",
+    });
+    await seedWorkWithLibraryItem(suggestUserId, {
+      resourceTitle: "Advanced Work Two",
+      readingStatus: "completed",
+      readerLevel: "advanced",
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(suggestEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+
+    await page.goto("/library");
+    await expect(page.getByText(/you might be ready for the/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Switch to Advanced" })).toBeVisible();
+
+    // Dismissing hides it and survives reload (localStorage-remembered).
+    await page.getByRole("button", { name: "Dismiss" }).click();
+    await expect(page.getByText(/you might be ready for the/i)).not.toBeVisible();
+    await page.reload();
+    await expect(page.getByText(/you might be ready for the/i)).not.toBeVisible();
+
+    await deleteTestUser(suggestEmail);
+  });
+
+  test("Switch actually writes the accepted level (separate user, no prior dismissal)", async ({ page }) => {
+    const acceptEmail = `e2e-library-accept-${Date.now()}@example.com`;
+    const acceptUserId = await createVerifiedTestUser(acceptEmail, PASSWORD);
+    await seedWorkWithLibraryItem(acceptUserId, {
+      resourceTitle: "Research Work One",
+      readingStatus: "completed",
+      readerLevel: "research",
+    });
+    await seedWorkWithLibraryItem(acceptUserId, {
+      resourceTitle: "Research Work Two",
+      readingStatus: "completed",
+      readerLevel: "research",
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(acceptEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+
+    await page.goto("/library");
+    await page.getByRole("button", { name: "Switch to Research" }).click();
+
+    await expect
+      .poll(async () => {
+        const [row] = await db.select({ readerLevel: users.readerLevel }).from(users).where(eq(users.id, acceptUserId));
+        return row?.readerLevel;
+      })
+      .toBe("research");
+
+    await deleteTestUser(acceptEmail);
   });
 
   test("a user with no v3-analyzed work sees an honest empty state, not a broken page", async ({ page }) => {

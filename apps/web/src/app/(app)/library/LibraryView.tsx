@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { ReaderLevelFilter } from "@ice/roadmap";
+import { useEffect, useMemo, useState } from "react";
+import { suggestReaderLevelFromCompletions, type ReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
 import type { LibraryItem } from "@/lib/library";
+
+const SUGGESTION_DISMISSED_KEY = "library-reader-level-suggestion-dismissed";
 
 const RELATIONSHIP_LABEL: Record<string, string> = {
   explicit_reference: "Explicit reference",
@@ -66,6 +68,44 @@ export function LibraryView({
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [sort, setSort] = useState<SortKey>("recency");
 
+  // Suggested-reader-level nudge (plan §35.2): a pure inference over what the
+  // reader has actually finished, never a silent write — "Switch" is the only
+  // path that changes the saved profile level, and "Dismiss" is remembered so
+  // the exact same suggestion doesn't keep reappearing.
+  const [dismissedSuggestion, setDismissedSuggestion] = useState<ReaderLevel | null>(null);
+  useEffect(() => {
+    // Deliberately read after mount rather than in a lazy useState initializer:
+    // the initializer would run during SSR too (window/localStorage absent),
+    // so reading it there would make the server- and client-rendered markup
+    // diverge and trigger a hydration mismatch. A same-render setState here
+    // is the standard fix for "sync client-only storage into state safely".
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDismissedSuggestion((localStorage.getItem(SUGGESTION_DISMISSED_KEY) as ReaderLevel | null) ?? null);
+  }, []);
+  const suggestedLevel = useMemo(() => {
+    const completedLevels = items.filter((i) => i.readingStatus === "completed").map((i) => i.readerLevel as ReaderLevel | null);
+    const currentLevel = initialReaderLevel === "all" ? null : initialReaderLevel;
+    return suggestReaderLevelFromCompletions(completedLevels, currentLevel);
+  }, [items, initialReaderLevel]);
+  const showSuggestion = suggestedLevel !== null && suggestedLevel !== dismissedSuggestion;
+
+  function dismissSuggestion() {
+    if (!suggestedLevel) return;
+    localStorage.setItem(SUGGESTION_DISMISSED_KEY, suggestedLevel);
+    setDismissedSuggestion(suggestedLevel);
+  }
+
+  async function acceptSuggestion() {
+    if (!suggestedLevel) return;
+    setReaderLevel(suggestedLevel);
+    await fetch("/api/reader-level", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level: suggestedLevel }),
+    });
+    dismissSuggestion();
+  }
+
   const relationships = useMemo(() => [...new Set(items.map((i) => i.relationship))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
 
@@ -118,6 +158,24 @@ export function LibraryView({
         Every source recommended for your own works, in one place — separate from the works you&rsquo;ve uploaded
         yourself. An AI-assisted aid; verify against the sources.
       </p>
+
+      {showSuggestion && suggestedLevel && (
+        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+          <p className="text-[var(--color-text-muted)]">
+            Based on what you&rsquo;ve completed, you might be ready for the{" "}
+            <strong className="text-[var(--color-text)]">{READER_LEVEL_LABEL[suggestedLevel]}</strong> view. This never
+            hides anything either way — it just changes what opens by default.
+          </p>
+          <div className="ml-auto flex gap-3 whitespace-nowrap text-xs">
+            <button type="button" className="underline" onClick={acceptSuggestion}>
+              Switch to {READER_LEVEL_LABEL[suggestedLevel]}
+            </button>
+            <button type="button" className="underline" onClick={dismissSuggestion}>
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {items.length === 0 && (
         <p className="rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">

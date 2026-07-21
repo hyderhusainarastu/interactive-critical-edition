@@ -200,17 +200,24 @@ export async function synthesizePassageAnnotations(
       maxOutputTokens: 3000,
       system:
         `You are annotating a scholarly primary text for a reader, one passage at a time. You are given ` +
-        `numbered blocks with their block_id. For each passage genuinely worth explaining (a difficult term, ` +
-        `necessary context, a place the author disagrees with someone, a connection worth noting), emit ONE ` +
-        `annotation with a VERBATIM quote copied exactly from that block's own text — never paraphrase the ` +
-        `quote, never invent one. Pick at most ${maxAnnotations} passages; quality over coverage. You may ` +
-        `ALSO emit at most one additional annotation with an empty block_id and an empty quote for genuine ` +
-        `whole-document guidance (something true of the work as a whole that no single passage captures) — ` +
-        `use this rarely, never as a substitute for a real anchor. summary must be a single sentence under ` +
-        `${MAX_SUMMARY_LENGTH} characters; explanation must be 1-3 sentences, concise. annotation_type is what ` +
-        `KIND of note this is about the passage itself. relationship is only relevant when the note draws a ` +
-        `comparison to another work or thinker; otherwise use "interpretive_aid". reader_level is who most needs ` +
-        `this note — leave it empty if it's useful at every level.`,
+        `numbered blocks with their block_id. Actively scan every block for TERMINOLOGY A READER WOULD STUMBLE ` +
+        `ON: technical jargon, a term of art used in a specialized sense, a foreign-language word or phrase left ` +
+        `untranslated, an acronym, or a proper name the text assumes the reader already knows — these are the ` +
+        `single most valuable kind of note (mark annotation_type: "definition") and should never be skipped in ` +
+        `favor of only the more general categories below. Beyond terminology, also annotate: necessary context, ` +
+        `a place the author disagrees with someone, or a connection worth noting. For each passage genuinely ` +
+        `worth explaining, emit ONE annotation with a VERBATIM quote copied exactly from that block's own text ` +
+        `— never paraphrase the quote, never invent one. Pick at most ${maxAnnotations} passages; quality over ` +
+        `coverage, but do not let generic commentary crowd out a real, identifiable term that needs defining. ` +
+        `You may ALSO emit at most one additional annotation with an empty block_id and an empty quote for ` +
+        `genuine whole-document guidance (something true of the work as a whole that no single passage ` +
+        `captures) — use this rarely, never as a substitute for a real anchor. summary must be a single ` +
+        `sentence under ${MAX_SUMMARY_LENGTH} characters; explanation must be 1-3 sentences, concise. For a ` +
+        `"definition" annotation, the explanation should state what the term means AS USED HERE, not a generic ` +
+        `dictionary definition. annotation_type is what KIND of note this is about the passage itself. ` +
+        `relationship is only relevant when the note draws a comparison to another work or thinker; otherwise ` +
+        `use "interpretive_aid". reader_level is who most needs this note — leave it empty if it's useful at ` +
+        `every level.`,
       input: JSON.stringify({
         title: input.primary.title,
         author: input.primary.author ?? null,

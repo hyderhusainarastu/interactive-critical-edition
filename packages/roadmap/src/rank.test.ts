@@ -3,6 +3,7 @@ import {
   KNOWN_THRESHOLD,
   countByReaderLevel,
   rankRoadmap,
+  suggestReaderLevelFromCompletions,
   type OverrideEntry,
   type ProfileEntry,
   type RoadmapCandidate,
@@ -171,5 +172,33 @@ describe("countByReaderLevel", () => {
       research: 3, // everything
       all: 3,
     });
+  });
+});
+
+describe("suggestReaderLevelFromCompletions", () => {
+  it("suggests nothing below the minimum-completions threshold", () => {
+    expect(suggestReaderLevelFromCompletions(["advanced"], "beginner")).toBeNull();
+  });
+
+  it("suggests a higher level once enough completions accumulate at it", () => {
+    expect(suggestReaderLevelFromCompletions(["advanced", "advanced"], "beginner")).toBe("advanced");
+  });
+
+  it("never suggests the reader's current level or anything at/below it", () => {
+    expect(suggestReaderLevelFromCompletions(["undergraduate", "undergraduate"], "undergraduate")).toBeNull();
+    expect(suggestReaderLevelFromCompletions(["beginner", "beginner", "beginner"], "advanced")).toBeNull();
+  });
+
+  it("prefers the strongest (highest) signal when multiple levels qualify", () => {
+    const completed = ["advanced", "advanced", "research", "research"] as const;
+    expect(suggestReaderLevelFromCompletions([...completed], "beginner")).toBe("research");
+  });
+
+  it("treats a null current level (never chosen) the same as beginner-and-below", () => {
+    expect(suggestReaderLevelFromCompletions(["undergraduate", "undergraduate"], null)).toBe("undergraduate");
+  });
+
+  it("ignores items with no recorded reader level", () => {
+    expect(suggestReaderLevelFromCompletions([null, null, null, null], "beginner")).toBeNull();
   });
 });

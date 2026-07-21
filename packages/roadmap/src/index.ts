@@ -337,3 +337,44 @@ export function countByReaderLevel(
   }
   return counts;
 }
+
+/** How many completed items at a level are enough evidence to suggest that
+ *  level — deliberately conservative so one lucky completion doesn't nudge
+ *  a reader who hasn't actually built up a pattern. */
+const SUGGESTION_MIN_COMPLETIONS = 2;
+
+/**
+ * Suggests a higher reader level from a pattern in what the reader has
+ * actually finished (plan §35.2: "reading behavior gauges reader's
+ * knowledge level"), the same *inference*-not-*override* posture 9.4's
+ * `inferMasteryFromCompletedWorks` already established for concept mastery —
+ * evidence only ever nudges upward from what's already known, and the
+ * caller (never this function) is responsible for treating the result as a
+ * dismissible suggestion rather than writing it back to the profile
+ * (plan §34.4: "browsing alone never silently changes a level").
+ *
+ * Deliberately a pure function over data the app already has (Library
+ * completion status + each item's own reader level) — no new AI call and no
+ * worker involvement, the same posture 9.6's Curriculum took over
+ * `resource_role`/`learning_resource` (see the project log's Design
+ * Decisions for the parallel).
+ */
+export function suggestReaderLevelFromCompletions(
+  completedLevels: Array<ReaderLevel | null>,
+  currentLevel: ReaderLevel | null,
+): ReaderLevel | null {
+  const counts: Record<ReaderLevel, number> = { beginner: 0, undergraduate: 0, advanced: 0, research: 0 };
+  for (const level of completedLevels) {
+    if (level) counts[level] += 1;
+  }
+
+  const currentIndex = currentLevel ? READER_LEVELS.indexOf(currentLevel) : -1;
+  // Highest level first: if the reader has completed enough at "research",
+  // that's the strongest signal and should win over a weaker signal at a
+  // lower level.
+  for (let i = READER_LEVELS.length - 1; i > currentIndex; i--) {
+    const level = READER_LEVELS[i];
+    if (counts[level] >= SUGGESTION_MIN_COMPLETIONS) return level;
+  }
+  return null;
+}
