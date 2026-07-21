@@ -49,3 +49,6 @@ supabase/.temp/
 # code, kept only for local reference and never committed. See
 # docs/PROJECT-LOG.md design decisions for the license/attribution rationale.
 external-reference/
+
+# Personal reference material unrelated to this project — never committed.
+/Rollout Plan/
