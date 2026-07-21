@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
-import { STATE_META, type GraphData, type GraphLink, type GraphNode, type NodeState, type NodeType } from "./types";
+import {
+  EDGE_FAMILY_META,
+  STATE_META,
+  edgeFamilyFor,
+  type EdgeFamily,
+  type GraphData,
+  type GraphLink,
+  type GraphNode,
+  type NodeState,
+  type NodeType,
+} from "./types";
 
 // Relative node size by kind — work is the anchor, concepts next, then
 // references, with sections (a per-work outline, often numerous) smallest.
@@ -40,6 +50,7 @@ export function KnowledgeGraph3D({
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: 800, h: 520 });
   const [colors, setColors] = useState<Record<NodeState, string>>();
+  const [linkColors, setLinkColors] = useState<Record<EdgeFamily, string>>();
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
 
   // Measure the container so the canvas fills it (react-force-graph-3d
@@ -63,7 +74,12 @@ export function KnowledgeGraph3D({
       for (const state of Object.keys(STATE_META) as NodeState[]) {
         next[state] = cs.getPropertyValue(STATE_META[state].colorVar).trim() || "#888";
       }
+      const nextLinks = {} as Record<EdgeFamily, string>;
+      for (const family of Object.keys(EDGE_FAMILY_META) as EdgeFamily[]) {
+        nextLinks[family] = cs.getPropertyValue(EDGE_FAMILY_META[family].colorVar).trim() || "#888";
+      }
       setColors(next);
+      setLinkColors(nextLinks);
     };
     resolve();
     const obs = new MutationObserver(resolve);
@@ -97,7 +113,7 @@ export function KnowledgeGraph3D({
 
   return (
     <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-lg border border-[var(--color-border)]">
-      {colors && (
+      {colors && linkColors && (
         <ForceGraph3D
           ref={fgRef as never}
           graphData={graphData}
@@ -121,9 +137,10 @@ export function KnowledgeGraph3D({
           nodeOpacity={0.9}
           linkColor={(l: object) => {
             const link = l as GraphLink;
-            if (!hoverNode) return "rgba(120,110,90,0.35)";
+            const family = edgeFamilyFor(link.edgeType, link.category);
+            if (!hoverNode) return linkColors[family];
             const connected = endpointId(link.source) === hoverNode.id || endpointId(link.target) === hoverNode.id;
-            return connected ? "rgba(180,140,60,0.85)" : "rgba(120,110,90,0.08)";
+            return connected ? linkColors[family] : "rgba(120,110,90,0.08)";
           }}
           linkWidth={(l: object) => {
             const link = l as GraphLink;
@@ -134,7 +151,10 @@ export function KnowledgeGraph3D({
           linkDirectionalParticles={2}
           linkDirectionalParticleWidth={1.2}
           linkDirectionalParticleSpeed={0.004}
-          linkDirectionalParticleColor={() => "rgba(180,140,60,0.9)"}
+          linkDirectionalParticleColor={(l: object) => {
+            const link = l as GraphLink;
+            return linkColors[edgeFamilyFor(link.edgeType, link.category)];
+          }}
           enableNodeDrag={false}
           showNavInfo={false}
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}

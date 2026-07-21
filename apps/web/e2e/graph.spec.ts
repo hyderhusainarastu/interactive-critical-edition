@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedWorkWithGraphData } from "./helpers";
 
 /**
- * Phase 9.7 E2E: the knowledge graph's node-type extension and shared
+ * Phase 9.7/11.8 E2E: the visualization graph's node-type extension and shared
  * filters. All graph data is SEEDED directly (`seedWorkWithGraphData`) —
  * `buildGraph()` has always been a pure DB read with no worker/live-API
  * dependency, so this is CI-safe the same way library.spec.ts/
@@ -29,7 +29,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.waitForURL("**/dashboard");
 }
 
-test.describe("Knowledge graph (Phase 9.7)", () => {
+test.describe("Visualization graph", () => {
   test.beforeAll(async () => {
     userId = await createVerifiedTestUser(EMAIL, PASSWORD);
   });
@@ -42,7 +42,7 @@ test.describe("Knowledge graph (Phase 9.7)", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Knowledge graph" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
 
     await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toContainText("On the Soul");
     await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toContainText("Physics");
@@ -51,6 +51,20 @@ test.describe("Knowledge graph (Phase 9.7)", () => {
 
     // Legend/summary reports the new concept count alongside the existing ones.
     await expect(page.getByText(/1 concepts/)).toBeVisible();
+  });
+
+  test("promotes Visualization in the main nav and shows relationship-family colors", async ({ page }) => {
+    const { workId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    const navLabels = await page.locator("header nav a").allInnerTexts();
+    expect(navLabels).toEqual(expect.arrayContaining(["Visualization", "Works", "Library"]));
+    expect(navLabels.indexOf("Visualization")).toBeLessThan(navLabels.indexOf("Works"));
+
+    await page.goto(`/works/${workId}/graph`);
+    await expect(page.getByLabel("Relationship color legend")).toContainText("Citation / reference");
+    await expect(page.getByLabel("Relationship color legend")).toContainText("Prerequisite");
+    await expect(page.getByLabel("Relationship color legend")).toContainText("Structure");
   });
 
   test("the Kind filter persists in the URL and narrows the table to one node type", async ({ page }) => {

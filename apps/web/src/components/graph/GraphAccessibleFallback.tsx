@@ -53,7 +53,7 @@ export function GraphAccessibleFallback({ data }: { data: GraphData }) {
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">
-          Knowledge graph as a table: each work, reference, concept, or section, its status, and what it connects to.
+          Visualization as a table: each work, reference, concept, or section, its status, and what it connects to.
         </caption>
         <thead>
           <tr className="border-b border-[var(--color-border)] text-left">

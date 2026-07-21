@@ -7,9 +7,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
 import {
   DEFAULT_GRAPH_FILTERS,
+  EDGE_FAMILY_META,
+  EDGE_FAMILY_ORDER,
   STATE_META,
   STATE_ORDER,
   TYPE_LABEL,
+  edgeFamilyFor,
   filterGraphData,
   type GraphData,
   type GraphFilters,
@@ -35,7 +38,7 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
 }
 
 /**
- * Orchestrates the knowledge-graph tab: fetches the per-user graph, offers
+ * Orchestrates the visualization tab: fetches the per-user graph, offers
  * a visible 3D ⇄ table toggle (the table is the accessible equal, plan
  * §20), a state legend, summary counts, and a click-to-detail panel. The
  * table view is the default so the information is reachable with zero
@@ -116,7 +119,7 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
       </div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-[var(--color-text)]">Knowledge graph</h1>
+          <h1 className="font-serif text-2xl font-semibold text-[var(--color-text)]">Visualization</h1>
           <p className="text-sm text-[var(--color-text-muted)]">
             {data?.title ?? ""} · works, references, concepts, and (per-work) the text&rsquo;s own outline.
           </p>
@@ -166,6 +169,20 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
               {data.stats.works} works · {data.stats.references} references · {data.stats.concepts} concepts ·{" "}
               {data.stats.missing} missing · {data.stats.read} read
             </span>
+          </div>
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" aria-label="Relationship color legend">
+            {[...new Set(data.links.map((link) => edgeFamilyFor(link.edgeType, link.category)))]
+              .sort((a, b) => EDGE_FAMILY_ORDER.indexOf(a) - EDGE_FAMILY_ORDER.indexOf(b))
+              .map((family) => (
+                <span key={family} className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
+                  <span
+                    aria-hidden
+                    className="inline-block h-0.5 w-5 rounded-full"
+                    style={{ background: `var(${EDGE_FAMILY_META[family].colorVar})` }}
+                  />
+                  {EDGE_FAMILY_META[family].label}
+                </span>
+              ))}
           </div>
 
           {/* Filters — the single source both views render from (plan §34.4 9.7). */}

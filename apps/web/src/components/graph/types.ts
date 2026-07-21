@@ -61,6 +61,27 @@ export function edgeTypeLabel(edgeType: string): string {
   return edgeType.replace(/_/g, " ");
 }
 
+export type EdgeFamily = "reference" | "influence" | "opposition" | "structural" | "prerequisite";
+
+export const EDGE_FAMILY_META: Record<EdgeFamily, { label: string; colorVar: string }> = {
+  reference: { label: "Citation / reference", colorVar: "--color-accent-ink" },
+  influence: { label: "Influence / agreement", colorVar: "--color-accent-green" },
+  opposition: { label: "Opposition", colorVar: "--color-credibility-critical" },
+  structural: { label: "Structure", colorVar: "--color-text-muted" },
+  prerequisite: { label: "Prerequisite", colorVar: "--color-credibility-warning" },
+};
+
+export const EDGE_FAMILY_ORDER: EdgeFamily[] = ["reference", "prerequisite", "influence", "opposition", "structural"];
+
+export function edgeFamilyFor(edgeType: string, category?: string | null): EdgeFamily {
+  const normalized = `${edgeType} ${category ?? ""}`.toLowerCase();
+  if (normalized.includes("outline") || normalized.includes("section")) return "structural";
+  if (normalized.includes("prerequisite") || normalized.includes("presupposes")) return "prerequisite";
+  if (normalized.includes("disagrees") || normalized.includes("criticizes") || normalized.includes("polemical")) return "opposition";
+  if (normalized.includes("cites") || normalized.includes("quotes") || normalized.includes("reference")) return "reference";
+  return "influence";
+}
+
 function linkEndpointId(end: GraphLink["source"] | GraphLink["target"]): string {
   return typeof end === "string" ? end : (end as { id: string }).id;
 }

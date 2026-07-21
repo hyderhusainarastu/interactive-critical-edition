@@ -294,7 +294,7 @@ export function WorkStatusPanel({
           href={`/works/${workId}/graph`}
           className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
         >
-          Knowledge graph
+          Visualization
         </Link>
         <Link
           href={`/works/${workId}/reader`}
