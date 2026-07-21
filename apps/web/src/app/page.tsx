@@ -101,7 +101,11 @@ function ReaderShowcase() {
         <p className="font-serif text-[1.05rem] leading-[1.7] text-[var(--color-text)]">
           The question of the meaning of Being must be raised anew. Here the inquiry builds directly on
           Kant&rsquo;s transcendental method
-          <span className="reader-annotation-marker reader-annotation-conceptual_influence" aria-hidden>
+          <span
+            className="reader-annotation-marker"
+            style={{ "--reader-annotation-color": "var(--color-accent-green)" } as React.CSSProperties}
+            aria-hidden
+          >
             ❋
           </span>
           , which first cleared the ground for the question.

@@ -105,7 +105,7 @@ export function TextReader({
           quote: a.anchor!.quote,
           prefix: a.anchor!.prefix,
           suffix: a.anchor!.suffix,
-          category: a.relationshipCategory,
+          colorVar: CATEGORY_META[a.relationshipCategory].colorVar,
           glyph: CATEGORY_META[a.relationshipCategory].glyph,
         })),
       );

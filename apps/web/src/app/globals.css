@@ -14,14 +14,22 @@
   --color-background: #faf9f5; /* bone white */
   --color-surface: #f1eee6; /* soft warm cream, elevated surfaces */
   --color-text: #22201b; /* near-black charcoal, >7:1 on the background */
-  --color-text-muted: #5a5346;
-  --color-border: #e4ddce;
+  --color-text-muted: #4a4332;
+  --color-border: #d8cdb2;
 
   --color-accent-burgundy: #7a2e3a;
   --color-accent-green: #3b5d42;
   --color-accent-ink: #2e4057;
   --color-accent-umber: #5c4632;
   --color-highlight: #c9a227; /* subdued gold/ochre, selection & highlight */
+
+  /* Functional accents reserved specifically for credibility alerting
+     (plan §36 11.2) — deliberately more saturated than the rest of the
+     warm palette above, scoped to this one purpose rather than a general
+     brightness increase. "Good" reuses --color-accent-green rather than
+     inventing a second green. */
+  --color-credibility-critical: #b3261e;
+  --color-credibility-warning: #a8630a;
 
   --color-focus-ring: #2e4057;
   /* Keep native UI (scrollbars, form controls) light too, so a dark-mode
@@ -34,13 +42,15 @@
   --color-background: #211d17;
   --color-surface: #2b2620;
   --color-text: #f2ead9;
-  --color-text-muted: #c3b8a3;
-  --color-border: #43392c;
+  --color-text-muted: #d2c7b0;
+  --color-border: #574a38;
   --color-accent-burgundy: #c2707c;
   --color-accent-green: #7ea988;
   --color-accent-ink: #8fa8c9;
   --color-accent-umber: #b99c7a;
   --color-highlight: #e0bb4d;
+  --color-credibility-critical: #ff6b5e;
+  --color-credibility-warning: #f0a94e;
   --color-focus-ring: #8fa8c9;
 }
 
@@ -48,13 +58,15 @@
   --color-background: #faf9f5;
   --color-surface: #f1eee6;
   --color-text: #22201b;
-  --color-text-muted: #5a5346;
-  --color-border: #e4ddce;
+  --color-text-muted: #4a4332;
+  --color-border: #d8cdb2;
   --color-accent-burgundy: #7a2e3a;
   --color-accent-green: #3b5d42;
   --color-accent-ink: #2e4057;
   --color-accent-umber: #5c4632;
   --color-highlight: #c9a227;
+  --color-credibility-critical: #b3261e;
+  --color-credibility-warning: #a8630a;
   --color-focus-ring: #2e4057;
 }
 
@@ -101,7 +113,10 @@
   AI annotation markers (plan §9/§18): a fourth, distinct treatment from
   authorial footnotes, user highlights, and user notes — a small colored
   superscript glyph the reader clicks to open the analysis panel. Category
-  color comes from the shared palette (see annotationMeta.ts); the glyph
+  color comes from the shared palette (CATEGORY_META in annotationMeta.ts,
+  the one source of truth — plan §36 11.2) via the inline
+  `--reader-annotation-color` custom property each marker sets for itself,
+  rather than a parallel per-category CSS class list here. The glyph
   carries the meaning so it never relies on color alone (WCAG, plan §20).
 */
 .reader-annotation-marker {
@@ -116,6 +131,7 @@
   margin: 0 0.06em;
   padding: 0 0.15em;
   border-radius: 999px;
+  background: var(--reader-annotation-color, var(--color-accent-ink));
   color: var(--color-background);
   cursor: pointer;
   font-weight: 700;
@@ -124,16 +140,6 @@
 .reader-annotation-marker:hover {
   transform: scale(1.15);
 }
-.reader-annotation-explicit_reference,
-.reader-annotation-interpretive_aid { background: var(--color-accent-ink); }
-.reader-annotation-secondary_scholarly_recommendation,
-.reader-annotation-conceptual_influence,
-.reader-annotation-optional_extension { background: var(--color-accent-green); }
-.reader-annotation-historical_context,
-.reader-annotation-parallel_comparison,
-.reader-annotation-ai_inferred { background: var(--color-accent-umber); }
-.reader-annotation-prerequisite,
-.reader-annotation-disagreement_polemical_target { background: var(--color-accent-burgundy); }
 
 /*
   Minimal pdf.js text-layer CSS (not importing pdf.js's own stylesheet
@@ -174,6 +180,8 @@
   --color-accent-ink: var(--color-accent-ink);
   --color-accent-umber: var(--color-accent-umber);
   --color-highlight: var(--color-highlight);
+  --color-credibility-critical: var(--color-credibility-critical);
+  --color-credibility-warning: var(--color-credibility-warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   /* Warm, contemporary-scholarly serif for display headings (plan §19):
@@ -199,6 +207,6 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-focus-ring);
+  outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { suggestReaderLevelFromCompletions, type ReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
+import { CredibilityMeter } from "@/components/CredibilityMeter";
 import type { LibraryItem } from "@/lib/library";
 
 const SUGGESTION_DISMISSED_KEY = "library-reader-level-suggestion-dismissed";
@@ -308,6 +309,12 @@ function LibraryRow({
               <>
                 <span>·</span>
                 <span>Authority {item.credibility.authority.toUpperCase()}</span>
+              </>
+            )}
+            {item.credibility?.score != null && (
+              <>
+                <span>·</span>
+                <CredibilityMeter score={item.credibility.score} />
               </>
             )}
             {item.peerReviewed === false && (

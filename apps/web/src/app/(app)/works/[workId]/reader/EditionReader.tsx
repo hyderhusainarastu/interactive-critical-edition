@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CATEGORY_META } from "./annotationMeta";
 import type { RelationshipCategory } from "./types";
 
@@ -410,6 +411,7 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
                     {resource.url ? <a className="underline" href={resource.url} target="_blank" rel="noreferrer">{work.title}</a> : work.title}
                     <span className="text-xs text-[var(--color-text-muted)]">· {resource.provider}{resource.year ? ` · ${resource.year}` : ""}</span>
                     {resource.credibility?.authority && <AuthorityBadge authority={resource.credibility.authority} />}
+                    {resource.credibility?.score != null && <CredibilityMeter score={resource.credibility.score} />}
                     {resource.credibility?.agreement && <span className="text-xs text-[var(--color-text-muted)]">{AGREEMENT_LABEL[resource.credibility.agreement]}</span>}
                   </div>
                   {work.related.length > 0 && (

@@ -125,8 +125,10 @@ export interface AnnotationMarkerAnchor {
   quote: string;
   prefix: string;
   suffix: string;
-  /** Category token used to color the marker (see annotationMeta). */
-  category: string;
+  /** CSS var name (e.g. "--color-accent-ink") from CATEGORY_META — the
+   *  one source of truth for category colors (plan §36 11.2). Applied as
+   *  an inline custom property rather than a per-category CSS class. */
+  colorVar: string;
   /** Short glyph shown inside the marker. */
   glyph: string;
 }
@@ -162,7 +164,8 @@ export function applyAnnotationMarkers(
     const marker = document.createElement("button");
     marker.type = "button";
     marker.dataset.annotationId = a.id;
-    marker.className = `reader-annotation-marker reader-annotation-${a.category}`;
+    marker.className = "reader-annotation-marker";
+    marker.style.setProperty("--reader-annotation-color", `var(${a.colorVar})`);
     marker.textContent = a.glyph;
     marker.setAttribute("aria-label", "AI annotation — open details");
     node.parentNode?.insertBefore(marker, insertionPoint);
