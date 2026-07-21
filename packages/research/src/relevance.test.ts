@@ -622,3 +622,22 @@ describe("relevance gate — a distinctive one-word title can still be a citatio
     ).toBe(false);
   });
 });
+
+describe("relevance gate — short distinctive canonical titles in citation entries", () => {
+  it("accepts Nicomachean Ethics from the explicit-citation lane even when provider metadata omits Aristotle", () => {
+    const withRefs: WorkIdentity = {
+      ...irwin,
+      explicitCitationTexts: [
+        "Aristotle, Nicomachean Ethics I.7, II.1-6, III.1-5, VII.1-10, IX.4 and IX.8.",
+      ],
+    };
+    const a = assessCandidate(
+      R({ title: "Nicomachean Ethics", authors: [], year: null }),
+      withRefs,
+      "explicit_citation",
+    );
+    expect(a.signals.isExplicitCitation).toBe(true);
+    expect(a.reasons).toContain("explicit_citation_match");
+    expect(a.verdict).toBe("accepted");
+  });
+});

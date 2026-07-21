@@ -328,6 +328,11 @@ const CITATION_MATCH_CORROBORATED_CONTAINMENT = 0.6;
  * title, "Ethics" (6) and "Regret" (6) are words that any number of works share.
  */
 const CITATION_MATCH_MIN_SOLO_TOKEN_LENGTH = 8;
+/** Two-token canonical titles can be explicit citations even when provider
+ * metadata omits the author. Require complete containment plus at least one
+ * distinctive long token, so "Nicomachean Ethics" can match while generic
+ * one-word titles ("Ethics") remain blocked by the solo-token rule above. */
+const CITATION_MATCH_DISTINCTIVE_SHORT_TOKEN_LENGTH = 8;
 
 /**
  * Does a discovered resource correspond to an entry in the document's own
@@ -373,6 +378,7 @@ export function matchesCitationText(
     if (authorNamed && yearNamed && ratio >= CITATION_MATCH_CORROBORATED_CONTAINMENT) return true;
     if (ratio < CITATION_MATCH_MIN_CONTAINMENT) continue;
     if (titleTokens.length >= CITATION_MATCH_MIN_TOKENS) return true;
+    if (ratio === 1 && titleTokens.some((t) => t.length >= CITATION_MATCH_DISTINCTIVE_SHORT_TOKEN_LENGTH)) return true;
     // Short title: require the entry to name the same author too.
     if (authorNamed) return true;
   }
