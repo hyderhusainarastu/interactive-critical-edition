@@ -211,7 +211,7 @@
       "evidence": [
         "Additive migration 0026 is applied locally and in production (Drizzle ledger 27); source text has a separate cascading provenance/content record.",
         "Automatic retrieval accepts explicit approved license metadata only, is capped at 12 source texts per run, and adds no AI spend to the existing $1 normal / $5 hard limits.",
-        "Workspace typecheck, all unit tests, web lint, production build, 10 focused Visualization Chromium checks, and 2 graph-route ownership checks passed locally; Vercel and Render deployments for commit 4bfdd9b are live."
+        "Workspace typecheck, all unit tests, web lint, production build, 10 focused Visualization Chromium checks, and 2 graph-route ownership checks passed locally; the 4bfdd9b code rollout was successfully promoted to both Vercel and Render."
       ],
       "subphases": [
         {
