@@ -4,7 +4,9 @@ import { and, eq, isNull } from "drizzle-orm";
 
 export const AUTOMATIC_GRAPH_CANDIDATE_CAP = 20;
 export const AUTOMATIC_GRAPH_COST_CAP_USD = 0.25;
-export const MANUAL_GRAPH_CANDIDATE_CAP = 400;
+// Must match the database check constraint in additive migration 0023. At
+// $0.0125/pair it still crosses the explicit-confirmation threshold above $1.
+export const MANUAL_GRAPH_CANDIDATE_CAP = 100;
 export const GRAPH_JOB_HARD_CAP_USD = 5;
 export const GRAPH_PAIR_RESERVED_COST_USD = 0.0125;
 

@@ -1661,3 +1661,78 @@ export const graphExpansionRequests = pgTable(
     check("graph_expansion_request_cap_valid", sql`${t.estimatedCostUsd} >= 0 AND ${t.hardCapUsd} > 0 AND ${t.hardCapUsd} <= 5`),
   ],
 );
+
+/**
+ * Private writing workspaces (Phase 12.6). A project is owned directly by a
+ * user; documents, revision snapshots and citations are deliberately nested
+ * beneath it so no writer API can ever grant access by a document UUID alone.
+ * The content column holds canonical ProseMirror JSON, not rendered HTML.
+ */
+export const writerProjects = pgTable(
+  "writer_project",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("writer_project_user_archived_idx").on(t.userId, t.archivedAt, t.sortOrder),
+  ],
+);
+
+export const writerDocuments = pgTable(
+  "writer_document",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => writerProjects.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Canonical, portable ProseMirror `doc` JSON. */
+    content: jsonb("content").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("writer_document_project_archived_idx").on(t.projectId, t.archivedAt, t.sortOrder),
+  ],
+);
+
+/** Immutable snapshots used for local autosave recovery and deliberate restore. */
+export const writerDocumentRevisions = pgTable(
+  "writer_document_revision",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id").notNull().references(() => writerDocuments.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    content: jsonb("content").notNull(),
+    reason: text("reason").notNull().default("autosave"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("writer_document_revision_document_idx").on(t.documentId, t.revision),
+    uniqueIndex("writer_document_revision_unique").on(t.documentId, t.revision),
+  ],
+);
+
+/** A project-scoped CSL-JSON source; key normalizes duplicates without losing provenance. */
+export const writerCitations = pgTable(
+  "writer_citation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => writerProjects.id, { onDelete: "cascade" }),
+    normalizedKey: text("normalized_key").notNull(),
+    cslJson: jsonb("csl_json").notNull(),
+    source: text("source").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("writer_citation_project_idx").on(t.projectId),
+    uniqueIndex("writer_citation_project_key_unique").on(t.projectId, t.normalizedKey),
+  ],
+);

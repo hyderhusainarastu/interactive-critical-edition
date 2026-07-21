@@ -440,7 +440,7 @@ function GraphExpansionControls({ workNodes }: { workNodes: GraphNode[] }) {
           </select>
         </label>
         <label className="flex flex-col gap-1"><span className="text-xs text-[var(--color-text-muted)]">New candidates</span>
-          <input type="number" min={1} max={400} value={candidates} onChange={(event) => setCandidates(Math.max(1, Math.min(400, Number(event.target.value) || 1)))} className="w-24 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1" />
+          <input type="number" min={1} max={100} value={candidates} onChange={(event) => setCandidates(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} className="w-24 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1" />
         </label>
         <button type="button" disabled={!preview?.hasGroundedClaims || !preview?.manual.candidateCount} onClick={() => expand(false)} className="rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-[var(--color-background)] disabled:opacity-50">Queue expansion</button>
         {preview?.manual.requiresConfirmation && <button type="button" onClick={() => expand(true)} className="rounded border border-[var(--color-credibility-warning)] px-3 py-1.5">Confirm {formatUsd(preview.manual.estimatedCostUsd)}</button>}

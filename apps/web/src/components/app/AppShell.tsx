@@ -14,24 +14,26 @@ interface NavItem { href: string; label: string }
 export function AppShell({
   email,
   admin,
+  writerEnabled,
   initialPreferences,
   children,
 }: {
   email: string | null | undefined;
   admin: boolean;
+  writerEnabled: boolean;
   initialPreferences: WorkspacePreferences;
   children: React.ReactNode;
 }) {
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin}>{children}</AppShellContents>
+        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, children }: { email: string | null | undefined; admin: boolean; children: React.ReactNode }) {
+function AppShellContents({ email, admin, writerEnabled, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -41,6 +43,7 @@ function AppShellContents({ email, admin, children }: { email: string | null | u
     { href: "/graph", label: "Visualization" },
     { href: "/works", label: "Works" },
     { href: "/library", label: "Library" },
+    ...(writerEnabled ? [{ href: "/writer", label: "Writer" }] : []),
     { href: "/upload", label: "Upload" },
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];

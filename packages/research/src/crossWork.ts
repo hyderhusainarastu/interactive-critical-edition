@@ -65,7 +65,7 @@ export function bm25Shortlist(
     })
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score || left.targetWorkId.localeCompare(right.targetWorkId))
-    .slice(0, Math.min(400, maxCandidates));
+    .slice(0, Math.min(100, maxCandidates));
 }
 
 /**
@@ -83,6 +83,6 @@ export function mergeCandidateIds(
   for (const candidate of embedding) ordered.set(candidate.targetWorkId, Math.max(ordered.get(candidate.targetWorkId) ?? 0, candidate.score));
   return [...ordered.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .slice(0, Math.min(400, maxCandidates))
+    .slice(0, Math.min(100, maxCandidates))
     .map(([workId]) => workId);
 }

@@ -16,7 +16,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 const AUTOMATIC_MAX_CANDIDATES = 20;
 const AUTOMATIC_MAX_COST_USD = 0.25;
 const JOB_HARD_CAP_USD = 5;
-const MANUAL_MAX_CANDIDATES = 400;
+const MANUAL_MAX_CANDIDATES = 100;
 // A deliberately conservative per-pair reservation. Actual provider usage is
 // metered after every judgement; this reservation prevents a long sequence of
 // calls from ever beginning past the documented hard limit.
