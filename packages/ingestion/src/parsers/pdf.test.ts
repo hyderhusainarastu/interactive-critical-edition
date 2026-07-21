@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergePageTexts } from "./pdf";
+import { mergePageTexts, processedTextFromPages } from "./pdf";
 
 describe("mergePageTexts (OCR reconstruction)", () => {
   it("joins non-empty page texts into one document string", () => {
@@ -22,5 +22,27 @@ describe("mergePageTexts (OCR reconstruction)", () => {
 
   it("drops whitespace-only pages so they don't create blank separators", () => {
     expect(mergePageTexts(["A", "   ", "\n", "B"])).toBe("A\n\nB");
+  });
+
+  it("builds the processed transcript without authorial apparatus duplication", () => {
+    const text = processedTextFromPages([
+      {
+        pageIndex: 0,
+        text: "raw PDF page including a footnote",
+        isOcr: false,
+        extractionConfidence: 1,
+        blocks: [
+          { kind: "body", text: "The body continues." },
+          { kind: "footnote", marker: "1", text: "This is authorial apparatus." },
+          { kind: "endnote", marker: "2", text: "So is this." },
+          { kind: "bibliography", text: "Author, Work." },
+          { kind: "caption", text: "Figure 1. A supporting diagram." },
+        ],
+      },
+    ]);
+    expect(text).toContain("The body continues.");
+    expect(text).toContain("Figure 1. A supporting diagram.");
+    expect(text).not.toContain("This is authorial apparatus.");
+    expect(text).not.toContain("Author, Work.");
   });
 });

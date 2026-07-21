@@ -98,6 +98,7 @@ export interface ReaderData {
   title: string;
   mimeType: string;
   extractedText: string | null;
+  /** A short-lived, owner-scoped URL for the immutable upload. */
   fileUrl: string | null;
   lastPosition: Position | null;
   analysisStatus: AnalysisStatus;

@@ -49,14 +49,21 @@ export async function GET(
     highlightIdsByNote.set(link.noteId, ids);
   }
 
-  const isPdf = doc.mimeType === "application/pdf";
+  // A missing legacy Storage object must not make a durable processed edition
+  // unreadable. Real uploads still receive their immutable signed source URL;
+  // older/imported rows fall back to the stored extraction with an explicit UI
+  // notice rather than silently failing the entire reader request.
+  const fileUrl = await getSignedDocumentUrl(doc.storagePath).catch(() => null);
 
   return NextResponse.json({
     documentId: doc.documentId,
     title: doc.title,
     mimeType: doc.mimeType,
-    extractedText: isPdf ? null : doc.extractedText,
-    fileUrl: isPdf ? await getSignedDocumentUrl(doc.storagePath) : null,
+    extractedText: doc.extractedText,
+    // Every reader mode can expose the immutable upload. The PDF reader uses
+    // it directly; the original TXT/Markdown reader fetches the exact bytes
+    // instead of presenting worker-normalized extraction as source text.
+    fileUrl,
     lastPosition: doc.lastPosition,
     analysisStatus: doc.analysisStatus,
     analysisError: doc.analysisError,

@@ -17,7 +17,6 @@ import {
   termOccurrences,
   termVariants,
 } from "@ice/db";
-import { phase12FeatureEnabled } from "@ice/config";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getRunCostBreakdown } from "./cost";
 
@@ -37,8 +36,6 @@ export async function getPublishedEdition(documentId: string) {
     .limit(1);
   if (!run) return null;
 
-  const pipelineV4Enabled = phase12FeatureEnabled("pipelineV4");
-  const interactiveReaderEnabled = phase12FeatureEnabled("interactiveReader");
 
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
@@ -52,36 +49,15 @@ export async function getPublishedEdition(documentId: string) {
     db.select().from(editionRelations).where(eq(editionRelations.runId, run.id)),
     db.select().from(providerAttempts).where(eq(providerAttempts.runId, run.id)).orderBy(asc(providerAttempts.provider)),
     db.select().from(evidenceSpans).where(eq(evidenceSpans.runId, run.id)),
-    // Select the pre-v4 shape until the additive v4 migration is live. This
-    // keeps the already-deployed reader safe before its rollout migration.
-    pipelineV4Enabled
-      ? db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt))
-      : db.select({
-        id: passageAnnotations.id,
-        textBlockId: passageAnnotations.textBlockId,
-        isWholeWork: passageAnnotations.isWholeWork,
-        quote: passageAnnotations.quote,
-        summary: passageAnnotations.summary,
-        explanation: passageAnnotations.explanation,
-        annotationType: passageAnnotations.annotationType,
-        relationship: passageAnnotations.relationship,
-        relatedResourceId: passageAnnotations.relatedResourceId,
-        readerLevel: passageAnnotations.readerLevel,
-        confidence: passageAnnotations.confidence,
-        createdBy: passageAnnotations.createdBy,
-      }).from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
-    interactiveReaderEnabled && pipelineV4Enabled
-      ? db.select().from(documentApparatus).where(eq(documentApparatus.runId, run.id)).orderBy(asc(documentApparatus.createdAt))
-      : Promise.resolve([]),
-    interactiveReaderEnabled
-      ? db.select().from(termVariants).where(eq(termVariants.documentId, documentId)).orderBy(asc(termVariants.createdAt))
-      : Promise.resolve([]),
+    db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
+    db.select().from(documentApparatus).where(eq(documentApparatus.runId, run.id)).orderBy(asc(documentApparatus.createdAt)),
+    db.select().from(termVariants).where(eq(termVariants.documentId, documentId)).orderBy(asc(termVariants.createdAt)),
     // Phase 9.7: per-run, per-module cost detail behind the existing single total.
     getRunCostBreakdown(run.id),
   ]);
 
   const termVariantIds = termRows.map((term) => term.id);
-  const termOccurrenceRows = interactiveReaderEnabled && termVariantIds.length
+  const termOccurrenceRows = termVariantIds.length
     ? await db.select().from(termOccurrences).where(inArray(termOccurrences.termVariantId, termVariantIds)).orderBy(asc(termOccurrences.startOffset))
     : [];
 
@@ -228,6 +204,19 @@ export async function getPublishedEdition(documentId: string) {
     occurrencesByVariant.set(occurrence.termVariantId, list);
   }
 
+  // `doc_footnote` predates the block-anchored apparatus table. A v4 run
+  // writes both for compatibility with older readers, but the modern reader
+  // must not show the same authorial note twice. Retain only legacy notes that
+  // have no equivalent, linked apparatus record.
+  const apparatusFootprint = new Set(
+    apparatus
+      .filter((entry) => entry.kind === "footnote" || entry.kind === "endnote")
+      .map((entry) => `${entry.marker ?? ""}\u0000${entry.text.trim()}`),
+  );
+  const legacyAuthorialNotes = authorialNotes.filter(
+    (note) => !apparatusFootprint.has(`${note.marker}\u0000${note.text.trim()}`),
+  );
+
   return {
     run: {
       id: run.id,
@@ -243,7 +232,12 @@ export async function getPublishedEdition(documentId: string) {
     cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote, breakdown: costBreakdown },
     pages: editionPages,
     blocks: blocks.map((block) => ({ ...block, pageIndex: pageIndexById.get(block.pageId) ?? 0 })),
-    authorialNotes,
+    authorialNotes: legacyAuthorialNotes.map((note) => ({
+      id: note.id,
+      marker: note.marker,
+      text: note.text,
+      pageAnchor: note.pageAnchor,
+    })),
     authorApparatus: apparatus.map((entry) => ({
       id: entry.id,
       textBlockId: entry.textBlockId,

@@ -13,7 +13,7 @@ import {
 } from "./types";
 import { AnnotationsPanel } from "./AnnotationsPanel";
 import { PdfReader } from "./PdfReader";
-import { TextReader } from "./TextReader";
+import { OriginalTextReader } from "./OriginalTextReader";
 import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
 import { EditionReader, type EditionPayload } from "./EditionReader";
@@ -48,7 +48,7 @@ export function ReaderShell({
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
   const [edition, setEdition] = useState<EditionPayload | null>(null);
-  const [showEdition, setShowEdition] = useState(false);
+  const [showInteractive, setShowInteractive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingColor, setPendingColor] = useState<HighlightColor>("gold");
   const [activeFootnote, setActiveFootnote] = useState<FootnoteRecord | null>(null);
@@ -60,6 +60,7 @@ export function ReaderShell({
   const [editionLevelMode, setEditionLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
   const [editionFilters, setEditionFilters] = useState<EditionReaderFilters>({ annotationType: "all", relationship: "all", provenance: "all", apparatusKind: "all" });
   const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
+  const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(null);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const currentPositionRef = useRef<Position | null>(null);
@@ -77,10 +78,10 @@ export function ReaderShell({
       .then((response) => {
         if (ignore) return;
         setEdition(response.edition);
-        // Published edition is the primary reading experience whenever one
-        // exists (plan §36 11.5); v1-only works (no edition) keep the
-        // interactive reader as their only option, unchanged.
-        if (response.edition) setShowEdition(true);
+        // The interactive reader is the primary reading experience whenever
+        // processing exists. Its explicitly separate companion is always the
+        // immutable original source, never a second processed "edition".
+        if (response.edition) setShowInteractive(true);
       })
       .catch(() => { /* legacy reader remains fully available */ });
     return () => {
@@ -234,7 +235,9 @@ export function ReaderShell({
   const openAnnotation = useCallback((id: string) => {
     setShowAnalysis(true);
     setActiveAnnotationId(id);
-  }, []);
+    const blockId = edition?.passageAnnotations.find((annotation) => annotation.id === id)?.textBlockId ?? null;
+    if (blockId) setActiveReaderBlockId(blockId);
+  }, [edition]);
 
   const createLinkedNote = useCallback(async (anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
     const highlightId = await createHighlight({ kind: "processed", ...anchor });
@@ -301,8 +304,8 @@ export function ReaderShell({
   }
 
   const isPdf = data.mimeType === "application/pdf";
-  const effectiveShowEdition = showEdition || (enablePhase12Reader && preferences.focusMode && edition !== null);
-  const readerFocus = enablePhase12Reader && preferences.focusMode && effectiveShowEdition && visibleEdition !== null;
+  const effectiveShowInteractive = showInteractive || (enablePhase12Reader && preferences.focusMode && edition !== null);
+  const readerFocus = enablePhase12Reader && preferences.focusMode && effectiveShowInteractive && visibleEdition !== null;
   const readerFontSize = preferences.fontSize === "small" ? 0.95 : preferences.fontSize === "large" ? 1.18 : 1.05;
   const readerLineWidth = preferences.readingWidth === "compact" ? 56 : preferences.readingWidth === "wide" ? 82 : 66;
 
@@ -316,21 +319,21 @@ export function ReaderShell({
               <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
                 <button
                   type="button"
-                  aria-pressed={effectiveShowEdition}
-                  onClick={() => setShowEdition(true)}
+                  aria-pressed={!effectiveShowInteractive}
+                  onClick={() => setShowInteractive(false)}
                   className="rounded px-2.5 py-1"
-                  style={{ background: effectiveShowEdition ? "var(--color-surface)" : "transparent" }}
+                  style={{ background: !effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
                 >
-                  {enablePhase12Reader ? "Processed text" : "Published edition"}
+                  Published edition
                 </button>
                 <button
                   type="button"
-                  aria-pressed={!effectiveShowEdition}
-                  onClick={() => setShowEdition(false)}
+                  aria-pressed={effectiveShowInteractive}
+                  onClick={() => setShowInteractive(true)}
                   className="rounded px-2.5 py-1"
-                  style={{ background: !effectiveShowEdition ? "var(--color-surface)" : "transparent" }}
+                  style={{ background: effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
                 >
-                  {enablePhase12Reader ? (isPdf ? "Original PDF" : "Original text") : "Interactive reader"}
+                  Interactive reader
                 </button>
               </div>
             )}
@@ -375,7 +378,7 @@ export function ReaderShell({
               aria-pressed={showAnalysis}
             >
               {showAnalysis ? "Hide analysis" : "Analysis"}
-              {effectiveShowEdition && visibleEdition
+              {effectiveShowInteractive && visibleEdition
                 ? visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length > 0 &&
                   ` (${visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length})`
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
@@ -393,9 +396,9 @@ export function ReaderShell({
               ["--reader-line-width" as string]: `${readerLineWidth}ch`,
             }}
           >
-            {effectiveShowEdition && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} isPhase12Reader={enablePhase12Reader} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
+            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} isPhase12Reader={enablePhase12Reader} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
               data.fileUrl ? (
-                <PdfReader
+                <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
                   fileUrl={data.fileUrl}
                   highlights={data.highlights}
                   initialPage={initialPosition?.kind === "pdf" ? initialPosition.page : 1}
@@ -405,13 +408,14 @@ export function ReaderShell({
                     savePosition(saved);
                   }}
                   onCreateHighlight={(a) => createHighlight({ kind: "pdf", ...a })}
-                />
+                /></section>
               ) : (
                 <p className="text-[var(--color-accent-burgundy)]">No file URL available.</p>
               )
-            ) : (
-              <TextReader
-                text={data.extractedText ?? ""}
+            ) : data.mimeType === "text/plain" || data.mimeType === "text/markdown" ? (
+              <OriginalTextReader
+                sourceUrl={data.fileUrl}
+                fallbackText={data.extractedText ?? ""}
                 footnotes={data.footnotes}
                 highlights={data.highlights}
                 annotations={data.annotations}
@@ -425,6 +429,8 @@ export function ReaderShell({
                 onOpenFootnote={setActiveFootnote}
                 onOpenAnnotation={openAnnotation}
               />
+            ) : (
+              <section aria-label="Published edition — original source file"><p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · immutable original source file</p><p className="mt-4 text-sm text-[var(--color-text-muted)]">This source format is preserved without rewriting it in the browser.</p>{data.fileUrl && <a className="mt-3 inline-block underline" href={data.fileUrl} download>Open immutable source file</a>}</section>
             )}
           </div>
         </div>
@@ -441,8 +447,8 @@ export function ReaderShell({
         )}
       </div>
 
-      {(showAnalysis || readerFocus) && !embedded && (
-        effectiveShowEdition && visibleEdition ? (
+      {effectiveShowInteractive && (showAnalysis || readerFocus) && !embedded && (
+        visibleEdition ? (
           <EditionAnnotationsPanel
             edition={visibleEdition}
             activeId={activeAnnotationId}
@@ -457,6 +463,7 @@ export function ReaderShell({
             onPreviousAnnotation={() => moveAnnotation(-1)}
             onNextAnnotation={() => moveAnnotation(1)}
             onApproveTerm={enablePhase12Reader ? (termId) => void approveTerm(termId) : undefined}
+            onSelectAnnotation={openAnnotation}
           />
         ) : (
           <AnnotationsPanel

@@ -597,7 +597,7 @@ export async function analyzeEditionRun(input: {
   pipeline?: "v1" | "v2" | "v3" | "v4";
   /** Real body blocks in document order. v4 adds page/section scope. */
   bodyBlocks?: { id: string; text: string; pageIndex?: number; blockOrder?: number; sectionTitle?: string | null }[];
-  /** v4-only, deterministic source apparatus extracted from structural blocks. */
+  /** Deterministic source apparatus extracted from structural blocks. */
   apparatus?: ExtractedAuthorApparatus[];
 }): Promise<void> {
   const [doc] = await db
@@ -794,7 +794,7 @@ export async function analyzeEditionRun(input: {
     }
   }
 
-  if (isV4 && input.apparatus?.length) {
+  if (isModernPipeline && input.apparatus?.length) {
     await setStage("research-discovery", "explicit-citations", "author-apparatus");
     await db.insert(documentApparatus).values(input.apparatus.map((entry) => ({
       runId: input.runId,

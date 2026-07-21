@@ -3,7 +3,7 @@ import { type GrobidBbox, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
 
 export interface ParsedBlock {
-  kind: "title" | "header" | "body" | "footnote" | "bibliography" | "reference";
+  kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference";
   text: string;
   marker?: string;
   bbox?: GrobidBbox | null;
@@ -24,6 +24,18 @@ export interface ParsedDocument {
   pages: ParsedPage[];
   structureState: "full" | "limited";
   metadataConfidence: number;
+}
+
+/** Build the reader/analysis transcript only from prose-bearing structural
+ * blocks. Authorial notes and bibliography remain persisted and addressable,
+ * but never get silently folded into the processed body transcript. */
+export function processedTextFromPages(pages: readonly ParsedPage[]): string {
+  return pages
+    .flatMap((page) => page.blocks)
+    .filter((block) => block.kind === "title" || block.kind === "header" || block.kind === "body" || block.kind === "caption")
+    .map((block) => block.text.trim())
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Merge per-page texts into one document string. Rebuilt from the final page
@@ -77,7 +89,7 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     page.extractionConfidence = result.confidence === null ? null : result.confidence / 100;
   }
 
-  const text = mergePageTexts(pages.map((p) => p.text)) || mergedText.trim();
+  let text = mergePageTexts(pages.map((p) => p.text)) || mergedText.trim();
 
   if (!detectedTitle) {
     detectedTitle = text
@@ -90,11 +102,22 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
   if (grobid) {
     detectedTitle = grobid.title ?? detectedTitle;
     detectedAuthor = grobid.authors[0] ?? detectedAuthor;
-    for (const block of grobid.blocks) {
-      if (block.kind === "title") continue; // title captured as metadata, not a page block
-      const index = Math.min(Math.max(block.pageIndex ?? 0, 0), Math.max(0, pages.length - 1));
-      const page = pages[index];
-      if (page) page.blocks.push({ kind: block.kind, text: block.text, marker: block.marker, bbox: block.bbox });
+    // A usable TEI result replaces, rather than augments, the PDF.js fallback
+    // blocks. Appending was a structural lie: the fallback page body already
+    // contains footnote/bibliography glyphs, so appending structured notes
+    // showed the same source material twice. PDF.js page text stays on the
+    // page record as immutable source evidence; the processed blocks now have
+    // one authoritative structural representation.
+    const structured = grobid.blocks.filter((block) => block.text.trim().length > 0);
+    const hasBody = structured.some((block) => block.kind === "body");
+    if (hasBody) {
+      for (const page of pages) page.blocks = [];
+      for (const block of structured) {
+        const index = Math.min(Math.max(block.pageIndex ?? 0, 0), Math.max(0, pages.length - 1));
+        const page = pages[index];
+        if (page) page.blocks.push({ kind: block.kind, text: block.text, marker: block.marker, bbox: block.bbox });
+      }
+      text = processedTextFromPages(pages);
     }
   }
 
@@ -103,7 +126,9 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     detectedTitle,
     detectedAuthor,
     pages,
-    structureState: grobid ? "full" : "limited",
+    // A syntactically valid TEI response without prose blocks is not enough
+    // to claim structural fidelity; retain the transparent PDF.js fallback.
+    structureState: grobid && processedTextFromPages(pages).length > 0 && grobid.blocks.some((block) => block.kind === "body") ? "full" : "limited",
     metadataConfidence: grobid?.title ? 0.95 : detectedTitle ? 0.65 : 0,
   };
 }

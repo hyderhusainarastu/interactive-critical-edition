@@ -31,7 +31,9 @@ export interface EditionReaderFilters {
 }
 
 /**
- * The published-edition's sidebar (plan §36 11.5) — modeled directly on
+ * The interactive reader's sidebar is an index/filter/detail surface, never a
+ * second long-form copy of every margin note. It also owns the labelled
+ * source apparatus so authorial notes cannot be mistaken for generated prose.
  * `AnnotationsPanel.tsx`'s shell (same width/border/scroll behavior) so the
  * two readers share one visual language. Two tabs for now: "Annotations"
  * (passage annotations, both anchored and whole-work, ported off the old
@@ -55,6 +57,7 @@ export function EditionAnnotationsPanel({
   onPreviousAnnotation,
   onNextAnnotation,
   onApproveTerm,
+  onSelectAnnotation,
 }: {
   edition: EditionPayload;
   activeId: string | null;
@@ -69,6 +72,7 @@ export function EditionAnnotationsPanel({
   onPreviousAnnotation?: () => void;
   onNextAnnotation?: () => void;
   onApproveTerm?: (termId: string) => void;
+  onSelectAnnotation?: (id: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
@@ -163,7 +167,7 @@ export function EditionAnnotationsPanel({
       )}
 
       {tab === "annotations" ? (
-        <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} />
+        <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} onSelectAnnotation={onSelectAnnotation} />
       ) : tab === "notes" ? (
         <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} />
       ) : tab === "apparatus" ? (
@@ -250,8 +254,9 @@ function ApparatusTab({
   const entries = kind === "all" ? edition.authorApparatus : edition.authorApparatus.filter((entry) => entry.kind === kind);
   return (
     <div className="px-3 py-3">
+      <h2 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Footnotes apparatus and source records</h2>
       <label className="flex items-center justify-between gap-2 text-xs"><span className="text-[var(--color-text-muted)]">Author apparatus</span><select value={kind} onChange={(event) => onKindChange(event.target.value as EditionReaderFilters["apparatusKind"])} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All apparatus</option><option value="footnote">Footnotes</option><option value="endnote">Endnotes</option><option value="bibliography_entry">Bibliography</option><option value="citation_block">Citation blocks</option></select></label>
-      {entries.length === 0 ? <p className="py-5 text-sm text-[var(--color-text-muted)]">No author apparatus matches this filter.</p> : <ol className="mt-3 flex flex-col gap-2 text-sm">{entries.map((entry) => <li key={entry.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2"><p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{entry.kind.replace("_", " ")}{entry.marker ? ` · ${entry.marker}` : ""}</p><p className="mt-1 whitespace-pre-wrap">{entry.text}</p></li>)}</ol>}
+      {entries.length === 0 ? <p className="py-5 text-sm text-[var(--color-text-muted)]">No author apparatus matches this filter.</p> : <ol className="mt-3 flex flex-col gap-2 text-sm">{entries.map((entry) => <li key={entry.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2"><p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{entry.kind.replace("_", " ")}{entry.marker ? ` · ${entry.marker}` : ""}{entry.textBlockId ? " · page/block anchored" : " · source-scoped"}</p><p className="mt-1 whitespace-pre-wrap">{entry.text}</p><p className="mt-1 text-[0.68rem] text-[var(--color-text-muted)]">Provenance: authorial source · extraction: {entry.scope && typeof entry.scope === "object" && "pageIndex" in entry.scope ? `page ${Number((entry.scope as { pageIndex: number }).pageIndex) + 1}` : "source record"}</p></li>)}</ol>}
     </div>
   );
 }
@@ -264,7 +269,7 @@ function TermsTab({
   onApproveTerm?: (termId: string) => void;
 }) {
   if (terms.length === 0) return <p className="px-4 py-6 text-sm text-[var(--color-text-muted)]">No verified or suggested original-script terms were found.</p>;
-  return <div className="flex flex-col gap-2 px-3 py-3">{terms.map((term) => <article key={term.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"><p lang={term.language} dir={term.direction === "rtl" ? "rtl" : "ltr"} className="font-medium text-[var(--color-accent-ink)]">{term.originalScript}</p><p className="text-[var(--color-text-muted)]">{term.transliteration}</p><p className="mt-1 text-[0.7rem] text-[var(--color-text-muted)]">{term.verificationStatus === "verified" ? "Verified pair" : "Suggested pair — not shown in the text until approved."}</p>{term.verificationStatus === "suggested" && onApproveTerm && <button type="button" onClick={() => onApproveTerm(term.id)} className="mt-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs">Approve pair</button>}</article>)}</div>;
+  return <div className="flex flex-col gap-2 px-3 py-3">{terms.map((term) => <article key={term.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"><p lang={term.language} dir={term.direction === "rtl" ? "rtl" : "ltr"} className="font-medium text-[var(--color-accent-ink)]">{term.originalScript}</p><p className="text-[var(--color-text-muted)]">{term.transliteration}</p><p className="mt-1 text-[0.7rem] text-[var(--color-text-muted)]">{term.verificationStatus === "verified" ? "Verified pair" : "Suggested pair — not shown in the text until approved."}</p><p className="mt-1 text-[0.68rem] text-[var(--color-text-muted)]">Source: {term.source} · confidence: {term.verificationStatus === "verified" ? "verified" : "pending verification"} · provenance: terminology extraction</p>{term.verificationStatus === "suggested" && onApproveTerm && <button type="button" onClick={() => onApproveTerm(term.id)} className="mt-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs">Approve pair</button>}</article>)}</div>;
 }
 
 function CriticalNoteCard({
@@ -329,6 +334,9 @@ function CriticalNoteCard({
               · {src.provider} · inspection depth {src.inspectionDepth}
             </p>
           )}
+          <p className="mt-1.5 text-[0.72rem] text-[var(--color-text-muted)]">
+            Source: {src?.title ?? "Document research run"} · confidence {Math.round(note.confidence * 100)}% · provenance: AI-generated, evidence-grounded
+          </p>
           {note.claims.length > 0 && (
             <ul className="mt-2 flex flex-col gap-2">
               {note.claims.map((claim) => <ClaimView key={claim.id} claim={claim} />)}
@@ -345,46 +353,45 @@ function AnnotationsTab({
   activeId,
   anchoredNotes,
   resourceById,
+  onSelectAnnotation,
 }: {
   edition: EditionPayload;
   activeId: string | null;
   anchoredNotes: EditionPassageAnnotation[];
   resourceById: Map<string, EditionResource>;
+  onSelectAnnotation?: (id: string) => void;
 }) {
+  const allNotes = [...edition.wholeWorkGuidance, ...anchoredNotes];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = allNotes.find((note) => note.id === activeId) ?? allNotes.find((note) => note.id === selectedId) ?? allNotes[0];
   if (edition.wholeWorkGuidance.length === 0 && anchoredNotes.length === 0) {
     return <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">No passage annotations for this edition.</p>;
   }
   return (
-    <div className="flex flex-col gap-4 px-3 py-3">
-      {edition.wholeWorkGuidance.length > 0 && (
-        <section aria-label="Whole-work guidance">
-          <h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-            Whole-work guidance
-          </h3>
-          <p className="px-1 text-[0.68rem] text-[var(--color-text-muted)]">
-            True of this work as a whole — no single passage captures it, so it carries no page/block anchor.
-          </p>
-          <ul className="mt-1.5 flex flex-col gap-1.5">
-            {edition.wholeWorkGuidance.map((note) => (
-              <PassageAnnotationCard key={note.id} note={note} active={note.id === activeId} resourceById={resourceById} />
-            ))}
-          </ul>
-        </section>
-      )}
-      {anchoredNotes.length > 0 && (
-        <section>
-          {edition.wholeWorkGuidance.length > 0 && (
-            <h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-              In the text
-            </h3>
-          )}
-          <ul className="mt-1.5 flex flex-col gap-1.5">
-            {anchoredNotes.map((note) => (
-              <PassageAnnotationCard key={note.id} note={note} active={note.id === activeId} resourceById={resourceById} />
-            ))}
-          </ul>
-        </section>
-      )}
+    <div className="flex flex-col gap-3 px-3 py-3">
+      <section aria-label="Annotation index">
+        <h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation index</h3>
+        <p className="px-1 text-[0.68rem] text-[var(--color-text-muted)]">Choose an item for its evidence detail. Full notes remain beside their passage on desktop and inline on narrow screens.</p>
+        <ul className="mt-1.5 flex flex-col gap-1">
+          {allNotes.map((note) => (
+            (() => {
+              const pageIndex = note.textBlockId ? edition.blocks.find((block) => block.id === note.textBlockId)?.pageIndex : null;
+              return <li key={note.id}>
+              <button
+                type="button"
+                onClick={() => { setSelectedId(note.id); onSelectAnnotation?.(note.id); }}
+                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-left text-xs"
+                aria-current={selected?.id === note.id ? "true" : undefined}
+              >
+                <span className="font-medium">{note.isWholeWork ? "Whole work" : pageIndex === undefined || pageIndex === null ? "Anchored passage" : `Page ${pageIndex + 1}`}</span>
+                {" · "}{note.summary}
+              </button>
+            </li>;
+            })()
+          ))}
+        </ul>
+      </section>
+      {selected && <section aria-label="Annotation detail"><h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Detail</h3><ul className="mt-1.5"><PassageAnnotationCard note={selected} active resourceById={resourceById} /></ul></section>}
     </div>
   );
 }
@@ -456,6 +463,9 @@ function PassageAnnotationCard({
               )}
             </p>
           )}
+          <p className="mt-1.5 text-[0.72rem] text-[var(--color-text-muted)]">
+            Source: {relatedResource?.title ?? (note.textBlockId ? "Anchored document passage" : "Whole work")} · confidence {Math.round(note.confidence * 100)}% · provenance: {note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
+          </p>
         </div>
       )}
     </li>

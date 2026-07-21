@@ -10,7 +10,7 @@ export interface GrobidBbox {
 }
 
 export interface GrobidBlock {
-  kind: "title" | "header" | "body" | "footnote" | "bibliography" | "reference";
+  kind: "title" | "header" | "body" | "footnote" | "endnote" | "caption" | "bibliography" | "reference";
   text: string;
   /** 0-based page index, resolved from TEI coordinates or <pb/> counting. */
   pageIndex?: number;
@@ -138,12 +138,14 @@ function walkBody(node: PoNode, ctx: WalkCtx): void {
   }
 
   if (tag === "note") {
-    // Footnotes/marginalia. Keep authorial notes as their own block so the
-    // reader can render them distinctly and page-anchored.
+    // Keep authorial notes as their own block so the reader can render them
+    // distinctly and page-anchored. GROBID uses `place="end"` for endnotes;
+    // treating every <note> as a footnote erases a source distinction that
+    // readers need in the apparatus.
     const text = clean(textContent(node));
     if (text) {
       ctx.blocks.push({
-        kind: "footnote",
+        kind: attrs["@_place"] === "end" || attrs["@_type"] === "endnote" ? "endnote" : "footnote",
         text,
         marker: attrs["@_n"] ? String(attrs["@_n"]) : undefined,
         ...pageInfo(node, ctx),
@@ -165,6 +167,15 @@ function walkBody(node: PoNode, ctx: WalkCtx): void {
   if (tag === "biblStruct") {
     const text = clean(textContent(node));
     if (text) ctx.blocks.push({ kind: "reference", text, ...pageInfo(node, ctx) });
+    return;
+  }
+
+  if (tag === "figure" || tag === "table") {
+    // GROBID keeps figure/table captions in a structural container. Preserve
+    // them as captions rather than letting a recursive walk flatten them into
+    // body text. A caption is source text, not an editorial annotation.
+    const caption = clean(textContent(node));
+    if (caption) ctx.blocks.push({ kind: "caption", text: caption, ...pageInfo(node, ctx) });
     return;
   }
 

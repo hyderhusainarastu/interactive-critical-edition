@@ -769,6 +769,7 @@ export const textBlockKindEnum = pgEnum("text_block_kind", [
   "body",
   "footer",
   "footnote",
+  "endnote",
   "caption",
   "bibliography",
   "reference",
@@ -855,6 +856,9 @@ export const textBlocks = pgTable(
     kind: textBlockKindEnum("kind").notNull().default("body"),
     // { x, y, w, h } in page coordinate space, when available (GROBID coords).
     bbox: jsonb("bbox"),
+    // Source marker for an apparatus block (for example footnote "12").
+    // Keeping it on the block makes the page/block anchor self-contained.
+    marker: text("marker"),
     text: text("text").notNull(),
     confidence: real("confidence"),
   },

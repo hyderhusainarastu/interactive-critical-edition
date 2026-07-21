@@ -5,8 +5,9 @@ export type AuthorApparatusKind = (typeof AUTHOR_APPARATUS_KINDS)[number];
 
 export interface ApparatusBlockInput {
   blockId: string;
-  kind: "title" | "header" | "body" | "footer" | "footnote" | "caption" | "bibliography" | "reference";
+  kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference";
   text: string;
+  marker?: string;
   pageIndex: number;
   blockOrder: number;
 }
@@ -58,8 +59,13 @@ export function extractAuthorApparatus(input: {
 
     const scope = { pageIndex: block.pageIndex, blockOrder: block.blockOrder };
     if (block.kind === "footnote") {
-      const marker = block.text.match(NOTE_MARKER)?.[1] ?? block.text.match(NOTE_MARKER)?.[2] ?? null;
+      const marker = block.marker ?? block.text.match(NOTE_MARKER)?.[1] ?? block.text.match(NOTE_MARKER)?.[2] ?? null;
       add({ textBlockId: block.blockId, kind: "footnote", marker, text: block.text, scope, source: "structure" });
+      continue;
+    }
+    if (block.kind === "endnote") {
+      const marker = block.marker ?? block.text.match(NOTE_MARKER)?.[1] ?? block.text.match(NOTE_MARKER)?.[2] ?? null;
+      add({ textBlockId: block.blockId, kind: "endnote", marker, text: block.text, scope, source: "structure" });
       continue;
     }
     if (block.kind === "bibliography" || block.kind === "reference") {

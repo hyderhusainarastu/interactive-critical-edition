@@ -15,6 +15,14 @@ describe("extractAuthorApparatus", () => {
     expect(apparatus.some((entry) => entry.kind === "citation_block")).toBe(true);
   });
 
+  it("retains a source marker and block anchor for an endnote", () => {
+    const apparatus = extractAuthorApparatus({
+      text: "Main body",
+      blocks: [{ blockId: "end", kind: "endnote", marker: "iv", text: "A terminal note.", pageIndex: 8, blockOrder: 2 }],
+    });
+    expect(apparatus).toMatchObject([{ kind: "endnote", marker: "iv", textBlockId: "end", scope: { pageIndex: 8, blockOrder: 2 } }]);
+  });
+
   it("finds numbered endnotes after an endnotes heading", () => {
     const apparatus = extractAuthorApparatus({
       text: "",

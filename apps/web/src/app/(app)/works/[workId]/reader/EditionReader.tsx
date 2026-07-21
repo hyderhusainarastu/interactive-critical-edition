@@ -103,8 +103,8 @@ export interface EditionPayload {
     breakdown: Array<{ stage: string | null; task: string; costUsd: number; calls: number; promptTokens: number; completionTokens: number }>;
   };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
-  blocks: Array<{ id: string; pageId: string; pageIndex: number; blockOrder: number; kind: string; text: string }>;
-  authorialNotes: Array<{ id: string; marker: string; text: string }>;
+  blocks: Array<{ id: string; pageId: string; pageIndex: number; blockOrder: number; kind: string; marker: string | null; text: string }>;
+  authorialNotes: Array<{ id: string; marker: string; text: string; pageAnchor: unknown }>;
   authorApparatus: Array<{ id: string; textBlockId: string | null; kind: "footnote" | "endnote" | "bibliography_entry" | "citation_block"; marker: string | null; text: string; scope: unknown }>;
   terms: Array<{
     id: string;
@@ -266,6 +266,43 @@ function renderVerifiedTerms(
   return nodes.length ? nodes : text;
 }
 
+function InlineEvidenceMeta({
+  note,
+  resource,
+}: {
+  note: EditionPassageAnnotation;
+  resource: EditionResource | undefined;
+}) {
+  const source = resource?.title ?? `Document passage${note.textBlockId ? " (anchored)" : ""}`;
+  return (
+    <p className="mt-1 text-[0.68rem] leading-snug text-[var(--color-text-muted)]">
+      Source: {source} · confidence {Math.round(note.confidence * 100)}% · provenance: {note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
+    </p>
+  );
+}
+
+/** A compact marginal reading aid on wide screens. Its long explanation is
+ * hidden until hover/focus; narrow layouts receive an explicit inline
+ * disclosure immediately below the passage instead. */
+function MarginNote({
+  note,
+  resource,
+}: {
+  note: EditionPassageAnnotation;
+  resource: EditionResource | undefined;
+}) {
+  const category = CATEGORY_META[note.relationship];
+  return (
+    <aside className="group hidden xl:block absolute left-[calc(100%+1.25rem)] top-0 w-52 border-l-2 bg-[var(--color-surface)] px-2 py-1.5 text-xs shadow-sm" style={{ borderColor: `var(${category.colorVar})` }} aria-label={`${category.label} margin note`} tabIndex={0}>
+      <p className="font-medium"><span aria-hidden>{category.glyph}</span> {note.summary}</p>
+      <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-150 group-hover:max-h-96 group-hover:opacity-100 group-focus-within:max-h-96 group-focus-within:opacity-100">
+        <p className="mt-1 leading-snug">{note.explanation}</p>
+        <InlineEvidenceMeta note={note} resource={resource} />
+      </div>
+    </aside>
+  );
+}
+
 /** Published-run reader: authorial (source) notes and AI-generated editorial
  * material are visibly distinct; every generated claim exposes its source-
  * grounded evidence, credibility, and agreement (plan §33 §3.4).
@@ -291,6 +328,7 @@ export function EditionReader({
   onCreateLinkedNote,
   onLinkExistingNote,
   isPhase12Reader = false,
+  activeBlockId = null,
 }: {
   edition: EditionPayload;
   onOpenAnnotation: (id: string) => void;
@@ -304,14 +342,16 @@ export function EditionReader({
   onCreateLinkedNote?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
   onLinkExistingNote?: (noteId: string, anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
   isPhase12Reader?: boolean;
+  /** A sidebar apparatus/index selection can jump to a real source block. */
+  activeBlockId?: string | null;
 }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [selectionUi, setSelectionUi] = useState<{ blockId: string; x: number; y: number } | null>(null);
   const page = edition.pages[pageIndex];
-  const pageBlocks = useMemo(
-    () => edition.blocks.filter((block) => block.pageId === page?.id).sort((a, b) => a.blockOrder - b.blockOrder),
-    [edition.blocks, page?.id],
+  const orderedBlocks = useMemo(
+    () => [...edition.blocks].sort((a, b) => a.pageIndex - b.pageIndex || a.blockOrder - b.blockOrder),
+    [edition.blocks],
   );
   const outline = useMemo(
     () => edition.blocks
@@ -410,7 +450,7 @@ export function EditionReader({
         ],
       );
     }
-  }, [highlights, matchedNotesByBlock, pageBlocks, passageAnnotationsByBlock, scriptDisplay]);
+  }, [highlights, matchedNotesByBlock, orderedBlocks, passageAnnotationsByBlock, scriptDisplay]);
 
   useEffect(() => {
     if (!activeAnnotationId) return;
@@ -426,9 +466,19 @@ export function EditionReader({
   }, [activeAnnotationId, edition.blocks, edition.passageAnnotations]);
 
   useEffect(() => {
-    const firstBlock = pageBlocks[0];
+    const firstBlock = orderedBlocks.find((block) => block.pageIndex === pageIndex);
     if (firstBlock) onPositionChange?.({ pageIndex, textBlockId: firstBlock.id });
-  }, [onPositionChange, pageBlocks, pageIndex]);
+  }, [onPositionChange, orderedBlocks, pageIndex]);
+
+  useEffect(() => {
+    if (!activeBlockId) return;
+    const block = edition.blocks.find((item) => item.id === activeBlockId);
+    if (!block) return;
+    window.requestAnimationFrame(() => {
+      setPageIndex(block.pageIndex);
+      blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  }, [activeBlockId, edition.blocks]);
 
   const hoverNote = hover ? previewById.get(hover.id) : null;
 
@@ -460,11 +510,18 @@ export function EditionReader({
     setSelectionUi(null);
   }
 
+  function goToPage(nextPageIndex: number) {
+    const clamped = Math.min(Math.max(0, nextPageIndex), Math.max(0, edition.pages.length - 1));
+    setPageIndex(clamped);
+    const first = orderedBlocks.find((block) => block.pageIndex === clamped);
+    if (first) window.requestAnimationFrame(() => blockRefs.current.get(first.id)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }
+
   return (
-    <section aria-label={isPhase12Reader ? "Processed text" : "Published critical edition"} className="mx-auto max-w-[72ch]">
+    <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[72ch]">
       {!focusMode && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
-        <strong>{isPhase12Reader ? "Processed text" : "Edition"} · run v{edition.run.version}</strong>
-        <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited"}</span>
+        <strong>Interactive reader · processed text · run v{edition.run.version}</strong>
+        <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>
         {edition.cost.breakdown.length > 0 ? (
           <details className="text-[var(--color-text-muted)]">
             <summary className="cursor-pointer">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
@@ -496,8 +553,8 @@ export function EditionReader({
         {page && (
           <>
             <span className="ml-auto">Page {page.pageIndex + 1} / {edition.pages.length}</span>
-            <button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex((i) => i - 1)} className="disabled:opacity-40">← Prev</button>
-            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => setPageIndex((i) => i + 1)} className="disabled:opacity-40">Next →</button>
+            <button type="button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)} className="disabled:opacity-40">← Prev</button>
+            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => goToPage(pageIndex + 1)} className="disabled:opacity-40">Next →</button>
           </>
         )}
       </div>}
@@ -507,8 +564,8 @@ export function EditionReader({
         <div className="mb-4 flex items-center justify-between border-b border-[var(--color-border)] pb-2 text-sm">
           <span>Page {page.pageIndex + 1} / {edition.pages.length}</span>
           <div className="flex gap-3">
-            <button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex((index) => index - 1)} className="disabled:opacity-40">← Prev</button>
-            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => setPageIndex((index) => index + 1)} className="disabled:opacity-40">Next →</button>
+            <button type="button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)} className="disabled:opacity-40">← Prev</button>
+            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => goToPage(pageIndex + 1)} className="disabled:opacity-40">Next →</button>
           </div>
         </div>
       )}
@@ -539,47 +596,53 @@ export function EditionReader({
         </div>
       )}
 
-      {/* Annotations (anchored + whole-work) live in the sidebar's
-       *  "Annotations" tab now (plan §36 11.5) — clicking an in-text marker
-       *  below opens and scrolls to its card there. */}
-      {page && (
-        <article
-          className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]"
-          onClick={(e) => {
-            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
-            if (marker) onOpenAnnotation((marker as HTMLElement).dataset.annotationId!);
-          }}
-          onMouseOver={(e) => {
-            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
-            if (marker) setHover({ id: (marker as HTMLElement).dataset.annotationId!, rect: marker.getBoundingClientRect() });
-          }}
-          onMouseOut={(e) => {
-            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
-            if (marker) setHover(null);
-          }}
-        >
-          {(pageBlocks.length ? pageBlocks : [{ id: "fallback", pageIndex, kind: "body", text: page.text ?? "" }]).map((block) => {
-            const register = (element: HTMLElement | null) => {
-              if (element) blockRefs.current.set(block.id, element);
-              else blockRefs.current.delete(block.id);
-            };
-            const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay);
-            if (block.kind === "title") return <h1 key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="font-serif text-3xl font-semibold">{text}</h1>;
-            if (block.kind === "header") return <h2 key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="mt-4 font-serif text-xl font-semibold">{text}</h2>;
-            if (block.kind === "footnote") return <aside key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="border-l-2 border-[var(--color-accent-ink)] pl-3 text-sm">{text}</aside>;
-            return (
-              <p
-                key={block.id}
-                ref={register}
-                onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)}
-                className="whitespace-pre-wrap"
-              >
-                {text}
-              </p>
-            );
-          })}
-        </article>
-      )}
+      {/* This is deliberately one continuous transcript. Page/block anchors
+       * remain in the data and navigation, but authorial apparatus blocks are
+       * not printed back into the prose flow: footnotes, endnotes, and
+       * bibliography stay in their labelled linked apparatus. */}
+      <article
+        className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]"
+        onClick={(e) => {
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+          if (marker) onOpenAnnotation((marker as HTMLElement).dataset.annotationId!);
+        }}
+        onMouseOver={(e) => {
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+          if (marker) setHover({ id: (marker as HTMLElement).dataset.annotationId!, rect: marker.getBoundingClientRect() });
+        }}
+        onMouseOut={(e) => {
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+          if (marker) setHover(null);
+        }}
+      >
+        {orderedBlocks.filter((block) => !["footnote", "endnote", "bibliography", "reference"].includes(block.kind)).map((block, index) => {
+          const register = (element: HTMLElement | null) => {
+            if (element) blockRefs.current.set(block.id, element);
+            else blockRefs.current.delete(block.id);
+          };
+          const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay);
+          const noteForBlock = passageAnnotationsByBlock.get(block.id) ?? [];
+          const resourceById = new Map(edition.resources.map((resource) => [resource.id, resource]));
+          const inlineNotes = noteForBlock.map((note) => (
+            <details key={`inline-${note.id}`} className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm xl:hidden">
+              <summary className="cursor-pointer font-medium">{CATEGORY_META[note.relationship].label}: {note.summary}</summary>
+              <p className="mt-1">{note.explanation}</p>
+              <InlineEvidenceMeta note={note} resource={note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined} />
+            </details>
+          ));
+          const margins = noteForBlock.slice(0, 2).map((note) => <MarginNote key={`margin-${note.id}`} note={note} resource={note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined} />);
+          const common = { ref: register, onMouseUp: (event: React.MouseEvent<HTMLElement>) => showSelectionToolbar(block.id, event.currentTarget) };
+          const pageStart = index === 0 || orderedBlocks.filter((candidate) => !["footnote", "endnote", "bibliography", "reference"].includes(candidate.kind))[index - 1]?.pageIndex !== block.pageIndex;
+          return (
+            <div key={block.id} className="relative" data-page-index={block.pageIndex}>
+              {pageStart && <p className="mb-2 text-xs text-[var(--color-text-muted)]">Source page {block.pageIndex + 1}</p>}
+              {block.kind === "title" ? <h1 {...common} className="font-serif text-3xl font-semibold">{text}</h1> : block.kind === "header" ? <h2 {...common} className="mt-4 font-serif text-xl font-semibold">{text}</h2> : block.kind === "caption" ? <figcaption {...common} className="border-l-2 border-[var(--color-border)] pl-3 text-sm italic text-[var(--color-text-muted)]">{text}</figcaption> : <p {...common} className="whitespace-pre-wrap">{text}</p>}
+              {margins}
+              {inlineNotes}
+            </div>
+          );
+        })}
+      </article>
 
       {hover && hoverNote && (
         <AnnotationHoverPreview

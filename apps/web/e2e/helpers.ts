@@ -8,6 +8,7 @@ import {
   conceptMastery,
   credibilityAssessments,
   db,
+  documentApparatus,
   docFootnotes,
   documents,
   editionRelations,
@@ -215,9 +216,13 @@ export async function seedPublishedEdition(userId: string): Promise<{
     .values([
       { pageId: page.id, blockOrder: 0, kind: "header", text: "A Gap in Aristotle's Moral Psychology" },
       { pageId: page.id, blockOrder: 1, kind: "body", text: "Vicious people act on decision, yet live according to passion. Vice remains a state on which one decides." },
+      { pageId: page.id, blockOrder: 2, kind: "footnote", marker: "1", text: "Adapted from Aquinas on sin from passion, ignorance, and deliberate badness." },
+      { pageId: page.id, blockOrder: 3, kind: "bibliography", text: "Irwin, Terence. Vice and Reason." },
     ])
     .returning({ id: textBlocks.id, blockOrder: textBlocks.blockOrder });
   const bodyBlock = blocks.find((b) => b.blockOrder === 1)!;
+  const footnoteBlock = blocks.find((b) => b.blockOrder === 2)!;
+  const bibliographyBlock = blocks.find((b) => b.blockOrder === 3)!;
 
   // Phase 9.3: one anchored passage annotation (a real quote from the body
   // block above) and one whole-work guidance note — the two forms the reader
@@ -256,6 +261,10 @@ export async function seedPublishedEdition(userId: string): Promise<{
     kind: "authorial",
     source: "grobid",
   });
+  await db.insert(documentApparatus).values([
+    { runId: run.id, textBlockId: footnoteBlock.id, kind: "footnote", marker: "1", text: "Adapted from Aquinas on sin from passion, ignorance, and deliberate badness.", scope: { pageIndex: 0, blockOrder: 2 }, source: "structure" },
+    { runId: run.id, textBlockId: bibliographyBlock.id, kind: "bibliography_entry", marker: null, text: "Irwin, Terence. Vice and Reason.", scope: { pageIndex: 0, blockOrder: 3 }, source: "structure" },
+  ]);
 
   // Three records describing ONE work, plus a genuinely different work. This is
   // the shape a real run produces and the reason work-level grouping exists.

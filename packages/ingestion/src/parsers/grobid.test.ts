@@ -24,6 +24,8 @@ const TEI = `<?xml version="1.0" encoding="UTF-8"?>
       <div>
         <head coords="2,72.0,80.0,300.0,14.0">Method</head>
         <p coords="2,72.0,100.0,400.0,120.0">A second page paragraph.</p>
+        <figure coords="2,72.0,420.0,400.0,40.0"><figDesc>A diagram of the causal sequence.</figDesc></figure>
+        <note place="end" n="2" coords="2,72.0,690.0,400.0,10.0">An endnote, distinct from the footnote.</note>
       </div>
     </body>
     <back>
@@ -73,6 +75,14 @@ describe("parseTei", () => {
     expect(notes[0].text).toBe("See Aristotle, Physics II.");
     expect(notes[0].marker).toBe("1");
     expect(notes[0].pageIndex).toBe(0);
+  });
+
+  it("keeps endnotes and captions in their own page-anchored structures", () => {
+    const endnote = result!.blocks.find((block) => block.kind === "endnote");
+    const caption = result!.blocks.find((block) => block.kind === "caption");
+    expect(endnote).toMatchObject({ marker: "2", pageIndex: 1, text: "An endnote, distinct from the footnote." });
+    expect(caption).toMatchObject({ pageIndex: 1, text: "A diagram of the causal sequence." });
+    expect(result!.blocks.filter((block) => block.kind === "body").map((block) => block.text).join(" ")).not.toContain("An endnote");
   });
 
   it("maps the bibliography entry to a reference block on its page", () => {

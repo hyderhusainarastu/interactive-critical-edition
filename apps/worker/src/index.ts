@@ -185,11 +185,12 @@ async function handleEditionExtraction(documentId: string) {
       await db.update(processingRuns).set({ stage: "structural-outline", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
     }
 
-    // Keep the established interactive reader functional while v2 is enabled:
-    // its note panel reads the legacy table, whereas the edition separately
-    // carries structurally extracted authorial notes.
+    // Keep the legacy source reader functional. Use exact source-page text
+    // here, not `parsed.text`: the latter is deliberately body-only after
+    // Phase 16 structural separation, so re-running detection on it could
+    // never see a trailing source notes section.
     if (doc.mimeType === "text/plain" || doc.mimeType === "text/markdown") {
-      const detected = detectFootnotes(parsed.text);
+      const detected = detectFootnotes(parsed.pages.map((page) => page.text).join("\n\n"));
       await db.delete(footnotes).where(eq(footnotes.documentId, documentId));
       if (detected.length) await db.insert(footnotes).values(detected.map((note) => ({
         documentId,
@@ -203,7 +204,7 @@ async function handleEditionExtraction(documentId: string) {
     // re-queried later so an annotation can only ever reference a block that
     // genuinely exists (the same real IDs that were just inserted).
     const bodyBlocks: { id: string; text: string; pageIndex: number; blockOrder: number; sectionTitle: string | null }[] = [];
-    const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "caption" | "bibliography" | "reference"; text: string; pageIndex: number; blockOrder: number }[] = [];
+    const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference"; text: string; marker?: string; pageIndex: number; blockOrder: number }[] = [];
     let currentSectionTitle: string | null = null;
 
     for (const parsedPage of parsed.pages) {
@@ -221,13 +222,15 @@ async function handleEditionExtraction(documentId: string) {
           kind: block.kind,
           text: block.text,
           bbox: block.bbox ?? null,
-        }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text, blockOrder: textBlocks.blockOrder });
+          marker: block.marker ?? null,
+        }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text, marker: textBlocks.marker, blockOrder: textBlocks.blockOrder });
         if (pipelineAtLeast(pipeline, "v3")) {
           for (const b of insertedBlocks) {
             apparatusBlocks.push({
               blockId: b.id,
               kind: b.kind,
               text: b.text,
+              marker: b.marker ?? undefined,
               pageIndex: parsedPage.pageIndex,
               blockOrder: b.blockOrder,
             });
@@ -246,11 +249,11 @@ async function handleEditionExtraction(documentId: string) {
       }
       // Structural (GROBID) footnotes become page-anchored authorial notes,
       // kept distinct from AI-generated notes (plan §33 §3.4).
-      const footnoteBlocks = parsedPage.blocks.filter((block) => block.kind === "footnote");
+      const footnoteBlocks = parsedPage.blocks.filter((block) => block.kind === "footnote" || block.kind === "endnote");
       if (footnoteBlocks.length) await db.insert(docFootnotes).values(footnoteBlocks.map((block) => ({
         runId: run.id,
         marker: block.marker ?? "*",
-        pageAnchor: { pageIndex: parsedPage.pageIndex, bbox: block.bbox ?? null },
+        pageAnchor: { pageIndex: parsedPage.pageIndex, bbox: block.bbox ?? null, apparatusKind: block.kind },
         text: block.text,
         kind: "authorial",
         source: "grobid",
@@ -270,7 +273,7 @@ async function handleEditionExtraction(documentId: string) {
         updatedAt: new Date(),
       }).where(eq(processingRuns.id, run.id));
     }
-    const apparatus = pipeline === "v4" ? extractAuthorApparatus({ blocks: apparatusBlocks, text: parsed.text }) : [];
+    const apparatus = pipelineAtLeast(pipeline, "v3") ? extractAuthorApparatus({ blocks: apparatusBlocks, text: parsed.text }) : [];
     await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks, apparatus });
 
     // Reprocessing a work the reader already confirmed must not send it back
@@ -286,7 +289,9 @@ async function handleEditionExtraction(documentId: string) {
       documentId,
       workId: doc.workId,
       structureState: parsed.structureState,
-      note: parsed.structureState === "limited" ? "Structured GROBID extraction is unavailable; PDF.js page blocks are published." : null,
+      note: parsed.structureState === "limited"
+        ? "Structure-limited: source layout did not yield reliably separate body and apparatus blocks. The immutable original source remains available."
+        : null,
       extractedText: parsed.text,
       detectedTitle: parsed.detectedTitle,
       detectedAuthor: parsed.detectedAuthor,

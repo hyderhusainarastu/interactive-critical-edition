@@ -25,7 +25,10 @@ export default async function ReaderPage({
       workId={workId}
       initialReaderLevel={readerLevel ?? "all"}
       enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
-      enablePhase12Reader={phase12FeatureEnabled("interactiveReader")}
+      // Phase 16 makes the reliable processed reader the released contract;
+      // it no longer hides source/processed labels or author apparatus behind
+      // the retired Phase 12 rollout switch.
+      enablePhase12Reader
     />
   );
 }

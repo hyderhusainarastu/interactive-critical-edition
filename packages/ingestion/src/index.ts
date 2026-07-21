@@ -3,7 +3,7 @@ import { parseEpub } from "./parsers/epub";
 import { parseText } from "./parsers/text";
 
 export type { ParsedDocument, ParsedPage, ParsedBlock } from "./parsers/pdf";
-export { mergePageTexts } from "./parsers/pdf";
+export { mergePageTexts, processedTextFromPages } from "./parsers/pdf";
 export { parseTei, type GrobidResult, type GrobidBlock, type GrobidBbox } from "./parsers/grobid";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export { extractCitations, type RawCitation, type CitationKind } from "./parsers/citations";
