@@ -35,8 +35,9 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole("button", { name: "Log in" }).click();
   await page.waitForURL("**/dashboard");
   await page.goto(`/works/${workId}/reader`);
-  // The edition loads asynchronously; the toggle only appears once it has.
-  await page.getByRole("button", { name: /published edition/i }).click();
+  // The published edition is the default view whenever one exists (plan
+  // §36 11.5) — no click needed; this also exercises that default on
+  // every test in this file, not just a single dedicated one.
   await expect(page.getByRole("region", { name: /published critical edition/i })).toBeVisible();
 });
 
@@ -72,21 +73,18 @@ test("a generated claim exposes supporting AND contradicting evidence", async ({
   await expect(edition).toContainText(/soul is not harmonious/i);
 });
 
-test("Sources consulted lists one entry per work, not one per record", async ({ page }) => {
-  const edition = page.getByRole("region", { name: /published critical edition/i });
+test("Sources consulted lists one entry per work, not one per record, in the sidebar's Sources tab (plan §36 11.5)", async ({ page }) => {
+  await page.getByRole("button", { name: /^Sources/i }).click();
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
   // Four records describe two works: a book with a review and a second
   // edition, plus one unrelated article. Repeating the book three times is
   // exactly the failure this grouping exists to prevent.
-  await expect(edition).toContainText(/2 works, 4 records/i);
+  await expect(sidebar).toContainText(/2 works, 4 records/i);
+  await expect(sidebar.getByRole("heading", { name: /sources consulted/i })).toBeVisible();
 
-  await expect(edition.getByRole("heading", { name: /sources consulted/i })).toBeVisible();
-
-  // Scope to the Sources section by its own text; a `has:` filter needs a
-  // locator relative to the candidate, not one rooted at an ancestor.
-  const sources = edition.locator("section").filter({ hasText: "Sources consulted" });
   // Two top-level entries, not four: the list is of works, and the direct
   // children are what the reader scans.
-  const workList = sources.locator("ul").first();
+  const workList = sidebar.locator("ul").first();
   await expect(workList.locator(":scope > li")).toHaveCount(2);
   // The book's review and second edition are attached beneath it — still
   // visible, labelled by role, never listed as separate works.
@@ -97,21 +95,29 @@ test("Sources consulted lists one entry per work, not one per record", async ({ 
   await expect(bookEntry).toContainText(/Recensão a/i);
 });
 
-test("a passage annotation renders inline at its own paragraph, collapsed until expanded", async ({ page }) => {
+test("a passage annotation renders as an in-text marker; clicking it reveals its sidebar card (plan §36 11.5)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /published critical edition/i });
-  const anchoredNote = edition.locator("li").filter({ hasText: "Flags the gap between decision and passion" });
-  await expect(anchoredNote).toBeVisible();
-  // The explanation is not shown until the reader asks for it.
-  await expect(anchoredNote).not.toContainText(/tension Irwin's paper investigates/i);
-  await anchoredNote.getByRole("button", { name: /read more/i }).click();
-  await expect(anchoredNote).toContainText(/tension Irwin's paper investigates/i);
-  await expect(anchoredNote).toContainText(/live according to passion/i);
+  const marker = edition.locator("button[data-annotation-id]");
+  await expect(marker).toHaveCount(1);
+
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  const card = sidebar.locator("li").filter({ hasText: "Flags the gap between decision and passion" });
+  // The Annotations tab is the sidebar's default, so the card is already
+  // visible — but collapsed, exactly as the old below-paragraph list was.
+  await expect(card).toBeVisible();
+  await expect(card).not.toContainText(/tension Irwin's paper investigates/i);
+
+  // Click-to-reveal: clicking the in-text marker expands the card
+  // immediately, no separate "Read more" click needed.
+  await marker.click();
+  await expect(card).toContainText(/tension Irwin's paper investigates/i);
+  await expect(card).toContainText(/live according to passion/i);
 });
 
-test("whole-work guidance is labelled and kept separate from passage-anchored notes", async ({ page }) => {
-  const edition = page.getByRole("region", { name: /published critical edition/i });
-  await expect(edition.getByRole("region", { name: /whole-work guidance/i })).toBeVisible();
-  const guidance = edition.getByRole("region", { name: /whole-work guidance/i });
+test("whole-work guidance is labelled and kept separate from passage-anchored notes, in the sidebar", async ({ page }) => {
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  const guidance = sidebar.getByRole("region", { name: /whole-work guidance/i });
+  await expect(guidance).toBeVisible();
   await expect(guidance).toContainText(/vice and akrasia are distinct psychological states/i);
   // It never carries a page/block anchor — no quoted excerpt is shown even
   // after expanding, because it genuinely has none.
@@ -146,4 +152,21 @@ test("the interactive reader remains reachable alongside the edition", async ({ 
   // user's own highlights/notes live in the interactive reader.
   await page.getByRole("button", { name: /interactive reader/i }).click();
   await expect(page.getByRole("region", { name: /published critical edition/i })).toHaveCount(0);
+});
+
+test("the reader-view toggle is a two-button segmented control showing current state unambiguously (plan §36 11.5)", async ({ page }) => {
+  const group = page.getByRole("group", { name: /reader view/i });
+  const editionButton = group.getByRole("button", { name: "Published edition" });
+  const interactiveButton = group.getByRole("button", { name: "Interactive reader" });
+  await expect(editionButton).toHaveAttribute("aria-pressed", "true");
+  await expect(interactiveButton).toHaveAttribute("aria-pressed", "false");
+
+  await interactiveButton.click();
+  await expect(editionButton).toHaveAttribute("aria-pressed", "false");
+  await expect(interactiveButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: /published critical edition/i })).toHaveCount(0);
+
+  await editionButton.click();
+  await expect(editionButton).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("region", { name: /published critical edition/i })).toBeVisible();
 });

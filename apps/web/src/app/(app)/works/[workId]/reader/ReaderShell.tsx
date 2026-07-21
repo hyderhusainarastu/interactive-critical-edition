@@ -15,6 +15,7 @@ import { TextReader } from "./TextReader";
 import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
 import { EditionReader, type EditionPayload } from "./EditionReader";
+import { EditionAnnotationsPanel } from "./EditionAnnotationsPanel";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -58,7 +59,14 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
         if (!ignore) setError(err instanceof Error ? err.message : "Failed to load.");
       });
     jsonFetch<{ edition: EditionPayload | null }>(`/api/works/${workId}/edition`)
-      .then((response) => { if (!ignore) setEdition(response.edition); })
+      .then((response) => {
+        if (ignore) return;
+        setEdition(response.edition);
+        // Published edition is the primary reading experience whenever one
+        // exists (plan §36 11.5); v1-only works (no edition) keep the
+        // interactive reader as their only option, unchanged.
+        if (response.edition) setShowEdition(true);
+      })
       .catch(() => { /* legacy reader remains fully available */ });
     return () => {
       ignore = true;
@@ -255,9 +263,26 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               {distractionReduced ? "Exit focus mode" : "Focus mode"}
             </button>
             {edition && (
-              <button type="button" onClick={() => setShowEdition((value) => !value)} aria-pressed={showEdition}>
-                {showEdition ? "Interactive reader" : "Published edition"}
-              </button>
+              <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
+                <button
+                  type="button"
+                  aria-pressed={showEdition}
+                  onClick={() => setShowEdition(true)}
+                  className="rounded px-2.5 py-1"
+                  style={{ background: showEdition ? "var(--color-surface)" : "transparent" }}
+                >
+                  Published edition
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!showEdition}
+                  onClick={() => setShowEdition(false)}
+                  className="rounded px-2.5 py-1"
+                  style={{ background: !showEdition ? "var(--color-surface)" : "transparent" }}
+                >
+                  Interactive reader
+                </button>
+              </div>
             )}
             <div className="flex items-center gap-1" role="group" aria-label="Highlight color">
               {HIGHLIGHT_COLORS.map((c) => (
@@ -302,8 +327,11 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               aria-pressed={showAnalysis}
             >
               {showAnalysis ? "Hide analysis" : "Analysis"}
-              {data.annotations.filter((a) => !a.hidden).length > 0 &&
-                ` (${data.annotations.filter((a) => !a.hidden).length})`}
+              {showEdition && edition
+                ? edition.passageAnnotations.length + edition.wholeWorkGuidance.length > 0 &&
+                  ` (${edition.passageAnnotations.length + edition.wholeWorkGuidance.length})`
+                : data.annotations.filter((a) => !a.hidden).length > 0 &&
+                  ` (${data.annotations.filter((a) => !a.hidden).length})`}
             </button>
             <button type="button" onClick={() => setShowNotes((v) => !v)}>
               {showNotes ? "Hide notes" : "Notes"}
@@ -317,7 +345,7 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               ["--reader-line-width" as string]: `${lineWidth}ch`,
             }}
           >
-            {showEdition && edition ? <EditionReader edition={edition} /> : isPdf ? (
+            {showEdition && edition ? <EditionReader edition={edition} onOpenAnnotation={openAnnotation} /> : isPdf ? (
               data.fileUrl ? (
                 <PdfReader
                   fileUrl={data.fileUrl}
@@ -364,14 +392,18 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
       </div>
 
       {showAnalysis && !embedded && (
-        <AnnotationsPanel
-          annotations={data.annotations}
-          analysisStatus={data.analysisStatus}
-          analysisError={data.analysisError}
-          activeId={activeAnnotationId}
-          onUpdate={updateAnnotation}
-          onReanalyze={reanalyze}
-        />
+        showEdition && edition ? (
+          <EditionAnnotationsPanel edition={edition} activeId={activeAnnotationId} />
+        ) : (
+          <AnnotationsPanel
+            annotations={data.annotations}
+            analysisStatus={data.analysisStatus}
+            analysisError={data.analysisError}
+            activeId={activeAnnotationId}
+            onUpdate={updateAnnotation}
+            onReanalyze={reanalyze}
+          />
+        )
       )}
 
       {showNotes && (

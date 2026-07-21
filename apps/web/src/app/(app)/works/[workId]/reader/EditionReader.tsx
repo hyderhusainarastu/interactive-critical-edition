@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CredibilityMeter } from "@/components/CredibilityMeter";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META } from "./annotationMeta";
+import { applyAnnotationMarkers, clearAnnotationMarkers } from "./highlightDom";
+import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import type { RelationshipCategory } from "./types";
 
-type Authority = "A" | "B" | "C" | "D" | "E";
-type Agreement = "strong" | "contested" | "mixed" | "insufficient";
+export type Authority = "A" | "B" | "C" | "D" | "E";
+export type Agreement = "strong" | "contested" | "mixed" | "insufficient";
 
 export interface EditionClaim {
   id: string;
@@ -115,34 +116,34 @@ export interface EditionPayload {
   providerReports: Array<{ provider: string; status: string; resultCount: number; inspectionDepth: number; latencyMs: number; error: string | null }>;
 }
 
-const AUTHORITY_LABEL: Record<Authority, string> = {
+export const AUTHORITY_LABEL: Record<Authority, string> = {
   A: "A · peer-reviewed / primary",
   B: "B · reputable scholarship",
   C: "C · credible web",
   D: "D · general web / video",
   E: "E · unverified / social",
 };
-const AGREEMENT_LABEL: Record<Agreement, string> = {
+export const AGREEMENT_LABEL: Record<Agreement, string> = {
   strong: "strong agreement",
   contested: "contested",
   mixed: "mixed evidence",
   insufficient: "insufficient corroboration",
 };
-const PASSAGE_TYPE_LABEL: Record<PassageAnnotationType, string> = {
+export const PASSAGE_TYPE_LABEL: Record<PassageAnnotationType, string> = {
   context: "Context",
   clarification: "Clarification",
   connection: "Connection",
   critique: "Critique",
   definition: "Definition",
 };
-const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
+export const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
   beginner: "Beginner",
   undergraduate: "Undergraduate",
   advanced: "Advanced",
   research: "Research",
 };
 
-function AuthorityBadge({ authority }: { authority: Authority | null }) {
+export function AuthorityBadge({ authority }: { authority: Authority | null }) {
   if (!authority) return null;
   const color = authority === "A" || authority === "B" ? "var(--color-accent-green)" : authority === "C" ? "var(--color-accent-ink)" : "var(--color-border)";
   return (
@@ -200,73 +201,32 @@ function ClaimView({ claim }: { claim: EditionClaim }) {
   );
 }
 
-/** A passage-anchored explanatory note (plan §34.4 9.3): summary always
- *  visible, explanation expandable, never claiming an anchor it doesn't have —
- *  `isWholeWork` items are rendered separately, under the literal label
- *  "Whole-work guidance", by the caller (never passed here mixed in). */
-function PassageAnnotationNote({
-  note,
-  resourceById,
-}: {
-  note: EditionPassageAnnotation;
-  resourceById: Map<string, EditionResource>;
-}) {
-  const [open, setOpen] = useState(false);
-  const relatedResource = note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined;
-  const category = CATEGORY_META[note.relationship];
-  return (
-    <li className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs font-medium">{PASSAGE_TYPE_LABEL[note.annotationType]}</span>
-        {category && (
-          <span
-            className="rounded px-1.5 py-0.5 text-xs font-medium"
-            style={{ color: `var(${category.colorVar})` }}
-            title={category.gloss}
-          >
-            {category.glyph} {category.label}
-          </span>
-        )}
-        {note.readerLevel && <span className="text-xs text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
-        <span className="ml-auto text-xs text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}% confidence</span>
-      </div>
-      <p className="mt-1">{note.summary}</p>
-      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="mt-1 text-xs underline">
-        {open ? "Hide explanation" : "Read more"}
-      </button>
-      {open && (
-        <div className="mt-2 border-t border-[var(--color-border)] pt-2">
-          <p>{note.explanation}</p>
-          {note.quote && <p className="mt-1.5 border-l-2 border-[var(--color-border)] pl-2 text-xs italic text-[var(--color-text-muted)]">“{note.quote}”</p>}
-          {relatedResource && (
-            <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
-              Related source:{" "}
-              {relatedResource.url ? (
-                <a href={relatedResource.url} target="_blank" rel="noopener noreferrer" className="underline">
-                  {relatedResource.title}
-                </a>
-              ) : (
-                relatedResource.title
-              )}
-            </p>
-          )}
-        </div>
-      )}
-    </li>
-  );
-}
-
 /** Published-run reader: authorial (source) notes and AI-generated editorial
  * material are visibly distinct; every generated claim exposes its source-
- * grounded evidence, credibility, and agreement (plan §33 §3.4). */
-export function EditionReader({ edition }: { edition: EditionPayload }) {
+ * grounded evidence, credibility, and agreement (plan §33 §3.4).
+ *
+ * Passage annotations (plan §34.4 9.3, ported to in-text markers in plan §36
+ * 11.5): rather than an unconditional below-paragraph list, each anchored
+ * annotation becomes a click-to-reveal marker inserted directly into the
+ * block text (reusing `applyAnnotationMarkers`/the quote-fingerprint logic
+ * from `highlightDom.ts`, same mechanism `TextReader` already uses) plus a
+ * hover preview; the full explanation lives in the sidebar
+ * (`EditionAnnotationsPanel`), which `onOpenAnnotation` opens and scrolls to
+ * — mirroring `AnnotationsPanel`'s existing scroll-to-active behavior. */
+export function EditionReader({
+  edition,
+  onOpenAnnotation,
+}: {
+  edition: EditionPayload;
+  onOpenAnnotation: (id: string) => void;
+}) {
   const [pageIndex, setPageIndex] = useState(0);
+  const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
   const page = edition.pages[pageIndex];
   const pageBlocks = useMemo(
     () => edition.blocks.filter((block) => block.pageId === page?.id).sort((a, b) => a.blockOrder - b.blockOrder),
     [edition.blocks, page?.id],
   );
-  const resourceById = useMemo(() => new Map(edition.resources.map((r) => [r.id, r])), [edition.resources]);
   const passageAnnotationsByBlock = useMemo(() => {
     const map = new Map<string, EditionPassageAnnotation[]>();
     for (const a of edition.passageAnnotations) {
@@ -277,6 +237,34 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
     }
     return map;
   }, [edition.passageAnnotations]);
+  const noteById = useMemo(() => new Map(edition.passageAnnotations.map((a) => [a.id, a])), [edition.passageAnnotations]);
+  const resourceById = useMemo(() => new Map(edition.resources.map((r) => [r.id, r])), [edition.resources]);
+
+  const blockRefs = useRef(new Map<string, HTMLParagraphElement>());
+  useEffect(() => {
+    for (const [blockId, el] of blockRefs.current) {
+      const notes = passageAnnotationsByBlock.get(blockId);
+      if (!notes || notes.length === 0) {
+        clearAnnotationMarkers(el);
+        continue;
+      }
+      applyAnnotationMarkers(
+        el,
+        notes
+          .filter((n): n is EditionPassageAnnotation & { quote: string } => n.quote !== null)
+          .map((n) => ({
+            id: n.id,
+            quote: n.quote,
+            prefix: "",
+            suffix: "",
+            colorVar: CATEGORY_META[n.relationship].colorVar,
+            glyph: CATEGORY_META[n.relationship].glyph,
+          })),
+      );
+    }
+  }, [pageBlocks, passageAnnotationsByBlock]);
+
+  const hoverNote = hover ? noteById.get(hover.id) : null;
 
   return (
     <section aria-label="Published critical edition" className="mx-auto max-w-[72ch]">
@@ -313,37 +301,53 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
       </div>
       {edition.run.note && <p className="mb-5 rounded-md border border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">{edition.run.note}</p>}
 
-      {edition.wholeWorkGuidance.length > 0 && (
-        <section aria-label="Whole-work guidance" className="mb-5 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <h2 className="text-sm font-semibold">Whole-work guidance</h2>
-          <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-            True of this work as a whole — no single passage captures it, so it carries no page/block anchor.
-          </p>
-          <ul className="mt-2 flex flex-col gap-2">
-            {edition.wholeWorkGuidance.map((note) => <PassageAnnotationNote key={note.id} note={note} resourceById={resourceById} />)}
-          </ul>
-        </section>
-      )}
-
+      {/* Annotations (anchored + whole-work) live in the sidebar's
+       *  "Annotations" tab now (plan §36 11.5) — clicking an in-text marker
+       *  below opens and scrolls to its card there. */}
       {page && (
-        <article className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]">
+        <article
+          className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]"
+          onClick={(e) => {
+            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+            if (marker) onOpenAnnotation((marker as HTMLElement).dataset.annotationId!);
+          }}
+          onMouseOver={(e) => {
+            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+            if (marker) setHover({ id: (marker as HTMLElement).dataset.annotationId!, rect: marker.getBoundingClientRect() });
+          }}
+          onMouseOut={(e) => {
+            const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+            if (marker) setHover(null);
+          }}
+        >
           {(pageBlocks.length ? pageBlocks : [{ id: "fallback", kind: "body", text: page.text ?? "" }]).map((block) => {
-            const blockNotes = passageAnnotationsByBlock.get(block.id);
             if (block.kind === "title") return <h1 key={block.id} className="font-serif text-3xl font-semibold">{block.text}</h1>;
             if (block.kind === "header") return <h2 key={block.id} className="mt-4 font-serif text-xl font-semibold">{block.text}</h2>;
             if (block.kind === "footnote") return <aside key={block.id} className="border-l-2 border-[var(--color-accent-ink)] pl-3 text-sm">{block.text}</aside>;
             return (
-              <div key={block.id}>
-                <p className="whitespace-pre-wrap">{block.text}</p>
-                {blockNotes && blockNotes.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-2 border-l-2 border-[var(--color-accent-green)] pl-3">
-                    {blockNotes.map((note) => <PassageAnnotationNote key={note.id} note={note} resourceById={resourceById} />)}
-                  </ul>
-                )}
-              </div>
+              <p
+                key={block.id}
+                ref={(el) => {
+                  if (el) blockRefs.current.set(block.id, el);
+                  else blockRefs.current.delete(block.id);
+                }}
+                className="whitespace-pre-wrap"
+              >
+                {block.text}
+              </p>
             );
           })}
         </article>
+      )}
+
+      {hover && hoverNote && (
+        <AnnotationHoverPreview
+          glyph={CATEGORY_META[hoverNote.relationship].glyph}
+          colorVar={CATEGORY_META[hoverNote.relationship].colorVar}
+          categoryLabel={CATEGORY_META[hoverNote.relationship].label}
+          summary={hoverNote.summary}
+          anchorRect={hover.rect}
+        />
       )}
 
       {edition.authorialNotes.length > 0 && (
@@ -389,47 +393,9 @@ export function EditionReader({ edition }: { edition: EditionPayload }) {
         </section>
       )}
 
-      {edition.resources.length > 0 && (
-        <section className="mt-8 border-t border-[var(--color-border)] pt-4">
-          <h2 className="font-semibold">
-            Sources consulted{" "}
-            <span className="text-xs font-normal text-[var(--color-text-muted)]">
-              ({edition.works.length} work{edition.works.length === 1 ? "" : "s"}
-              {edition.resources.length !== edition.works.length ? `, ${edition.resources.length} records` : ""})
-            </span>
-          </h2>
-          {/* One entry per WORK. A book, a review of it and its second edition
-              are three real records but one work, and repeating the same book
-              five times makes the list unusable. Related records stay visible,
-              attached to the work rather than listed beside it. */}
-          <ul className="mt-2 flex flex-col gap-2 text-sm">
-            {edition.works.map((work) => {
-              const resource = work.primary;
-              return (
-                <li key={work.key} className="flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {resource.url ? <a className="underline" href={resource.url} target="_blank" rel="noreferrer">{work.title}</a> : work.title}
-                    <span className="text-xs text-[var(--color-text-muted)]">· {resource.provider}{resource.year ? ` · ${resource.year}` : ""}</span>
-                    {resource.credibility?.authority && <AuthorityBadge authority={resource.credibility.authority} />}
-                    {resource.credibility?.score != null && <CredibilityMeter score={resource.credibility.score} />}
-                    {resource.credibility?.agreement && <span className="text-xs text-[var(--color-text-muted)]">{AGREEMENT_LABEL[resource.credibility.agreement]}</span>}
-                  </div>
-                  {work.related.length > 0 && (
-                    <ul className="ml-4 flex flex-col gap-0.5 border-l border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]">
-                      {work.related.map((rel) => (
-                        <li key={rel.id} title={rel.evidence ?? undefined}>
-                          <span className="capitalize">{rel.role}</span>:{" "}
-                          {rel.url ? <a className="underline" href={rel.url} target="_blank" rel="noreferrer">{rel.title}</a> : rel.title}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {/* "Sources consulted" moved to the sidebar's "Sources" tab (plan §36
+       *  11.5, `EditionAnnotationsPanel.tsx`) — same content, no longer
+       *  requiring a scroll past the whole text to reach it. */}
 
       {edition.providerReports.length > 0 && (
         <section className="mt-8 border-t border-[var(--color-border)] pt-4">
