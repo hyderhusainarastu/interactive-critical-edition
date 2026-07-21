@@ -32,6 +32,7 @@ import {
   OpenAIResponsesClient,
   RELATIONSHIP_CATEGORIES,
   safetyIdentifierFor,
+  type CitationFrequencySignal,
   type RelationshipCategory,
 } from "@ice/ai-adapters";
 import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
@@ -206,6 +207,75 @@ function leadingSurname(query: string): string {
   return m ? m[1] : "";
 }
 
+function normalizeFrequencyText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function uniqueFrequencyTerms(title: string, authors: string[] | string | null): string[] {
+  const terms = new Set<string>();
+  const normalizedTitle = normalizeFrequencyText(title);
+  if (normalizedTitle.length >= 5) terms.add(normalizedTitle);
+
+  // "Aristotle, Nicomachean Ethics" should count both the full label and the
+  // title-bearing part; the author surname is added below.
+  for (const part of title.split(/[:,.;]/)) {
+    const normalized = normalizeFrequencyText(part);
+    if (normalized.length >= 5 && normalized !== normalizedTitle) terms.add(normalized);
+  }
+
+  const authorList = Array.isArray(authors) ? authors : authors ? authors.split(/[,;]/) : [];
+  for (const author of authorList) {
+    const words = normalizeFrequencyText(author).split(/\s+/).filter(Boolean);
+    const surname = words.at(-1);
+    if (surname && surname.length >= 4) terms.add(surname);
+  }
+
+  return [...terms];
+}
+
+function countTermMentions(haystack: string, term: string): number {
+  if (!haystack || !term) return 0;
+  let count = 0;
+  let from = 0;
+  for (;;) {
+    const found = haystack.indexOf(term, from);
+    if (found === -1) break;
+    const before = found === 0 ? " " : haystack[found - 1];
+    const after = found + term.length >= haystack.length ? " " : haystack[found + term.length];
+    if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) count++;
+    from = found + Math.max(1, term.length);
+  }
+  return count;
+}
+
+function citationFrequencyFor(
+  candidate: { title: string; authors: string[] | string | null },
+  documentText: string,
+  citationTexts: string[],
+): CitationFrequencySignal {
+  const terms = uniqueFrequencyTerms(candidate.title, candidate.authors);
+  const normalizedDocument = normalizeFrequencyText(documentText);
+  const normalizedCitations = citationTexts.map(normalizeFrequencyText).join(" ");
+  const matchedTerms: string[] = [];
+  let documentMentions = 0;
+  let citationMentions = 0;
+
+  for (const term of terms) {
+    const docCount = countTermMentions(normalizedDocument, term);
+    const citationCount = countTermMentions(normalizedCitations, term);
+    if (docCount > 0 || citationCount > 0) matchedTerms.push(term);
+    documentMentions += docCount;
+    citationMentions += citationCount;
+  }
+
+  return { documentMentions, citationMentions, total: documentMentions + citationMentions, matchedTerms };
+}
+
 /** A concise human-readable target label for the annotation, even when
  *  unresolved (plan §12: never drop the citation). */
 function targetLabel(candidate: RawCitation, record: ResolvedRecord | null): string {
@@ -297,6 +367,7 @@ export async function analyzeWork(documentId: string): Promise<void> {
     // processed with bounded concurrency (see ANALYSIS_CONCURRENCY) so a
     // large reference list finishes in a fraction of the sequential time.
     const candidates = extractCitations(doc.extractedText, 300);
+    const citationTexts = candidates.map((candidate) => `${candidate.text} ${candidate.query}`);
     const isText = doc.mimeType === "text/plain" || doc.mimeType === "text/markdown";
     const paragraphs = isText
       ? doc.extractedText.split(/\n{2,}/).filter((p) => p.trim().length > 0)
@@ -338,6 +409,11 @@ export async function analyzeWork(documentId: string): Promise<void> {
       // --- Anchoring (text docs only) ---
       const located = isText ? buildTextAnchor(paragraphs, leadingSurname(candidate.query)) : null;
       const sourceText = located?.sourceText ?? candidate.text;
+      const citationFrequency = citationFrequencyFor(
+        { title: record?.title ?? candidate.text.slice(0, 160), authors: record?.authors ?? null },
+        doc.extractedText ?? "",
+        citationTexts,
+      );
 
       // --- Stage 2: classify the relationship ---
       const classification = await classifyRelationship({
@@ -347,6 +423,7 @@ export async function analyzeWork(documentId: string): Promise<void> {
         candidateAuthor: record?.authors ?? null,
         sourceText,
         resolved: Boolean(record),
+        citationFrequency,
       });
 
       await db.insert(aiUsageLogs).values({
@@ -388,7 +465,7 @@ export async function analyzeWork(documentId: string): Promise<void> {
           edgeType: edgeValue(CATEGORY_TO_EDGE[classification.category]),
           weight: 1,
           confidence: classification.confidence,
-          evidence: { extractedSourceText: sourceText, category: classification.category },
+          evidence: { extractedSourceText: sourceText, category: classification.category, citationFrequency },
           createdBy: "system",
         });
       }
@@ -845,6 +922,7 @@ export async function analyzeEditionRun(input: {
   }
 
   const acceptedResources = assessed.filter((a) => a.assessment.verdict === "accepted");
+  const frequencyCitationTexts = citationCandidates.map((candidate) => `${candidate.text} ${candidate.query}`);
   const gateSummary = {
     accepted: acceptedResources.length,
     quarantined: assessed.filter((a) => a.assessment.verdict === "quarantined").length,
@@ -875,6 +953,7 @@ export async function analyzeEditionRun(input: {
   await setStage("classification", "citation-graph-expansion");
 
   for (const { r, assessment, authority } of ranked) {
+    const citationFrequency = citationFrequencyFor({ title: r.title, authors: r.authors }, input.text, frequencyCitationTexts);
     const classify = () => classifyRelationship({
       primaryTitle: resolvedTitle,
       primaryAuthor: resolvedAuthorName,
@@ -882,6 +961,7 @@ export async function analyzeEditionRun(input: {
       candidateAuthor: r.authors.join(", ") || null,
       sourceText: r.snippet ?? r.title,
       resolved: Boolean(r.doi || r.isbn),
+      citationFrequency,
     });
     // V2 classifies before writing its note as it always has. V3 deliberately
     // delays this until the final conservative-influence stage: a source first
@@ -987,7 +1067,7 @@ export async function analyzeEditionRun(input: {
       relationType: provisionalCategory,
       depth: r.resourceType === "unresolved-citation" ? 0 : 1,
       importance: cred.score,
-      evidence: { category: provisionalCategory, sourceText: evidenceText.slice(0, 300) },
+      evidence: { category: provisionalCategory, sourceText: evidenceText.slice(0, 300), citationFrequency },
       confidence: relevanceConfidence,
     });
 
@@ -1042,7 +1122,7 @@ export async function analyzeEditionRun(input: {
     if (isV3) {
       await db.update(editionRelations).set({
         relationType: conservativeCategory,
-        evidence: { category: conservativeCategory, sourceText: evidenceText.slice(0, 300) },
+        evidence: { category: conservativeCategory, sourceText: evidenceText.slice(0, 300), citationFrequency },
         confidence: classification!.confidence,
       }).where(and(eq(editionRelations.runId, input.runId), eq(editionRelations.resourceId, resourceRow.id)));
       await db.update(generatedNotes).set({ noteType: conservativeCategory, confidence: classification!.confidence }).where(eq(generatedNotes.id, note.id));
@@ -1057,7 +1137,7 @@ export async function analyzeEditionRun(input: {
         edgeType: edgeValue(CATEGORY_TO_EDGE[conservativeCategory]),
         weight: 1,
         confidence: classification!.confidence,
-        evidence: { category: conservativeCategory, provider: r.provider },
+        evidence: { category: conservativeCategory, provider: r.provider, citationFrequency },
         createdBy: "system",
       });
     }

@@ -51,10 +51,23 @@ export const RELATIONSHIP_CATEGORIES = [
 
 export type RelationshipCategory = (typeof RELATIONSHIP_CATEGORIES)[number];
 
+export const SUSTAINED_CITATION_THRESHOLD = 5;
+
+export interface CitationFrequencySignal {
+  /** Mentions in the primary document's extracted text. */
+  documentMentions: number;
+  /** Mentions in extracted citation/reference entries. */
+  citationMentions: number;
+  total: number;
+  /** Normalized candidate terms that contributed to the count. */
+  matchedTerms: string[];
+}
+
 /** Structured input to the relationship classifier — the "expensive
  *  stage" of the two-stage pipeline (plan §11). One candidate reference,
- *  the primary work it was found in, and the verbatim passage that
- *  surfaced it (kept as evidence/provenance, never paraphrased away). */
+ *  the primary work it was found in, the verbatim passage that surfaced
+ *  it, and optionally a run-level frequency signal (kept as evidence/
+ *  provenance, never paraphrased away). */
 export interface ClassificationInput {
   primaryTitle: string;
   primaryAuthor: string | null;
@@ -66,6 +79,7 @@ export interface ClassificationInput {
    *  record (vs. an unresolved raw citation) — a strong signal it's an
    *  explicit reference rather than inferred context. */
   resolved: boolean;
+  citationFrequency?: CitationFrequencySignal;
 }
 
 export interface ClassificationResult {

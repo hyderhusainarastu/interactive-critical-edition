@@ -1,4 +1,4 @@
-import type { ClassificationInput, ClassificationResult, RelationshipCategory } from "../types";
+import { SUSTAINED_CITATION_THRESHOLD, type ClassificationInput, type ClassificationResult, type RelationshipCategory } from "../types";
 
 /**
  * Deterministic, no-network relationship classifier — the fallback used
@@ -48,6 +48,7 @@ export function heuristicClassify(input: ClassificationInput): ClassificationRes
   const text = input.sourceText ?? "";
   let category: RelationshipCategory | null = null;
   let matched = false;
+  let frequencyMatched = false;
 
   for (const rule of RULES) {
     if (rule.pattern.test(text)) {
@@ -64,6 +65,12 @@ export function heuristicClassify(input: ClassificationInput): ClassificationRes
     matched = true;
   }
 
+  if (!category && (input.citationFrequency?.total ?? 0) >= SUSTAINED_CITATION_THRESHOLD) {
+    category = "prerequisite";
+    matched = true;
+    frequencyMatched = true;
+  }
+
   if (!category) {
     category = input.resolved ? "explicit_reference" : "ai_inferred";
   }
@@ -71,7 +78,8 @@ export function heuristicClassify(input: ClassificationInput): ClassificationRes
   // Confidence reflects signal strength, deliberately capped below what a
   // real model verdict would carry — this is a stub, and the number says so.
   let confidence: number;
-  if (input.resolved && matched) confidence = 0.7;
+  if (frequencyMatched) confidence = input.resolved ? 0.62 : 0.42;
+  else if (input.resolved && matched) confidence = 0.7;
   else if (input.resolved) confidence = 0.6;
   else if (matched) confidence = 0.45;
   else confidence = 0.3;

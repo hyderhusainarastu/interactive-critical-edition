@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { classifyWithProvider } from "./classify";
 import { heuristicClassify } from "./providers/heuristic";
 import { RELATIONSHIP_CATEGORIES, type ClassificationInput, type LLMProvider } from "./types";
@@ -56,6 +58,40 @@ describe("heuristicClassify", () => {
     const r = heuristicClassify({ ...base, resolved: false, sourceText: "A passing mention." });
     expect(r.category).toBe("ai_inferred");
     expect(r.confidence).toBeLessThan(0.5);
+  });
+
+  it("treats sustained engagement with Nicomachean Ethics as prerequisite for the Irwin fixture", () => {
+    const manifest = JSON.parse(
+      readFileSync(resolve(process.cwd(), "../../docs/eval/irwin-vice-and-reason/vice-and-reason.manifest.json"), "utf8"),
+    ) as { acceptanceGates: { essentialSources: string[] } };
+    expect(manifest.acceptanceGates.essentialSources).toContain("Aristotle, Nicomachean Ethics");
+
+    const r = heuristicClassify({
+      primaryTitle: "Vice and Reason",
+      primaryAuthor: "Terence Irwin",
+      candidateTitle: "Nicomachean Ethics",
+      candidateAuthor: "Aristotle",
+      sourceText: "EN III discusses decision.",
+      resolved: true,
+      citationFrequency: {
+        documentMentions: 8,
+        citationMentions: 3,
+        total: 11,
+        matchedTerms: ["nicomachean ethics", "aristotle"],
+      },
+    });
+    expect(r.category).toBe("prerequisite");
+    expect(r.confidence).toBeGreaterThan(0.6);
+    expect(r.confidence).toBeLessThan(0.7);
+  });
+
+  it("lets a stronger local polemical cue beat the frequency prerequisite signal", () => {
+    const r = heuristicClassify({
+      ...base,
+      sourceText: "The paper rejects this account as mistaken.",
+      citationFrequency: { documentMentions: 8, citationMentions: 1, total: 9, matchedTerms: ["kant"] },
+    });
+    expect(r.category).toBe("disagreement_polemical_target");
   });
 });
 
