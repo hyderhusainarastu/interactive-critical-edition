@@ -6,6 +6,7 @@ import {
   pedagogicalValue,
   processLabel,
   publicationRigor,
+  structuralEvidenceStrength,
 } from "./credibilityV3";
 import type { RawResource } from "./types";
 
@@ -142,5 +143,70 @@ describe("assessCredibilityV3", () => {
     const a = assessCredibilityV3(resource(), { relevance: 1.7, evidenceStrength: -0.4 });
     expect(a.dimensions.relevance).toBe(1);
     expect(a.dimensions.evidenceStrength).toBe(0);
+  });
+
+  it("includes evidenceStrengthWhy in the rationale when supplied, and omits it when absent", () => {
+    const withWhy = assessCredibilityV3(resource(), { relevance: 0.9, evidenceStrength: 0.7, evidenceStrengthWhy: "abstract signals: named study design" });
+    expect(withWhy.rationale).toContain("evidence strength 0.70 — abstract signals: named study design");
+    const withoutWhy = assessCredibilityV3(resource(), { relevance: 0.9, evidenceStrength: 0.7 });
+    expect(withoutWhy.rationale).toContain("evidence strength 0.70");
+    expect(withoutWhy.rationale).not.toContain("evidence strength 0.70 —");
+  });
+});
+
+describe("structuralEvidenceStrength", () => {
+  it("falls back to the low floor when there is no snippet at all", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: null }));
+    expect(r.score).toBe(0.3);
+    expect(r.why).toContain("no abstract");
+  });
+
+  it("uses the plain existence-based fallback for non-scholarly resource types", () => {
+    const r = structuralEvidenceStrength(resource({ provider: "youtube", resourceType: "video", snippet: "A talk about virtue ethics." }));
+    expect(r.score).toBe(0.6);
+    expect(r.why).toContain("non-scholarly");
+  });
+
+  it("gives a scholarly article with a plain abstract the baseline, no structural signals found", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: "This paper discusses Aristotle's account of virtue and its relation to reason." }));
+    expect(r.score).toBe(0.5);
+    expect(r.why).toContain("no structural signals found");
+  });
+
+  it("scores higher for an abstract naming a study design", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: "We conducted a randomized controlled trial to test the hypothesis." }));
+    expect(r.score).toBeGreaterThan(0.5);
+    expect(r.why).toContain("named study design");
+  });
+
+  it("scores higher for an abstract reporting a sample size", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: "Data were collected from n = 240 participants across three sites." }));
+    expect(r.score).toBeGreaterThan(0.5);
+    expect(r.why).toContain("reported sample size");
+  });
+
+  it("scores higher for an abstract reporting inferential statistics", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: "The effect was significant, p < 0.01, with a 95% CI excluding zero." }));
+    expect(r.score).toBeGreaterThan(0.5);
+    expect(r.why).toContain("inferential statistics");
+  });
+
+  it("scores lower for an abstract with hedging language, without dropping below the floor", () => {
+    const r = structuralEvidenceStrength(resource({ snippet: "These are preliminary findings; further research is needed before drawing conclusions." }));
+    expect(r.score).toBeLessThan(0.5);
+    expect(r.score).toBeGreaterThanOrEqual(0);
+    expect(r.why).toContain("hedging language");
+  });
+
+  it("combines multiple signals and stays clamped to 0..1", () => {
+    const r = structuralEvidenceStrength(
+      resource({ snippet: "A randomized controlled trial with n = 500 participants found p < 0.05, though these are preliminary results." }),
+    );
+    expect(r.score).toBeGreaterThan(0.5);
+    expect(r.score).toBeLessThanOrEqual(1);
+    expect(r.why).toContain("named study design");
+    expect(r.why).toContain("reported sample size");
+    expect(r.why).toContain("inferential statistics");
+    expect(r.why).toContain("hedging language");
   });
 });

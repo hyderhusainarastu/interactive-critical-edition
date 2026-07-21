@@ -42,6 +42,7 @@ import {
   buildCredibility,
   assessCredibilityV3,
   publicationRigor,
+  structuralEvidenceStrength,
   canAfford,
   canonicalizeDoi,
   canonicalizeIsbn,
@@ -931,10 +932,15 @@ export async function analyzeEditionRun(input: {
       .returning({ id: researchResources.id });
 
     await setStage("classification", "credibility");
+    // Structural cues (study design, sample size, statistics, hedging) beat
+    // the old binary "does any snippet exist" check for scholarly articles —
+    // deterministic, no model call, scoped to where the regex classes
+    // actually mean something (see structuralEvidenceStrength's doc comment).
+    const evidenceStrengthSignal = structuralEvidenceStrength(r);
     const cred = buildCredibility(r, {
       relevance: Math.max(0, Math.min(1, relevanceConfidence)),
       inspectionDepth: r.snippet ? 1 : 0,
-      evidenceStrength: r.snippet ? 0.6 : 0.3,
+      evidenceStrength: evidenceStrengthSignal.score,
     });
     // Single independent source at this stage → agreement is honestly insufficient.
     const agreement = computeAgreement(1, 0);
@@ -942,7 +948,8 @@ export async function analyzeEditionRun(input: {
     const v3Credibility = isV3
       ? assessCredibilityV3(r, {
           relevance: Math.max(0, Math.min(1, relevanceConfidence)),
-          evidenceStrength: r.snippet ? 0.6 : 0.3,
+          evidenceStrength: evidenceStrengthSignal.score,
+          evidenceStrengthWhy: evidenceStrengthSignal.why,
           creator: verifiedCreators.get(creatorKey),
         })
       : null;

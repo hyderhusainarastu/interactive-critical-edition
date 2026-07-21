@@ -58,6 +58,69 @@ export interface CredibilityAssessmentV3 {
 const SCHOLARLY_INDEXES = new Set(["crossref", "openalex", "semanticscholar"]);
 const BOOK_CATALOGUES = new Set(["openlibrary", "googlebooks"]);
 
+export interface StructuralEvidenceSignal {
+  score: number;
+  why: string;
+}
+
+// Structurally checkable cues in a scholarly abstract — none of this
+// requires a model call to detect, only requires the abstract to exist.
+const STUDY_DESIGN_RE = /\b(randomi[sz]ed controlled trial|rct|meta-analysis|systematic review|cohort study|case-control|longitudinal study|case study)\b/i;
+const SAMPLE_SIZE_RE = /\bn\s*=\s*\d+\b|\bsample of \d+\b|\b\d+\s+participants\b/i;
+const STATISTICS_RE = /\bp\s*[<>=]\s*0?\.\d+|\b95%\s*ci\b|\bconfidence interval\b|\beffect size\b|\bcohen'?s d\b/i;
+const HEDGING_RE = /\b(preliminary|may suggest|further research is needed|limited evidence|small sample|inconclusive|tentative(ly)?)\b/i;
+
+/**
+ * Deterministic structural signal for evidence strength (Phase 10, plan §35.3
+ * — a general two-stage-scoring technique, not copied from any specific
+ * project): scans the abstract/snippet text scholarly providers actually
+ * return (Crossref/OpenAlex/Semantic Scholar) for a named study design, a
+ * reported sample size, inferential statistics, or hedging language, rather
+ * than the prior heuristic's binary "does any snippet exist at all" check —
+ * which credited a one-line marketing blurb exactly as much as a real
+ * methods-bearing abstract.
+ *
+ * Deliberately scoped to scholarly-article resources: these regex classes
+ * (RCT, p-value, Cohen's d) don't meaningfully apply to a web page or video,
+ * so every other resource type/provider keeps the plain existence-based
+ * fallback the caller already had — this narrows what changes, it doesn't
+ * replace the whole heuristic.
+ */
+export function structuralEvidenceStrength(r: RawResource): StructuralEvidenceSignal {
+  if (!r.snippet) return { score: 0.3, why: "no abstract/snippet available" };
+  if (!SCHOLARLY_INDEXES.has(r.provider) || r.resourceType !== "article") {
+    return { score: 0.6, why: "snippet available (non-scholarly source, no structural cues checked)" };
+  }
+
+  const text = r.snippet;
+  const found: string[] = [];
+  let score = 0.5; // baseline: a real scholarly abstract exists at all
+
+  if (STUDY_DESIGN_RE.test(text)) {
+    score += 0.15;
+    found.push("named study design");
+  }
+  if (SAMPLE_SIZE_RE.test(text)) {
+    score += 0.1;
+    found.push("reported sample size");
+  }
+  if (STATISTICS_RE.test(text)) {
+    score += 0.1;
+    found.push("inferential statistics");
+  }
+  if (HEDGING_RE.test(text)) {
+    // Hedging is itself a legitimate signal (the source is honest about its
+    // own limits), not a penalty for bad writing — it still nudges the score
+    // down because it's evidence the claims are weaker, not because of tone.
+    score -= 0.1;
+    found.push("hedging language");
+  }
+
+  const clamp = (n: number) => Math.max(0, Math.min(1, n));
+  const why = found.length > 0 ? `abstract signals: ${found.join(", ")}` : "abstract present, no structural signals found";
+  return { score: clamp(score), why };
+}
+
 const INSTITUTIONAL_TLD = /\.(edu|gov|mil|ac\.[a-z]{2}|edu\.[a-z]{2}|gov\.[a-z]{2})$/i;
 const SCHOLARLY_HOST =
   /(^|\.)(jstor|plato\.stanford|nature|science|springer|wiley|cambridge|oup|tandfonline|sciencedirect|arxiv|philpapers|projectmuse|degruyter|brill)\./i;
@@ -179,6 +242,8 @@ export function assessCredibilityV3(
   opts: {
     relevance: number;
     evidenceStrength: number;
+    /** Optional rationale for evidenceStrength, e.g. from `structuralEvidenceStrength()` — included in the rationale string when present, matching every other dimension's `.why`. */
+    evidenceStrengthWhy?: string;
     creator?: CreatorIdentity;
   },
 ): CredibilityAssessmentV3 {
@@ -203,7 +268,7 @@ export function assessCredibilityV3(
     `publication rigor ${rigor.score.toFixed(2)} — ${rigor.why}`,
     `creator expertise ${expertise.score.toFixed(2)} — ${expertise.why}`,
     `host provenance ${host.score.toFixed(2)} — ${host.why}`,
-    `evidence strength ${dimensions.evidenceStrength.toFixed(2)}`,
+    `evidence strength ${dimensions.evidenceStrength.toFixed(2)}${opts.evidenceStrengthWhy ? ` — ${opts.evidenceStrengthWhy}` : ""}`,
     `relevance ${dimensions.relevance.toFixed(2)}`,
     `pedagogical value ${pedagogy.score.toFixed(2)} — ${pedagogy.why}`,
     popularity.value == null

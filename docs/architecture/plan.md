@@ -705,11 +705,13 @@ Pure-UI items above (annotation relationship/link display, annotation filter/sor
 
 ### 35.3 Reference-project-informed techniques (ideas only, no code reuse, never named)
 
-Four techniques adopted from prior-art research as starting points for implementation, interleaved into §35.2's work rather than built as a separate track:
-1. A cheap two-stage pre-filter ahead of the relevance gate's LLM calls, to bound cost further (maps onto `packages/research/src/relevance.ts`/`discover.ts`'s existing cost-gating).
-2. Deterministic evidence-strength scoring from structural cues (study design, sample size, effect size, p-value, hedging) where something is structurally checkable without an LLM call — compared against `credibilityV3.ts`'s evidence-strength dimension.
-3. Ideas about what makes a knowledge graph feel alive (degree-scaled sizing, hover tooltips) folded into §35.2's graph-richness item — still on `react-force-graph-3d`, no engine rewrite.
-4. Concurrent/parallel LLM calls per document where `apps/worker/src/analyze.ts`'s stages can safely run concurrently, adopted only on a measured win with no correctness risk (the shared `CostBudget` accounting needs a concurrency-safe update first).
+Four techniques surveyed from prior-art research as starting points, interleaved into §35.2's work rather than built as a separate track. **Outcome (2026-07-20), each independently audited against the shipped codebase before writing any code — one adopted, one already satisfied, two assessed and honestly declined:**
+1. **A cheap two-stage pre-filter ahead of the relevance gate's LLM calls — assessed, not applicable.** `relevance.ts`'s own header confirms the gate is already deterministic with no LLM call at all, so there's nothing to pre-filter ahead of; the real per-candidate cost (`classifyRelationship`/`synthesizeNote` in `apps/worker/src/analyze.ts`) is already capped and budget-gated.
+2. **Deterministic evidence-strength scoring from structural cues — adopted.** `evidenceStrength` turned out to be a binary snippet-presence heuristic, not an LLM judgment, so the "reduce LLM reliance" framing didn't apply — but the structural-cue scoring (study design, sample size, statistics, hedging, scoped to scholarly articles) is still a real, standalone improvement over the binary check, and is now live (`structuralEvidenceStrength()`, `credibilityV3.ts`).
+3. **Ideas about what makes a knowledge graph feel alive — already satisfied** by §35.2's graph-richness item (directional particles, hover-highlight, click-to-focus), which stayed on `react-force-graph-3d` with no engine rewrite as planned.
+4. **Concurrent/parallel LLM calls per document — assessed, not adopted.** Provider-level concurrency across discovery adapters already exists (`Promise.all` in `discover.ts`'s round loop) — the real remaining sequential stage is the per-candidate classification/credibility/note-synthesis/DB-write loop in `analyze.ts`, and parallelizing it would race the shared `CostBudget`'s check-then-charge pattern and risk non-deterministic write ordering across foreign-key-dependent inserts. Declined per this section's own caveat rather than forced.
+
+Full reasoning and verification for each: `docs/PROJECT-LOG.md`'s Phase 10 entry.
 
 ### 35.4 Acceptance gates
 
