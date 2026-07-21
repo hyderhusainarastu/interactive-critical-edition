@@ -5,7 +5,7 @@ import { defineConfig } from "@playwright/test";
  * Postgres) rather than spinning services up itself — the worker is a
  * separate long-running process Playwright's single `webServer` option
  * can't orchestrate alongside the web app and a live Postgres. See
- * CLAUDE.md "Commands" for how to start the full stack before running
+ * docs/PROJECT-LOG.md "Commands" for how to start the full stack before running
  * these. Wiring this into CI (which would need the worker running
  * alongside the existing Postgres service container) is a documented
  * follow-up, not yet done.

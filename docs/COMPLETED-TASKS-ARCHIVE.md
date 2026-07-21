@@ -1,14 +1,14 @@
 # Completed Tasks Archive — Interactive Critical Edition
 
-Full per-phase completed-task detail, moved out of `CLAUDE.md` on 2026-07-20 to keep that file within a manageable size for every session's context. This is a historical record — nothing here is load-bearing for resuming work; `CLAUDE.md`'s condensed "Completed Tasks" section plus "Current Implementation Status" are the authoritative current-state summary. Phase 9 sub-phases stay in `CLAUDE.md` directly since that work is still active.
+Full per-phase completed-task detail, moved out of `docs/PROJECT-LOG.md` on 2026-07-20 to keep that file within a manageable size for every session's context. This is a historical record — nothing here is load-bearing for resuming work; `docs/PROJECT-LOG.md`'s condensed "Completed Tasks" section plus "Current Implementation Status" are the authoritative current-state summary. Phase 9 sub-phases stay in `docs/PROJECT-LOG.md` directly since that work is still active.
 
 ## Completed Tasks
 
 **Phase 0:**
 - [x] Full implementation plan written and approved (`docs/architecture/plan.md`).
-- [x] ScholarLens inspected via GitHub API; license verdict recorded (no LICENSE file found).
-- [x] Filesystem case-sensitivity constraint on `CLAUDE.md`/`Claude.md` verified and documented.
-- [x] `git init`, `.gitignore`, `README.md`, `CLAUDE.md`, `.env.example` created and committed (`0b148b6`).
+- [x] Reference project inspected via GitHub API; license verdict recorded (no LICENSE file found).
+- [x] Filesystem case-sensitivity constraint on the project log's filename verified and documented.
+- [x] `git init`, `.gitignore`, `README.md`, `docs/PROJECT-LOG.md`, `.env.example` created and committed (`0b148b6`).
 - [x] Private GitHub repo created (`gh repo create --private --source=. --push`), initial commit pushed to `main`.
 - [x] `phase-0-complete` tag created and pushed.
 
@@ -114,7 +114,7 @@ Full per-phase completed-task detail, moved out of `CLAUDE.md` on 2026-07-20 to 
 - [x] Performance: 15 indexes (migration `0007`) on the hot filter/join columns (graph_edges by user+source / user+target, per-document reader + annotation tables, work/document by owner, Phase 5 profile tables). Applied local + prod.
 - [x] CI now runs the CI-safe E2E specs (landing/onboarding a11y + the authorization matrix — web + Postgres, no worker/live APIs) after build; verified green in CI. Analysis/reader/roadmap specs stay manual (documented).
 - [x] Recovery drill: materialized the `phase-5-complete` tag in a git worktree and confirmed it installs (`--frozen-lockfile`) and typechecks — a genuine restore point (plan §23 "restore from an earlier tagged checkpoint").
-- [x] README overhaul (feature overview, built stack + package list, test/E2E workflow); CLAUDE.md brought current.
+- [x] README overhaul (feature overview, built stack + package list, test/E2E workflow); docs/PROJECT-LOG.md brought current.
 - [x] Deployed: migration `0007` applied to prod; web + worker deployed; `/admin` live and auth-gated. `phase-7-complete` tag.
 - [ ] **Honest gaps (need real infra / manual effort, documented not silently skipped):** a *manual* screen-reader (VoiceOver) pass — only the automated axe scan (zero violations) was run; a k6 load test — indexes landed as the perf improvement but no load run; real Sentry — the seam is wired but no DSN is provisioned (structured local logging until then); a live DB backup/restore drill — Supabase's managed backups cover this and the git-checkpoint recovery was done, but a point-in-time DB restore wasn't exercised.
 

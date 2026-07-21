@@ -2,8 +2,12 @@
 .DS_Store
 Thumbs.db
 
-# Claude Code local settings (machine-specific, never shared)
+# Coding-assistant local settings (machine-specific, never shared)
 .claude/settings.local.json
+
+# Local pointer/mirror for tooling that expects a root-level CLAUDE.md;
+# the tracked project log lives at docs/PROJECT-LOG.md (see that file).
+/CLAUDE.md
 
 # Node
 node_modules/
@@ -41,6 +45,7 @@ test-results/
 .vercel/
 supabase/.temp/
 
-# ScholarLens reference clone — ideas only, no code reuse (no LICENSE upstream).
-# Kept locally for reference but never committed. See CLAUDE.md design decisions.
-ScholarLens-main/
+# Local reference project clone — architectural ideas only, never copied
+# code, kept only for local reference and never committed. See
+# docs/PROJECT-LOG.md design decisions for the license/attribution rationale.
+external-reference/

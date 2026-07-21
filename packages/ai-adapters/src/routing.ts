@@ -6,7 +6,7 @@ import type { TaskType } from "./types";
  * a task on eval-harness evidence (Phase 7), as a deliberate, documented
  * config change here — not silently at call time. Model IDs are
  * env-overridable so a catalog change doesn't require a code edit
- * (CLAUDE.md notes exact IDs get pinned at implementation time).
+ * (docs/PROJECT-LOG.md notes exact IDs get pinned at implementation time).
  */
 
 export type ProviderName = "openai" | "anthropic";

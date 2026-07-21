@@ -52,7 +52,7 @@ export const users = pgTable("user", {
   /**
    * Auth.js v5's Credentials provider requires the JWT session strategy —
    * database sessions only auto-wire for OAuth-style adapter flows (plan
-   * §14 assumed DB sessions; this is a recorded deviation, see CLAUDE.md).
+   * §14 assumed DB sessions; this is a recorded deviation, see docs/PROJECT-LOG.md).
    * Incrementing this invalidates every outstanding JWT for the user
    * (checked in the `jwt` callback), giving server-side "sign out
    * everywhere" / revocation-on-deletion without needing DB sessions.

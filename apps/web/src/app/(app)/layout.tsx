@@ -9,7 +9,7 @@ import { isAdminEmail } from "@/lib/admin";
  * Single, centralized auth check for every route under (app) — replaces
  * the Phase 1 pattern of checking auth() in each page individually,
  * per the "revisit once Phase 2 adds more protected pages" note in
- * CLAUDE.md. Still Node-runtime (not Edge middleware) since the
+ * docs/PROJECT-LOG.md. Still Node-runtime (not Edge middleware) since the
  * sessionVersion revocation check needs postgres.js.
  */
 export default async function AppLayout({

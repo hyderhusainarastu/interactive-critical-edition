@@ -32,7 +32,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   }),
   // Required by the Credentials provider — Auth.js only auto-wires
   // database sessions for OAuth-adapter flows. Revocability is instead
-  // handled via `users.sessionVersion`, checked below. See CLAUDE.md
+  // handled via `users.sessionVersion`, checked below. See docs/PROJECT-LOG.md
   // "Known Problems" for the full rationale (deviation from plan §14).
   session: { strategy: "jwt" },
   pages: {

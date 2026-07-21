@@ -79,7 +79,7 @@ jobs:
       # buildGraph() and the trash routes are pure DB reads/writes with no
       # AI pipeline involved at all). The analysis/reader/roadmap specs
       # still run manually against the full local stack (documented in
-      # CLAUDE.md).
+      # docs/PROJECT-LOG.md).
       - name: Install Playwright browser
         run: pnpm --filter web exec playwright install --with-deps chromium
 

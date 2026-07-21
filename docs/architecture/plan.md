@@ -2,16 +2,16 @@
 
 ## Context
 
-The user wants a production-quality web application that helps readers understand difficult scholarly works (philosophy, monographs, research articles) by automatically generating an "interactive critical edition": an annotated reader that surfaces explicit citations, implicit intellectual context, and secondary literature, then turns that into a personalized, priority-ranked reading roadmap. The working directory is empty (true greenfield, not yet a git repo). The user gave an extremely detailed 26-section specification; this plan's job is to turn that spec into a buildable architecture and phased roadmap without dropping any requirement, and to resolve the ambiguous points the spec explicitly asks to have resolved (stack choice, ScholarLens license analysis, etc.).
+The user wants a production-quality web application that helps readers understand difficult scholarly works (philosophy, monographs, research articles) by automatically generating an "interactive critical edition": an annotated reader that surfaces explicit citations, implicit intellectual context, and secondary literature, then turns that into a personalized, priority-ranked reading roadmap. The working directory is empty (true greenfield, not yet a git repo). The user gave an extremely detailed 26-section specification; this plan's job is to turn that spec into a buildable architecture and phased roadmap without dropping any requirement, and to resolve the ambiguous points the spec explicitly asks to have resolved (stack choice, reference-project license analysis, etc.).
 
 **Resolved via research and clarifying questions this session:**
 - GitHub repo name: `interactive-critical-edition`, created under `hyderhusainarastu` (already authenticated via `gh`), **private**.
 - Infra stack: **Vercel + Supabase + Render** (confirmed by user).
 - AI providers: **multi-provider from day one — OpenAI and Anthropic**, because the user already holds OpenAI credits and wants to use whichever is convenient per task, not pay twice for the same call.
 - Auth: **Auth.js (NextAuth) backed by our own Postgres tables**, not a managed auth vendor.
-- ScholarLens (`github.com/aakashshahani/ScholarLens`) has **no LICENSE file** — confirmed via `gh api repos/.../license` → 404, and `license: null` in the repo metadata — despite an MIT badge image in its README with no actual license text anywhere in the repo. Verdict: **treat as all-rights-reserved. No code or verbatim text will be copied.** Its publicly described architecture (FastAPI, Next.js, Supabase Postgres+pgvector, hybrid BM25+embedding retrieval, two-stage LLM-judge classification, claim-level provenance, evidence-strength scoring alongside LLM verdicts) is used only as **prior art for architectural ideas**, which is not a licensing concern.
-- Filesystem check on this machine: `touch CLAUDE_test.md && ls claude_test.md` succeeded → **this disk is case-insensitive APFS**. `CLAUDE.md` and `Claude.md` are the same directory entry here and cannot coexist as two distinct files. This is handled explicitly in §3 and §29 rather than silently dropped.
-- **3D knowledge-graph visualizer (added by explicit user request):** a dedicated, per-user, separate-tab 3D node-graph view of a work's relationships to other works, figures, concepts, and traditions — showing read/unread status and flagging missing links (referenced-but-unacquired works). This is reconciled with the brief's "avoid excessive 3D effects" instruction as follows: that instruction targets gratuitous decorative 3D (the landing page stays free of it, matching the brief's explicit contrast with ScholarLens); this is one deliberate, opt-in, purposeful data-visualization tool living behind login, not ambient UI chrome, and it is built restrained (damped camera, no forced auto-rotation, calm palette-consistent colors) with a non-3D fallback for accessibility (§20). Full design in §9, §16, §17, §19, §23 Phase 5.
+- A public reference project surveyed for prior art has **no LICENSE file** — confirmed via a GitHub API check (404 on the license endpoint, `license: null` in repo metadata) — despite an MIT badge image in its README with no actual license text anywhere in the repo. Verdict: **treat as all-rights-reserved. No code or verbatim text will be copied.** Its publicly described architecture (FastAPI, Next.js, Supabase Postgres+pgvector, hybrid BM25+embedding retrieval, two-stage LLM-judge classification, claim-level provenance, evidence-strength scoring alongside LLM verdicts) is used only as **prior art for architectural ideas**, which is not a licensing concern.
+- Filesystem check on this machine: creating a test file and reading it back under a different letter-case succeeded → **this disk is case-insensitive APFS**, so two variously-cased requested filenames are the same directory entry here and cannot coexist as distinct files. This is handled explicitly in §3 and §29 rather than silently dropped.
+- **3D knowledge-graph visualizer (added by explicit user request):** a dedicated, per-user, separate-tab 3D node-graph view of a work's relationships to other works, figures, concepts, and traditions — showing read/unread status and flagging missing links (referenced-but-unacquired works). This is reconciled with the brief's "avoid excessive 3D effects" instruction as follows: that instruction targets gratuitous decorative 3D (the landing page stays free of it, matching the brief's explicit contrast with the reference project surveyed in §4); this is one deliberate, opt-in, purposeful data-visualization tool living behind login, not ambient UI chrome, and it is built restrained (damped camera, no forced auto-rotation, calm palette-consistent colors) with a non-3D fallback for accessibility (§20). Full design in §9, §16, §17, §19, §23 Phase 5.
 - **Cost constraint (explicit design constraint, not a soft preference):** optimize for lowest cost at current (single-user) scale, on both infrastructure and AI-token spend equally, accepting that some service tiers may need upgrading later as usage grows. The user explicitly does **not** want to trade this for less dev/ops burden — managed services (Vercel/Supabase/Render) stay as decided; the savings come from *tier* and *routing* choices, not from self-hosting. No fixed dollar ceiling was given, so this plan optimizes structurally (cheapest viable tier per service, cheapest-by-default model routing, aggressive caching) and surfaces actual spend via the admin cost dashboard (§20/§22) so the user can set a real ceiling once they see real numbers. This reshapes §5, §11, and §22 below.
 
 ---
@@ -32,7 +32,7 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 
 | Brief §  | Topic | Covered in |
 |---|---|---|
-| 1 | CLAUDE.md / Claude.md init | §3 (assumption), §23 Phase 0, §29, §30 |
+| 1 | Project log init | §3 (assumption), §23 Phase 0, §29, §30 |
 | 2 | GitHub repo, git hygiene, checkpoints | §23 (every phase), §29, §30 |
 | 3–4 | Core concept, Heidegger/Vico examples | §1, §13 (roadmap algorithm uses these as test cases), §25 risk R1 |
 | 5 | 10 relationship categories, evidence/confidence/provenance | §12 |
@@ -56,18 +56,19 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 23 | Privacy, copyright, ethics | §15 |
 | 24 | Implementation phases | §23 |
 | 25 | This planning document itself | entire document |
-| 26 | Working rules post-approval | §30, and restated in CLAUDE.md itself |
+| 26 | Working rules post-approval | §30, and restated in docs/PROJECT-LOG.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 10, §31 |
-| — | *Redefined 2026-07-19:* Phase 9 = Interactive Learning Workspace (learner levels, passage-anchored annotations, Library, curriculum, graph, trash) | §23 Phase 9, §34 |
+| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 11, §31 |
+| — | *Redefined 2026-07-19, completed 2026-07-20:* Phase 9 = Interactive Learning Workspace, sub-phases 9.1–9.7 (9.8 "Comprehensive dossier" retired as a phantom requirement — never enumerated anywhere it was referenced by count — before implementation) | §23 Phase 9, §34 |
+| — | *Added 2026-07-20:* Phase 10 = Workspace Depth & Adaptivity Completion (closes the concrete gaps 9.1–9.7 left in Phase 9's own original objective, rather than inventing new scope) | §23 Phase 10, §35 |
 | — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
 
 ## 3. Assumptions and Resolved/Open Decisions
 
-**Resolved this session (see Context):** repo name, infra stack, AI providers, auth approach, ScholarLens license verdict, CLAUDE.md/Claude.md filesystem constraint.
+**Resolved this session (see Context):** repo name, infra stack, AI providers, auth approach, reference-project license verdict, project-log filesystem-casing constraint.
 
 **Assumptions made to keep the spec buildable (flagged per the instruction to document and preserve intent):**
-- "Claude.md compatibility copy" — since this OS is case-insensitive, a byte-identical second file is impossible locally. Resolution: `CLAUDE.md` is canonical and the only physical file on this machine; a short note inside `CLAUDE.md` documents the constraint. If the repo is ever cloned onto a case-sensitive filesystem (Linux CI, most Docker containers, or a case-sensitive APFS volume), a `Claude.md` symlink to `CLAUDE.md` can be added there safely — this is recorded as a documented, non-blocking gap rather than silently skipped.
+- The originally requested second, differently-cased copy of the project log — since this OS is case-insensitive, a byte-identical second file under a different case is impossible locally. Resolution: one canonical file (`docs/PROJECT-LOG.md`) is used; a short note inside it documents the constraint. If the repo is ever cloned onto a case-sensitive filesystem (Linux CI, most Docker containers, or a case-sensitive APFS volume), a same-content symlink under the alternate casing can be added there safely — this is recorded as a documented, non-blocking gap rather than silently skipped.
 - Embeddings: use **OpenAI `text-embedding-3-small`** (cheap, good enough, spends down existing credits) via `pgvector`, with the adapter layer allowing a swap to Anthropic-compatible or open-source embeddings later. Not a hard requirement in the brief, but needed to implement §11/§13.
 - Object storage for uploads: **Supabase Storage** (S3-compatible, bundled with the chosen Supabase plan) rather than raw AWS S3, to keep the infra surface to the three chosen platforms.
 - Background jobs: **pg-boss** (Postgres-backed job queue) rather than adding Redis/BullMQ, since Postgres is already the system of record — one fewer moving part, runs as a Node worker service on Render.
@@ -77,11 +78,11 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 - Error monitoring: **Sentry** (frontend + worker), chosen for first-class Next.js and Node support.
 - These are all swappable — every external integration in §11 sits behind an adapter interface per the brief's explicit requirement that AI providers (and by extension other vendors) must be replaceable.
 
-**Genuinely open, deferred to Phase 0/1 rather than blocking planning approval** (small, non-architectural, will be resolved in CLAUDE.md as they're decided):
-- Exact OpenAI/Anthropic model IDs to pin (will use latest available small/large tiers at implementation time and record the exact IDs used in CLAUDE.md, since model catalogs change).
+**Genuinely open, deferred to Phase 0/1 rather than blocking planning approval** (small, non-architectural, will be resolved in docs/PROJECT-LOG.md as they're decided):
+- Exact OpenAI/Anthropic model IDs to pin (will use latest available small/large tiers at implementation time and record the exact IDs used in docs/PROJECT-LOG.md, since model catalogs change).
 - Whether social login (Google) is enabled in MVP or added post-MVP — recommendation: defer to post-MVP, ship email/password first, since it's explicitly "optional" in the brief.
 
-## 4. ScholarLens Analysis
+## 4. Reference Project Analysis
 
 **Reusable ideas (patterns, not code):**
 - Two-stage retrieval (cheap lexical/BM25 filter → expensive LLM judge only on survivors) — directly applicable to our relationship-classification pipeline (§11) to control AI cost, matching the brief's cost-tiering requirement.
@@ -94,7 +95,7 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 - FastAPI backend — this plan uses Next.js API routes + a Node worker instead, to keep one language (TypeScript) across the stack per the brief's "TypeScript throughout" suggestion, which this plan adopts.
 - Their claim-graph-only model (paper-vs-paper contradiction detection) is narrower than what's needed here — this product needs a general-purpose prerequisite/context graph across works, authors, concepts, and editions, not just claim contradiction between papers.
 - Any literal code, prompts, SQL, or config files — **not inspected file-by-file and not to be copied**, since there is no license granting reuse. If the user later obtains written permission from the author, this can be revisited.
-- Its "agentic" framing / heavy custom force-directed graph JS — this plan uses a restrained, non-3D graph visualization per the brief's explicit instruction to avoid ScholarLens's excessive 3D effects.
+- Its "agentic" framing / heavy custom force-directed graph JS — this plan uses a restrained, non-3D graph visualization per the brief's explicit instruction to avoid that reference project's excessive 3D effects.
 
 ## 5. Recommended Stack
 
@@ -266,7 +267,7 @@ interface EmbeddingProvider {
 ```
 Concrete `OpenAIProvider` and `AnthropicProvider` implementations; a routing config (`config/ai-routing.ts`) maps `TaskType` (e.g., `metadata_extraction`, `citation_parse`, `relationship_classification`, `roadmap_synthesis`) to a provider+model tier. Per the explicit cost constraint (§3), the default routing is **cheapest-tier-first for every task type**, including relationship classification and roadmap synthesis — a stronger/pricier model is only promoted for a task if eval-harness accuracy (§21) on that task is unacceptable at the cheap tier, and that promotion is a deliberate, documented config change, not a default assumption. This is stricter than a generic "cheap for routine, strong for hard" split: it starts everything cheap and only spends more where evidence shows it's needed.
 
-**Two-stage relationship discovery** (adapted idea from ScholarLens, not code): 
+**Two-stage relationship discovery** (an idea adapted from prior-art research, not code): 
 1. Cheap stage — embedding similarity + BM25-style lexical match between the primary text's passages/entities and candidate background works/concepts, producing a shortlist.
 2. Expensive stage — LLM classifies each shortlisted candidate into one of the 10 relationship categories (§12) with a rationale and confidence, run only on survivors of stage 1 to control cost.
 
@@ -312,7 +313,7 @@ Every `annotations` row (§9) carries, per brief §5/§12:
 - **Uploads are untrusted input**: scanned for malware, size-capped, MIME-sniffed (not trusted by extension), parsed by sandboxed/library-level parsers (not shelling out to arbitrary converters), and any text extracted from them is never directly interpolated into an LLM system prompt unescaped — treated as data, with the prompt structure designed to resist prompt injection embedded in document text (brief explicitly calls this out).
 - **Tenant isolation**: every query for user-owned data is scoped by `user_id`; automated authorization tests (§21) assert one user's documents/annotations/notes are unreachable by another user's session, including by direct object id guessing.
 - **Copyright**: the platform never attempts to bypass paywalls or source copyrighted text itself. For works it can't obtain, it stores a proper citation + legitimate acquisition pointer (library/purchase link where known) and lets the user upload their own legally obtained copy; roadmap generation continues without the full text, marking those items "not directly inspected" (brief §11).
-- **AI data handling**: use each provider's zero/no-training-retention API tier where available (OpenAI and Anthropic both offer API-tier data-use terms distinct from consumer products); document in CLAUDE.md exactly what is/isn't sent and retained. Uploaded content is never used to train models without explicit, separate, informed opt-in consent (brief §12/§23) — default is opt-out.
+- **AI data handling**: use each provider's zero/no-training-retention API tier where available (OpenAI and Anthropic both offer API-tier data-use terms distinct from consumer products); document in docs/PROJECT-LOG.md exactly what is/isn't sent and retained. Uploaded content is never used to train models without explicit, separate, informed opt-in consent (brief §12/§23) — default is opt-out.
 - **Deletion**: account deletion cascades to uploaded files (Storage), extracted text, embeddings, and derived annotations — not just the account row. A deletion job (worker) performs and verifies the cascade, tested explicitly (§21).
 - **Data export**: user can export their notes, roadmap, bibliography, and account data (brief §14/§19).
 - **Audit log**: privileged admin access to any user content is logged with a justification field, and admins do not get blanket content access — support tooling surfaces metadata/status by default, with content access requiring an explicit, logged action (brief §20).
@@ -392,7 +393,7 @@ Warm, calm, scholarly, contemporary — not faux-antique. Base tokens (light mod
 - Selection/highlight: subdued gold/ochre.
 - Annotation-category colors: a distinct, accessible qualitative palette for the 10 relationship categories, each paired with a unique icon so category is never color-only (WCAG requirement). **The `dataviz` skill's categorical-palette method will be used at implementation time** to derive and validate this 10-color set for contrast and light/dark parity, rather than hand-picking colors now.
 - Dark mode and distraction-reduced mode are token overrides of the same system, not a separate design.
-- Motion: restrained — hover/focus transitions, gentle expand/collapse for annotation cards, no parallax-heavy or 3D landing-page effects (explicit brief instruction, and explicit contrast with ScholarLens). **Exception, by explicit later request:** the dedicated 3D knowledge-graph visualizer (§9/§16/§17) is a real, purposeful 3D tool — but even there, motion stays restrained: damped/inertia-limited camera controls, no forced auto-rotation, node/edge colors drawn from the same palette and category coding as the reader's annotations (not a separate visual language), and it lives behind an explicit tab the user chooses to open, not on the landing page or embedded ambiently in the reader.
+- Motion: restrained — hover/focus transitions, gentle expand/collapse for annotation cards, no parallax-heavy or 3D landing-page effects (explicit brief instruction, and explicit contrast with the reference project surveyed in §4). **Exception, by explicit later request:** the dedicated 3D knowledge-graph visualizer (§9/§16/§17) is a real, purposeful 3D tool — but even there, motion stays restrained: damped/inertia-limited camera controls, no forced auto-rotation, node/edge colors drawn from the same palette and category coding as the reader's annotations (not a separate visual language), and it lives behind an explicit tab the user chooses to open, not on the landing page or embedded ambiently in the reader.
 
 ## 20. Accessibility Strategy
 
@@ -417,12 +418,12 @@ Vercel auto-deploys the Next.js app from `main` (with preview deployments per PR
 
 ## 23. Phased Implementation Roadmap
 
-Each phase: objective, tasks, dependencies, deliverables, tests, definition of done, git checkpoint, CLAUDE.md updates. Every phase ends with a pushed, tagged commit (`git tag phase-N-complete`) recorded in CLAUDE.md's changelog.
+Each phase: objective, tasks, dependencies, deliverables, tests, definition of done, git checkpoint, docs/PROJECT-LOG.md updates. Every phase ends with a pushed, tagged commit (`git tag phase-N-complete`) recorded in docs/PROJECT-LOG.md's changelog.
 
 **Phase 0 — Research & Planning (this document + first execution actions)**
-- Tasks: this plan; ScholarLens inspection (done); create GitHub repo (private); scaffold monorepo; write `CLAUDE.md` (+ documented Claude.md constraint); `README.md`; `.gitignore`; `.env.example`.
+- Tasks: this plan; reference-project license inspection (done); create GitHub repo (private); scaffold monorepo; write `docs/PROJECT-LOG.md` (+ documented filesystem-casing constraint); `README.md`; `.gitignore`; `.env.example`.
 - Deliverables: initialized private GitHub repo with governance files committed.
-- DoD: `git log` shows an initial commit on `main`, pushed; CLAUDE.md accurately describes repo state.
+- DoD: `git log` shows an initial commit on `main`, pushed; docs/PROJECT-LOG.md accurately describes repo state.
 
 **Phase 1 — Foundation**
 - Tasks: Next.js scaffold, Tailwind + design tokens, Drizzle schema + first migration (users, sessions, verification_tokens), Auth.js credentials flow + email verification + reset, base app shell/layout, Supabase project provisioning, Storage bucket + access policy, structured logging + Sentry wiring, GitHub Actions CI (lint/typecheck/unit tests).
@@ -462,10 +463,10 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - DoD: an unauthenticated visitor can understand the product's value from the landing page alone and complete signup→first upload without confusion (manually validated, not just automated).
 
 **Phase 7 — Hardening and Deployment**
-- Tasks: full security review (authz test matrix, upload fuzzing, prompt-injection resistance check on uploaded-text handling), accessibility review (manual screen-reader pass), performance pass (k6 load test, large-document ingestion benchmark), AI eval harness full run + gate, backup/restore drill, admin dashboard (§20) completion, production monitoring dashboards, full documentation pass in CLAUDE.md/README, a real recovery test restoring from an earlier tagged GitHub checkpoint.
+- Tasks: full security review (authz test matrix, upload fuzzing, prompt-injection resistance check on uploaded-text handling), accessibility review (manual screen-reader pass), performance pass (k6 load test, large-document ingestion benchmark), AI eval harness full run + gate, backup/restore drill, admin dashboard (§20) completion, production monitoring dashboards, full documentation pass in docs/PROJECT-LOG.md/README, a real recovery test restoring from an earlier tagged GitHub checkpoint.
 - Dependencies: all prior phases.
 - Tests: everything in §21 run end-to-end.
-- DoD: the recovery drill succeeds, all Phase 0–6 acceptance criteria still pass, and CLAUDE.md fully reflects shipped state.
+- DoD: the recovery drill succeeds, all Phase 0–6 acceptance criteria still pass, and docs/PROJECT-LOG.md fully reflects shipped state.
 
 **Phase 8 — Critical Edition Recovery, Autonomous Research & Public-Source Discovery (redefined; runs after Phase 7)**
 - Objective: transform the app into a reliable, largely autonomous critical-edition generator. Uploading a PDF leads — with no manual refresh and no unnecessary metadata form — to page-aware extraction, automatic title/author, anchored authorial footnotes, resolved explicit + implied references, broad credibility-aware research across scholarly/web/social sources, and traceable critical notes, under a cost ceiling.
@@ -473,16 +474,22 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Dependencies: Phases 0–7 (repairs and extends the shipped pipeline).
 - DoD: autonomous upload→edition with no manual refresh; *Vice and Reason* acceptance tests pass (≥95% explicit-citation recall, *Nicomachean Ethics* as essential background, all configured providers queried-or-reported-unavailable, weak sources separated, generated≠authorial, every factual claim traceable, no fabricated data); failed reprocess preserves the last edition; `phase-8-complete` tagged.
 
-**Phase 9 — Interactive Learning Workspace (redefined 2026-07-19; full detail in §34)**
+**Phase 9 — Interactive Learning Workspace (redefined 2026-07-19; complete 2026-07-20; full detail in §34)**
 - Objective: turn the published critical edition into a workspace that adapts to the reader's level without ever hiding depth — passage-anchored annotations, a Library of every recommended source, curriculum routes, an entity-rich knowledge graph, and safe deletion.
-- Tasks: sub-phases 9.1–9.8 behind `ANALYSIS_PIPELINE=v3`, v2 retained as rollback. See §34.
+- Tasks: sub-phases 9.1–9.7 behind `ANALYSIS_PIPELINE=v3`, v2 retained as rollback. See §34. (The originally planned 9.8 "Comprehensive dossier" was retired before implementation — an exhaustive repo-wide search found its "14 modules" referenced by count everywhere and enumerated nowhere, and given the real AI-spend stakes attached to it, guessing at scope was rejected in favor of retiring it. Phase 9's own original objective — full-depth adaptivity — is completed instead by Phase 10 below.)
 - Dependencies: Phase 8 complete (`phase-8-complete`, 2026-07-20).
-- DoD: see §34 acceptance gates; `phase-9-complete` tagged.
+- DoD: see §34 acceptance gates; `phase-9-complete` tagged. **Met.**
 
-**Phase 10 — Educational Companion Site (added by explicit user request, runs after Phase 9)**
-- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–9 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 10 itself (no infinite regress).
-- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–9, content sourced primarily from this repo's own `CLAUDE.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
-- Dependencies: all of Phases 0–9 complete (it teaches what was actually built, not a plan).
+**Phase 10 — Workspace Depth & Adaptivity Completion (added 2026-07-20; full detail in §35)**
+- Objective: complete Phase 9's own original objective — turn the published critical edition into a workspace that adapts to the reader's level without ever hiding depth — passage-anchored annotations, a Library of every recommended source, curriculum routes, an entity-rich knowledge graph, and safe deletion — by closing the concrete gaps sub-phases 9.1–9.7 left open, rather than inventing new scope in their place.
+- Tasks: see §35 for the full feature-by-feature audit and scope (annotation relationship/source linking, annotation filter/sort, Library reader-level default-scoping, 3D graph visual richness, a suggested-reader-level nudge, and jargon/terminology-extraction tightening).
+- Dependencies: Phase 9 complete (`phase-9-complete`, 2026-07-20).
+- DoD: see §35 acceptance gates; `phase-10-complete` tagged.
+
+**Phase 11 — Educational Companion Site (added by explicit user request, runs after Phase 10; renumbered from Phase 10 on 2026-07-20)**
+- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–10 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 11 itself (no infinite regress).
+- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–10, content sourced primarily from this repo's own `docs/PROJECT-LOG.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
+- Dependencies: all of Phases 0–10 complete (it teaches what was actually built, not a plan).
 - Deliverables: a deployed, independent, publicly reachable tutorial site with one chapter per phase plus an intro and retrospective.
 - Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual repo's code/history at time of writing.
 - DoD: someone with no prior context could follow the site from Chapter 1 onward and understand, and largely reproduce, the architecture and decisions of the main project.
@@ -541,7 +548,7 @@ interactive-critical-edition/
     architecture/           # this plan, ADRs, diagrams
   .github/workflows/        # CI: lint, typecheck, unit, integration, Playwright, axe
   docker-compose.yml         # local Postgres+pgvector for dev
-  CLAUDE.md                  # canonical project memory (see §30 for the Claude.md note)
+  docs/PROJECT-LOG.md                  # canonical project memory (see §30 for the filesystem-casing note)
   README.md
   .env.example
   .gitignore
@@ -552,27 +559,27 @@ interactive-critical-edition/
 In order, each its own small commit:
 1. `gh repo create interactive-critical-edition --private --source=. --description "..."` (after `git init` and the files below exist locally) — or `git init` first, then `gh repo create` with `--source=.` to link.
 2. `.gitignore` (Node/Next.js/env/OS-file coverage).
-3. `README.md` (project description, setup instructions placeholder, links to CLAUDE.md).
-4. `CLAUDE.md` — full canonical file per the brief's required contents (purpose, functional requirements summary, architecture, design decisions + rationale, implementation status = "Phase 0 complete," completed/remaining tasks, known gaps including the documented Claude.md case-insensitivity constraint, DB/API decisions, run/test/build/migrate/deploy commands [placeholders until Phase 1 scaffolds them], required env vars by name only, changelog with today's entry, "how to resume" instructions).
+3. `README.md` (project description, setup instructions placeholder, links to docs/PROJECT-LOG.md).
+4. `docs/PROJECT-LOG.md` — full canonical file per the brief's required contents (purpose, functional requirements summary, architecture, design decisions + rationale, implementation status = "Phase 0 complete," completed/remaining tasks, known gaps including the documented filesystem case-insensitivity constraint, DB/API decisions, run/test/build/migrate/deploy commands [placeholders until Phase 1 scaffolds them], required env vars by name only, changelog with today's entry, "how to resume" instructions).
 5. `.env.example` (variable names only: `DATABASE_URL`, `SUPABASE_*`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `AUTH_SECRET`, `RESEND_API_KEY`, `SENTRY_DSN`, etc. — no values).
-6. Commit all of the above: "Initial project governance: CLAUDE.md, README, env template."
+6. Commit all of the above: "Initial project governance: docs/PROJECT-LOG.md, README, env template."
 7. Push to `origin main`.
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Educational Companion Site (Phase 10 detail — renumbered from Phase 9 on 2026-07-19)
+## 31. Educational Companion Site (Phase 11 detail — renumbered from Phase 9 on 2026-07-19, then from Phase 10 on 2026-07-20)
 
-**Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened Phase-7 deployment. It documents everything done in Phases 0–7 of this plan; it does not document its own creation.
+**Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened deployment. It documents everything done in Phases 0–10 of this plan; it does not document its own creation.
 
 **Location and independence:** a new sibling folder next to this project (e.g. `/Users/hyderhusainarastu/Documents/interactive-critical-edition-course`), with its own `git init`, its own new private-or-public GitHub repo (recommend **public** at Phase 8 kickoff, since the content is generic educational material with no user data, scholarly uploads, or secrets in it — but this is a recommendation to confirm with the user at that time, not decided now), and its own deploy — fully decoupled from `interactive-critical-edition`'s codebase, history, and hosting.
 
 **Stack:** Astro + Starlight (MIT-licensed, purpose-built for chaptered docs/tutorial content — sidebar navigation, search, code blocks, versioning — out of the box), deployed as a static site to a free tier (Vercel free/GitHub Pages), consistent with the cost constraint (§3) since this site has no backend, no database, and no AI calls of its own.
 
-**Content sourcing strategy:** rather than reconstructing the build narrative from memory at the very end, each chapter is drafted from that phase's own entry in `interactive-critical-edition`'s `CLAUDE.md` changelog/decision log — which the working rules already require to be updated after every meaningful step (brief §1/§26). This means Phase 8 is genuinely a synthesis-and-polish pass at the end, not a parallel documentation effort competing with the main build for time; the raw material already exists by the time Phase 8 starts.
+**Content sourcing strategy:** rather than reconstructing the build narrative from memory at the very end, each chapter is drafted from that phase's own entry in `interactive-critical-edition`'s `docs/PROJECT-LOG.md` changelog/decision log — which the working rules already require to be updated after every meaningful step (brief §1/§26). This means Phase 8 is genuinely a synthesis-and-polish pass at the end, not a parallel documentation effort competing with the main build for time; the raw material already exists by the time Phase 8 starts.
 
 **Chapter structure (mirrors §23's phases):**
 0. Introduction — the problem (the Heidegger/Vico framing from the original brief), what gets built, how to use the course.
-1. Planning & governance — how the plan itself was built, CLAUDE.md/GitHub setup.
+1. Planning & governance — how the plan itself was built, docs/PROJECT-LOG.md/GitHub setup.
 2. Foundation — auth, scaffolding, CI.
 3. Upload & ingestion pipeline.
 4. The reader and annotation system.
@@ -589,8 +596,8 @@ In order, each its own small commit:
 
 ## Verification
 
-- Phase 0 is verified by: `git log` on GitHub showing the pushed initial commit, the repo visible as private under `hyderhusainarastu/interactive-critical-edition`, and CLAUDE.md content matching actual repo state.
-- Each subsequent phase is verified per its DoD line in §23 — run the relevant app flow manually plus the automated test suite for that phase, not typecheck alone, before marking the phase complete in CLAUDE.md.
+- Phase 0 is verified by: `git log` on GitHub showing the pushed initial commit, the repo visible as private under `hyderhusainarastu/interactive-critical-edition`, and docs/PROJECT-LOG.md content matching actual repo state.
+- Each subsequent phase is verified per its DoD line in §23 — run the relevant app flow manually plus the automated test suite for that phase, not typecheck alone, before marking the phase complete in docs/PROJECT-LOG.md.
 
 ## 33. Phase 8 — Critical Edition Recovery, Autonomous Research & Public-Source Discovery (approved plan)
 
@@ -615,9 +622,9 @@ In order, each its own small commit:
 
 ---
 
-## 34. Phase 9 — Interactive Learning Workspace (approved plan)
+## 34. Phase 9 — Interactive Learning Workspace (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, not started. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 10 (§31). This section is the plan of record; `CLAUDE.md`'s changelog remains the record of what actually shipped.
+**Status:** approved 2026-07-20, **complete 2026-07-20** — sub-phases 9.1–9.7 shipped and canary-verified/production-applied, tagged `phase-9-complete`. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 11 (§31). This section is the plan of record; `docs/PROJECT-LOG.md`'s changelog remains the record of what actually shipped. **9.8 "Comprehensive dossier" was retired before implementation** (see §34.2/§34.4 note below) — Phase 9's own original objective is completed instead by Phase 10 (§35).
 
 ### 34.1 Objective
 
@@ -625,7 +632,7 @@ Phase 8 produced a trustworthy critical edition: relevant sources, honest credib
 
 ### 34.2 Delivery shape
 
-Sub-phases **9.1–9.8**, each committed, pushed and verified before the next begins, gated behind **`ANALYSIS_PIPELINE=v3`** with v2 retained as rollback. **Core edition first**; the 14-module Comprehensive dossier is deferred to 9.8 so canary runs cost cents, not $3–10, while the pipeline is still moving.
+Sub-phases **9.1–9.7**, each committed, pushed and verified before the next begins, gated behind **`ANALYSIS_PIPELINE=v3`** with v2 retained as rollback. **Core edition first**, so canary runs cost cents, not dollars, while the pipeline is still moving. *(Originally planned as 9.1–9.8, with a 14-module "Comprehensive dossier" deferred to 9.8. Retired before implementation: an exhaustive grep across this plan, the project log, and the changelog found the "14 modules" referenced by count everywhere and enumerated nowhere, and given the real AI-spend stakes attached to it, guessing at scope was rejected in favor of retiring it outright. Phase 9's own original objective — full-depth adaptivity without hiding anything — is completed instead by Phase 10, §35.)*
 
 > **Known trap.** `ANALYSIS_PIPELINE` is compared by exact equality today (`=== "v2"` in `apps/worker/src/index.ts`, `!== "v2"` in `apps/web/src/app/api/works/[workId]/reprocess/route.ts`). Setting `v3` would silently fall back to v1 *and* disable the reprocess route. Replace both with a version-aware helper in 9.1, before anything else.
 
@@ -653,16 +660,57 @@ Sub-phases **9.1–9.8**, each committed, pushed and verified before the next be
 - **9.5 Library & work grouping.** Split `/works` (uploads) from `/library` (recommended sources), with the spec's tabs, filters, sorts and reading states. Nav: Dashboard · Works · Library · Graph · Upload.
 - **9.6 Curriculum & study guide.** Five stages; minimal / university / graduate routes; acyclic dependencies; per-item rationale, time, difficulty and checkpoint. Completed items become review-only rather than disappearing.
 - **9.7 Graph, trash, cost UI.** Graph nodes extended to concepts/people/traditions/debates/sections, filters persisted in the URL and **identical** across the 3D scene and the accessible table. 30-day work trash with restore and idempotent purge. Cost estimate and actual, per run and per module, with hard stops.
-- **9.8 Comprehensive dossier (deferred).** The 14 modules, gated by the $8 warning and the $20 confirmed ceiling.
+
+**9.8 retired before implementation** — see §34.2. Phase 9's own original objective (§34.1) is completed instead by Phase 10, §35.
 
 ### 34.5 Cost posture
 
-Core edition ~$0.50–2/run, hard cap $5. Comprehensive $3–10, warn at $8, user-confirmed ceiling $20. No call begins if its projected maximum crosses the cap — reuse `canAfford()`.
+Core edition ~$0.50–2/run, hard cap $5. No call begins if its projected maximum crosses the cap — reuse `canAfford()`. *(The Comprehensive-dossier cost tier — $3–10, warn at $8, user-confirmed ceiling $20 — was specific to the retired 9.8 and no longer applies; see §34.2.)*
 
 ### 34.6 Acceptance gates
 
-Every passage annotation has a valid anchor · Reader/Library/Curriculum/Graph share canonical IDs · 3D and accessible-table filters yield identical sets · relevant expert lectures accepted and correctly labelled "not peer-reviewed" · unrelated popular media rejected · anonymous comments never solely support a factual claim · reader state survives reload · Library status changes immediately affect Curriculum and Graph · cost warnings and hard stops fire · trash/restore/purge retry-safe · **a failed v3 publish leaves the previous edition served** · then tag `phase-9-complete`.
+Every passage annotation has a valid anchor · Reader/Library/Curriculum/Graph share canonical IDs · 3D and accessible-table filters yield identical sets · relevant expert lectures accepted and correctly labelled "not peer-reviewed" · unrelated popular media rejected · anonymous comments never solely support a factual claim · reader state survives reload · Library status changes immediately affect Curriculum and Graph · cost warnings and hard stops fire · trash/restore/purge retry-safe · **a failed v3 publish leaves the previous edition served** · then tag `phase-9-complete`. **All met, 2026-07-20.**
 
 ### 34.7 Testing
 
 Pure logic unit-tested offline; the pipeline proven by canary — the Phase 8 pattern that caught seven defects unit tests could not. E2E stays **seeded and CI-safe** (no worker, GROBID or API spend), as `apps/web/e2e/edition.spec.ts` demonstrates. Canary from the private `eval-fixtures` Irwin PDF, then an owner-only production canary, **purging production after every run**.
+
+---
+
+## 35. Phase 10 — Workspace Depth & Adaptivity Completion (approved plan)
+
+**Status:** approved 2026-07-20, in progress. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 (Educational Companion Site) is renumbered Phase 11 (§23, §31).
+
+### 35.1 Objective
+
+*"Turn the published critical edition into a workspace that adapts to the reader's level without ever hiding depth — passage-anchored annotations, a Library of every recommended source, curriculum routes, an entity-rich knowledge graph, and safe deletion."* (§34.1/§23 Phase 9's own original wording.) Sub-phases 9.1–9.7 built the mechanisms; Phase 10 closes the concrete gaps that remain between what those mechanisms do today and that full objective.
+
+### 35.2 Scope, audited against the shipped codebase rather than guessed
+
+| Requirement | Current state (9.1–9.7) | Phase 10 action |
+|---|---|---|
+| Reader shows clickable highlights/markers explaining terms, jargon, foreign concepts, moves, arguments, claims | Built (9.3): `passage_annotation`, inline collapsed/expandable notes in `EditionReader.tsx`, `annotationType` enum incl. `definition`/`clarification` | Verify the extraction prompt (`packages/research/src/passageAnnotations.ts`) actually targets terminology/jargon explicitly, not just general passage commentary — tighten if it's under-indexing on definitions |
+| Sources classified by credibility, type, relevance | Built (9.2a/9.2b): separated credibility dimensions, `resourceType`, `resource_role.confidence` | None — already correct |
+| 10 relationship categories (background/context, similar argument, influenced-by, influenced, explanation, etc.) | Built (Phase 4/9.1): `relationship_category` enum, reused everywhere | None |
+| Annotations show which text/source they relate to and how, with a link | Gap: `PassageAnnotationNote` renders type/level/confidence/summary/explanation/quote but never surfaces `relationship` or `relatedResourceId`, even though both are already fetched | Add the relationship label + a link to the related resource (when set) to the existing card — no new schema, no new AI call, pure UI |
+| Filter/sort annotations by type, topic, relevance, credibility | Gap: `AnnotationsPanel.tsx` only has a `showHidden` toggle, no filter/sort at all, unlike Library | Add filter/sort controls mirroring `LibraryView.tsx`'s established pattern |
+| Library sources default-scoped to reader level (not just an optional filter) | Gap: Library's reader-level control is an optional filter dropdown; Roadmap/Curriculum already default-scope-then-offer-"show all" | Bring Library's reader-level behavior in line with Roadmap/Curriculum's established default-then-override pattern |
+| Reading behavior (read/reading/to-read/not-interested) gauges reader's knowledge level | Partial: `concept_mastery` already infers from completed prerequisite works (9.4); no broader "suggest a reader level from aggregate Library behavior" exists | New: a suggested-level nudge derived from Library completion patterns — surfaced as a suggestion the reader can accept or ignore, never a silent overwrite (same precedent as 9.4's mastery precedence chain) |
+| 3D graph made visually rich, interactive, effect-heavy; node filtering | Filtering: built (9.7). Visual richness: deliberately restrained per an earlier design decision this explicitly reverses | Add directional link particles, hover-highlight of the neighbor subgraph, click-to-focus camera fly-to, richer node materials — still driven by the same palette tokens, so meaning doesn't drift, only presentation does. The accessible table stays an equal, unchanged fallback |
+| Every view shows how a source relates to the main/focus work | Partial — Library has "recommended for" chips; Graph has the primary node; Curriculum is inherently per-work | Small audit/polish pass: a consistent "primary work" badge/anchor treatment across Library, Graph, and Curriculum |
+| Upload any work, build competency with no prior knowledge | Already the whole product's premise (Phase 0 brief); Phase 10 is in service of this, not a discrete task | — |
+| Convenient UI throughout | Ongoing | Applied per-feature above, not a separate task |
+
+Pure-UI items above (annotation relationship/link display, annotation filter/sort, Library default-scoping, graph visual richness) need no migration and no canary. The jargon-extraction tightening and the suggested-reader-level nudge touch the worker/AI pipeline and require the full established discipline: schema change if any, worker wiring, local + CI-safe tests, then an owner-approved production canary before being marked done.
+
+### 35.3 Reference-project-informed techniques (ideas only, no code reuse, never named)
+
+Four techniques adopted from prior-art research as starting points for implementation, interleaved into §35.2's work rather than built as a separate track:
+1. A cheap two-stage pre-filter ahead of the relevance gate's LLM calls, to bound cost further (maps onto `packages/research/src/relevance.ts`/`discover.ts`'s existing cost-gating).
+2. Deterministic evidence-strength scoring from structural cues (study design, sample size, effect size, p-value, hedging) where something is structurally checkable without an LLM call — compared against `credibilityV3.ts`'s evidence-strength dimension.
+3. Ideas about what makes a knowledge graph feel alive (degree-scaled sizing, hover tooltips) folded into §35.2's graph-richness item — still on `react-force-graph-3d`, no engine rewrite.
+4. Concurrent/parallel LLM calls per document where `apps/worker/src/analyze.ts`'s stages can safely run concurrently, adopted only on a measured win with no correctness risk (the shared `CostBudget` accounting needs a concurrency-safe update first).
+
+### 35.4 Acceptance gates
+
+Every pure-UI item ships with typecheck/lint/test/build green, relevant CI-safe Playwright coverage, and a manual screenshot. Every AI-pipeline-touching item ships with the same plus a migration (if needed) and an owner-approved production canary. No regression in any 9.1–9.7 behavior. Then tag `phase-10-complete`.

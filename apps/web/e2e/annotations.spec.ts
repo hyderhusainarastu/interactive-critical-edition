@@ -13,7 +13,7 @@ import { createVerifiedTestUser, deleteTestUser } from "./helpers";
  * reader.spec.ts — the worker is what processes the analyze-work job. With
  * no AI key configured, classification uses the deterministic heuristic
  * fallback, which is exactly what this asserts on (the pipeline, not model
- * quality). Not CI-wired yet (see playwright.config.ts / CLAUDE.md).
+ * quality). Not CI-wired yet (see playwright.config.ts / docs/PROJECT-LOG.md).
  */
 
 const EMAIL = `e2e-annot-${Date.now()}@example.com`;
