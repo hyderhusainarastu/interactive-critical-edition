@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
+import { phase12FeatureEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
+import { getUserReaderLevel } from "@/lib/readerLevel";
 import { getOwnedDocument } from "@/lib/works";
 import { ReaderShell } from "./ReaderShell";
 
@@ -17,5 +19,12 @@ export default async function ReaderPage({
     redirect(`/works/${workId}`);
   }
 
-  return <ReaderShell workId={workId} />;
+  const readerLevel = await getUserReaderLevel(session.user.id);
+  return (
+    <ReaderShell
+      workId={workId}
+      initialReaderLevel={readerLevel ?? "all"}
+      enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
+    />
+  );
 }

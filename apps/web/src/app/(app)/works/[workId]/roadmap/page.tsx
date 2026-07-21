@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { phase12FeatureEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
 import { getUserReaderLevel } from "@/lib/readerLevel";
 import { getOwnedDocument } from "@/lib/works";
@@ -19,5 +20,12 @@ export default async function RoadmapPage({
   // (plan §34.4 9.4); "research" (full view) when the reader never chose one.
   const readerLevel = await getUserReaderLevel(session.user.id);
 
-  return <RoadmapView workId={workId} title={doc.title} initialReaderLevel={readerLevel ?? "research"} />;
+  return (
+    <RoadmapView
+      workId={workId}
+      title={doc.title}
+      initialReaderLevel={readerLevel ?? "research"}
+      enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
+    />
+  );
 }

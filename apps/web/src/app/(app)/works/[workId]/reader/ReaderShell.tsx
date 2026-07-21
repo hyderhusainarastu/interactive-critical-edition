@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationRecord,
@@ -30,7 +31,17 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
  * side is a fully functional independent reader, but only the primary
  * pane offers opening a second one).
  */
-export function ReaderShell({ workId, embedded = false }: { workId: string; embedded?: boolean }) {
+export function ReaderShell({
+  workId,
+  embedded = false,
+  initialReaderLevel = "all",
+  enablePhase12Identity = false,
+}: {
+  workId: string;
+  embedded?: boolean;
+  initialReaderLevel?: ReaderLevelFilter;
+  enablePhase12Identity?: boolean;
+}) {
   const [data, setData] = useState<ReaderData | null>(null);
   const [edition, setEdition] = useState<EditionPayload | null>(null);
   const [showEdition, setShowEdition] = useState(false);
@@ -45,6 +56,8 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
   const [showAnalysis, setShowAnalysis] = useState(true);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
+  const [editionReaderLevel, setEditionReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
+  const [editionLevelMode, setEditionLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const currentPositionRef = useRef<{ page?: number; paragraphIndex?: number }>({});
@@ -224,6 +237,16 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
   }, []);
 
   const initialPosition = useMemo(() => data?.lastPosition ?? null, [data]);
+  const visibleEdition = useMemo(() => {
+    if (!edition || !enablePhase12Identity || editionReaderLevel === "all") return edition;
+    const visibleAtLevel = (annotation: EditionPayload["passageAnnotations"][number]) =>
+      matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
+    return {
+      ...edition,
+      passageAnnotations: edition.passageAnnotations.filter(visibleAtLevel),
+      wholeWorkGuidance: edition.wholeWorkGuidance.filter(visibleAtLevel),
+    };
+  }, [edition, editionLevelMode, editionReaderLevel, enablePhase12Identity]);
 
   if (error) {
     return <p className="mx-auto max-w-xl px-6 py-12 text-[var(--color-accent-burgundy)]">{error}</p>;
@@ -327,9 +350,9 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               aria-pressed={showAnalysis}
             >
               {showAnalysis ? "Hide analysis" : "Analysis"}
-              {showEdition && edition
-                ? edition.passageAnnotations.length + edition.wholeWorkGuidance.length > 0 &&
-                  ` (${edition.passageAnnotations.length + edition.wholeWorkGuidance.length})`
+              {showEdition && visibleEdition
+                ? visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length > 0 &&
+                  ` (${visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length})`
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
                   ` (${data.annotations.filter((a) => !a.hidden).length})`}
             </button>
@@ -345,7 +368,7 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
               ["--reader-line-width" as string]: `${lineWidth}ch`,
             }}
           >
-            {showEdition && edition ? <EditionReader edition={edition} onOpenAnnotation={openAnnotation} /> : isPdf ? (
+            {showEdition && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} /> : isPdf ? (
               data.fileUrl ? (
                 <PdfReader
                   fileUrl={data.fileUrl}
@@ -392,8 +415,16 @@ export function ReaderShell({ workId, embedded = false }: { workId: string; embe
       </div>
 
       {showAnalysis && !embedded && (
-        showEdition && edition ? (
-          <EditionAnnotationsPanel edition={edition} activeId={activeAnnotationId} />
+        showEdition && visibleEdition ? (
+          <EditionAnnotationsPanel
+            edition={visibleEdition}
+            activeId={activeAnnotationId}
+            readerLevel={editionReaderLevel}
+            levelMode={editionLevelMode}
+            enableLevelFilter={enablePhase12Identity}
+            onReaderLevelChange={setEditionReaderLevel}
+            onLevelModeChange={setEditionLevelMode}
+          />
         ) : (
           <AnnotationsPanel
             annotations={data.annotations}

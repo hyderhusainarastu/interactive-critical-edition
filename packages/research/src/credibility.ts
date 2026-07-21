@@ -23,6 +23,9 @@ const CREDIBLE_TLD = /\.(edu|gov|ac\.[a-z]{2}|edu\.[a-z]{2})$/i;
 const CREDIBLE_HOST = /(^|\.)(stanford|harvard|mit|ox\.ac|cam\.ac|jstor|plato\.stanford|archive|nature|science|springer|wiley|cambridge|oup|tandfonline|sciencedirect|arxiv|philpapers)\./i;
 
 export function classifyAuthority(r: RawResource): SourceAuthority {
+  // Search-discovered social posts (including public Reddit result metadata)
+  // remain visible for interpretation, but never become factual evidence.
+  if (r.resourceType === "social_post") return "E";
   if (SCHOLARLY.has(r.provider)) {
     // A scholarly index match with a DOI on an article is the strongest signal.
     if (r.doi && (r.resourceType === "article" || r.resourceType === "book")) return "A";

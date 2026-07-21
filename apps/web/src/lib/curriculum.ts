@@ -7,6 +7,7 @@ import {
   type CurriculumRoute,
   type ProfileEntry,
 } from "@ice/curriculum";
+import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 const EMPTY_ROUTE_COUNTS: Record<CurriculumRoute, number> = { minimal: 0, university: 0, graduate: 0 };
@@ -18,6 +19,11 @@ export interface CurriculumResponse extends CurriculumResult {
    *  Library (`apps/web/src/lib/library.ts`) rather than a silent empty list. */
   hasWorkIdentity: boolean;
   routeCounts: Record<CurriculumRoute, number>;
+}
+
+export interface CurriculumLevelOptions {
+  readerLevel?: ReaderLevelFilter;
+  levelMode?: ReaderLevelMatchMode;
 }
 
 /**
@@ -36,6 +42,7 @@ export async function computeCurriculum(
   userId: string,
   workId: string,
   route: CurriculumRoute,
+  levelOptions: CurriculumLevelOptions = {},
 ): Promise<CurriculumResponse | null> {
   const [work] = await db
     .select({ id: works.id, workIdentityId: works.workIdentityId })
@@ -80,6 +87,7 @@ export async function computeCurriculum(
 
   const candidates: CurriculumCandidate[] = [];
   for (const role of roles) {
+    if (!matchesReaderLevel(role.readerLevel, levelOptions.readerLevel ?? "all", levelOptions.levelMode ?? "cumulative")) continue;
     const resource = resourceById.get(role.learningResourceId);
     if (!resource) continue;
     candidates.push({

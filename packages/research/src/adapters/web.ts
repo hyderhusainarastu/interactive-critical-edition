@@ -4,6 +4,15 @@ import { disabledAttempt, fetchJson, runAttempt, userAgent } from "./base";
 
 const first = (queries: string[]) => queries.find((q) => q.trim().length > 3) ?? "";
 
+function isPublicRedditUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    return hostname === "reddit.com" || hostname.endsWith(".reddit.com");
+  } catch {
+    return false;
+  }
+}
+
 // ---- Tavily (web search; free key required) ----
 interface TavilyResult {
   title?: string;
@@ -39,20 +48,26 @@ export class TavilyAdapter implements SourceAdapter {
         const data = (await res.json()) as { results?: TavilyResult[] };
         const resources: RawResource[] = (data.results ?? [])
           .filter((r) => r.url && r.title)
-          .map((r) => ({
-            provider: this.provider,
-            resourceType: "webpage" as const,
-            title: r.title!,
-            authors: [],
-            year: null,
-            url: r.url!,
-            doi: null,
-            isbn: null,
-            snippet: r.content ? r.content.replace(/\s+/g, " ").trim().slice(0, 600) : null,
-            venue: null,
-            popularity: null,
-            raw: r,
-          }));
+          .map((r) => {
+            const isReddit = isPublicRedditUrl(r.url!);
+            // Reddit stays a Tavily/web-search result: only the returned
+            // citation metadata, snippet, and outbound URL are retained. No
+            // Reddit HTML/API adapter or post scraping is introduced here.
+            return {
+              provider: this.provider,
+              resourceType: isReddit ? "social_post" as const : "webpage" as const,
+              title: r.title!,
+              authors: [],
+              year: null,
+              url: r.url!,
+              doi: null,
+              isbn: null,
+              snippet: r.content ? r.content.replace(/\s+/g, " ").trim().slice(0, 600) : null,
+              venue: isReddit ? "Reddit (web search result)" : null,
+              popularity: null,
+              raw: r,
+            };
+          });
         return { resources };
       } finally {
         clearTimeout(timer);

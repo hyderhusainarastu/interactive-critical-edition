@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { phase12FeatureEnabled } from "@ice/config";
 import { CURRICULUM_ROUTES, type CurriculumRoute } from "@ice/curriculum";
+import { READER_LEVELS, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
 import { computeCurriculum } from "@/lib/curriculum";
 import { getOwnedDocument } from "@/lib/works";
@@ -25,11 +27,22 @@ export async function GET(
 
   const url = new URL(request.url);
   const routeParam = url.searchParams.get("route");
+  const readerLevelParam = url.searchParams.get("readerLevel");
+  const levelModeParam = url.searchParams.get("levelMode");
   const route: CurriculumRoute = (CURRICULUM_ROUTES as string[]).includes(routeParam ?? "")
     ? (routeParam as CurriculumRoute)
     : "university";
+  const levelOptions = phase12FeatureEnabled("libraryIdentity")
+    ? {
+        readerLevel:
+          readerLevelParam === "all" || (READER_LEVELS as string[]).includes(readerLevelParam ?? "")
+            ? (readerLevelParam as ReaderLevelFilter)
+            : "all",
+        levelMode: levelModeParam === "exact" ? "exact" as ReaderLevelMatchMode : "cumulative" as ReaderLevelMatchMode,
+      }
+    : {};
 
-  const result = await computeCurriculum(userId, workId, route);
+  const result = await computeCurriculum(userId, workId, route, levelOptions);
   if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ title: doc.title, ...result });

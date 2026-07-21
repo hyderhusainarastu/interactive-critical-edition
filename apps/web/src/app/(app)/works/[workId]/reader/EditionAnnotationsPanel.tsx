@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CATEGORY_META } from "./annotationMeta";
 import {
@@ -17,6 +18,8 @@ import {
 import { matchNoteToBlock } from "./matchNoteToBlock";
 
 type Tab = "annotations" | "notes" | "sources";
+const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
+const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = { ...READER_LEVEL_LABEL, all: "Show all levels" };
 
 /**
  * The published-edition's sidebar (plan §36 11.5) — modeled directly on
@@ -32,9 +35,19 @@ type Tab = "annotations" | "notes" | "sources";
 export function EditionAnnotationsPanel({
   edition,
   activeId,
+  readerLevel,
+  levelMode,
+  enableLevelFilter,
+  onReaderLevelChange,
+  onLevelModeChange,
 }: {
   edition: EditionPayload;
   activeId: string | null;
+  readerLevel: ReaderLevelFilter;
+  levelMode: ReaderLevelMatchMode;
+  enableLevelFilter: boolean;
+  onReaderLevelChange: (level: ReaderLevelFilter) => void;
+  onLevelModeChange: (mode: ReaderLevelMatchMode) => void;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
@@ -85,6 +98,34 @@ export function EditionAnnotationsPanel({
           Sources{edition.works.length > 0 ? ` (${edition.works.length})` : ""}
         </button>
       </div>
+
+      {enableLevelFilter && tab === "annotations" && (
+        <div className="grid grid-cols-1 gap-2 border-b border-[var(--color-border)] px-3 py-2 text-xs">
+          <label className="flex items-center justify-between gap-2">
+            <span className="text-[var(--color-text-muted)]">Reader level</span>
+            <select
+              value={readerLevel}
+              onChange={(event) => onReaderLevelChange(event.target.value as ReaderLevelFilter)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+            >
+              {READER_LEVEL_FILTER_OPTIONS.map((level) => <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>)}
+            </select>
+          </label>
+          {readerLevel !== "all" && (
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-[var(--color-text-muted)]">Level match</span>
+              <select
+                value={levelMode}
+                onChange={(event) => onLevelModeChange(event.target.value as ReaderLevelMatchMode)}
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+              >
+                <option value="cumulative">Selected + foundations</option>
+                <option value="exact">Exact level</option>
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       {tab === "annotations" ? (
         <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} />

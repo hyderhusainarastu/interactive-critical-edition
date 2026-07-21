@@ -17,5 +17,12 @@ export default async function LibraryPage() {
   // (never chosen) falls back to "all", same as Roadmap's own default.
   const readerLevel = await getUserReaderLevel(session.user.id);
 
-  return <LibraryView initialItems={items} initialReaderLevel={readerLevel ?? "all"} />;
+  return (
+    <LibraryView
+      initialItems={items}
+      initialReaderLevel={readerLevel ?? "all"}
+      enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
+    />
+  );
 }
+import { phase12FeatureEnabled } from "@ice/config";

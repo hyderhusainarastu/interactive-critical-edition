@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   KNOWN_THRESHOLD,
   countByReaderLevel,
+  exactTiersForReaderLevel,
+  matchesReaderLevel,
   rankRoadmap,
   suggestReaderLevelFromCompletions,
   type OverrideEntry,
@@ -25,6 +27,21 @@ function cand(partial: Partial<RoadmapCandidate> & { bibId: string; title: strin
 
 const empty = () => new Map<string, ProfileEntry>();
 const noOverrides = () => new Map<string, OverrideEntry>();
+
+describe("matchesReaderLevel", () => {
+  it("includes universal, selected, and foundational material cumulatively", () => {
+    expect(matchesReaderLevel(null, "undergraduate")).toBe(true);
+    expect(matchesReaderLevel("beginner", "undergraduate")).toBe(true);
+    expect(matchesReaderLevel("undergraduate", "undergraduate")).toBe(true);
+    expect(matchesReaderLevel("advanced", "undergraduate")).toBe(false);
+  });
+
+  it("keeps universal material while offering an exact-level facet", () => {
+    expect(matchesReaderLevel(null, "advanced", "exact")).toBe(true);
+    expect(matchesReaderLevel("advanced", "advanced", "exact")).toBe(true);
+    expect(matchesReaderLevel("beginner", "advanced", "exact")).toBe(false);
+  });
+});
 
 describe("rankRoadmap — Heidegger acceptance case (plan §13 step 9)", () => {
   const kant = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["conceptual_influence"] });
@@ -119,6 +136,15 @@ describe("rankRoadmap — modes, filters, overrides", () => {
   it("the explicit 'all' override shows everything, same as research", () => {
     const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "all" });
     expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
+  });
+
+  it("keeps universal prerequisites in the exact-level roadmap facet", () => {
+    expect([...exactTiersForReaderLevel("advanced")]).toEqual(["essential", "comparative"]);
+    const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), {
+      readerLevel: "research",
+      readerLevelMode: "exact",
+    });
+    expect(items.map((item) => item.bibId)).toEqual(["e", "o"]);
   });
 
   it("hidden override excludes an item entirely", () => {

@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { suggestReaderLevelFromCompletions, type ReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
+import {
+  matchesReaderLevel,
+  suggestReaderLevelFromCompletions,
+  type ReaderLevel,
+  type ReaderLevelFilter,
+  type ReaderLevelMatchMode,
+} from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
 import type { LibraryItem } from "@/lib/library";
@@ -34,6 +40,22 @@ const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = {
   all: "Show all levels",
 } as Record<ReaderLevelFilter, string>;
 const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
+const SOURCE_TYPE_LABEL: Record<string, string> = {
+  article: "Article",
+  book: "Book",
+  webpage: "Web article",
+  video: "Lecture or video",
+  social_post: "Social post",
+  dataset: "Dataset",
+  "unresolved-citation": "Unresolved citation",
+};
+const VERIFICATION_LABEL: Record<string, string> = {
+  scholarly_record: "Scholarly record verified",
+  institutional: "Institution verified",
+  named: "Named creator",
+  pseudonymous: "Pseudonymous creator",
+  anonymous: "Anonymous creator",
+};
 
 type Tab = "all" | "to_read" | "reading" | "completed";
 const TABS: { key: Tab; label: string }[] = [
@@ -55,6 +77,7 @@ function matchesTab(item: LibraryItem, tab: Tab): boolean {
 export function LibraryView({
   initialItems,
   initialReaderLevel = "all",
+  enablePhase12Identity = false,
 }: {
   initialItems: LibraryItem[];
   /** The reader's saved global level, or "all" if they never chose one.
@@ -62,12 +85,14 @@ export function LibraryView({
    *  never overwrites the saved global level (plan §35.2: bringing Library
    *  in line with Roadmap/Curriculum's default-then-override pattern). */
   initialReaderLevel?: ReaderLevelFilter;
+  enablePhase12Identity?: boolean;
 }) {
   const [items, setItems] = useState(initialItems);
   const [tab, setTab] = useState<Tab>("all");
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
+  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>(enablePhase12Identity ? "cumulative" : "exact");
   const [workId, setWorkId] = useState<string>("");
   const [sort, setSort] = useState<SortKey>("recency");
 
@@ -109,7 +134,7 @@ export function LibraryView({
     dismissSuggestion();
   }
 
-  const relationships = useMemo(() => [...new Set(items.map((i) => i.relationship))].sort(), [items]);
+  const relationships = useMemo(() => [...new Set(items.flatMap((item) => item.roles.map((role) => role.relationship)))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
 
   // Work-scoping (plan §36 11.4): "select one of my own uploaded works, see
@@ -126,16 +151,15 @@ export function LibraryView({
     return [...byId.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
   }, [items]);
 
-  // Per-level counts for the select options, computed the same way the
-  // level filter itself matches (specific level, or no level recorded at
-  // all) so the displayed count never diverges from what picking it shows.
+  // Per-level counts use exactly the selected matching rule, so a cumulative
+  // Undergraduate view counts universal + Beginner + Undergraduate material.
   const levelCounts = useMemo(() => {
     const counts = {} as Record<ReaderLevelFilter, number>;
     for (const level of READER_LEVEL_FILTER_OPTIONS) {
-      counts[level] = level === "all" ? items.length : items.filter((i) => i.readerLevel === level || i.readerLevel === null).length;
+      counts[level] = items.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, level, levelMode))).length;
     }
     return counts;
-  }, [items]);
+  }, [items, levelMode]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<Tab, number> = { all: items.length, to_read: 0, reading: 0, completed: 0 };
@@ -149,16 +173,16 @@ export function LibraryView({
 
   const visible = useMemo(() => {
     let filtered = items.filter((i) => matchesTab(i, tab));
-    if (relationship) filtered = filtered.filter((i) => i.relationship === relationship);
+    if (relationship) filtered = filtered.filter((item) => item.roles.some((role) => role.relationship === relationship));
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
-    if (readerLevel !== "all") filtered = filtered.filter((i) => i.readerLevel === readerLevel || i.readerLevel === null);
+    if (readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel, levelMode)));
     if (workId) filtered = filtered.filter((i) => i.recommendedFor.some((w) => w.workId === workId));
     const sorted = [...filtered];
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
     else if (sort === "credibility") sorted.sort((a, b) => (b.credibility?.score ?? -1) - (a.credibility?.score ?? -1));
     else sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     return sorted;
-  }, [items, tab, relationship, resourceType, readerLevel, workId, sort]);
+  }, [items, tab, relationship, resourceType, readerLevel, levelMode, workId, sort]);
 
   async function setReadingStatus(resourceId: string, status: (typeof READING_STATUSES)[number] | null) {
     setItems((prev) => prev.map((i) => (i.id === resourceId ? { ...i, readingStatus: status } : i)));
@@ -252,7 +276,7 @@ export function LibraryView({
                 <option value="">All</option>
                 {resourceTypes.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {SOURCE_TYPE_LABEL[t] ?? t}
                   </option>
                 ))}
               </select>
@@ -262,7 +286,7 @@ export function LibraryView({
                 Reader level
                 {readerLevel !== "all" && (
                   <span className="ml-1 text-[var(--color-text-muted)]">
-                    (never hides anything you can&rsquo;t also see — pick &ldquo;Show all levels&rdquo; anytime)
+                    ({enablePhase12Identity && levelMode === "exact" ? "exact tags, plus universal material" : "selected level and foundations"})
                   </span>
                 )}
               </span>
@@ -278,6 +302,19 @@ export function LibraryView({
                 ))}
               </select>
             </label>
+            {enablePhase12Identity && readerLevel !== "all" && (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
+                <select
+                  value={levelMode}
+                  onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="cumulative">Selected + foundations</option>
+                  <option value="exact">Exact level</option>
+                </select>
+              </label>
+            )}
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Sort</span>
               <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
@@ -333,7 +370,7 @@ function LibraryRow({
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
             <span>{RELATIONSHIP_LABEL[item.relationship] ?? item.relationship}</span>
             <span>·</span>
-            <span>{item.resourceType}</span>
+            <span>{SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</span>
             {item.credibility?.authority && (
               <>
                 <span>·</span>
@@ -346,10 +383,12 @@ function LibraryRow({
                 <CredibilityMeter score={item.credibility.score} />
               </>
             )}
-            {item.peerReviewed === false && (
+            <span>·</span>
+            <span>{item.peerReviewed === true ? "Peer-reviewed" : item.peerReviewed === false ? "Not peer-reviewed" : "Peer review unverified"}</span>
+            {item.creatorVerification && (
               <>
                 <span>·</span>
-                <span>Not peer-reviewed</span>
+                <span>{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</span>
               </>
             )}
             {item.readerLevel && (

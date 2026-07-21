@@ -238,6 +238,8 @@ export const documents = pgTable("document", {
   originalFilename: text("original_filename").notNull(),
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(),
+  /** SHA-256 of the verified stored bytes; used only for duplicate detection. */
+  contentHash: text("content_hash"),
   processingStatus: processingStatusEnum("processing_status")
     .notNull()
     .default("uploaded"),
@@ -261,7 +263,11 @@ export const documents = pgTable("document", {
   analysisError: text("analysis_error"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (t) => [index("document_work_idx").on(t.workId), index("document_user_idx").on(t.userId)]);
+}, (t) => [
+  index("document_work_idx").on(t.workId),
+  index("document_user_idx").on(t.userId),
+  index("document_user_content_hash_idx").on(t.userId, t.contentHash),
+]);
 
 export const processingJobs = pgTable("processing_job", {
   id: uuid("id").primaryKey().defaultRandom(),

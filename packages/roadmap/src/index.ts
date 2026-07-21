@@ -123,10 +123,31 @@ export type RoadmapMode = "concise" | "comprehensive";
 export type ReaderLevel = "beginner" | "undergraduate" | "advanced" | "research";
 export const READER_LEVELS: ReaderLevel[] = ["beginner", "undergraduate", "advanced", "research"];
 export type ReaderLevelFilter = ReaderLevel | "all";
+/** Whether a selected reader-level view accumulates foundational material or
+ * shows only material explicitly tagged for that level. */
+export type ReaderLevelMatchMode = "cumulative" | "exact";
+
+/**
+ * Null represents universal material. A cumulative selection includes that
+ * material, the selected level, and every earlier/foundational level. The
+ * exact facet intentionally still includes universal material: it is not
+ * tagged for a different level and must remain reachable in every view.
+ */
+export function matchesReaderLevel(
+  materialLevel: ReaderLevel | null | undefined,
+  selectedLevel: ReaderLevelFilter,
+  mode: ReaderLevelMatchMode = "cumulative",
+): boolean {
+  if (selectedLevel === "all" || materialLevel == null) return true;
+  if (mode === "exact") return materialLevel === selectedLevel;
+  return READER_LEVELS.indexOf(materialLevel) <= READER_LEVELS.indexOf(selectedLevel);
+}
 
 export interface RankOptions {
   mode?: RoadmapMode;
   readerLevel?: ReaderLevelFilter;
+  /** Cumulative is the default; exact preserves a depth-only facet. */
+  readerLevelMode?: ReaderLevelMatchMode;
   /** Time budget in minutes; a greedy pass keeps the highest-priority
    *  items that fit and marks the rest as over-budget (plan §13 step 6). */
   maxMinutes?: number;
@@ -225,6 +246,19 @@ export function tiersForReaderLevel(level: ReaderLevelFilter): Set<PriorityTier>
   return new Set<PriorityTier>(TIER_ORDER);
 }
 
+/**
+ * The Roadmap stores priority tiers rather than a separate role-level column.
+ * Its exact facet therefore shows the tiers introduced at that depth while
+ * retaining `essential` prerequisites as universal material.
+ */
+export function exactTiersForReaderLevel(level: ReaderLevelFilter): Set<PriorityTier> {
+  if (level === "all") return new Set<PriorityTier>(TIER_ORDER);
+  if (level === "beginner") return new Set<PriorityTier>(["essential", "high", "strongly_recommended"]);
+  if (level === "undergraduate") return new Set<PriorityTier>(["essential", "contextual", "interpretive_aid"]);
+  if (level === "advanced") return new Set<PriorityTier>(["essential", "comparative"]);
+  return new Set<PriorityTier>(["essential", "optional"]);
+}
+
 export function rankRoadmap(
   candidates: RoadmapCandidate[],
   profile: Map<string, ProfileEntry>,
@@ -236,7 +270,9 @@ export function rankRoadmap(
   // filter, so the untouched roadmap shows everything reached (plan §13:
   // comprehensive is the natural default, concise/beginner narrow it).
   const readerLevel = options.readerLevel ?? "all";
-  const allowedTiers = tiersForReaderLevel(readerLevel);
+  const allowedTiers = options.readerLevelMode === "exact"
+    ? exactTiersForReaderLevel(readerLevel)
+    : tiersForReaderLevel(readerLevel);
 
   type Interim = RoadmapItem & { _manualPosition?: number };
   const items: Interim[] = [];

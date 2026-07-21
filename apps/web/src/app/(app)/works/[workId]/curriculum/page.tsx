@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { phase12FeatureEnabled } from "@ice/config";
 import { defaultRouteForReaderLevel } from "@ice/curriculum";
 import { requireSession } from "@/lib/auth";
 import { getUserReaderLevel } from "@/lib/readerLevel";
@@ -21,5 +22,13 @@ export default async function CurriculumPage({
   // writes back to the profile — same rule 9.4 established for reader levels.
   const readerLevel = await getUserReaderLevel(session.user.id);
 
-  return <CurriculumView workId={workId} title={doc.title} initialRoute={defaultRouteForReaderLevel(readerLevel)} />;
+  return (
+    <CurriculumView
+      workId={workId}
+      title={doc.title}
+      initialRoute={defaultRouteForReaderLevel(readerLevel)}
+      initialReaderLevel={readerLevel ?? "all"}
+      enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
+    />
+  );
 }

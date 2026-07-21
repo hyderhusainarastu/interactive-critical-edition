@@ -75,6 +75,9 @@ describe("authority (independent of popularity)", () => {
   it("assigns E to social posts", () => {
     expect(classifyAuthority(resource({ provider: "mastodon", resourceType: "social_post" }))).toBe("E");
   });
+  it("keeps search-discovered Reddit metadata at E", () => {
+    expect(classifyAuthority(resource({ provider: "tavily", resourceType: "social_post", url: "https://reddit.com/r/example" }))).toBe("E");
+  });
 });
 
 describe("agreement (deterministic)", () => {

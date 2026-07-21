@@ -53,17 +53,25 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+async function sha256(file: File): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) return null;
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export default function UploadPage() {
   const router = useRouter();
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
+  const [duplicate, setDuplicate] = useState<{ file: File; workId: string; title: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleFile(file: File) {
+  async function handleFile(file: File, duplicateResolution?: "add_edition") {
     setError(null);
     setProgress(null);
+    setDuplicate(null);
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError(
@@ -79,14 +87,20 @@ export default function UploadPage() {
     setSubmitting(true);
 
     try {
+      const contentHash = await sha256(file);
       const init = await fetch("/api/works/upload/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, type: file.type, size: file.size }),
+        body: JSON.stringify({ name: file.name, type: file.type, size: file.size, contentHash, duplicateResolution }),
       });
       const body = await init.json().catch(() => ({}));
       if (!init.ok) {
         setError(body.error ?? "Upload failed.");
+        setSubmitting(false);
+        return;
+      }
+      if (body.duplicate) {
+        setDuplicate({ file, workId: body.duplicate.workId, title: body.duplicate.title });
         setSubmitting(false);
         return;
       }
@@ -216,6 +230,21 @@ export default function UploadPage() {
         <p className="rounded-md bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-accent-burgundy)]">
           {error}
         </p>
+      )}
+
+      {duplicate && (
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
+          <p className="font-medium text-[var(--color-text)]">{duplicate.title} is already in your Library.</p>
+          <p className="mt-1 text-[var(--color-text-muted)]">Open the existing work, or keep this upload as another edition.</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <button type="button" className="rounded border border-[var(--color-border)] px-3 py-1.5" onClick={() => router.push(`/works/${duplicate.workId}`)}>
+              Open existing
+            </button>
+            <button type="button" className="rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-white" onClick={() => void handleFile(duplicate.file, "add_edition")}>
+              Add as another edition
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

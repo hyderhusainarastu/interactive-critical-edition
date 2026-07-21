@@ -8,6 +8,7 @@ import {
   type PriorityTier,
   type ReaderLevel,
   type ReaderLevelFilter,
+  type ReaderLevelMatchMode,
   type ReadingStatus,
   type RoadmapItem,
   type RoadmapMode,
@@ -48,6 +49,7 @@ export function RoadmapView({
   workId,
   title,
   initialReaderLevel = "research",
+  enablePhase12Identity = false,
 }: {
   workId: string;
   title: string;
@@ -56,11 +58,13 @@ export function RoadmapView({
    *  filter only — it never overwrites the saved global level (plan §34.4:
    *  "Browsing alone never silently changes a level"). */
   initialReaderLevel?: ReaderLevel;
+  enablePhase12Identity?: boolean;
 }) {
   const [data, setData] = useState<RoadmapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RoadmapMode>("comprehensive");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
+  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
   const [maxMinutes, setMaxMinutes] = useState<string>("");
 
   // Used by `mutate` to refetch after a change. Not called from the effect
@@ -69,6 +73,7 @@ export function RoadmapView({
   // below with the `.then` pattern the rule accepts.
   const load = useCallback(async () => {
     const qs = new URLSearchParams({ mode, readerLevel });
+    if (enablePhase12Identity) qs.set("levelMode", levelMode);
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     try {
       const res = await fetch(`/api/works/${workId}/roadmap?${qs}`);
@@ -78,11 +83,12 @@ export function RoadmapView({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load roadmap");
     }
-  }, [workId, mode, readerLevel, maxMinutes]);
+  }, [workId, mode, readerLevel, levelMode, maxMinutes, enablePhase12Identity]);
 
   useEffect(() => {
     let ignore = false;
     const qs = new URLSearchParams({ mode, readerLevel });
+    if (enablePhase12Identity) qs.set("levelMode", levelMode);
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     fetch(`/api/works/${workId}/roadmap?${qs}`)
       .then(async (res) => {
@@ -101,7 +107,7 @@ export function RoadmapView({
     return () => {
       ignore = true;
     };
-  }, [workId, mode, readerLevel, maxMinutes]);
+  }, [workId, mode, readerLevel, levelMode, maxMinutes, enablePhase12Identity]);
 
   const mutate = useCallback(
     async (bibId: string, patch: Record<string, unknown>) => {
@@ -143,6 +149,19 @@ export function RoadmapView({
             <option value="concise">Concise (essential + high)</option>
           </select>
         </label>
+        {enablePhase12Identity && readerLevel !== "all" && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
+            <select
+              value={levelMode}
+              onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
+              className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+            >
+              <option value="cumulative">Selected + foundations</option>
+              <option value="exact">Exact level</option>
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-xs text-[var(--color-text-muted)]">
             Level

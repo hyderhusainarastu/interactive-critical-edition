@@ -9,6 +9,7 @@ import {
   type CurriculumRoute,
   type CurriculumStageResult,
 } from "@ice/curriculum";
+import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 
 interface CurriculumResponse {
   title: string;
@@ -27,33 +28,56 @@ const READER_LEVEL_LABEL: Record<string, string> = {
 
 const READING_STATUSES = ["planned", "reading", "completed", "abandoned"] as const;
 type ReadingStatus = (typeof READING_STATUSES)[number];
+const READER_LEVEL_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
+const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
+  all: "Show all levels",
+};
 
 export function CurriculumView({
   workId,
   title,
   initialRoute = "university",
+  initialReaderLevel = "all",
+  enablePhase12Identity = false,
 }: {
   workId: string;
   title: string;
   initialRoute?: CurriculumRoute;
+  initialReaderLevel?: ReaderLevelFilter;
+  enablePhase12Identity?: boolean;
 }) {
   const [data, setData] = useState<CurriculumResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState<CurriculumRoute>(initialRoute);
+  const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
+  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
+
+  const curriculumUrl = useCallback(() => {
+    const params = new URLSearchParams({ route });
+    if (enablePhase12Identity) {
+      params.set("readerLevel", readerLevel);
+      params.set("levelMode", levelMode);
+    }
+    return `/api/works/${workId}/curriculum?${params}`;
+  }, [enablePhase12Identity, levelMode, readerLevel, route, workId]);
 
   // Used to refetch after a status change so `known`/review-only reflects
   // the server's real recomputation rather than a stale local patch — same
   // mutate-then-reload pattern as RoadmapView's `load()`.
   const load = useCallback(async () => {
-    const res = await fetch(`/api/works/${workId}/curriculum?route=${route}`);
+    const res = await fetch(curriculumUrl());
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed to load curriculum");
     setData(await res.json());
     setError(null);
-  }, [workId, route]);
+  }, [curriculumUrl]);
 
   useEffect(() => {
     let ignore = false;
-    fetch(`/api/works/${workId}/curriculum?route=${route}`)
+    fetch(curriculumUrl())
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed to load curriculum");
         return res.json();
@@ -70,7 +94,7 @@ export function CurriculumView({
     return () => {
       ignore = true;
     };
-  }, [workId, route]);
+  }, [curriculumUrl]);
 
   async function setReadingStatus(resourceId: string, status: ReadingStatus | null) {
     await fetch(`/api/library/${resourceId}/status`, {
@@ -111,6 +135,35 @@ export function CurriculumView({
             ))}
           </select>
         </label>
+        {enablePhase12Identity && (
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+              <select
+                value={readerLevel}
+                onChange={(event) => setReaderLevel(event.target.value as ReaderLevelFilter)}
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              >
+                {READER_LEVEL_OPTIONS.map((level) => (
+                  <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>
+                ))}
+              </select>
+            </label>
+            {readerLevel !== "all" && (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
+                <select
+                  value={levelMode}
+                  onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="cumulative">Selected + foundations</option>
+                  <option value="exact">Exact level</option>
+                </select>
+              </label>
+            )}
+          </>
+        )}
       </div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}

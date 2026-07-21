@@ -61,7 +61,7 @@ test.describe("Library (Phase 9.5)", () => {
 
     await login(page);
     await page.goto("/library");
-    const row = page.locator(`[data-library-item="${resourceId}"]`);
+    const row = page.locator("#main-content").locator(`[data-library-item="${resourceId}"]`);
     await expect(row).toBeVisible();
     await row.getByLabel(/Reading status of/).selectOption("reading");
 
@@ -101,14 +101,15 @@ test.describe("Library (Phase 9.5)", () => {
     await page.waitForURL("**/dashboard");
 
     await page.goto("/library");
-    await expect(page.getByText(/you might be ready for the/i)).toBeVisible();
+    const libraryContent = page.locator("#main-content");
+    await expect(libraryContent.getByText(/you might be ready for the/i)).toBeVisible();
     await expect(page.getByRole("button", { name: "Switch to Advanced" })).toBeVisible();
 
     // Dismissing hides it and survives reload (localStorage-remembered).
     await page.getByRole("button", { name: "Dismiss" }).click();
-    await expect(page.getByText(/you might be ready for the/i)).not.toBeVisible();
+    await expect(libraryContent.getByText(/you might be ready for the/i)).not.toBeVisible();
     await page.reload();
-    await expect(page.getByText(/you might be ready for the/i)).not.toBeVisible();
+    await expect(libraryContent.getByText(/you might be ready for the/i)).not.toBeVisible();
 
     await deleteTestUser(suggestEmail);
   });
@@ -159,17 +160,42 @@ test.describe("Library (Phase 9.5)", () => {
     await page.waitForURL("**/dashboard");
 
     await page.goto("/library");
-    await expect(page.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
+    const libraryContent = page.locator("#main-content");
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
 
-    await page.getByLabel("Work", { exact: true }).selectOption({ label: "First Work" });
-    await expect(page.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).not.toBeVisible();
+    await libraryContent.getByLabel("Work", { exact: true }).selectOption({ label: "First Work" });
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).not.toBeVisible();
 
-    await page.getByLabel("Work", { exact: true }).selectOption({ label: "All my works" });
-    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
+    await libraryContent.getByLabel("Work", { exact: true }).selectOption({ label: "All my works" });
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
 
     await deleteTestUser(scopeEmail);
+  });
+
+  test("Phase 12's Library level facet includes foundations cumulatively and can switch to exact tags", async ({ page }) => {
+    test.skip(process.env.PHASE_12_LIBRARY_IDENTITY_ENABLED !== "true", "requires the Phase 12 Library release flag");
+    const levelEmail = `e2e-library-level-${Date.now()}@example.com`;
+    const levelUserId = await createVerifiedTestUser(levelEmail, PASSWORD);
+    await seedWorkWithLibraryItem(levelUserId, { resourceTitle: "Foundational source", readerLevel: "beginner" });
+    await seedWorkWithLibraryItem(levelUserId, { resourceTitle: "Advanced source", readerLevel: "advanced" });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(levelEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+
+    await page.goto("/library");
+    await page.getByLabel("Reader level").selectOption("undergraduate");
+    await expect(page.getByRole("listitem").filter({ hasText: "Foundational source" })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Advanced source" })).not.toBeVisible();
+
+    await page.getByLabel("Level match").selectOption("exact");
+    await expect(page.getByRole("listitem").filter({ hasText: "Foundational source" })).not.toBeVisible();
+
+    await deleteTestUser(levelEmail);
   });
 
   test("a user with no v3-analyzed work sees an honest empty state, not a broken page", async ({ page }) => {

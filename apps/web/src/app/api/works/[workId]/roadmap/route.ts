@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { READER_LEVELS, type ReaderLevelFilter, type RoadmapMode } from "@ice/roadmap";
+import { phase12FeatureEnabled } from "@ice/config";
+import { READER_LEVELS, type ReaderLevelFilter, type ReaderLevelMatchMode, type RoadmapMode } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
 import { computeRoadmap } from "@/lib/roadmap";
 import { getOwnedDocument } from "@/lib/works";
@@ -27,6 +28,7 @@ export async function GET(
   const url = new URL(request.url);
   const mode = url.searchParams.get("mode");
   const readerLevel = url.searchParams.get("readerLevel");
+  const levelMode = url.searchParams.get("levelMode");
   const maxMinutesRaw = url.searchParams.get("maxMinutes");
 
   const options = {
@@ -35,6 +37,9 @@ export async function GET(
       readerLevel === "all" || (READER_LEVELS as string[]).includes(readerLevel ?? "")
         ? (readerLevel as ReaderLevelFilter)
         : undefined,
+    readerLevelMode: phase12FeatureEnabled("libraryIdentity") && levelMode === "exact"
+      ? "exact" as ReaderLevelMatchMode
+      : "cumulative" as ReaderLevelMatchMode,
     maxMinutes: maxMinutesRaw && Number.isFinite(Number(maxMinutesRaw)) ? Number(maxMinutesRaw) : undefined,
   };
 

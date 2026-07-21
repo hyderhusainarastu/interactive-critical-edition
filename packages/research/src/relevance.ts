@@ -735,6 +735,7 @@ export function laneForResource(
   isExplicitCitation: boolean,
 ): QueryLane {
   if (isExplicitCitation) return "explicit_citation";
+  if (r.resourceType === "social_post") return "public_discussion";
   switch (r.provider) {
     case "mastodon":
     case "bluesky":

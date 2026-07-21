@@ -133,4 +133,18 @@ describe("keyed adapters activate when configured", () => {
     expect(res.attempt.status).toBe("queried");
     expect(res.resources[0]).toMatchObject({ provider: "tavily", resourceType: "webpage" });
   });
+
+  it("retains public Reddit result metadata through Tavily without a Reddit adapter", async () => {
+    process.env.TAVILY_API_KEY = "test-key";
+    global.fetch = mockFetch(200, {
+      results: [{ title: "A useful discussion", url: "https://www.reddit.com/r/askphilosophy/comments/example", content: "Search snippet only" }],
+    });
+    const res = await new TavilyAdapter().search(["aristotle virtue reddit"], opts);
+    expect(res.resources[0]).toMatchObject({
+      provider: "tavily",
+      resourceType: "social_post",
+      venue: "Reddit (web search result)",
+      snippet: "Search snippet only",
+    });
+  });
 });

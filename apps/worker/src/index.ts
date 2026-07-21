@@ -1,4 +1,5 @@
-import { isEditionPipeline, pipelineVersion } from "@ice/config";
+import { isEditionPipeline, phase12FeatureEnabled, pipelineVersion } from "@ice/config";
+import { createHash } from "node:crypto";
 import {
   type AnalyzeWorkJob,
   db,
@@ -21,6 +22,10 @@ import { reportError } from "@ice/observability";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
+
+function sha256(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
+}
 
 async function handleExtractText(documentId: string) {
   const [job] = await db
@@ -71,6 +76,7 @@ async function handleExtractText(documentId: string) {
         extractedText: parsed.text,
         extractedTitle: parsed.detectedTitle,
         extractedAuthor: parsed.detectedAuthor,
+        ...(phase12FeatureEnabled("libraryIdentity") ? { contentHash: sha256(buffer) } : {}),
         processingStatus: "needs_review",
         updatedAt: new Date(),
       })
@@ -232,6 +238,10 @@ async function handleEditionExtraction(documentId: string) {
     // through metadata review just because the new extractor has lower title
     // confidence. The user-approved work metadata is stronger evidence.
     const autoReady = (parsed.metadataConfidence >= 0.9 && Boolean(parsed.detectedTitle)) || doc.processingStatus === "ready";
+    if (phase12FeatureEnabled("libraryIdentity")) {
+      await db.update(documents).set({ contentHash: sha256(buffer), updatedAt: new Date() }).where(eq(documents.id, documentId));
+    }
+
     await publishEditionRun({
       runId: run.id,
       documentId,

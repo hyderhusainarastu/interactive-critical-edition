@@ -10,6 +10,7 @@ import {
   understandingRatings,
   works,
 } from "@ice/db";
+import type { ReaderLevel } from "@ice/roadmap";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 /**
@@ -40,13 +41,30 @@ export interface LibraryItem {
   confidence: number;
   rationale: string | null;
   readerLevel: string | null;
+  /** Every role this one canonical resource plays across the reader's works. */
+  roles: Array<{
+    relationship: string;
+    readerLevel: ReaderLevel | null;
+    rationale: string | null;
+    confidence: number;
+    recommendedFor: { workId: string; title: string }[];
+  }>;
   recommendedFor: { workId: string; title: string }[];
   credibility: { authority: string | null; score: number } | null;
+  creatorVerification: string | null;
   readingStatus: "planned" | "reading" | "completed" | "abandoned" | null;
   understandingScore: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+function creatorVerification(creator: unknown): string | null {
+  if (!creator || typeof creator !== "object") return null;
+  const verification = (creator as { verification?: unknown }).verification;
+  return typeof verification === "string" ? verification : null;
+}
+
+const AUTHORITY_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 export async function getLibrary(userId: string): Promise<LibraryItem[]> {
   const ownedWorks = await db
@@ -113,11 +131,32 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
     : [];
   const credByResourceId = new Map(creds.map((c) => [c.resourceId, c]));
 
-  const items: LibraryItem[] = [];
+  const rolesByResourceId = new Map<string, typeof roles>();
   for (const role of roles) {
-    const resource = resourceById.get(role.learningResourceId);
+    const grouped = rolesByResourceId.get(role.learningResourceId) ?? [];
+    grouped.push(role);
+    rolesByResourceId.set(role.learningResourceId, grouped);
+  }
+
+  const items: LibraryItem[] = [];
+  for (const [resourceId, resourceRolesForResource] of rolesByResourceId) {
+    const resource = resourceById.get(resourceId);
     if (!resource) continue;
-    const recommendedFor = identityToWorks.get(role.workIdentityId) ?? [];
+    const sortedRoles = [...resourceRolesForResource].sort((left, right) => right.confidence - left.confidence);
+    const libraryRoles = sortedRoles.map((role) => ({
+      relationship: role.relationship,
+      readerLevel: role.readerLevel as ReaderLevel | null,
+      rationale: role.rationale,
+      confidence: role.confidence,
+      recommendedFor: identityToWorks.get(role.workIdentityId) ?? [],
+    }));
+    const recommendedByWorkId = new Map<string, { workId: string; title: string }>();
+    for (const role of libraryRoles) {
+      for (const work of role.recommendedFor) recommendedByWorkId.set(work.workId, work);
+    }
+    const recommendedFor = [...recommendedByWorkId.values()];
+    const primaryRole = libraryRoles[0];
+    if (!primaryRole) continue;
     const reading = readingByResourceId.get(resource.id);
     const rating = ratingByResourceId.get(resource.id);
 
@@ -127,8 +166,12 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
         const found = latestResourceIdByWorkKey.get(`${workId}:${resource.normalizedKey}`);
         const cred = found ? credByResourceId.get(found.resourceId) : undefined;
         if (cred) {
-          credibility = { authority: cred.authority, score: cred.score };
-          break;
+          const candidate = { authority: cred.authority, score: cred.score };
+          const candidateRank = AUTHORITY_ORDER[candidate.authority ?? "E"] ?? 5;
+          const currentRank = AUTHORITY_ORDER[credibility?.authority ?? "E"] ?? 5;
+          if (!credibility || candidateRank < currentRank || (candidateRank === currentRank && candidate.score > credibility.score)) {
+            credibility = candidate;
+          }
         }
       }
     }
@@ -144,12 +187,14 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
       venue: resource.venue,
       peerReviewed: resource.peerReviewed,
       popularity: resource.popularity,
-      relationship: role.relationship,
-      confidence: role.confidence,
-      rationale: role.rationale,
-      readerLevel: role.readerLevel,
+      relationship: primaryRole.relationship,
+      confidence: primaryRole.confidence,
+      rationale: primaryRole.rationale,
+      readerLevel: primaryRole.readerLevel,
+      roles: libraryRoles,
       recommendedFor,
       credibility,
+      creatorVerification: creatorVerification(resource.creator),
       readingStatus: reading?.status ?? null,
       understandingScore: rating?.score ?? null,
       createdAt: resource.createdAt,
