@@ -146,6 +146,32 @@ test.describe("Library (Phase 9.5)", () => {
     await deleteTestUser(acceptEmail);
   });
 
+  test("the Work filter scopes to items recommended for one selected work (plan §36 11.4)", async ({ page }) => {
+    const scopeEmail = `e2e-library-scope-${Date.now()}@example.com`;
+    const scopeUserId = await createVerifiedTestUser(scopeEmail, PASSWORD);
+    await seedWorkWithLibraryItem(scopeUserId, { title: "First Work", resourceTitle: "Item For First Work" });
+    await seedWorkWithLibraryItem(scopeUserId, { title: "Second Work", resourceTitle: "Item For Second Work" });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(scopeEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+
+    await page.goto("/library");
+    await expect(page.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
+
+    await page.getByLabel("Work", { exact: true }).selectOption({ label: "First Work" });
+    await expect(page.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
+    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).not.toBeVisible();
+
+    await page.getByLabel("Work", { exact: true }).selectOption({ label: "All my works" });
+    await expect(page.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
+
+    await deleteTestUser(scopeEmail);
+  });
+
   test("a user with no v3-analyzed work sees an honest empty state, not a broken page", async ({ page }) => {
     const freshEmail = `e2e-library-empty-${Date.now()}@example.com`;
     const freshUserId = await createVerifiedTestUser(freshEmail, PASSWORD);

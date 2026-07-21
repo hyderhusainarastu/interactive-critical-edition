@@ -67,6 +67,7 @@ export function LibraryView({
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
+  const [workId, setWorkId] = useState<string>("");
   const [sort, setSort] = useState<SortKey>("recency");
 
   // Suggested-reader-level nudge (plan §35.2): a pure inference over what the
@@ -110,6 +111,20 @@ export function LibraryView({
   const relationships = useMemo(() => [...new Set(items.map((i) => i.relationship))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
 
+  // Work-scoping (plan §36 11.4): "select one of my own uploaded works, see
+  // everything the Library recommends for it specifically" — reuses the
+  // Library's own real relatedness mechanism (resource_role/recommendedFor,
+  // already carried per item) rather than the Graph's different, fuzzy
+  // title-matched graph_edge mechanism, which would give an inconsistent
+  // second answer to the same question.
+  const works = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const item of items) {
+      for (const w of item.recommendedFor) byId.set(w.workId, w.title);
+    }
+    return [...byId.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
+  }, [items]);
+
   // Per-level counts for the select options, computed the same way the
   // level filter itself matches (specific level, or no level recorded at
   // all) so the displayed count never diverges from what picking it shows.
@@ -136,12 +151,13 @@ export function LibraryView({
     if (relationship) filtered = filtered.filter((i) => i.relationship === relationship);
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
     if (readerLevel !== "all") filtered = filtered.filter((i) => i.readerLevel === readerLevel || i.readerLevel === null);
+    if (workId) filtered = filtered.filter((i) => i.recommendedFor.some((w) => w.workId === workId));
     const sorted = [...filtered];
     if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
     else if (sort === "credibility") sorted.sort((a, b) => (b.credibility?.score ?? -1) - (a.credibility?.score ?? -1));
     else sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     return sorted;
-  }, [items, tab, relationship, resourceType, readerLevel, sort]);
+  }, [items, tab, relationship, resourceType, readerLevel, workId, sort]);
 
   async function setReadingStatus(resourceId: string, status: (typeof READING_STATUSES)[number] | null) {
     setItems((prev) => prev.map((i) => (i.id === resourceId ? { ...i, readingStatus: status } : i)));
@@ -206,6 +222,22 @@ export function LibraryView({
           </div>
 
           <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Work</span>
+              <select
+                value={workId}
+                onChange={(e) => setWorkId(e.target.value)}
+                aria-label="Work"
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              >
+                <option value="">All my works</option>
+                {works.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.title}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Relationship</span>
               <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
