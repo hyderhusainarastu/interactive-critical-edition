@@ -38,9 +38,9 @@ function AppShellContents({ email, admin, children }: { email: string | null | u
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const navItems: NavItem[] = [
     { href: "/dashboard", label: "Dashboard" },
+    { href: "/graph", label: "Visualization" },
     { href: "/works", label: "Works" },
     { href: "/library", label: "Library" },
-    { href: "/graph", label: "Visualization" },
     { href: "/upload", label: "Upload" },
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];

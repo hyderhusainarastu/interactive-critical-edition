@@ -1,4 +1,4 @@
-import { conceptMastery, db, readingRecords, understandingRatings } from "@ice/db";
+import { conceptMastery, db, readingRecords, understandingRatings, workRelationshipJudgments } from "@ice/db";
 import { KNOWN_THRESHOLD } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -67,6 +67,9 @@ export interface GraphLink {
   edgeType: string;
   category: string | null;
   confidence: number;
+  /** Cross-library judgement explanation and grounded claim anchors, when present. */
+  explanation?: string | null;
+  evidence?: unknown;
 }
 
 export interface GraphData {
@@ -334,6 +337,45 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         }))
       : []),
   ];
+
+  // Phase 12.5: only a durable, evidence-hashed judgement becomes a
+  // cross-work edge. Retrieval candidates never appear as relationships.
+  // This keeps an isolated work visible while preventing a vector/BM25 score
+  // from masquerading as a scholarly claim.
+  if (!rootWorkId) {
+    const judgments = await db
+      .select({
+        sourceWorkId: workRelationshipJudgments.sourceWorkId,
+        targetWorkId: workRelationshipJudgments.targetWorkId,
+        relationshipType: workRelationshipJudgments.relationshipType,
+        confidence: workRelationshipJudgments.confidence,
+        explanation: workRelationshipJudgments.explanation,
+        evidence: workRelationshipJudgments.evidence,
+        updatedAt: workRelationshipJudgments.updatedAt,
+      })
+      .from(workRelationshipJudgments)
+      .where(eq(workRelationshipJudgments.userId, userId));
+    const visibleWorkIds = new Set(works.map((work) => work.id));
+    // A changed basis can legitimately create a newer judgement. Display only
+    // the latest one per directed pair, while retaining prior rows as the
+    // permanent paid-judgement cache/audit history.
+    const latest = new Map<string, (typeof judgments)[number]>();
+    for (const judgment of judgments) {
+      if (!visibleWorkIds.has(judgment.sourceWorkId) || !visibleWorkIds.has(judgment.targetWorkId)) continue;
+      const key = `${judgment.sourceWorkId}:${judgment.targetWorkId}`;
+      const prior = latest.get(key);
+      if (!prior || judgment.updatedAt > prior.updatedAt) latest.set(key, judgment);
+    }
+    links.push(...[...latest.values()].map((judgment) => ({
+      source: `work:${judgment.sourceWorkId}`,
+      target: `work:${judgment.targetWorkId}`,
+      edgeType: judgment.relationshipType,
+      category: "cross_library",
+      confidence: judgment.confidence,
+      explanation: judgment.explanation,
+      evidence: judgment.evidence,
+    })));
+  }
 
   return {
     nodes,

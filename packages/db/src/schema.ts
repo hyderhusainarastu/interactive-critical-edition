@@ -1583,3 +1583,81 @@ export const workRelationshipCandidates = pgTable(
     check("work_relationship_candidate_distinct_works", sql`${t.sourceWorkId} <> ${t.targetWorkId}`),
   ],
 );
+
+/**
+ * Phase 12.5's durable answer to a *specific, source-grounded* cross-work
+ * question. Candidates are intentionally cheap and disposable retrieval
+ * hints; judgments are the cache. `basisHash` fingerprints the two work
+ * signals and their cited claims, so unchanged evidence is never paid for a
+ * second time while a changed work can be evaluated afresh. Direction is
+ * explicit: `sourceWorkId --relationshipType--> targetWorkId`.
+ */
+export const workRelationshipJudgments = pgTable(
+  "work_relationship_judgment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceWorkId: uuid("source_work_id").notNull().references(() => works.id, { onDelete: "cascade" }),
+    targetWorkId: uuid("target_work_id").notNull().references(() => works.id, { onDelete: "cascade" }),
+    /** SHA-256 of the exact claim evidence supplied to the judgement. */
+    basisHash: text("basis_hash").notNull(),
+    relationshipType: edgeTypeEnum("relationship_type").notNull(),
+    confidence: real("confidence").notNull().default(0),
+    explanation: text("explanation").notNull(),
+    /** { sourceClaims: [{ claimId, textBlockId, excerpt }], targetClaims: [...] }. */
+    evidence: jsonb("evidence").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("work_relationship_judgment_user_idx").on(t.userId),
+    index("work_relationship_judgment_source_idx").on(t.sourceWorkId),
+    index("work_relationship_judgment_target_idx").on(t.targetWorkId),
+    uniqueIndex("work_relationship_judgment_basis_unique").on(t.userId, t.sourceWorkId, t.targetWorkId, t.basisHash),
+    check("work_relationship_judgment_distinct_works", sql`${t.sourceWorkId} <> ${t.targetWorkId}`),
+    check("work_relationship_judgment_confidence_valid", sql`${t.confidence} >= 0 AND ${t.confidence} <= 1`),
+  ],
+);
+
+export const graphExpansionStatusEnum = pgEnum("graph_expansion_status", [
+  "planned",
+  "queued",
+  "running",
+  "complete",
+  "failed",
+]);
+
+/**
+ * An auditable, idempotent graph-expansion request. Automatic upload work
+ * creates a <=$0.25 request; manual work records the shown estimate and the
+ * required explicit confirmation once it is above $1. The worker never
+ * trusts client-supplied candidate counts or budget values.
+ */
+export const graphExpansionRequests = pgTable(
+  "graph_expansion_request",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    sourceWorkId: uuid("source_work_id").notNull().references(() => works.id, { onDelete: "cascade" }),
+    mode: text("mode").notNull(), // automatic | manual
+    requestedCandidates: integer("requested_candidates").notNull(),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    hardCapUsd: real("hard_cap_usd").notNull().default(5),
+    confirmedAt: timestamp("confirmed_at"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: graphExpansionStatusEnum("status").notNull().default("planned"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("graph_expansion_request_user_idx").on(t.userId, t.createdAt),
+    index("graph_expansion_request_source_idx").on(t.sourceWorkId),
+    uniqueIndex("graph_expansion_request_idempotency_unique").on(t.userId, t.idempotencyKey),
+    check("graph_expansion_request_count_valid", sql`${t.requestedCandidates} > 0 AND ${t.requestedCandidates} <= 100`),
+    check("graph_expansion_request_cap_valid", sql`${t.estimatedCostUsd} >= 0 AND ${t.hardCapUsd} > 0 AND ${t.hardCapUsd} <= 5`),
+  ],
+);

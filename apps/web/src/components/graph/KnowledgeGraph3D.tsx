@@ -38,9 +38,11 @@ function endpointId(end: GraphLink["source"] | GraphLink["target"]): string {
 export function KnowledgeGraph3D({
   data,
   onNodeClick,
+  onLinkClick,
 }: {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
+  onLinkClick?: (link: GraphLink) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Typed loosely: the library's own generic ref shape (wrapping NodeType in
@@ -156,6 +158,7 @@ export function KnowledgeGraph3D({
             return linkColors[edgeFamilyFor(link.edgeType, link.category)];
           }}
           enableNodeDrag={false}
+          cooldownTicks={80}
           showNavInfo={false}
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}
           onNodeClick={(n: object) => {
@@ -175,6 +178,7 @@ export function KnowledgeGraph3D({
             );
             onNodeClick(node);
           }}
+          onLinkClick={(link: object) => onLinkClick?.(link as GraphLink)}
         />
       )}
     </div>

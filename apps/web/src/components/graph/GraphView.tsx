@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
 import {
   CREDIBILITY_BAND_META,
@@ -19,6 +19,7 @@ import {
   filterGraphData,
   type GraphData,
   type GraphFilters,
+  type GraphLink,
   type GraphNode,
   type NodeType,
 } from "./types";
@@ -29,7 +30,7 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
   loading: () => <p className="py-10 text-center text-[var(--color-text-muted)]">Loading 3D view…</p>,
 });
 
-const FILTER_KEYS = ["state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
+const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
 
 function filtersFromParams(params: URLSearchParams): GraphFilters {
   const next = { ...DEFAULT_GRAPH_FILTERS };
@@ -51,15 +52,17 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
  * the exact same filtered node/edge set (one `filterGraphData` call feeds
  * both), and a filtered link is shareable/reloadable.
  */
-export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string; backHref: string; backLabel: string }) {
+export function GraphView({ endpoint, backHref, backLabel, enableExpansion = false }: { endpoint: string; backHref: string; backLabel: string; enableExpansion?: boolean }) {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
+  const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<GraphFilters>(() => filtersFromParams(searchParams));
+  const graphWorkspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -85,7 +88,7 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
       setFilters(next);
       const params = new URLSearchParams(searchParams.toString());
       for (const k of FILTER_KEYS) {
-        if (next[k] === "all") params.delete(k);
+        if (next[k] === "all" || next[k] === "") params.delete(k);
         else params.set(k, next[k]);
       }
       const qs = params.toString();
@@ -95,6 +98,22 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
   );
 
   const onNodeClick = useCallback((node: GraphNode) => setSelected(node), []);
+
+  function toggleFullscreen() {
+    const target = graphWorkspaceRef.current;
+    if (!target) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void target.requestFullscreen();
+  }
+
+  function exportPng() {
+    const canvas = graphWorkspaceRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = "palimnote-cross-library-graph.png";
+    link.click();
+  }
 
   const filtered = useMemo(() => (data ? filterGraphData(data, filters) : null), [data, filters]);
 
@@ -166,6 +185,15 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
 
           {/* Filters — the single source both views render from (plan §34.4 9.7). */}
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-1">
+              <span className="text-[var(--color-text-muted)]">Search</span>
+              <input
+                value={filters.search}
+                onChange={(event) => updateFilter("search", event.target.value)}
+                placeholder="Works, concepts, sources"
+                className="w-48 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              />
+            </label>
             <label className="flex items-center gap-1">
               <span className="text-[var(--color-text-muted)]">Filter</span>
               <select
@@ -295,12 +323,18 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
             </span>
           </div>
 
+          {enableExpansion && <GraphExpansionControls workNodes={workNodes} />}
+
           {filtered.nodes.length === 0 ? (
             <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.9fr)]">
+            <div ref={graphWorkspaceRef} className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.9fr)]">
               <section className="order-2 lg:order-1" aria-label="3D relationship graph">
-                <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} />
+                <div className="mb-2 flex justify-end gap-2 text-xs">
+                  <button type="button" onClick={toggleFullscreen} className="rounded border border-[var(--color-border)] px-2 py-1">Fullscreen</button>
+                  <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
+                </div>
+                <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} />
               </section>
               <section className="order-1 lg:order-2" aria-label="Accessible relationship table">
                 <GraphAccessibleFallback data={filtered} />
@@ -331,8 +365,96 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
               </div>
             </div>
           )}
+          {selectedLink && (
+            <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4" data-graph-evidence>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-medium text-[var(--color-text)]">{selectedLink.edgeType.replace(/_/g, " ")}</p>
+                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is available in the accessible table."}</p>
+                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}%</p>
+                  {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
+                </div>
+                <button type="button" className="text-sm underline" onClick={() => setSelectedLink(null)}>Close</button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>
   );
+}
+
+function EvidenceAnchors({ evidence }: { evidence: unknown }) {
+  const record = evidence && typeof evidence === "object" ? evidence as { sourceClaims?: { claim?: string; excerpt?: string }[]; targetClaims?: { claim?: string; excerpt?: string }[] } : null;
+  if (!record) return null;
+  const anchors = [...(record.sourceClaims ?? []), ...(record.targetClaims ?? [])].slice(0, 6);
+  if (!anchors.length) return null;
+  return <ul className="mt-3 space-y-2 border-l-2 border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]" aria-label="Grounded claim evidence">
+    {anchors.map((anchor, index) => <li key={index}><span className="font-medium text-[var(--color-text)]">{anchor.claim}</span>{anchor.excerpt ? <span> — “{anchor.excerpt}”</span> : null}</li>)}
+  </ul>;
+}
+
+interface ExpansionPreview {
+  availableCandidates: number;
+  hasGroundedClaims: boolean;
+  manual: { candidateCount: number; estimatedCostUsd: number; requiresConfirmation: boolean; hardCapUsd: number };
+}
+
+function GraphExpansionControls({ workNodes }: { workNodes: GraphNode[] }) {
+  const [workId, setWorkId] = useState(workNodes[0]?.id.replace(/^work:/, "") ?? "");
+  const [candidates, setCandidates] = useState(20);
+  const [preview, setPreview] = useState<ExpansionPreview | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!workId) return;
+    let ignore = false;
+    fetch(`/api/graph/expansion/preview?workId=${encodeURIComponent(workId)}&candidates=${candidates}`)
+      .then(async (response) => response.ok ? response.json() as Promise<ExpansionPreview> : null)
+      .then((next) => { if (!ignore) setPreview(next); })
+      .catch(() => { if (!ignore) setPreview(null); });
+    return () => { ignore = true; };
+  }, [workId, candidates]);
+
+  async function expand(confirmEstimatedCost: boolean) {
+    const response = await fetch("/api/graph/expansion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+      body: JSON.stringify({ workId, candidates, confirmEstimatedCost }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (response.status === 409 && body.preview?.manual?.requiresConfirmation) {
+      setMessage(`Estimated ${formatUsd(body.preview.manual.estimatedCostUsd)}. Confirm to queue this paid expansion.`);
+      return;
+    }
+    setMessage(response.ok ? "Expansion queued. Grounded relationships appear when the job completes." : (body.error ?? "Could not queue expansion."));
+  }
+
+  if (!workId) return null;
+  return (
+    <section className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm" data-graph-expansion>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1"><span className="text-xs text-[var(--color-text-muted)]">Expand from work</span>
+          <select value={workId} onChange={(event) => setWorkId(event.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+            {workNodes.map((work) => <option key={work.id} value={work.id.replace(/^work:/, "")}>{work.label}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1"><span className="text-xs text-[var(--color-text-muted)]">New candidates</span>
+          <input type="number" min={1} max={400} value={candidates} onChange={(event) => setCandidates(Math.max(1, Math.min(400, Number(event.target.value) || 1)))} className="w-24 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1" />
+        </label>
+        <button type="button" disabled={!preview?.hasGroundedClaims || !preview?.manual.candidateCount} onClick={() => expand(false)} className="rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-[var(--color-background)] disabled:opacity-50">Queue expansion</button>
+        {preview?.manual.requiresConfirmation && <button type="button" onClick={() => expand(true)} className="rounded border border-[var(--color-credibility-warning)] px-3 py-1.5">Confirm {formatUsd(preview.manual.estimatedCostUsd)}</button>}
+      </div>
+      <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+        {preview
+          ? `${preview.manual.candidateCount} of ${preview.availableCandidates} grounded candidates · estimate ${formatUsd(preview.manual.estimatedCostUsd)} · hard cap ${formatUsd(preview.manual.hardCapUsd)}${preview.manual.requiresConfirmation ? " · confirmation required above $1" : ""}`
+          : "Calculating a read-only estimate…"}
+      </p>
+      {message && <p className="mt-2 text-xs text-[var(--color-text-muted)]">{message}</p>}
+    </section>
+  );
+}
+
+function formatUsd(value: number) {
+  return `$${value.toFixed(value < 1 ? 3 : 2)}`;
 }

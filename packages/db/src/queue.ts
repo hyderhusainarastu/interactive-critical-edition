@@ -13,6 +13,8 @@ export const QUEUE_EXTRACT_TEXT = "extract-text";
 // extraction so a slow/failed analysis never blocks the reader from
 // opening a document whose text already extracted fine.
 export const QUEUE_ANALYZE_WORK = "analyze-work";
+/** Paid, source-grounded cross-work judgements (Phase 12.5). */
+export const QUEUE_EXPAND_CROSS_LIBRARY_GRAPH = "expand-cross-library-graph";
 
 export interface ExtractTextJob {
   documentId: string;
@@ -20,6 +22,10 @@ export interface ExtractTextJob {
 
 export interface AnalyzeWorkJob {
   documentId: string;
+}
+
+export interface ExpandCrossLibraryGraphJob {
+  expansionRequestId: string;
 }
 
 let bossPromise: Promise<PgBoss> | undefined;
@@ -39,6 +45,7 @@ export function getQueue(): Promise<PgBoss> {
       .start()
       .then(() => boss.createQueue(QUEUE_EXTRACT_TEXT))
       .then(() => boss.createQueue(QUEUE_ANALYZE_WORK))
+      .then(() => boss.createQueue(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH))
       .then(() => boss);
   }
   return bossPromise;
@@ -67,4 +74,14 @@ export async function enqueueExtractText(documentId: string) {
 export async function enqueueAnalyzeWork(documentId: string) {
   const boss = await getQueue();
   return boss.send(QUEUE_ANALYZE_WORK, { documentId } satisfies AnalyzeWorkJob);
+}
+
+/** Idempotency lives in `graph_expansion_request`; this queue payload is its immutable ID. */
+export async function enqueueGraphExpansion(expansionRequestId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
+    { expansionRequestId } satisfies ExpandCrossLibraryGraphJob,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
 }

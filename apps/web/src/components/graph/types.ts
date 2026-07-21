@@ -25,6 +25,8 @@ export interface GraphLink {
   edgeType: string;
   category: string | null;
   confidence: number;
+  explanation?: string | null;
+  evidence?: unknown;
 }
 
 export interface GraphData {
@@ -105,6 +107,7 @@ export function edgeTypesByNode(data: Pick<GraphData, "links">): Map<string, Set
 }
 
 export interface GraphFilters {
+  search: string;
   state: NodeState | "all";
   type: NodeType | "all";
   authority: string | "all";
@@ -124,6 +127,7 @@ export const CREDIBILITY_BAND_META: Record<CredibilityBand, { label: string }> =
 };
 
 export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
+  search: "",
   state: "all",
   type: "all",
   authority: "all",
@@ -163,8 +167,10 @@ export function filterGraphData(data: GraphData, filters: GraphFilters): GraphDa
             return [];
           }),
         ]);
+  const normalizedSearch = filters.search.trim().toLocaleLowerCase();
   const nodes = data.nodes.filter(
     (n) =>
+      (!normalizedSearch || `${n.label} ${n.authors ?? ""} ${n.kind ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) &&
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
       (filters.authority === "all" || n.authority === filters.authority) &&

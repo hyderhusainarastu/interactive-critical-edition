@@ -25,8 +25,9 @@ export function GraphAccessibleFallback({ data }: { data: GraphData }) {
     for (const l of data.links) {
       const s = typeof l.source === "string" ? l.source : (l.source as { id: string }).id;
       const t = typeof l.target === "string" ? l.target : (l.target as { id: string }).id;
-      byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} → ${labelById.get(t) ?? t}`]);
-      byNode.set(t, [...(byNode.get(t) ?? []), `← ${edgeTypeLabel(l.edgeType)} from ${labelById.get(s) ?? s}`]);
+      const evidence = l.explanation ? ` — ${l.explanation}` : "";
+      byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} → ${labelById.get(t) ?? t}${evidence}`]);
+      byNode.set(t, [...(byNode.get(t) ?? []), `← ${edgeTypeLabel(l.edgeType)} from ${labelById.get(s) ?? s}${evidence}`]);
     }
     return byNode;
   }, [data]);

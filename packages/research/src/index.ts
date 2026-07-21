@@ -1,5 +1,6 @@
 export * from "./types";
 export * from "./config";
+export * from "./crossWork";
 export * from "./normalize";
 // Relevance is exported BEFORE credibility to mirror the pipeline order: a
 // candidate's relevance is settled first, and only accepted candidates are

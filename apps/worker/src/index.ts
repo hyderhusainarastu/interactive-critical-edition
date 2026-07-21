@@ -9,10 +9,14 @@ import {
   type ExtractTextJob,
   footnotes,
   getQueue,
+  enqueueGraphExpansion,
+  graphExpansionRequests,
   processingJobs,
   processingRuns,
   pages,
   QUEUE_ANALYZE_WORK,
+  QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
+  type ExpandCrossLibraryGraphJob,
   QUEUE_EXTRACT_TEXT,
   researchCache,
   textBlocks,
@@ -22,6 +26,7 @@ import { reportError } from "@ice/observability";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { analyzeEditionRun, analyzeWork } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
+import { expandCrossLibraryGraph } from "./crossLibraryGraph";
 
 function sha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
@@ -154,6 +159,7 @@ async function handleEditionExtraction(documentId: string) {
     mimeType: documents.mimeType,
     originalFilename: documents.originalFilename,
     workId: documents.workId,
+    userId: documents.userId,
     processingStatus: documents.processingStatus,
   }).from(documents).where(eq(documents.id, documentId)).limit(1);
   if (!doc) throw new Error(`Document ${documentId} not found`);
@@ -285,6 +291,27 @@ async function handleEditionExtraction(documentId: string) {
       detectedAuthor: parsed.detectedAuthor,
       autoReady,
     });
+    // Cross-library work is an independent, release-gated post-publication
+    // step. A v4 run creates at most one automatic request; its own worker
+    // enforces 20 candidates and $0.25, so uploading never silently fans out
+    // into an unbounded paid graph operation.
+    if (pipeline === "v4" && phase12FeatureEnabled("crossLibraryGraph")) {
+      const [expansion] = await db
+        .insert(graphExpansionRequests)
+        .values({
+          userId: doc.userId,
+          sourceWorkId: doc.workId,
+          mode: "automatic",
+          requestedCandidates: 20,
+          estimatedCostUsd: 0.25,
+          hardCapUsd: 0.25,
+          idempotencyKey: `automatic:${run.id}`,
+          status: "queued",
+        })
+        .onConflictDoNothing({ target: [graphExpansionRequests.userId, graphExpansionRequests.idempotencyKey] })
+        .returning({ id: graphExpansionRequests.id });
+      if (expansion) await enqueueGraphExpansion(expansion.id);
+    }
     if (job) await db.update(processingJobs).set({ status: "succeeded", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -353,10 +380,15 @@ async function main() {
     }
   });
 
+  await boss.work<ExpandCrossLibraryGraphJob>(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) await expandCrossLibraryGraph(job.data.expansionRequestId);
+  });
+
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary
   // runs to production quietly running something other than what was assumed.
   console.log(
-    `[worker] listening for "${QUEUE_EXTRACT_TEXT}" and "${QUEUE_ANALYZE_WORK}" jobs (pipeline ${activePipelineVersion()})`,
+    `[worker] listening for "${QUEUE_EXTRACT_TEXT}", "${QUEUE_ANALYZE_WORK}", and "${QUEUE_EXPAND_CROSS_LIBRARY_GRAPH}" jobs (pipeline ${activePipelineVersion()})`,
   );
 }
 
