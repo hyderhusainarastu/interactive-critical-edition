@@ -3,259 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Implementation progress for Palimnote.">
-  <title>Progress · Palimnote</title>
+  <title>Palimnote — Project status</title>
   <style>
-    :root {
-      color-scheme: light dark;
-      --canvas: #f7f3eb;
-      --surface: #fffdf8;
-      --surface-muted: #eee7da;
-      --ink: #24211d;
-      --muted: #625b51;
-      --line: #d9d0c0;
-      --complete: #286044;
-      --complete-soft: #dcece2;
-      --active: #8c5c0d;
-      --active-soft: #f8e8bf;
-      --planned: #5b6470;
-      --planned-soft: #e7e9ed;
-      --link: #294b72;
-      --shadow: 0 10px 28px rgb(44 36 25 / 0.07);
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --canvas: #191815;
-        --surface: #24211d;
-        --surface-muted: #302c26;
-        --ink: #f3eee5;
-        --muted: #c3baad;
-        --line: #4a4339;
-        --complete: #8dc79e;
-        --complete-soft: #1e3a2a;
-        --active: #e8bc5c;
-        --active-soft: #483613;
-        --planned: #bec6d2;
-        --planned-soft: #343942;
-        --link: #a8c9f0;
-        --shadow: 0 10px 28px rgb(0 0 0 / 0.22);
-      }
-    }
-
-    * { box-sizing: border-box; }
-    html { -webkit-text-size-adjust: 100%; }
-    body {
-      margin: 0;
-      min-width: 20rem;
-      background: var(--canvas);
-      color: var(--ink);
-      font: 1rem/1.55 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    a { color: var(--link); }
-    a:focus-visible, summary:focus-visible {
-      outline: 3px solid var(--active);
-      outline-offset: 3px;
-      border-radius: 3px;
-    }
-
-    .page { width: min(100% - 2rem, 72rem); margin-inline: auto; padding: clamp(2.5rem, 7vw, 5.5rem) 0 5rem; }
-    .eyebrow, .meta, .status, .phase-number {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      letter-spacing: .07em;
-      text-transform: uppercase;
-    }
-    .eyebrow { margin: 0 0 .65rem; color: var(--muted); font-size: .76rem; font-weight: 700; }
-    h1, h2, h3 { font-family: Iowan Old Style, Palatino Linotype, Palatino, Georgia, serif; }
-    h1 { max-width: 18ch; margin: 0; font-size: clamp(2.35rem, 7vw, 4.5rem); line-height: .98; letter-spacing: -.045em; }
-    .lede { max-width: 63ch; margin: 1.25rem 0 0; color: var(--muted); font-size: clamp(1rem, 2vw, 1.16rem); }
-    .links { display: flex; flex-wrap: wrap; gap: .65rem 1.25rem; margin-top: 1.2rem; font-size: .94rem; }
-
-    .overview {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 1.5rem;
-      align-items: end;
-      margin-top: 2.5rem;
-      padding: clamp(1.25rem, 3vw, 2rem);
-      border: 1px solid var(--line);
-      border-radius: 1rem;
-      background: var(--surface);
-      box-shadow: var(--shadow);
-    }
-    .overview h2 { margin: .1rem 0 0; font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.1; }
-    .overview p { max-width: 55ch; margin: .7rem 0 0; color: var(--muted); }
-    .metric { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
-    .metric strong { display: block; font-size: 2.5rem; line-height: 1; letter-spacing: -.06em; }
-    .metric span { color: var(--muted); font-size: .82rem; }
-    .progress { margin-top: 1.35rem; }
-    .progress-label { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .45rem; color: var(--muted); font-size: .84rem; }
-    .bar { height: .7rem; overflow: hidden; border-radius: 999px; background: var(--surface-muted); }
-    .bar > span { display: block; width: 100%; height: 100%; border-radius: inherit; background: var(--complete); }
-
-    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 4rem 0 1.25rem; }
-    .section-heading h2 { margin: 0; font-size: clamp(1.7rem, 3vw, 2.35rem); letter-spacing: -.025em; }
-    .section-heading p { margin: 0; color: var(--muted); font-size: .9rem; }
-
-    .phases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 0; padding: 0; list-style: none; }
-    .phase { display: flex; flex-direction: column; min-height: 15rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: .85rem; background: var(--surface); }
-    .phase.active { border: 2px solid var(--active); box-shadow: var(--shadow); }
-    .phase-top { display: flex; align-items: start; justify-content: space-between; gap: .75rem; }
-    .phase-number { color: var(--muted); font-size: .74rem; font-weight: 700; }
-    .phase h3 { margin: .25rem 0 0; font-size: 1.35rem; line-height: 1.12; letter-spacing: -.02em; }
-    .status { flex: none; margin-top: .1rem; padding: .3rem .5rem; border-radius: 999px; font-size: .65rem; font-weight: 800; white-space: nowrap; }
-    .status.complete { color: var(--complete); background: var(--complete-soft); }
-    .status.active { color: var(--active); background: var(--active-soft); }
-    .status.planned { color: var(--planned); background: var(--planned-soft); }
-    .phase p { margin: .9rem 0 0; color: var(--muted); font-size: .92rem; }
-    .phase .meta { margin-top: auto; padding-top: 1rem; color: var(--muted); font-size: .7rem; }
-
-    .focus { margin-top: 1.5rem; padding: clamp(1.3rem, 3vw, 2rem); border: 1px solid var(--active); border-radius: 1rem; background: var(--surface); }
-    .focus-header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
-    .focus h2 { margin: .2rem 0 0; font-size: clamp(1.6rem, 3vw, 2.2rem); line-height: 1.1; letter-spacing: -.025em; }
-    .focus > p { max-width: 72ch; margin: 1rem 0 0; color: var(--muted); }
-    .subphases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: 1.5rem 0 0; padding: 0; list-style: none; counter-reset: subphase; }
-    .subphase { position: relative; min-height: 8.6rem; padding: 1rem 1rem 1rem 3.2rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface-muted); }
-    .subphase::before { position: absolute; left: 1rem; top: 1rem; display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); content: counter(subphase); counter-increment: subphase; font: 700 .7rem/1 ui-monospace, monospace; }
-    .subphase.complete::before { content: "✓"; border-color: var(--complete); background: var(--complete); color: var(--surface); }
-    .subphase.current { border-color: var(--active); background: var(--active-soft); }
-    .subphase.current::before { border-color: var(--active); color: var(--active); }
-    .subphase h3 { margin: 0; font-size: 1rem; line-height: 1.2; }
-    .subphase p { margin: .4rem 0 0; color: var(--muted); font-size: .86rem; line-height: 1.45; }
-    .subphase.complete h3 { color: var(--complete); }
-    .subphase.current h3 { color: var(--active); }
-
-    details { margin-top: 1.5rem; border-top: 1px solid var(--line); }
-    summary { padding: 1rem 0; cursor: pointer; color: var(--link); font-weight: 700; }
-    .evidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; padding-bottom: .5rem; }
-    .evidence div { padding: .8rem; border-left: 3px solid var(--line); }
-    .evidence strong { display: block; font-size: .85rem; }
-    .evidence span { color: var(--muted); font-size: .82rem; }
-
-    footer { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
-    footer p { margin: 0; }
-
-    @media (max-width: 43rem) {
-      .overview, .subphases { grid-template-columns: 1fr; }
-      .metric { text-align: left; }
-      .phases { grid-template-columns: 1fr; }
-      .phase { min-height: 0; }
-      .evidence { grid-template-columns: 1fr; }
-      .section-heading { align-items: start; flex-direction: column; }
-    }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+    :root { --ink:#25211d; --muted:#675f56; --paper:#fcfaf5; --panel:#fffdf9; --line:#ded7cc; --accent:#7c3f20; --complete:#2f6b4d; --progress:#9a5a19; --planned:#676a78; --gated:#79527e; --incomplete:#a23d34; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    main { max-width:72rem; margin:auto; padding:clamp(1.25rem,4vw,4rem) clamp(1rem,4vw,2rem) 4rem; } h1,h2,h3,h4,p { margin-top:0; } h1 { font:700 clamp(2.2rem,6vw,4.8rem)/1.02 Georgia,serif; letter-spacing:-.04em; max-width:14ch; } h2 { font:700 clamp(1.55rem,3vw,2.35rem)/1.1 Georgia,serif; letter-spacing:-.025em; } h3 { font:700 1.22rem/1.2 Georgia,serif; } h4 { margin:0; font-size:1rem; } a { color:var(--accent); } code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88em; }
+    header { border-bottom:1px solid var(--line); padding-bottom:2rem; } .eyebrow { margin-bottom:.4rem; color:var(--accent); font-size:.78rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; } .lede { max-width:61ch; color:var(--muted); font-size:1.1rem; }
+    section { margin-top:3.5rem; } .overview { display:grid; grid-template-columns:minmax(0,2fr) minmax(13rem,1fr); gap:1.5rem; align-items:stretch; } .card,.metric,.phase,.audit { border:1px solid var(--line); background:var(--panel); border-radius:.75rem; box-shadow:0 .3rem 1.2rem rgba(69,50,27,.045); } .card { padding:1.4rem; } .metric { display:grid; place-content:center; padding:1.4rem; text-align:center; } .metric strong { font:700 2.45rem/1 Georgia,serif; } .metric span { color:var(--muted); margin-top:.5rem; }
+    .counts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.7rem; margin-top:1.3rem; } .count { padding:.75rem; border:1px solid var(--line); border-radius:.5rem; } .count strong,.count span { display:block; } .count strong { font-size:1.35rem; } .count span { color:var(--muted); font-size:.8rem; }
+    .phases { list-style:none; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:0; padding:0; } .phase { padding:1.2rem; } .phase-heading,.audit-heading,.subphase>div { display:flex; gap:.75rem; justify-content:space-between; align-items:flex-start; } .phase h3 { margin-bottom:.55rem; } .phase .eyebrow { margin:.1rem 0 .25rem; } .phase>p:not(.eyebrow) { color:var(--muted); } .meta,.confirmation { color:var(--muted); font-size:.88rem; } .confirmation strong { color:var(--ink); }
+    .status { display:inline-flex; flex:none; align-items:center; border-radius:999px; padding:.18rem .55rem; font-size:.72rem; font-weight:750; line-height:1.2; white-space:nowrap; } .status.complete { background:#e5f2e9; color:var(--complete); } .status.in_progress { background:#fff0d9; color:var(--progress); } .status.awaiting_confirmation { background:#eee7f4; color:var(--gated); } .status.planned { background:#ececf0; color:var(--planned); } .status.operational { background:#e5f2e9; color:var(--complete); } .status.release_gated { background:#eee7f4; color:var(--gated); } .status.incomplete { background:#f9e4e1; color:var(--incomplete); }
+    ul { padding-left:1.2rem; } li+li { margin-top:.4rem; } .phase ul,.audit ul { color:var(--muted); font-size:.88rem; } .subphases { list-style:none; margin:1rem 0 0; padding:0; border-top:1px solid var(--line); } .subphase { padding:1rem 0 0; } .subphase+li { margin-top:0; border-top:1px solid var(--line); } .subphase h4 { margin:.15rem 0 .35rem; } .subphase p { margin:.5rem 0 0; color:var(--muted); font-size:.9rem; } .subphase-id { color:var(--accent); font-size:.78rem; font-weight:750; }
+    .audit-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1rem; } .audit { padding:1.2rem; } .audit p { color:var(--muted); } .empty { color:var(--muted); font-style:italic; } footer { margin-top:4rem; border-top:1px solid var(--line); padding-top:1rem; color:var(--muted); font-size:.88rem; }
+    @media (max-width:44rem) { .overview,.phases { grid-template-columns:1fr; } .counts { grid-template-columns:repeat(2,minmax(0,1fr)); } } @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
   </style>
 </head>
 <body>
-  <main class="page">
+  <main>
     <header>
-      <p class="eyebrow">Palimnote · Project record</p>
-      <h1>Build progress, plainly accounted for.</h1>
-      <p class="lede">A concise record of what has shipped, what is underway, and what comes next. The canonical detail lives in <code>docs/PROJECT-LOG.md</code>; the approved delivery plan lives in <code>docs/architecture/plan.md</code>.</p>
-      <nav class="links" aria-label="Project links">
-        <a href="https://github.com/hyderhusainarastu/interactive-critical-edition" target="_blank" rel="noopener noreferrer">Repository</a>
-        <a href="https://interactive-critical-edition.vercel.app" target="_blank" rel="noopener noreferrer">Live application</a>
-      </nav>
+      <p class="eyebrow">Palimnote · Generated project record</p>
+      <h1>Progress, evidence, and the next gate.</h1>
+      <p class="lede">This standalone checklist is generated from <code>docs/project-status.json</code>. The canonical narrative is <code>docs/PROJECT-LOG.md</code>; the approved delivery plan is <code>docs/architecture/plan.md</code>.</p>
     </header>
-
-    <section class="overview" aria-labelledby="overview-title">
-      <div>
+    <section class="overview" aria-labelledby="current-title">
+      <div class="card">
         <p class="eyebrow">Current position</p>
-        <h2 id="overview-title">Phase 12 is complete</h2>
-        <p>Phases 0–12 are complete. Phase 12 (Production Research Workspace) shipped 2026-07-21: migrations 0020–0025 (ledger 26), Library, reader, graph, Writer, and v4 gates, a full/non-degraded same-corpus v3/v4 comparison, and the forecasted one-work v4 backfill. Render enforces $1 normal/$5 hard research caps and automatic graph expansion is capped at 20 candidates/$0.25. The disposable canary and its Storage object were verified removed. Phase 13 is planned next.</p>
-        <div class="progress">
-          <div class="progress-label"><span>Phase 12 scope items</span><span>7 of 7 locally complete</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 12 scope items locally complete" aria-valuemin="0" aria-valuemax="7" aria-valuenow="7"><span style="width: 100%"></span></div>
+        <h2 id="current-title">Phase 13 complete — confirmation required</h2>
+        <p>The roadmap, generated status record, tracker workflow, and evidence-based operational audit are complete. Phase 14 remains blocked by its explicit confirmation gate.</p>
+        <p><strong>Next action:</strong> Review the Phase 13 handoff and confirm whether to begin Phase 14.</p>
+        <div class="counts" aria-label="Phase totals">
+          <div class="count"><strong>13</strong><span>complete</span></div>
+          <div class="count"><strong>0</strong><span>in progress</span></div>
+          <div class="count"><strong>1</strong><span>awaiting confirmation</span></div>
+          <div class="count"><strong>4</strong><span>planned</span></div>
         </div>
       </div>
-      <div class="metric"><strong>13 / 14</strong><span>numbered phases complete</span></div>
+      <div class="metric"><strong>4 / 4</strong><span>current-phase subphases complete</span></div>
     </section>
-
-    <section aria-labelledby="phase-index-title">
-      <div class="section-heading">
-        <h2 id="phase-index-title">Phase index</h2>
-        <p>Completed phases are deliberately summarized; the most recently completed phase is detailed below.</p>
-      </div>
-      <ol class="phases">
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 0</div><h3>Research &amp; planning</h3></div><span class="status complete">Complete</span></div><p>Product definition, implementation plan, governance, repository, and project constraints established.</p><div class="meta">tag · phase-0-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 1</div><h3>Foundation</h3></div><span class="status complete">Complete</span></div><p>Next.js, authentication, database, storage, observability, and CI brought to production.</p><div class="meta">tag · phase-1-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 2</div><h3>Upload &amp; library</h3></div><span class="status complete">Complete</span></div><p>Secure upload, parsing, metadata confirmation, worker processing, and a personal library shipped.</p><div class="meta">tag · phase-2-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 3</div><h3>Reader</h3></div><span class="status complete">Complete</span></div><p>PDF and text reading, anchored highlights, notes, bookmarks, persistence, and split-pane reading delivered.</p><div class="meta">tag · phase-3-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 4</div><h3>Scholarly analysis</h3></div><span class="status complete">Complete</span></div><p>Citation resolution, relationship analysis, provenance, confidence, and reader annotations implemented.</p><div class="meta">tag · phase-4-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 5</div><h3>Roadmap &amp; knowledge graph</h3></div><span class="status complete">Complete</span></div><p>Personalized reading routes, knowledge profile, 3D graph, and equal accessible table fallback delivered.</p><div class="meta">tag · phase-5-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 6</div><h3>Landing &amp; onboarding</h3></div><span class="status complete">Complete</span></div><p>Public product story, policy pages, and optional reader onboarding completed.</p><div class="meta">tag · phase-6-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 7</div><h3>Hardening &amp; deployment</h3></div><span class="status complete">Complete</span></div><p>Authorization coverage, evaluation harness, admin tools, CI, recovery drill, and documentation completed.</p><div class="meta">tag · phase-7-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 8</div><h3>Autonomous critical edition</h3></div><span class="status complete">Complete</span></div><p>Page-aware extraction, evidence-first research, relevance gating, source grouping, and reliable v2 publishing verified in production.</p><div class="meta">tag · phase-8-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>All seven planned sub-phases shipped and production-verified. The originally-planned 9.8 was retired as a phantom requirement; see Phase 10.</p><div class="meta">tag · phase-9-complete</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete gaps 9.1–9.7 left in Phase 9's own original objective; the two AI-pipeline-touching items are production-canary-verified.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Rebrand, UI/UX overhaul &amp; reader/relevance fixes</h3></div><span class="status complete">Complete</span></div><p>Palimnote rebrand, stronger theming, honest upload progress, Library work-scoping, a two-part reader overhaul, a classification fix, and a merged graph/table visualization.</p><div class="meta">plan · docs/architecture/plan.md §36</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Production research workspace</h3></div><span class="status complete">Complete</span></div><p>Production research and writing workspace shipped: canonical sources, v4, processed reader, evidence-grounded graph, Writer mode, hardening, canary comparison, and resumable backfill under enforced caps.</p><div class="meta">plan · docs/architecture/plan.md §37</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 13</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 12</div></li>
-      </ol>
+    <section aria-labelledby="roadmap-title">
+      <p class="eyebrow">Roadmap</p><h2 id="roadmap-title">Phases 0–17</h2>
+      <ol class="phases"><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 0</p><h3>Research and planning</h3></div><span class="status complete">Complete</span></div><p>Product definition, architecture plan, governance, and repository established.</p><p class="meta">Tag: <code>phase-0-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 1</p><h3>Foundation</h3></div><span class="status complete">Complete</span></div><p>Next.js, authentication, database, storage, observability, and CI delivered.</p><p class="meta">Tag: <code>phase-1-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 2</p><h3>Upload and Library</h3></div><span class="status complete">Complete</span></div><p>Secure upload, worker processing, metadata confirmation, and personal Library delivered.</p><p class="meta">Tag: <code>phase-2-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 3</p><h3>Reader</h3></div><span class="status complete">Complete</span></div><p>PDF and text reading, highlights, notes, bookmarks, and persistence delivered.</p><p class="meta">Tag: <code>phase-3-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 4</p><h3>Scholarly analysis</h3></div><span class="status complete">Complete</span></div><p>Citation resolution, provenance, relationship analysis, and reader annotations delivered.</p><p class="meta">Tag: <code>phase-4-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 5</p><h3>Reading roadmap and knowledge graph</h3></div><span class="status complete">Complete</span></div><p>Personalized roadmap, reader profile, visualization, and accessible graph table delivered.</p><p class="meta">Tag: <code>phase-5-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 6</p><h3>Landing and onboarding</h3></div><span class="status complete">Complete</span></div><p>Public product story, policy pages, and reader onboarding delivered.</p><p class="meta">Tag: <code>phase-6-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 7</p><h3>Hardening and deployment</h3></div><span class="status complete">Complete</span></div><p>Authorization coverage, evaluation harness, admin tooling, CI, recovery drill, and documentation delivered.</p><p class="meta">Tag: <code>phase-7-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 8</p><h3>Autonomous critical edition</h3></div><span class="status complete">Complete</span></div><p>Page-aware extraction, evidence-first research, relevance gating, and reliable v2 publishing production-verified.</p><p class="meta">Tag: <code>phase-8-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 9</p><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>Reader levels, concepts, Library resources, curriculum, graph extension, and trash delivered.</p><p class="meta">Tag: <code>phase-9-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 10</p><h3>Workspace depth and adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete annotation, Library, graph, reader-level, and terminology gaps from Phase 9.</p><p class="meta">Tag: <code>phase-10-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 11</p><h3>Rebrand and interface repairs</h3></div><span class="status complete">Complete</span></div><p>Palimnote rebrand, upload progress, reader overhaul, Library scoping, and Visualization repairs delivered.</p><p class="meta">Tag: <code>phase-11-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p></li><li class="phase complete"><div class="phase-heading"><div><p class="eyebrow">Phase 12</p><h3>Production research workspace</h3></div><span class="status complete">Complete</span></div><p>Pipeline v4, canonical Library sources, processed reader, cross-library graph, Writer, and hardening delivered.</p><p class="meta">Tag: <code>phase-12-complete</code></p><p class="confirmation"><strong>Gate:</strong> Historical closeout confirmed.</p><ul><li>Production migrations 0020–0025 are recorded through Drizzle ledger 26.</li><li>Same-corpus v3/v4 canary and the approved one-work v4 backfill completed within caps.</li><li>Render enforces $1 normal and $5 hard research cost limits.</li></ul></li><li class="phase awaiting_confirmation"><div class="phase-heading"><div><p class="eyebrow">Phase 13</p><h3>Project record, checklist, and operational audit</h3></div><span class="status awaiting_confirmation">Awaiting Confirmation</span></div><p>Replaced obsolete roadmap references, introduced the generated status checklist and CI guard, recorded the tracker workflow, and audited released surfaces.</p><p class="meta">Tag: <code>phase-13-complete</code></p><p class="confirmation"><strong>Gate:</strong> Phase 14 must not begin until Phase 13 closeout is confirmed.</p><ul><li>docs/project-status.json is the tracked source; progress-checklist.html is generated and CI checks it for drift.</li><li>13 targeted config/worker tests and 27 seeded Chromium flows passed locally.</li><li>Read-only production inspection found a live v4 worker, one active work, one published v4 run, zero graph expansions, and zero Writer projects.</li></ul><ol class="subphases"><li class="subphase complete"><div><span class="subphase-id">13.1</span><h4>Roadmap and record</h4></div><span class="status complete">Complete</span><p>Replaced obsolete planning references with the Phase 13–17 roadmap in the architecture plan and project record.</p></li><li class="subphase complete"><div><span class="subphase-id">13.2</span><h4>Generated checklist</h4></div><span class="status complete">Complete</span><p>Added the structured source, standalone generated HTML, package commands, and stale-output CI check.</p></li><li class="subphase complete"><div><span class="subphase-id">13.3</span><h4>Tracker workflow</h4></div><span class="status complete">Complete</span><p>Recorded the required status-update workflow and synchronized the root mirror from the canonical record.</p></li><li class="subphase complete"><div><span class="subphase-id">13.4</span><h4>Operational audit</h4></div><span class="status complete">Complete</span><p>Audited v4 processing, Interactive Reader, Visualization, Library, and Writer locally and read-only in production.</p></li></ol></li><li class="phase planned"><div class="phase-heading"><div><p class="eyebrow">Phase 14</p><h3>Library focus, interface, motion, and multi-work upload</h3></div><span class="status planned">Planned</span></div><p>Focus the Library on uploaded work, establish shared interaction patterns, and add batch upload.</p><p class="confirmation"><strong>Gate:</strong> Closeout confirmation is required before Phase 15 begins.</p></li><li class="phase planned"><div class="phase-heading"><div><p class="eyebrow">Phase 15</p><h3>Visualization as a connected research web</h3></div><span class="status planned">Planned</span></div><p>Expand provenance-backed graph relationships, open-access retrieval, and accessible graph interaction.</p><p class="confirmation"><strong>Gate:</strong> Closeout confirmation is required before Phase 16 begins.</p></li><li class="phase planned"><div class="phase-heading"><div><p class="eyebrow">Phase 16</p><h3>Reliable processing and the Interactive Reader</h3></div><span class="status planned">Planned</span></div><p>Strengthen structural extraction, clarify reader modes, and redesign the annotation apparatus.</p><p class="confirmation"><strong>Gate:</strong> Closeout confirmation is required before Phase 17 begins.</p></li><li class="phase planned"><div class="phase-heading"><div><p class="eyebrow">Phase 17</p><h3>Library-grounded Socratic RAG chat</h3></div><span class="status planned">Planned</span></div><p>Index owner-scoped sources and add citation-grounded, Socratic conversations across the workspace.</p><p class="confirmation"><strong>Gate:</strong> Closeout confirmation is required before any follow-on phase begins.</p></li></ol>
     </section>
-
-    <section class="focus" aria-labelledby="phase-twelve-title">
-      <div class="focus-header"><div><p class="eyebrow">Completed phase</p><h2 id="phase-twelve-title">Production Research Workspace</h2></div><span class="status complete">Complete</span></div>
-      <p>All seven parts are committed, verified, logged, pushed, and production-released. Additive schema, web/worker flags, full/non-degraded v3/v4 comparison, a bounded v4 backfill, and canary cleanup have all completed; v2/v3 rollback paths remain available.</p>
-      <ol class="subphases">
-        <li class="subphase complete"><h3>12.1 · Foundation and site-wide UX</h3><p>Responsive shell, compact headers, mobile drawer, command palette, toasts, recovery states, feature flags, preferences, and desktop/mobile baselines. Complete.</p></li>
-        <li class="subphase complete"><h3>12.2 · Library, identity &amp; source coverage</h3><p>Canonical source aggregation, verified SHA-256 duplicate resolution, transparent source labels, public Reddit web-search metadata only, and cumulative/exact level filtering. Production schema and identity gate are live; the v4 canary and retained backfill used verified stored-byte hashes.</p></li>
-        <li class="subphase complete"><h3>12.3 · Pipeline v4 &amp; annotations</h3><p>Eight capped section-aware chunks, grounded deduplicated annotations with helpful purpose/scope, independent source apparatus, compact embeddings/candidates, and an admin-only dry-run forecast. The matched v3/v4 comparison passed full/non-degraded at $0.0861008; the lone forecasted work then published full v4 at $0.0850599.</p></li>
-        <li class="subphase complete"><h3>12.4 · Interactive reader</h3><p>Release-gated processed text with original-file labels, outline/position/annotation navigation, focus mode, many-to-many note links, author apparatus filters, and verified script terms. Production schema and web gate are live; no authenticated production reader mutation was initiated.</p></li>
-        <li class="subphase complete"><h3>12.5 · Cross-library graph</h3><p>Evidence-hashed directional claim judgments, BM25/vector retrieval, accessible graph workspace, and automatic/manual cost guardrails. Production schema, guarded web gate, and 20-candidate/$0.25 automatic worker gate are live; no graph expansion exists because the retained Library currently has one work.</p></li>
-        <li class="subphase complete"><h3>12.6 · Writer mode</h3><p>Private owner-scoped projects and ProseMirror drafts, recovery snapshots, resizable Library/reader companion, CSL-JSON citation ingestion, MLA 9 formatting, and validated DOCX/PDF exports. Production schema and web gate are live; no draft or external citation lookup was initiated.</p></li>
-        <li class="subphase complete"><h3>12.7 · Production hardening</h3><p>Shared rate limits and idempotency, upload/API safeguards with structured error telemetry, dormant Sentry, automated accessibility/visual/load/restore checks, and confirmation/undo-safe destructive actions. Production auth and the normal Storage-aware permanent-purge flow were exercised by the disposable cleanup; the worker enforces $1 normal/$5 hard caps.</p></li>
-      </ol>
-      <details>
-        <summary>What has shipped in Parts 1–4</summary>
-        <div class="evidence">
-          <div><strong>Shared infrastructure</strong><span>Responsive app shell, keyboard command palette, mobile navigation, toasts, tooltips, compact headers, and failure recovery now serve every authenticated route.</span></div>
-          <div><strong>Preferences without flash</strong><span>Authenticated preferences validate and persist; local values apply before hydration and reduced-motion behavior remains respected.</span></div>
-          <div><strong>Verified baseline</strong><span>Desktop/mobile landing captures are tracked under <code>docs/baselines/phase-12-foundation</code>; config, typecheck, lint, build, and a local Playwright shell flow pass.</span></div>
-          <div><strong>Canonical sources</strong><span>One Library source now aggregates its cross-work roles; duplicate uploads resolve by a worker-verified SHA-256 hash, while source type, peer review, authority, creator verification, and credibility remain visible.</span></div>
-          <div><strong>Safe rollout</strong><span>Public Reddit results remain Tavily citation metadata only and authority E. Production migrations 0020–0025 and every Phase 12 web/worker release gate are live. The retained work is full, published v4; the graph has no relationship request yet because one work cannot form a pair.</span></div>
-          <div><strong>Provider clarity</strong><span>Tavily uses bearer-token authentication; enabled providers omitted by all generated lanes display as not selected rather than unavailable. Blog/newsletter discovery remains within Tavily's existing 12-result budget; no direct Reddit adapter exists. A local hidden-input helper writes provider values only to the ignored worker env file; one bounded local live lookup verified Tavily, YouTube, Mastodon, and Bluesky all return results, and all four are configured on the production worker with a clean v2 startup.</span></div>
-          <div><strong>V4 is reversible</strong><span>Pipeline v4 preserves v2/v3 rollback and additive records only. Its same-corpus production run was full/non-degraded, improved A/B source coverage, and stayed at $0.0861008; a work still receives at most eight 12,000-character section chunks with real anchors, scope, and overlap deduplication.</span></div>
-          <div><strong>Apparatus &amp; signals</strong><span>Footnotes, endnotes, bibliography entries, and citation blocks are stored independently of AI annotations. Grounded claims, compact embeddings, and unjudged retrieval candidates prepare the graph without presenting a relationship as fact.</span></div>
-          <div><strong>Backfill control</strong><span>The Admin dashboard and protected forecast route estimate v4 work without queuing a job or calling a provider. The six-chunk $0.066563 forecast was separately approved; its single work completed full/non-degraded at $0.0850599, and the resumable forecast now has zero eligible works.</span></div>
-          <div><strong>Reader controls</strong><span>The release-gated reader labels processed text honestly, preserves original PDFs/text, offers an outline, position and annotation navigation, focus mode, apparatus filters, many-to-many note links, and verified original-script switching. Its production schema and guarded web gate are live; no authenticated reader mutation was initiated by rollout.</span></div>
-        </div>
-      </details>
+    <section aria-labelledby="audit-title">
+      <p class="eyebrow">Operational audit · 2026-07-21</p><h2 id="audit-title">Released-surface evidence</h2>
+      <p>Local verification used the existing local Postgres stack with release gates enabled where applicable. Production inspection was read-only: Render logs, Vercel deployment status, and a Supabase aggregate query only.</p>
+      <div class="audit-grid"><article class="audit operational"><div class="audit-heading"><h3>v4 processing</h3><span class="status operational">Operational</span></div><p>The section-aware v4 pipeline is locally covered and currently processes the retained production work.</p><ul><li>Local: config pipeline/stage coverage and worker v4, Library promotion, and target-invariant tests passed (13 tests).</li><li>Production: current Render worker startup reports pipeline v4; logs record a v4 analysis run writing annotations, apparatus, concepts, and v4 work signals.</li><li>Production: read-only aggregate reports one full published v4 run.</li></ul></article><article class="audit operational"><div class="audit-heading"><h3>Library</h3><span class="status operational">Operational</span></div><p>The owner-scoped Library and its canonical-source projection have local coverage and a retained production work.</p><ul><li>Local: seeded Library browser coverage passed with the identity gate enabled; worker promotion/target-invariant tests passed.</li><li>Production: Vercel production deployment is Ready and the read-only aggregate reports one active work.</li><li>Production: the published v4 run is associated with that retained work.</li></ul></article><article class="audit release_gated"><div class="audit-heading"><h3>Interactive Reader</h3><span class="status release_gated">Release Gated</span></div><p>The processed-text reader is implemented and locally rendered behind its flag, but no authenticated production reader mutation was initiated for this audit.</p><ul><li>Local: the enabled gate rendered the Processed text surface, outline, apparatus sidebar, and reader controls; seeded reader coverage passed after correcting one stale heading assertion.</li><li>Production: the Vercel deployment is Ready and the retained work has a full published v4 run.</li><li>Production: no note-link, term-approval, highlight, or position mutation was performed during this read-only audit.</li></ul></article><article class="audit release_gated"><div class="audit-heading"><h3>Visualization</h3><span class="status release_gated">Release Gated</span></div><p>The graph/table workspace and bounded expansion flow pass local coverage, but the one-work production Library cannot exercise a relationship expansion.</p><ul><li>Local: seeded Visualization, filter/parity, and graph-expansion idempotency/rate-limit flows passed with the graph gate enabled.</li><li>Production: Render listens for expand-cross-library-graph jobs and Vercel production is Ready.</li><li>Production: the read-only aggregate reports zero graph-expansion requests because there is one active work.</li></ul></article><article class="audit release_gated"><div class="audit-heading"><h3>Writer</h3><span class="status release_gated">Release Gated</span></div><p>Private Writer APIs, recovery, citation import, export signatures, and ownership checks pass locally; no production draft or export was created for the audit.</p><ul><li>Local: seeded Writer Chromium flows passed for autosave, BibTeX import, revision restore, DOCX/PDF signatures, archive/restore, and cross-account denial.</li><li>Production: Vercel production deployment is Ready and the authenticated Writer route is deployed.</li><li>Production: the read-only aggregate reports zero Writer projects.</li></ul></article></div>
     </section>
-
-    <section aria-labelledby="phase-ten-title-ref" style="margin-top: 2rem;">
-      <div class="section-heading">
-        <h2 id="phase-ten-title-ref">Phase 10 — Workspace Depth &amp; Adaptivity Completion (complete)</h2>
-        <p>All six audited scope items shipped, tested, and production-canary-verified where AI-pipeline-touching. Kept here for reference.</p>
-      </div>
-      <ol class="subphases">
-        <li class="subphase complete"><h3>Annotation relationship &amp; source link</h3><p>Surface each passage annotation's relationship category and a link to its related resource. Pure UI, no new schema or AI call. Complete.</p></li>
-        <li class="subphase complete"><h3>Annotation filter &amp; sort</h3><p>Filter/sort annotations by category and review status, plus a sort control, mirroring the Library's established pattern. Complete.</p></li>
-        <li class="subphase complete"><h3>Library default-scoping</h3><p>Reader-level scoping becomes the default view (with an explicit "show all"), matching Roadmap and Curriculum's established pattern. Complete.</p></li>
-        <li class="subphase complete"><h3>3D graph visual richness</h3><p>Directional link particles, neighbor-subgraph hover highlight, click-to-focus camera fly-to — still driven by the same palette tokens. The accessible table stays an equal, unchanged fallback. Complete.</p></li>
-        <li class="subphase complete"><h3>Suggested reader level</h3><p>A level nudge derived from aggregate Library completion patterns — a suggestion the reader can accept or ignore, never a silent overwrite. Complete as a pure read-time feature; no canary needed.</p></li>
-        <li class="subphase complete"><h3>Jargon-extraction tightening</h3><p>Verify and, if needed, tighten the passage-annotation extraction prompt so it reliably targets terminology/jargon, not just general commentary. Complete; production-canary-verified (4 of 7 seeded annotations correctly typed "definition" against real Greek/Latin technical vocabulary).</p></li>
-      </ol>
-    </section>
-
-    <section aria-labelledby="phase-nine-title" style="margin-top: 2rem;">
-      <div class="section-heading">
-        <h2 id="phase-nine-title">Phase 9 — Interactive Learning Workspace (complete)</h2>
-        <p>All seven sub-phases shipped, tested, and production-canary-verified before Phase 10 began. Kept here for reference.</p>
-      </div>
-      <ol class="subphases">
-        <li class="subphase complete"><h3>9.1 · Foundations &amp; flag</h3><p>Version-aware v1/v2/v3 pipeline handling and schema foundations for reader levels, concepts, canonical works, Library resources, and roles.</p></li>
-        <li class="subphase complete"><h3>9.2 · Research sequence v3</h3><p>Creator evidence and separated credibility dimensions; popularity is visible but never counted as credibility. Verified by a production canary.</p></li>
-        <li class="subphase complete"><h3>9.3 · Passage annotations</h3><p>Short, expandable annotations anchored to real text blocks, with whole-work guidance kept distinct. Verified by a production canary.</p></li>
-        <li class="subphase complete"><h3>9.4 · Reader levels &amp; mastery</h3><p>Four reader levels, optional self-assessment, and a protected mastery precedence chain. Verified by a production canary.</p></li>
-        <li class="subphase complete"><h3>9.5 · Library &amp; work grouping</h3><p>Separate uploaded works from recommended sources; Library states, filters, sorts, and navigation. Verified by a production canary.</p></li>
-        <li class="subphase complete"><h3>9.6 · Curriculum &amp; study guide</h3><p>Minimal, university, and graduate routes with acyclic dependencies, rationales, checkpoints, and review-only completion. No production canary needed — pure read-time compute over 9.5's data.</p></li>
-        <li class="subphase complete"><h3>9.7 · Graph, trash &amp; cost UI</h3><p>Concept/section graph nodes with identical URL-persisted filters, 30-day restoreable trash, and a per-run/per-module cost breakdown. Complete; migration applied to production.</p></li>
-      </ol>
-    </section>
-
-    <footer><p>Last reconciled with <code>docs/PROJECT-LOG.md</code> and <code>docs/architecture/plan.md</code> on 2026-07-21. This page is a milestone tracker, not a substitute for the project record.</p></footer>
+    <footer>Generated from <code>docs/project-status.json</code> on record date 2026-07-21. Run <code>pnpm generate:project-status</code> after editing the source; CI rejects a stale <code>progress-checklist.html</code>.</footer>
   </main>
 </body>
 </html>

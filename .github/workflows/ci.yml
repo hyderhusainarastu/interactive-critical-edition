@@ -58,6 +58,9 @@ jobs:
       - name: Run migrations
         run: pnpm --filter @ice/db db:migrate
 
+      - name: Check generated project status
+        run: pnpm check:project-status
+
       - name: Lint
         run: pnpm -r lint
 

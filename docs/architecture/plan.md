@@ -58,7 +58,7 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 25 | This planning document itself | entire document |
 | 26 | Working rules post-approval | §30, and restated in docs/PROJECT-LOG.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 13, §31 |
+| — | *Added 2026-07-21:* Phase 13–17 delivery roadmap for project records, Library, Visualization, reader reliability, and grounded chat | §23 Phases 13–17, §31 |
 | — | *Redefined 2026-07-19, completed 2026-07-20:* Phase 9 = Interactive Learning Workspace, sub-phases 9.1–9.7 (9.8 "Comprehensive dossier" retired as a phantom requirement — never enumerated anywhere it was referenced by count — before implementation) | §23 Phase 9, §34 |
 | — | *Added 2026-07-20:* Phase 10 = Workspace Depth & Adaptivity Completion (closes the concrete gaps 9.1–9.7 left in Phase 9's own original objective, rather than inventing new scope) | §23 Phase 10, §35 |
 | — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
@@ -492,14 +492,37 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Dependencies: Phases 0–11 complete.
 - DoD: §37's verification and rollout gates pass; v2/v3 remain immediately recoverable until v4 has production verification.
 
-**Phase 13 — Educational Companion Site (added by explicit user request, runs after Phase 12; renumbered 2026-07-21)**
-- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–12 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 13 itself (no infinite regress).
-- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–12, content sourced primarily from this repo's own `docs/PROJECT-LOG.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
-- Dependencies: all of Phases 0–12 complete (it teaches what was actually built, not a plan).
-- Deliverables: a deployed, independent, publicly reachable tutorial site with one chapter per phase plus an intro and retrospective.
-- Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual repo's code/history at time of writing.
-- DoD: someone with no prior context could follow the site from Chapter 1 onward and understand, and largely reproduce, the architecture and decisions of the main project.
-- Git: its own repo, its own commit history, its own checkpoints — entirely separate from the main repo's history.
+**Phase 13 — Project Record, Checklist, and Operational Audit**
+- Objective: establish a trustworthy, generated project record and audit the released workspace before feature work resumes.
+- Tasks: replace obsolete planning references with this roadmap; make `docs/project-status.json` the tracked status source and generate `progress-checklist.html`; make CI reject stale output; record the mandatory tracker workflow; audit v4 processing, Interactive Reader, Visualization, Library, and Writer locally and read-only in production.
+- Dependencies: Phases 0–12 complete.
+- DoD: status totals, confirmation gate, evidence, and next action are generated from one source; the project record and root mirror agree; each audited surface is honestly classified operational, release-gated, or incomplete; tag `phase-13-complete` is pushed.
+
+**Phase 14 — Library Focus, Interface, Motion, and Multi-work Upload**
+- Objective: make uploaded work the clear center of the Library while improving shared interaction quality and supporting batch ingestion.
+- Tasks: default Focus to the newest uploaded work even when it has no recommendations; anchor the focused work above its recommendations; rank by focus relevance, then credibility, then stable title; expose honest per-focus values in the payload; add warm-academic responsive interaction/reduced-motion patterns; add sequential multi-file private upload with per-file progress, errors, duplicates, and batch status.
+- Tests: focus defaults, URL/deep-link focus, relevance-then-credibility ordering, empty focus libraries, batch upload, keyboard/mobile behavior, and reduced-motion behavior.
+- DoD: all work is owner-scoped, the default ordering can be explained from returned data, and batch failures never obscure another file's result.
+
+**Phase 15 — Visualization as a Connected Research Web**
+- Objective: evolve the graph into an evidence-backed web of works, sources, concepts, people, and sections without hiding its limits.
+- Tasks: persist provenance-backed relationships; automatically retrieve only clearly open-access, license-evidenced source text within existing result and $1/$5 limits; retain inaccessible sources as visibly metadata-only; rebuild graph selection, inspector, parity table, layout, effects, and reduced-motion/hidden-tab/large-graph safeguards.
+- Tests: enrichment provenance, selected-work pinning, filters, inspector focus, graph/table parity, performance limits, and ownership isolation.
+- DoD: selected uploads remain visible in graph and table, every displayed relationship has its source/provenance status, and inaccessible sources are never presented as indexed text.
+
+**Phase 16 — Reliable Processing and the Interactive Reader**
+- Objective: improve structural truthfulness and make the reader's source, processed, annotation, and apparatus modes unambiguous.
+- Tasks: preserve body, footnotes, endnotes, bibliography, and captions as distinct page/block anchors; label uncertain extraction structure-limited; distinguish immutable published source from continuous processed text; add responsive margin/inline annotations, labelled footnote apparatus, and evidence-grounded notes with source, confidence, and provenance.
+- Tests: PDF footnote/body separation, anchor stability, reader accessibility, source/processed labels, and a cost-bounded production canary.
+- DoD: no authorial footnote is duplicated into body text; every reader mode is plainly labelled; and generated notes identify the evidence supporting or opposing them.
+
+**Phase 17 — Library-grounded Socratic RAG Chat**
+- Objective: add owner-scoped, citation-grounded Socratic conversation without inventing support outside the reader's Library.
+- Tasks: index eligible upload/open-access chunks with anchors, hashes, embeddings, and deletion propagation; add authenticated persistent streamed conversations and retrieval-first responses; add desktop sidebar/mobile sheet; use SocraticLM's dialogue method through the provider layer while respecting its code/data/weights licensing boundary; preview existing-library indexing and automatically index new eligible sources within limits.
+- Tests: retrieval quality, citation grounding, prompt injection, cross-user isolation, deletion, latency, and cost caps.
+- DoD: every substantive answer cites and links to a source location, unsupported claims receive an explicit not-found response, and no conversation or chunk crosses ownership boundaries.
+
+**Phase closeout contract (Phases 13–17).** Every sub-phase ends with relevant tests, `docs/PROJECT-LOG.md`, the root `CLAUDE.md` mirror, generated checklist, commit, push, and confirmation. At each phase closeout, tag the commit, create a compact handoff, clear working context, and do not begin the next phase without confirmation. Preserve and ignore `research/` and `research.zip`; do not move, commit, or deploy them.
 
 **Post-MVP (kept explicitly separate so it never blocks core delivery — see §27).**
 
@@ -573,34 +596,29 @@ In order, each its own small commit:
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Educational Companion Site (Phase 13 detail — renumbered from Phase 9 on 2026-07-19, Phase 10 on 2026-07-20, and Phase 12 on 2026-07-21)
+## 31. Phase 13–17 Delivery Roadmap
 
-**Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened deployment. It documents everything done in Phases 0–12 of this plan; it does not document its own creation.
+This section is the detailed execution record for the active roadmap in §23. It replaces the obsolete separate-site proposal; no separate-site code was created. The source of record for current status is `docs/project-status.json`, which generates `progress-checklist.html`; `docs/PROJECT-LOG.md` remains the canonical narrative and decision record.
 
-**Location and independence:** a new sibling folder next to this project (e.g. `/Users/hyderhusainarastu/Documents/interactive-critical-edition-course`), with its own `git init`, its own new private-or-public GitHub repo (recommend **public** at Phase 8 kickoff, since the content is generic educational material with no user data, scholarly uploads, or secrets in it — but this is a recommendation to confirm with the user at that time, not decided now), and its own deploy — fully decoupled from `interactive-critical-edition`'s codebase, history, and hosting.
+### 31.1 Status and documentation discipline
 
-**Stack:** Astro + Starlight (MIT-licensed, purpose-built for chaptered docs/tutorial content — sidebar navigation, search, code blocks, versioning — out of the box), deployed as a static site to a free tier (Vercel free/GitHub Pages), consistent with the cost constraint (§3) since this site has no backend, no database, and no AI calls of its own.
+- Update the structured status source as part of every sub-phase closeout, then regenerate the HTML with `pnpm generate:project-status` and verify it with `pnpm check:project-status`.
+- The source must carry phase/sub-phase state, confirmation gate, evidence, next action, and totals. CI rejects generated HTML that does not exactly match it.
+- Update `docs/PROJECT-LOG.md` in the same change, then copy it to the ignored root `CLAUDE.md` mirror. The mirror never carries independent content.
+- Do not infer completion from code alone: record local test commands and a read-only production observation where the release claim concerns production.
+- Keep `research/` and `research.zip` outside version control and deployment scope.
 
-**Content sourcing strategy:** rather than reconstructing the build narrative from memory at the very end, each chapter is drafted from that phase's own entry in `interactive-critical-edition`'s `docs/PROJECT-LOG.md` changelog/decision log — which the working rules already require to be updated after every meaningful step (brief §1/§26). This means Phase 8 is genuinely a synthesis-and-polish pass at the end, not a parallel documentation effort competing with the main build for time; the raw material already exists by the time Phase 8 starts.
+### 31.2 Phase 13 audit rubric
 
-**Chapter structure (mirrors §23's phases):**
-0. Introduction — the problem (the Heidegger/Vico framing from the original brief), what gets built, how to use the course.
-1. Planning & governance — how the plan itself was built, docs/PROJECT-LOG.md/GitHub setup.
-2. Foundation — auth, scaffolding, CI.
-3. Upload & ingestion pipeline.
-4. The reader and annotation system.
-5. Scholarly analysis — citation extraction, the provenance/confidence model, anti-hallucination design.
-6. Reading roadmap algorithm and knowledge profile.
-7. The 3D knowledge-graph visualizer.
-8. Landing page and onboarding.
-9. Hardening, testing, deployment, observability.
-10. Workspace depth, adaptivity, and the Phase 11 visual overhaul.
-11. Production research workspace — canonical sources, v4, cross-work graph, Writer mode, and rollout discipline.
-12. Retrospective — what was hard, what would change next time, real cost numbers from the admin dashboard (§20/§22).
+Classify each surface as **operational** only when its intended release behavior has local evidence and a read-only production observation; **release-gated** when implemented and locally verified but production behavior remains intentionally unexercised or contingent on a release flag/data condition; **incomplete** when either implementation or evidence is missing. The audit records v4 processing, Interactive Reader, Visualization, Library, and Writer in the structured status source and project log.
 
-**Tests:** CI on the new repo runs the Astro build and a link-checker on every push; before each chapter is marked done, a read-through pass confirms its code references and claims match the actual state of the `interactive-critical-edition` repo at that point (not idealized/aspirational descriptions).
+### 31.3 Phases 14–17 constraints
 
-**DoD:** the site is live, navigable start-to-end, and a reader unfamiliar with the project could follow it to understand — and largely reproduce — every major decision in this plan.
+- **Library:** uploaded work stays first-class even with zero recommendations. Default sorting must use values returned in the Library payload; source authority and credibility remain distinct.
+- **Visualization:** ownership isolation and graph/table parity are non-negotiable. Automation retrieves source text only with clear open-access and license evidence; unavailable content stays metadata-only.
+- **Reader:** original files stay immutable. Structural uncertainty is visible rather than normalized away, and authorial apparatus never becomes generated prose.
+- **Chat:** retrieval is owner-scoped and precedes every answer. Citations jump to the anchored reader location. SocraticLM informs dialogue method only: use its Apache-2.0 repository code where appropriate, never its CC BY-NC 4.0 data or weight-diff artifacts.
+- **Cost:** retain the existing $1 normal/$5 hard limits. No new automatic source acquisition, graph expansion, or indexing pathway can exceed its approved cap.
 
 ## Verification
 
@@ -632,7 +650,7 @@ In order, each its own small commit:
 
 ## 34. Phase 9 — Interactive Learning Workspace (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, **complete 2026-07-20** — sub-phases 9.1–9.7 shipped and canary-verified/production-applied, tagged `phase-9-complete`. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 13 (§31). This section is the plan of record; `docs/PROJECT-LOG.md`'s changelog remains the record of what actually shipped. **9.8 "Comprehensive dossier" was retired before implementation** (see §34.2/§34.4 note below) — Phase 9's own original objective is completed instead by Phase 10 (§35).
+**Status:** approved 2026-07-20, **complete 2026-07-20** — sub-phases 9.1–9.7 shipped and canary-verified/production-applied, tagged `phase-9-complete`. This section is the plan of record; `docs/PROJECT-LOG.md`'s changelog remains the record of what actually shipped. **9.8 "Comprehensive dossier" was retired before implementation** (see §34.2/§34.4 note below) — Phase 9's own original objective is completed instead by Phase 10 (§35).
 
 ### 34.1 Objective
 
@@ -687,7 +705,7 @@ Pure logic unit-tested offline; the pipeline proven by canary — the Phase 8 pa
 
 ## 35. Phase 10 — Workspace Depth & Adaptivity Completion (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, **complete 2026-07-20** — all 6 audited scope items shipped, the two AI-pipeline-touching items production-canary-verified, tagged `phase-10-complete`. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 Educational Companion Site has since moved to Phase 13 (§23, §31).
+**Status:** approved 2026-07-20, **complete 2026-07-20** — all 6 audited scope items shipped, the two AI-pipeline-touching items production-canary-verified, tagged `phase-10-complete`. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances.
 
 ### 35.1 Objective
 
@@ -733,13 +751,13 @@ Every pure-UI item ships with typecheck/lint/test/build green, relevant CI-safe 
 
 ---
 
-## 37. Phase 12 — Production Research Workspace (approved 2026-07-21; active)
+## 37. Phase 12 — Production Research Workspace (complete 2026-07-21)
 
-**Goal.** Turn the current application into a production-oriented research and writing workspace. The separate educational companion is now Phase 13 and remains unchanged. Prior-art ideas may inform internal relationship caching, incremental graph computation, library navigation, and cost controls, but no third-party branding or assets appear in the product.
+**Goal.** Turn the current application into a production-oriented research and writing workspace. The completed work provides the baseline for Phases 13–17. Prior-art ideas may inform internal relationship caching, incremental graph computation, library navigation, and cost controls, but no third-party branding or assets appear in the product.
 
 ### 37.1 Delivery discipline
 
-The seven parts below are completed one at a time. Each part updates the code, `docs/PROJECT-LOG.md`, `progress-checklist.html`, and GitHub before the next begins. `PHASE_12_FOUNDATION_ENABLED` defaults on; `PHASE_12_LIBRARY_IDENTITY_ENABLED`, `PHASE_12_PIPELINE_V4_ENABLED`, `PHASE_12_INTERACTIVE_READER_ENABLED`, `PHASE_12_CROSS_LIBRARY_GRAPH_ENABLED`, and `PHASE_12_WRITER_ENABLED` default off. Flags are release controls only, never authorization controls.
+The seven parts were completed one at a time. Future changes update code, `docs/PROJECT-LOG.md`, `docs/project-status.json`, the generated checklist, and GitHub before the next begins. `PHASE_12_FOUNDATION_ENABLED` defaults on; `PHASE_12_LIBRARY_IDENTITY_ENABLED`, `PHASE_12_PIPELINE_V4_ENABLED`, `PHASE_12_INTERACTIVE_READER_ENABLED`, `PHASE_12_CROSS_LIBRARY_GRAPH_ENABLED`, and `PHASE_12_WRITER_ENABLED` default off. Flags are release controls only, never authorization controls.
 
 ### 37.2 Parts
 
@@ -755,4 +773,4 @@ The seven parts below are completed one at a time. Each part updates the code, `
 
 Additive migrations only: user preferences, content hashes/edition identity, richer passage annotations, note-highlight joins, verified term variants/occurrences, library membership, CSL metadata, Writer entities, work claims, cached relationships, and relationship evidence. Add authenticated routes for preferences, citation import/resolution, Writer operations/recovery/export, graph expansion preview/execution, and duplicate-upload resolution. Do not remove v2/v3 data until v4 passes production verification.
 
-Normal processing must stay below $1/work; no job may exceed $5. The existing $2 soft/$5 hard limits remain, and source-result/inspection caps do not grow without a separate cost report and approval. Writer collaboration/public sharing/non-MLA styles and the educational companion remain out of scope.
+Normal processing must stay below $1/work; no job may exceed $5. The existing $2 soft/$5 hard limits remain, and source-result/inspection caps do not grow without a separate cost report and approval. Writer collaboration/public sharing and non-MLA styles remain out of scope.

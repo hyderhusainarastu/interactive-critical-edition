@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "name": "Palimnote",
+    "canonicalRecord": "docs/PROJECT-LOG.md",
+    "architecturePlan": "docs/architecture/plan.md",
+    "generatedChecklist": "progress-checklist.html"
+  },
+  "updated": "2026-07-21",
+  "current": {
+    "phase": 13,
+    "headline": "Phase 13 complete — confirmation required",
+    "summary": "The roadmap, generated status record, tracker workflow, and evidence-based operational audit are complete. Phase 14 remains blocked by its explicit confirmation gate.",
+    "nextAction": "Review the Phase 13 handoff and confirm whether to begin Phase 14."
+  },
+  "phases": [
+    {
+      "number": 0,
+      "title": "Research and planning",
+      "state": "complete",
+      "summary": "Product definition, architecture plan, governance, and repository established.",
+      "tag": "phase-0-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 1,
+      "title": "Foundation",
+      "state": "complete",
+      "summary": "Next.js, authentication, database, storage, observability, and CI delivered.",
+      "tag": "phase-1-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 2,
+      "title": "Upload and Library",
+      "state": "complete",
+      "summary": "Secure upload, worker processing, metadata confirmation, and personal Library delivered.",
+      "tag": "phase-2-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 3,
+      "title": "Reader",
+      "state": "complete",
+      "summary": "PDF and text reading, highlights, notes, bookmarks, and persistence delivered.",
+      "tag": "phase-3-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 4,
+      "title": "Scholarly analysis",
+      "state": "complete",
+      "summary": "Citation resolution, provenance, relationship analysis, and reader annotations delivered.",
+      "tag": "phase-4-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 5,
+      "title": "Reading roadmap and knowledge graph",
+      "state": "complete",
+      "summary": "Personalized roadmap, reader profile, visualization, and accessible graph table delivered.",
+      "tag": "phase-5-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 6,
+      "title": "Landing and onboarding",
+      "state": "complete",
+      "summary": "Public product story, policy pages, and reader onboarding delivered.",
+      "tag": "phase-6-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 7,
+      "title": "Hardening and deployment",
+      "state": "complete",
+      "summary": "Authorization coverage, evaluation harness, admin tooling, CI, recovery drill, and documentation delivered.",
+      "tag": "phase-7-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 8,
+      "title": "Autonomous critical edition",
+      "state": "complete",
+      "summary": "Page-aware extraction, evidence-first research, relevance gating, and reliable v2 publishing production-verified.",
+      "tag": "phase-8-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 9,
+      "title": "Interactive learning workspace",
+      "state": "complete",
+      "summary": "Reader levels, concepts, Library resources, curriculum, graph extension, and trash delivered.",
+      "tag": "phase-9-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 10,
+      "title": "Workspace depth and adaptivity completion",
+      "state": "complete",
+      "summary": "Closed the concrete annotation, Library, graph, reader-level, and terminology gaps from Phase 9.",
+      "tag": "phase-10-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 11,
+      "title": "Rebrand and interface repairs",
+      "state": "complete",
+      "summary": "Palimnote rebrand, upload progress, reader overhaul, Library scoping, and Visualization repairs delivered.",
+      "tag": "phase-11-complete",
+      "confirmation": "Historical closeout confirmed."
+    },
+    {
+      "number": 12,
+      "title": "Production research workspace",
+      "state": "complete",
+      "summary": "Pipeline v4, canonical Library sources, processed reader, cross-library graph, Writer, and hardening delivered.",
+      "tag": "phase-12-complete",
+      "confirmation": "Historical closeout confirmed.",
+      "evidence": [
+        "Production migrations 0020–0025 are recorded through Drizzle ledger 26.",
+        "Same-corpus v3/v4 canary and the approved one-work v4 backfill completed within caps.",
+        "Render enforces $1 normal and $5 hard research cost limits."
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Project record, checklist, and operational audit",
+      "state": "awaiting_confirmation",
+      "summary": "Replaced obsolete roadmap references, introduced the generated status checklist and CI guard, recorded the tracker workflow, and audited released surfaces.",
+      "tag": "phase-13-complete",
+      "confirmation": "Phase 14 must not begin until Phase 13 closeout is confirmed.",
+      "evidence": [
+        "docs/project-status.json is the tracked source; progress-checklist.html is generated and CI checks it for drift.",
+        "13 targeted config/worker tests and 27 seeded Chromium flows passed locally.",
+        "Read-only production inspection found a live v4 worker, one active work, one published v4 run, zero graph expansions, and zero Writer projects."
+      ],
+      "subphases": [
+        {
+          "id": "13.1",
+          "title": "Roadmap and record",
+          "state": "complete",
+          "summary": "Replaced obsolete planning references with the Phase 13–17 roadmap in the architecture plan and project record."
+        },
+        {
+          "id": "13.2",
+          "title": "Generated checklist",
+          "state": "complete",
+          "summary": "Added the structured source, standalone generated HTML, package commands, and stale-output CI check."
+        },
+        {
+          "id": "13.3",
+          "title": "Tracker workflow",
+          "state": "complete",
+          "summary": "Recorded the required status-update workflow and synchronized the root mirror from the canonical record."
+        },
+        {
+          "id": "13.4",
+          "title": "Operational audit",
+          "state": "complete",
+          "summary": "Audited v4 processing, Interactive Reader, Visualization, Library, and Writer locally and read-only in production."
+        }
+      ]
+    },
+    {
+      "number": 14,
+      "title": "Library focus, interface, motion, and multi-work upload",
+      "state": "planned",
+      "summary": "Focus the Library on uploaded work, establish shared interaction patterns, and add batch upload.",
+      "confirmation": "Closeout confirmation is required before Phase 15 begins."
+    },
+    {
+      "number": 15,
+      "title": "Visualization as a connected research web",
+      "state": "planned",
+      "summary": "Expand provenance-backed graph relationships, open-access retrieval, and accessible graph interaction.",
+      "confirmation": "Closeout confirmation is required before Phase 16 begins."
+    },
+    {
+      "number": 16,
+      "title": "Reliable processing and the Interactive Reader",
+      "state": "planned",
+      "summary": "Strengthen structural extraction, clarify reader modes, and redesign the annotation apparatus.",
+      "confirmation": "Closeout confirmation is required before Phase 17 begins."
+    },
+    {
+      "number": 17,
+      "title": "Library-grounded Socratic RAG chat",
+      "state": "planned",
+      "summary": "Index owner-scoped sources and add citation-grounded, Socratic conversations across the workspace.",
+      "confirmation": "Closeout confirmation is required before any follow-on phase begins."
+    }
+  ],
+  "operationalAudit": {
+    "performed": "2026-07-21",
+    "scope": "Local verification used the existing local Postgres stack with release gates enabled where applicable. Production inspection was read-only: Render logs, Vercel deployment status, and a Supabase aggregate query only.",
+    "items": [
+      {
+        "surface": "v4 processing",
+        "state": "operational",
+        "summary": "The section-aware v4 pipeline is locally covered and currently processes the retained production work.",
+        "evidence": [
+          "Local: config pipeline/stage coverage and worker v4, Library promotion, and target-invariant tests passed (13 tests).",
+          "Production: current Render worker startup reports pipeline v4; logs record a v4 analysis run writing annotations, apparatus, concepts, and v4 work signals.",
+          "Production: read-only aggregate reports one full published v4 run."
+        ]
+      },
+      {
+        "surface": "Library",
+        "state": "operational",
+        "summary": "The owner-scoped Library and its canonical-source projection have local coverage and a retained production work.",
+        "evidence": [
+          "Local: seeded Library browser coverage passed with the identity gate enabled; worker promotion/target-invariant tests passed.",
+          "Production: Vercel production deployment is Ready and the read-only aggregate reports one active work.",
+          "Production: the published v4 run is associated with that retained work."
+        ]
+      },
+      {
+        "surface": "Interactive Reader",
+        "state": "release_gated",
+        "summary": "The processed-text reader is implemented and locally rendered behind its flag, but no authenticated production reader mutation was initiated for this audit.",
+        "evidence": [
+          "Local: the enabled gate rendered the Processed text surface, outline, apparatus sidebar, and reader controls; seeded reader coverage passed after correcting one stale heading assertion.",
+          "Production: the Vercel deployment is Ready and the retained work has a full published v4 run.",
+          "Production: no note-link, term-approval, highlight, or position mutation was performed during this read-only audit."
+        ]
+      },
+      {
+        "surface": "Visualization",
+        "state": "release_gated",
+        "summary": "The graph/table workspace and bounded expansion flow pass local coverage, but the one-work production Library cannot exercise a relationship expansion.",
+        "evidence": [
+          "Local: seeded Visualization, filter/parity, and graph-expansion idempotency/rate-limit flows passed with the graph gate enabled.",
+          "Production: Render listens for expand-cross-library-graph jobs and Vercel production is Ready.",
+          "Production: the read-only aggregate reports zero graph-expansion requests because there is one active work."
+        ]
+      },
+      {
+        "surface": "Writer",
+        "state": "release_gated",
+        "summary": "Private Writer APIs, recovery, citation import, export signatures, and ownership checks pass locally; no production draft or export was created for the audit.",
+        "evidence": [
+          "Local: seeded Writer Chromium flows passed for autosave, BibTeX import, revision restore, DOCX/PDF signatures, archive/restore, and cross-account denial.",
+          "Production: Vercel production deployment is Ready and the authenticated Writer route is deployed.",
+          "Production: the read-only aggregate reports zero Writer projects."
+        ]
+      }
+    ]
+  }
+}

@@ -11,6 +11,8 @@
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "generate:project-status": "node scripts/generate-progress-checklist.mjs",
+    "check:project-status": "node scripts/generate-progress-checklist.mjs --check"
   }
 }

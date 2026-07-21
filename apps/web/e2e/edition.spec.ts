@@ -43,7 +43,7 @@ test.beforeEach(async ({ page }) => {
 
 test("the published edition renders its structure and run provenance", async ({ page }) => {
   const edition = page.getByRole("region", { name: /published critical edition/i });
-  await expect(edition).toContainText("Edition v1");
+  await expect(edition).toContainText("Edition · run v1");
   // Structure state must be stated, not implied — a degraded run has to be
   // visibly different from a full one.
   await expect(edition).toContainText(/structured extraction/i);
