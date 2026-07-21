@@ -876,6 +876,7 @@ export async function analyzeEditionRun(input: {
     }),
     explicitCitationKeys: new Set(),
     explicitCitationTexts: explicitCitationMatchTexts,
+    documentTextForExplicitTitleMatch: input.text,
     citedAuthorSurnames: citedSurnamesFrom(citationTexts),
     citationGraphKeys: new Set(),
   };

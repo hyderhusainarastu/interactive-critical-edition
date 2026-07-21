@@ -114,6 +114,9 @@ export interface WorkIdentity {
    *  a discovered resource as something the work actually cites even when the
    *  citation was never resolved to a DOI — most reference entries never are. */
   explicitCitationTexts?: string[];
+  /** Full uploaded text, used only for exact-phrase fallback on concise
+   *  canonical titles surfaced by the explicit-citation lane. */
+  documentTextForExplicitTitleMatch?: string;
   /** Surnames appearing in the document's own reference list. */
   citedAuthorSurnames: Set<string>;
   /** Works the citation graph links to this one (normalized keys). */
@@ -334,6 +337,33 @@ const CITATION_MATCH_MIN_SOLO_TOKEN_LENGTH = 8;
  * one-word titles ("Ethics") remain blocked by the solo-token rule above. */
 const CITATION_MATCH_DISTINCTIVE_SHORT_TOKEN_LENGTH = 8;
 
+const DOCUMENT_TITLE_PHRASE_MIN_TOKENS = 2;
+const DOCUMENT_TITLE_PHRASE_MAX_TOKENS = 5;
+
+function hasContiguousSubsequence(haystack: string[], needle: string[]): boolean {
+  if (!haystack.length || !needle.length || needle.length > haystack.length) return false;
+  outer:
+  for (let i = 0; i <= haystack.length - needle.length; i += 1) {
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
+}
+
+export function matchesDocumentTitlePhrase(titleTokens: string[], documentText: string | undefined): boolean {
+  if (!documentText?.trim()) return false;
+  if (
+    titleTokens.length < DOCUMENT_TITLE_PHRASE_MIN_TOKENS ||
+    titleTokens.length > DOCUMENT_TITLE_PHRASE_MAX_TOKENS ||
+    !titleTokens.some((t) => t.length >= CITATION_MATCH_DISTINCTIVE_SHORT_TOKEN_LENGTH)
+  ) {
+    return false;
+  }
+  return hasContiguousSubsequence(terms(documentText), titleTokens);
+}
+
 /**
  * Does a discovered resource correspond to an entry in the document's own
  * reference list? Most reference entries never resolve to a DOI, so key
@@ -446,7 +476,8 @@ export function assessCandidate(
 
   const isExplicitCitation =
     Boolean(key && identity.explicitCitationKeys.has(key)) ||
-    matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames, candidate.year);
+    matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames, candidate.year) ||
+    (lane === "explicit_citation" && matchesDocumentTitlePhrase(candidateTerms, identity.documentTextForExplicitTitleMatch));
   const inCitationGraph = Boolean(key && identity.citationGraphKeys?.has(key));
   const citedAuthorHit = candidateSurnames.some((s) => identity.citedAuthorSurnames.has(s));
 
