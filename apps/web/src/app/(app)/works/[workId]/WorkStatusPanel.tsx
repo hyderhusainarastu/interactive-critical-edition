@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { STAGE_LABEL, stageSequenceForPipeline } from "@ice/config";
 import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
 
 type Status = "uploaded" | "processing" | "needs_review" | "ready" | "failed";
@@ -18,12 +19,54 @@ interface StatusPayload {
   deletedAt: string | null;
   processingRun: {
     version: number;
+    pipelineVersion: string;
     stage: string | null;
     structureState: "full" | "limited";
     runStatus: "pending" | "running" | "complete" | "failed";
     published: boolean;
     note: string | null;
   } | null;
+}
+
+/**
+ * Discrete, honest step list for server-side edition processing (plan §36
+ * 11.3) — never a fake percentage. Driven by the real ordered stage
+ * sequence the worker actually sets on `processing_run.stage`
+ * (`@ice/config`'s `stageSequenceForPipeline`, shared with the worker so
+ * this list can never promise a stage that isn't really emitted).
+ */
+function StageProgress({ pipelineVersion, currentStage }: { pipelineVersion: string; currentStage: string | null }) {
+  const sequence = stageSequenceForPipeline(pipelineVersion);
+  const currentIndex = currentStage ? sequence.indexOf(currentStage) : -1;
+  return (
+    <ol className="mt-2 flex flex-col gap-1 text-sm">
+      {sequence.map((stage, i) => {
+        const done = currentIndex >= 0 && i < currentIndex;
+        const active = i === currentIndex;
+        return (
+          <li key={stage} className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="inline-flex h-4 w-4 flex-none items-center justify-center rounded-full border text-[0.6rem]"
+              style={{
+                borderColor: done || active ? "var(--color-accent-ink)" : "var(--color-border)",
+                background: done ? "var(--color-accent-ink)" : "transparent",
+                color: done ? "var(--color-background)" : "var(--color-text-muted)",
+              }}
+            >
+              {done ? "✓" : ""}
+            </span>
+            <span
+              className={active ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}
+            >
+              {STAGE_LABEL[stage as keyof typeof STAGE_LABEL] ?? stage}
+              {active ? "…" : ""}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 const POLLING_STATUSES: Status[] = ["uploaded", "processing"];
@@ -134,15 +177,19 @@ export function WorkStatusPanel({
 
   if (POLLING_STATUSES.includes(data.status)) {
     return (
-      <div className="flex items-center gap-3 rounded-md border border-[var(--color-border)] px-4 py-3">
-        <span
-          className="h-2 w-2 animate-pulse rounded-full"
-          style={{ background: STATUS_COLOR[data.status] }}
-        />
-        <span className="text-[var(--color-text)]">
-          {STATUS_LABEL[data.status]} — extracting text and detecting
-          metadata{data.processingRun?.stage ? ` (${data.processingRun.stage})` : ""}. This page updates automatically.
-        </span>
+      <div className="rounded-md border border-[var(--color-border)] px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span
+            className="h-2 w-2 flex-none animate-pulse rounded-full"
+            style={{ background: STATUS_COLOR[data.status] }}
+          />
+          <span className="text-[var(--color-text)]">
+            {STATUS_LABEL[data.status]} — this page updates automatically.
+          </span>
+        </div>
+        {data.processingRun && (
+          <StageProgress pipelineVersion={data.processingRun.pipelineVersion} currentStage={data.processingRun.stage} />
+        )}
       </div>
     );
   }

@@ -32,6 +32,7 @@ export default async function WorkPage({
   if (!row) notFound();
   const [run] = await db.select({
     version: processingRuns.version,
+    pipelineVersion: processingRuns.pipelineVersion,
     stage: processingRuns.stage,
     structureState: processingRuns.structureState,
     runStatus: processingRuns.status,

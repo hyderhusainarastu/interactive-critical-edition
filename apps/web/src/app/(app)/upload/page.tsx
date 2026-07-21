@@ -9,6 +9,29 @@ const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 // the JSON request near 4 MiB, safely below Vercel's ~4.5 MiB body ceiling.
 const JSON_PROXY_MAX_BYTES = 3 * 1024 * 1024;
 
+/**
+ * Real byte-level transfer progress for the primary direct-PUT path (plan
+ * §36 11.3) — `fetch` has no upload-progress event, so this is the one
+ * primary-path change; the small-file proxy/base64 fallbacks are
+ * unaffected and stay on `fetch`. Resolves `false` on any transport
+ * failure (mirroring the previous try/catch-around-fetch behavior) so the
+ * caller falls through to the proxy path exactly as before.
+ */
+function putWithProgress(url: string, file: File, onProgress: (loaded: number, total: number) => void): Promise<boolean> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("content-type", file.type);
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total);
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.send(file);
+  });
+}
+
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -34,10 +57,12 @@ export default function UploadPage() {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ loaded: number; total: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     setError(null);
+    setProgress(null);
 
     if (!ACCEPTED_TYPES.includes(file.type)) {
       setError(
@@ -67,18 +92,9 @@ export default function UploadPage() {
       // Primary: direct PUT to the signed Storage URL (no serverless body
       // limit). Some client environments block cross-origin PUTs to
       // supabase.co entirely, so small files fall back to a same-origin
-      // proxy route rather than failing the upload outright.
-      let stored = false;
-      try {
-        const direct = await fetch(body.uploadUrl, {
-          method: "PUT",
-          headers: { "content-type": file.type, "x-upsert": "false" },
-          body: file,
-        });
-        stored = direct.ok;
-      } catch {
-        stored = false;
-      }
+      // proxy route rather than failing the upload outright. XHR (not
+      // fetch) so real byte-level progress is available.
+      const stored = await putWithProgress(body.uploadUrl, file, (loaded, total) => setProgress({ loaded, total }));
       if (!stored) {
         const proxyUrl = `/api/works/upload/proxy?workId=${body.workId}&documentId=${body.documentId}`;
         let proxied: Response | null = null;
@@ -168,9 +184,23 @@ export default function UploadPage() {
             ? "Uploading…"
             : "Drop a file here, or click to choose one"}
         </p>
-        <p className="text-sm text-[var(--color-text-muted)]">
-          PDF, EPUB, TXT, or Markdown — up to 50MB
-        </p>
+        {submitting && progress && progress.total > 0 ? (
+          <div className="w-full max-w-xs">
+            <progress
+              className="w-full"
+              value={progress.loaded}
+              max={progress.total}
+            />
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+              {Math.round((progress.loaded / progress.total) * 100)}% ·{" "}
+              {(progress.loaded / (1024 * 1024)).toFixed(1)}MB of {(progress.total / (1024 * 1024)).toFixed(1)}MB
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-[var(--color-text-muted)]">
+            PDF, EPUB, TXT, or Markdown — up to 50MB
+          </p>
+        )}
         <input
           ref={inputRef}
           type="file"

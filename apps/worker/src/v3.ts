@@ -4,23 +4,11 @@ import { corroborateCreator, identifyCreator, type RawResource } from "@ice/rese
 /**
  * Phase 9.2b's durable order. These labels are stored on processing_run so a
  * stalled v3 run says exactly which evidence-producing step it reached.
+ * Relocated to `@ice/config` (plan §36 11.3) so both the worker and the web
+ * UI's processing-progress indicator share one source of truth; re-exported
+ * here unchanged so existing imports from "./v3" keep working.
  */
-export const V3_STAGE_SEQUENCE = [
-  "canonical-identity",
-  "structural-outline",
-  "section-passage-anchors",
-  "explicit-citations",
-  "concepts-people-debates",
-  "lane-discovery",
-  "relevance-gate",
-  "creator-verification",
-  "citation-graph-expansion",
-  "credibility",
-  "claims",
-  "conservative-influence-classification",
-] as const;
-
-export type V3Stage = (typeof V3_STAGE_SEQUENCE)[number];
+export { V3_STAGE_SEQUENCE, type V3Stage } from "@ice/config";
 
 /**
  * Creator corroboration is deliberately mechanical: a name supplied by a
