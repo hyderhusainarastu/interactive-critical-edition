@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
+import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationRecord,
@@ -16,7 +17,7 @@ import { TextReader } from "./TextReader";
 import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
 import { EditionReader, type EditionPayload } from "./EditionReader";
-import { EditionAnnotationsPanel } from "./EditionAnnotationsPanel";
+import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -36,20 +37,19 @@ export function ReaderShell({
   embedded = false,
   initialReaderLevel = "all",
   enablePhase12Identity = false,
+  enablePhase12Reader = false,
 }: {
   workId: string;
   embedded?: boolean;
   initialReaderLevel?: ReaderLevelFilter;
   enablePhase12Identity?: boolean;
+  enablePhase12Reader?: boolean;
 }) {
+  const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
   const [edition, setEdition] = useState<EditionPayload | null>(null);
   const [showEdition, setShowEdition] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
-  const [distractionReduced, setDistractionReduced] = useState(false);
-  const [fontSize, setFontSize] = useState(1.05);
-  const [lineWidth, setLineWidth] = useState(66);
   const [pendingColor, setPendingColor] = useState<HighlightColor>("gold");
   const [activeFootnote, setActiveFootnote] = useState<FootnoteRecord | null>(null);
   const [showNotes, setShowNotes] = useState(true);
@@ -58,9 +58,11 @@ export function ReaderShell({
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
   const [editionReaderLevel, setEditionReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [editionLevelMode, setEditionLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
+  const [editionFilters, setEditionFilters] = useState<EditionReaderFilters>({ annotationType: "all", relationship: "all", provenance: "all", apparatusKind: "all" });
+  const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const currentPositionRef = useRef<{ page?: number; paragraphIndex?: number }>({});
+  const currentPositionRef = useRef<Position | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -85,11 +87,6 @@ export function ReaderShell({
       ignore = true;
     };
   }, [workId]);
-
-  useEffect(() => {
-    if (theme) document.documentElement.dataset.theme = theme;
-    else delete document.documentElement.dataset.theme;
-  }, [theme]);
 
   const savePosition = useCallback(
     (position: Position) => {
@@ -123,6 +120,7 @@ export function ReaderShell({
             }
           : d,
       );
+      return created.id;
     },
     [workId, pendingColor],
   );
@@ -136,19 +134,21 @@ export function ReaderShell({
   );
 
   const addNote = useCallback(
-    async (body: string, highlightId?: string) => {
+    async (body: string, highlightIds: string[] = []) => {
       const created = await jsonFetch<{
         id: string;
         highlightId: string | null;
+        highlightIds: string[];
         body: string;
         createdAt: string;
         updatedAt: string;
       }>(`/api/works/${workId}/reader/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, highlightId }),
+        body: JSON.stringify({ body, highlightIds }),
       });
       setData((d) => (d ? { ...d, notes: [created, ...d.notes] } : d));
+      setPendingNoteHighlightIds([]);
     },
     [workId],
   );
@@ -236,17 +236,62 @@ export function ReaderShell({
     setActiveAnnotationId(id);
   }, []);
 
+  const createLinkedNote = useCallback(async (anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
+    const highlightId = await createHighlight({ kind: "processed", ...anchor });
+    if (highlightId) {
+      setPendingNoteHighlightIds([highlightId]);
+      setShowNotes(true);
+    }
+  }, [createHighlight]);
+
+  const linkExistingNote = useCallback(async (noteId: string, anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
+    const highlightId = await createHighlight({ kind: "processed", ...anchor });
+    if (!highlightId) return;
+    await jsonFetch(`/api/works/${workId}/reader/notes/${noteId}/highlights`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ highlightId }),
+    });
+    setData((current) => current ? {
+      ...current,
+      notes: current.notes.map((note) => note.id === noteId ? { ...note, highlightIds: [...new Set([...note.highlightIds, highlightId])] } : note),
+    } : current);
+  }, [createHighlight, workId]);
+
+  const approveTerm = useCallback(async (termId: string) => {
+    await jsonFetch(`/api/works/${workId}/reader/terms/${termId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "approve" }),
+    });
+    const response = await jsonFetch<{ edition: EditionPayload | null }>(`/api/works/${workId}/edition`);
+    setEdition(response.edition);
+  }, [workId]);
+
   const initialPosition = useMemo(() => data?.lastPosition ?? null, [data]);
   const visibleEdition = useMemo(() => {
-    if (!edition || !enablePhase12Identity || editionReaderLevel === "all") return edition;
+    if (!edition) return edition;
     const visibleAtLevel = (annotation: EditionPayload["passageAnnotations"][number]) =>
-      matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
+      !enablePhase12Identity || editionReaderLevel === "all" || matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
+    const visibleByReaderFilter = (annotation: EditionPayload["passageAnnotations"][number]) =>
+      !enablePhase12Reader
+      || ((editionFilters.annotationType === "all" || annotation.annotationType === editionFilters.annotationType)
+        && (editionFilters.relationship === "all" || annotation.relationship === editionFilters.relationship)
+        && (editionFilters.provenance === "all" || (editionFilters.provenance === "ai" ? annotation.createdBy === "system" : annotation.createdBy !== "system")));
     return {
       ...edition,
-      passageAnnotations: edition.passageAnnotations.filter(visibleAtLevel),
-      wholeWorkGuidance: edition.wholeWorkGuidance.filter(visibleAtLevel),
+      passageAnnotations: edition.passageAnnotations.filter((annotation) => visibleAtLevel(annotation) && visibleByReaderFilter(annotation)),
+      wholeWorkGuidance: edition.wholeWorkGuidance.filter((annotation) => visibleAtLevel(annotation) && visibleByReaderFilter(annotation)),
     };
-  }, [edition, editionLevelMode, editionReaderLevel, enablePhase12Identity]);
+  }, [edition, editionFilters, editionLevelMode, editionReaderLevel, enablePhase12Identity, enablePhase12Reader]);
+
+  const visibleAnnotationIds = useMemo(() => visibleEdition?.passageAnnotations.map((annotation) => annotation.id) ?? [], [visibleEdition]);
+  const moveAnnotation = useCallback((direction: -1 | 1) => {
+    if (!visibleAnnotationIds.length) return;
+    const activeIndex = activeAnnotationId ? visibleAnnotationIds.indexOf(activeAnnotationId) : direction === 1 ? -1 : 0;
+    const nextIndex = (activeIndex + direction + visibleAnnotationIds.length) % visibleAnnotationIds.length;
+    openAnnotation(visibleAnnotationIds[nextIndex]);
+  }, [activeAnnotationId, openAnnotation, visibleAnnotationIds]);
 
   if (error) {
     return <p className="mx-auto max-w-xl px-6 py-12 text-[var(--color-accent-burgundy)]">{error}</p>;
@@ -256,54 +301,36 @@ export function ReaderShell({
   }
 
   const isPdf = data.mimeType === "application/pdf";
+  const effectiveShowEdition = showEdition || (enablePhase12Reader && preferences.focusMode && edition !== null);
+  const readerFocus = enablePhase12Reader && preferences.focusMode && effectiveShowEdition && visibleEdition !== null;
+  const readerFontSize = preferences.fontSize === "small" ? 0.95 : preferences.fontSize === "large" ? 1.18 : 1.05;
+  const readerLineWidth = preferences.readingWidth === "compact" ? 56 : preferences.readingWidth === "wide" ? 82 : 66;
 
   return (
-    <div data-reading-mode={distractionReduced ? "distraction-reduced" : undefined} className="flex min-h-screen">
+    <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen">
       <div className={splitWorkId ? "flex flex-1 divide-x divide-[var(--color-border)]" : "flex flex-1"}>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
+          {!readerFocus && <div className="flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
             <strong className="text-[var(--color-text)]">{data.title}</strong>
-            <div className="flex items-center gap-1" role="group" aria-label="Text size">
-              <button type="button" onClick={() => setFontSize((s) => Math.max(0.85, s - 0.1))} aria-label="Decrease text size">
-                A−
-              </button>
-              <button type="button" onClick={() => setFontSize((s) => Math.min(1.6, s + 0.1))} aria-label="Increase text size">
-                A+
-              </button>
-            </div>
-            <div className="flex items-center gap-1" role="group" aria-label="Line width">
-              <button type="button" onClick={() => setLineWidth((w) => Math.max(44, w - 6))} aria-label="Narrower lines">
-                ↔−
-              </button>
-              <button type="button" onClick={() => setLineWidth((w) => Math.min(96, w + 6))} aria-label="Wider lines">
-                ↔+
-              </button>
-            </div>
-            <button type="button" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
-              {theme === "dark" ? "Light mode" : "Dark mode"}
-            </button>
-            <button type="button" onClick={() => setDistractionReduced((v) => !v)} aria-pressed={distractionReduced}>
-              {distractionReduced ? "Exit focus mode" : "Focus mode"}
-            </button>
             {edition && (
               <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
                 <button
                   type="button"
-                  aria-pressed={showEdition}
+                  aria-pressed={effectiveShowEdition}
                   onClick={() => setShowEdition(true)}
                   className="rounded px-2.5 py-1"
-                  style={{ background: showEdition ? "var(--color-surface)" : "transparent" }}
+                  style={{ background: effectiveShowEdition ? "var(--color-surface)" : "transparent" }}
                 >
-                  Published edition
+                  {enablePhase12Reader ? "Processed text" : "Published edition"}
                 </button>
                 <button
                   type="button"
-                  aria-pressed={!showEdition}
+                  aria-pressed={!effectiveShowEdition}
                   onClick={() => setShowEdition(false)}
                   className="rounded px-2.5 py-1"
-                  style={{ background: !showEdition ? "var(--color-surface)" : "transparent" }}
+                  style={{ background: !effectiveShowEdition ? "var(--color-surface)" : "transparent" }}
                 >
-                  Interactive reader
+                  {enablePhase12Reader ? (isPdf ? "Original PDF" : "Original text") : "Interactive reader"}
                 </button>
               </div>
             )}
@@ -327,9 +354,7 @@ export function ReaderShell({
               type="button"
               onClick={() =>
                 addBookmark(
-                  isPdf
-                    ? { kind: "pdf", page: currentPositionRef.current.page ?? 1 }
-                    : { kind: "text", paragraphIndex: currentPositionRef.current.paragraphIndex ?? 0 },
+                  currentPositionRef.current ?? (isPdf ? { kind: "pdf", page: 1 } : { kind: "text", paragraphIndex: 0 }),
                 )
               }
             >
@@ -350,7 +375,7 @@ export function ReaderShell({
               aria-pressed={showAnalysis}
             >
               {showAnalysis ? "Hide analysis" : "Analysis"}
-              {showEdition && visibleEdition
+              {effectiveShowEdition && visibleEdition
                 ? visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length > 0 &&
                   ` (${visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length})`
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
@@ -359,24 +384,25 @@ export function ReaderShell({
             <button type="button" onClick={() => setShowNotes((v) => !v)}>
               {showNotes ? "Hide notes" : "Notes"}
             </button>
-          </div>
+          </div>}
 
           <div
             className="px-6 py-8"
             style={{
-              ["--reader-font-size" as string]: `${fontSize}rem`,
-              ["--reader-line-width" as string]: `${lineWidth}ch`,
+              ["--reader-font-size" as string]: `${readerFontSize}rem`,
+              ["--reader-line-width" as string]: `${readerLineWidth}ch`,
             }}
           >
-            {showEdition && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} /> : isPdf ? (
+            {effectiveShowEdition && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} isPhase12Reader={enablePhase12Reader} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
               data.fileUrl ? (
                 <PdfReader
                   fileUrl={data.fileUrl}
                   highlights={data.highlights}
                   initialPage={initialPosition?.kind === "pdf" ? initialPosition.page : 1}
                   onPageChange={(page) => {
-                    currentPositionRef.current = { page };
-                    savePosition({ kind: "pdf", page });
+                    const saved: Position = { kind: "pdf", page };
+                    currentPositionRef.current = saved;
+                    savePosition(saved);
                   }}
                   onCreateHighlight={(a) => createHighlight({ kind: "pdf", ...a })}
                 />
@@ -391,8 +417,9 @@ export function ReaderShell({
                 annotations={data.annotations}
                 activeParagraph={initialPosition?.kind === "text" ? initialPosition.paragraphIndex : null}
                 onParagraphInView={(paragraphIndex) => {
-                  currentPositionRef.current = { paragraphIndex };
-                  savePosition({ kind: "text", paragraphIndex });
+                  const saved: Position = { kind: "text", paragraphIndex };
+                  currentPositionRef.current = saved;
+                  savePosition(saved);
                 }}
                 onCreateHighlight={(a) => createHighlight({ kind: "text", ...a })}
                 onOpenFootnote={setActiveFootnote}
@@ -409,21 +436,27 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} />
           </div>
         )}
       </div>
 
-      {showAnalysis && !embedded && (
-        showEdition && visibleEdition ? (
+      {(showAnalysis || readerFocus) && !embedded && (
+        effectiveShowEdition && visibleEdition ? (
           <EditionAnnotationsPanel
             edition={visibleEdition}
             activeId={activeAnnotationId}
             readerLevel={editionReaderLevel}
             levelMode={editionLevelMode}
-            enableLevelFilter={enablePhase12Identity}
+            enableLevelFilter={enablePhase12Identity || enablePhase12Reader}
+            enablePhase12Reader={enablePhase12Reader}
+            filters={editionFilters}
             onReaderLevelChange={setEditionReaderLevel}
             onLevelModeChange={setEditionLevelMode}
+            onFiltersChange={setEditionFilters}
+            onPreviousAnnotation={() => moveAnnotation(-1)}
+            onNextAnnotation={() => moveAnnotation(1)}
+            onApproveTerm={enablePhase12Reader ? (termId) => void approveTerm(termId) : undefined}
           />
         ) : (
           <AnnotationsPanel
@@ -437,7 +470,7 @@ export function ReaderShell({
         )
       )}
 
-      {showNotes && (
+      {showNotes && !readerFocus && (
         <NotesSidebar
           highlights={data.highlights}
           notes={data.notes}
@@ -446,6 +479,7 @@ export function ReaderShell({
           onAddNote={addNote}
           onDeleteNote={deleteNote}
           onDeleteBookmark={deleteBookmark}
+          pendingHighlightIds={pendingNoteHighlightIds}
         />
       )}
 
@@ -474,4 +508,5 @@ export function ReaderShell({
 
 type HighlightRecordAnchorInput =
   | { kind: "pdf"; page: number; quote: string; prefix: string; suffix: string }
-  | { kind: "text"; paragraphIndex: number; quote: string; prefix: string; suffix: string };
+  | { kind: "text"; paragraphIndex: number; quote: string; prefix: string; suffix: string }
+  | { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string };

@@ -19,6 +19,14 @@ const anchorSchema = z.union([
     prefix: z.string().max(200),
     suffix: z.string().max(200),
   }),
+  z.object({
+    kind: z.literal("processed"),
+    pageIndex: z.number().int().min(0),
+    textBlockId: z.string().uuid(),
+    quote: z.string().min(1).max(2000),
+    prefix: z.string().max(200),
+    suffix: z.string().max(200),
+  }),
 ]);
 
 const schema = z.object({

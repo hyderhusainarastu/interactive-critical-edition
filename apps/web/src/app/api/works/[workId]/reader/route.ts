@@ -1,6 +1,7 @@
-import { bookmarks, db, footnotes, highlights, notes } from "@ice/db";
+import { bookmarks, db, footnotes, highlights, noteHighlights, notes } from "@ice/db";
 import { getSignedDocumentUrl } from "@ice/ingestion";
-import { desc, eq } from "drizzle-orm";
+import { phase12FeatureEnabled } from "@ice/config";
+import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getAnnotationsForDocument } from "@/lib/annotations";
 import { getApiUserId } from "@/lib/auth";
@@ -38,6 +39,15 @@ export async function GET(
     db.select().from(bookmarks).where(eq(bookmarks.documentId, doc.documentId)),
     getAnnotationsForDocument(doc.documentId),
   ]);
+  const links = phase12FeatureEnabled("interactiveReader") && docNotes.length
+    ? await db.select().from(noteHighlights).where(inArray(noteHighlights.noteId, docNotes.map((note) => note.id)))
+    : [];
+  const highlightIdsByNote = new Map<string, string[]>();
+  for (const link of links) {
+    const ids = highlightIdsByNote.get(link.noteId) ?? [];
+    ids.push(link.highlightId);
+    highlightIdsByNote.set(link.noteId, ids);
+  }
 
   const isPdf = doc.mimeType === "application/pdf";
 
@@ -52,7 +62,10 @@ export async function GET(
     analysisError: doc.analysisError,
     footnotes: docFootnotes,
     highlights: docHighlights,
-    notes: docNotes,
+    notes: docNotes.map((note) => ({
+      ...note,
+      highlightIds: highlightIdsByNote.get(note.id) ?? (note.highlightId ? [note.highlightId] : []),
+    })),
     bookmarks: docBookmarks,
     annotations: docAnnotations,
   });

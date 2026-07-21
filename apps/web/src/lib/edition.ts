@@ -13,7 +13,11 @@ import {
   providerAttempts,
   researchResources,
   textBlocks,
+  documentApparatus,
+  termOccurrences,
+  termVariants,
 } from "@ice/db";
+import { phase12FeatureEnabled } from "@ice/config";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getRunCostBreakdown } from "./cost";
 
@@ -33,9 +37,12 @@ export async function getPublishedEdition(documentId: string) {
     .limit(1);
   if (!run) return null;
 
+  const pipelineV4Enabled = phase12FeatureEnabled("pipelineV4");
+  const interactiveReaderEnabled = phase12FeatureEnabled("interactiveReader");
+
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
-  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, costBreakdown] = await Promise.all([
+  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, apparatus, termRows, costBreakdown] = await Promise.all([
     pageIds.length ? db.select().from(textBlocks).where(inArray(textBlocks.pageId, pageIds)).orderBy(asc(textBlocks.blockOrder)) : Promise.resolve([]),
     db.select().from(docFootnotes).where(eq(docFootnotes.runId, run.id)).orderBy(asc(docFootnotes.createdAt)),
     db.select().from(generatedNotes).where(eq(generatedNotes.runId, run.id)).orderBy(asc(generatedNotes.createdAt)),
@@ -45,13 +52,38 @@ export async function getPublishedEdition(documentId: string) {
     db.select().from(editionRelations).where(eq(editionRelations.runId, run.id)),
     db.select().from(providerAttempts).where(eq(providerAttempts.runId, run.id)).orderBy(asc(providerAttempts.provider)),
     db.select().from(evidenceSpans).where(eq(evidenceSpans.runId, run.id)),
-    // Phase 9.3: only ever populated for a v3 run — empty for v1/v2, so the
-    // reader payload shape is identical either way (an empty array, not a
-    // missing field).
-    db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
+    // Select the pre-v4 shape until the additive v4 migration is live. This
+    // keeps the already-deployed reader safe before its rollout migration.
+    pipelineV4Enabled
+      ? db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt))
+      : db.select({
+        id: passageAnnotations.id,
+        textBlockId: passageAnnotations.textBlockId,
+        isWholeWork: passageAnnotations.isWholeWork,
+        quote: passageAnnotations.quote,
+        summary: passageAnnotations.summary,
+        explanation: passageAnnotations.explanation,
+        annotationType: passageAnnotations.annotationType,
+        relationship: passageAnnotations.relationship,
+        relatedResourceId: passageAnnotations.relatedResourceId,
+        readerLevel: passageAnnotations.readerLevel,
+        confidence: passageAnnotations.confidence,
+        createdBy: passageAnnotations.createdBy,
+      }).from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
+    interactiveReaderEnabled && pipelineV4Enabled
+      ? db.select().from(documentApparatus).where(eq(documentApparatus.runId, run.id)).orderBy(asc(documentApparatus.createdAt))
+      : Promise.resolve([]),
+    interactiveReaderEnabled
+      ? db.select().from(termVariants).where(eq(termVariants.documentId, documentId)).orderBy(asc(termVariants.createdAt))
+      : Promise.resolve([]),
     // Phase 9.7: per-run, per-module cost detail behind the existing single total.
     getRunCostBreakdown(run.id),
   ]);
+
+  const termVariantIds = termRows.map((term) => term.id);
+  const termOccurrenceRows = interactiveReaderEnabled && termVariantIds.length
+    ? await db.select().from(termOccurrences).where(inArray(termOccurrences.termVariantId, termVariantIds)).orderBy(asc(termOccurrences.startOffset))
+    : [];
 
   const spanById = new Map(spans.map((s) => [s.id, s]));
   const resourceIds = new Set(resources.map((r) => r.id));
@@ -178,12 +210,23 @@ export async function getPublishedEdition(documentId: string) {
     quote: p.quote,
     summary: p.summary,
     explanation: p.explanation,
+    helpfulFor: "helpfulFor" in p ? p.helpfulFor : null,
+    scope: "scope" in p ? p.scope : null,
     annotationType: p.annotationType,
     relationship: p.relationship,
     relatedResourceId: p.relatedResourceId,
     readerLevel: p.readerLevel,
     confidence: p.confidence,
+    createdBy: p.createdBy,
   }));
+
+  const pageIndexById = new Map(editionPages.map((page) => [page.id, page.pageIndex]));
+  const occurrencesByVariant = new Map<string, typeof termOccurrenceRows>();
+  for (const occurrence of termOccurrenceRows) {
+    const list = occurrencesByVariant.get(occurrence.termVariantId) ?? [];
+    list.push(occurrence);
+    occurrencesByVariant.set(occurrence.termVariantId, list);
+  }
 
   return {
     run: {
@@ -199,8 +242,31 @@ export async function getPublishedEdition(documentId: string) {
     },
     cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote, breakdown: costBreakdown },
     pages: editionPages,
-    blocks,
+    blocks: blocks.map((block) => ({ ...block, pageIndex: pageIndexById.get(block.pageId) ?? 0 })),
     authorialNotes,
+    authorApparatus: apparatus.map((entry) => ({
+      id: entry.id,
+      textBlockId: entry.textBlockId,
+      kind: entry.kind,
+      marker: entry.marker,
+      text: entry.text,
+      scope: entry.scope,
+    })),
+    terms: termRows.map((term) => ({
+      id: term.id,
+      originalScript: term.originalScript,
+      transliteration: term.transliteration,
+      language: term.language,
+      direction: term.direction,
+      verificationStatus: term.verificationStatus,
+      source: term.source,
+      occurrences: (occurrencesByVariant.get(term.id) ?? []).map((occurrence) => ({
+        id: occurrence.id,
+        textBlockId: occurrence.textBlockId,
+        startOffset: occurrence.startOffset,
+        endOffset: occurrence.endOffset,
+      })),
+    })),
     passageAnnotations: passageAnnotationsOut.filter((p) => !p.isWholeWork),
     wholeWorkGuidance: passageAnnotationsOut.filter((p) => p.isWholeWork),
     generatedNotes: generated,

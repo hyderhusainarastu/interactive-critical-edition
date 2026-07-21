@@ -337,6 +337,79 @@ export const notes = pgTable("note", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [index("note_document_idx").on(t.documentId)]);
 
+/**
+ * Phase 12.4: notes can explain more than one selected passage and a passage
+ * can be discussed by more than one note. `note.highlight_id` remains during
+ * the rollout as a compatibility pointer for older clients; this join table
+ * is the canonical relationship for new reader interactions.
+ */
+export const noteHighlights = pgTable(
+  "note_highlight",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    noteId: uuid("note_id")
+      .notNull()
+      .references(() => notes.id, { onDelete: "cascade" }),
+    highlightId: uuid("highlight_id")
+      .notNull()
+      .references(() => highlights.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("note_highlight_unique").on(t.noteId, t.highlightId),
+    index("note_highlight_highlight_idx").on(t.highlightId),
+  ],
+);
+
+/** A suggested pair never changes reading text until a person verifies it. */
+export const termVerificationStatusEnum = pgEnum("term_verification_status", ["suggested", "verified"]);
+
+export const termVariants = pgTable(
+  "term_variant",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    originalScript: text("original_script").notNull(),
+    transliteration: text("transliteration").notNull(),
+    language: text("language").notNull(),
+    direction: text("direction").notNull().default("ltr"),
+    verificationStatus: termVerificationStatusEnum("verification_status").notNull().default("suggested"),
+    source: text("source").notNull().default("system"),
+    approvedBy: uuid("approved_by").references(() => users.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("term_variant_document_idx").on(t.documentId),
+    index("term_variant_status_idx").on(t.documentId, t.verificationStatus),
+    uniqueIndex("term_variant_document_pair_unique").on(t.documentId, t.originalScript, t.transliteration),
+  ],
+);
+
+/** Exact processed-text offsets let verified terms render without touching PDFs. */
+export const termOccurrences = pgTable(
+  "term_occurrence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    termVariantId: uuid("term_variant_id")
+      .notNull()
+      .references(() => termVariants.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id")
+      .notNull()
+      .references(() => textBlocks.id, { onDelete: "cascade" }),
+    startOffset: integer("start_offset").notNull(),
+    endOffset: integer("end_offset").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("term_occurrence_block_idx").on(t.textBlockId),
+    uniqueIndex("term_occurrence_unique").on(t.termVariantId, t.textBlockId, t.startOffset, t.endOffset),
+    check("term_occurrence_offsets_valid", sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset}`),
+  ],
+);
+
 export const bookmarks = pgTable("bookmark", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")

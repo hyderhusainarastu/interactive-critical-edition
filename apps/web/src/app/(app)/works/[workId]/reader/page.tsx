@@ -25,6 +25,7 @@ export default async function ReaderPage({
       workId={workId}
       initialReaderLevel={readerLevel ?? "all"}
       enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
+      enablePhase12Reader={phase12FeatureEnabled("interactiveReader")}
     />
   );
 }

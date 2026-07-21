@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META } from "./annotationMeta";
-import { applyAnnotationMarkers, clearAnnotationMarkers } from "./highlightDom";
+import { applyAnnotationMarkers, applyHighlights, captureSelectionAnchor, clearAnnotationMarkers } from "./highlightDom";
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import type { RelationshipCategory } from "./types";
+import type { HighlightRecord } from "./types";
 
 export type Authority = "A" | "B" | "C" | "D" | "E";
 export type Agreement = "strong" | "contested" | "mixed" | "insufficient";
@@ -63,7 +64,7 @@ export interface EditionResource {
 /** What KIND of note a passage annotation is making about the passage itself
  *  — distinct from `relationship`, which describes how a cited/related source
  *  bears on the work (plan §34.4 9.3). */
-export type PassageAnnotationType = "context" | "clarification" | "connection" | "critique" | "definition";
+export type PassageAnnotationType = "context" | "clarification" | "connection" | "critique" | "definition" | "key_term" | "concept" | "argument" | "evidence" | "relationship";
 export type ReaderLevel = "beginner" | "undergraduate" | "advanced" | "research";
 
 export interface EditionPassageAnnotation {
@@ -73,11 +74,14 @@ export interface EditionPassageAnnotation {
   quote: string | null;
   summary: string;
   explanation: string;
+  helpfulFor: string | null;
+  scope: unknown;
   annotationType: PassageAnnotationType;
   relationship: RelationshipCategory;
   relatedResourceId: string | null;
   readerLevel: ReaderLevel | null;
   confidence: number;
+  createdBy: "system" | "user" | "editor";
 }
 
 export interface EditionGeneratedNote {
@@ -99,8 +103,19 @@ export interface EditionPayload {
     breakdown: Array<{ stage: string | null; task: string; costUsd: number; calls: number; promptTokens: number; completionTokens: number }>;
   };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
-  blocks: Array<{ id: string; pageId: string; blockOrder: number; kind: string; text: string }>;
+  blocks: Array<{ id: string; pageId: string; pageIndex: number; blockOrder: number; kind: string; text: string }>;
   authorialNotes: Array<{ id: string; marker: string; text: string }>;
+  authorApparatus: Array<{ id: string; textBlockId: string | null; kind: "footnote" | "endnote" | "bibliography_entry" | "citation_block"; marker: string | null; text: string; scope: unknown }>;
+  terms: Array<{
+    id: string;
+    originalScript: string;
+    transliteration: string;
+    language: string;
+    direction: string;
+    verificationStatus: "suggested" | "verified";
+    source: string;
+    occurrences: Array<{ id: string; textBlockId: string; startOffset: number; endOffset: number }>;
+  }>;
   /** Anchored to a real text_block_id — never a fabricated one (DB-enforced). */
   passageAnnotations: EditionPassageAnnotation[];
   /** No single passage applies; always rendered under the literal label
@@ -138,6 +153,11 @@ export const PASSAGE_TYPE_LABEL: Record<PassageAnnotationType, string> = {
   connection: "Connection",
   critique: "Critique",
   definition: "Definition",
+  key_term: "Key term",
+  concept: "Concept",
+  argument: "Argument",
+  evidence: "Evidence",
+  relationship: "Relationship",
 };
 export const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
   beginner: "Beginner",
@@ -204,6 +224,48 @@ export function ClaimView({ claim }: { claim: EditionClaim }) {
   );
 }
 
+function renderVerifiedTerms(
+  text: string,
+  blockId: string,
+  terms: EditionPayload["terms"],
+  scriptDisplay: "original" | "transliteration",
+) {
+  const occurrences = terms
+    .filter((term) => term.verificationStatus === "verified")
+    .flatMap((term) => term.occurrences.map((occurrence) => ({ term, ...occurrence })))
+    .filter((occurrence) => occurrence.textBlockId === blockId)
+    .filter((occurrence) => (
+      occurrence.startOffset >= 0
+      && occurrence.endOffset <= text.length
+      && occurrence.endOffset > occurrence.startOffset
+      && text.slice(occurrence.startOffset, occurrence.endOffset) === occurrence.term.originalScript
+    ))
+    .sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
+
+  const nodes: ReactNode[] = [];
+  let offset = 0;
+  for (const occurrence of occurrences) {
+    if (occurrence.startOffset < offset) continue;
+    if (occurrence.startOffset > offset) nodes.push(text.slice(offset, occurrence.startOffset));
+    const displayed = scriptDisplay === "transliteration" ? occurrence.term.transliteration : occurrence.term.originalScript;
+    nodes.push(
+      <span
+        key={occurrence.id}
+        data-verified-term={occurrence.term.id}
+        lang={occurrence.term.language}
+        dir={occurrence.term.direction === "rtl" ? "rtl" : "ltr"}
+        className="rounded-sm bg-[color-mix(in_srgb,var(--color-accent-ink)_12%,transparent)] px-0.5 text-[var(--color-accent-ink)]"
+        title={scriptDisplay === "transliteration" ? occurrence.term.originalScript : occurrence.term.transliteration}
+      >
+        {displayed}
+      </span>,
+    );
+    offset = occurrence.endOffset;
+  }
+  if (offset < text.length) nodes.push(text.slice(offset));
+  return nodes.length ? nodes : text;
+}
+
 /** Published-run reader: authorial (source) notes and AI-generated editorial
  * material are visibly distinct; every generated claim exposes its source-
  * grounded evidence, credibility, and agreement (plan §33 §3.4).
@@ -219,16 +281,43 @@ export function ClaimView({ claim }: { claim: EditionClaim }) {
 export function EditionReader({
   edition,
   onOpenAnnotation,
+  activeAnnotationId = null,
+  highlights = [],
+  notes = [],
+  scriptDisplay = "original",
+  focusMode = false,
+  onPositionChange,
+  onCreateHighlight,
+  onCreateLinkedNote,
+  onLinkExistingNote,
+  isPhase12Reader = false,
 }: {
   edition: EditionPayload;
   onOpenAnnotation: (id: string) => void;
+  activeAnnotationId?: string | null;
+  highlights?: HighlightRecord[];
+  notes?: Array<{ id: string; body: string }>;
+  scriptDisplay?: "original" | "transliteration";
+  focusMode?: boolean;
+  onPositionChange?: (position: { pageIndex: number; textBlockId: string }) => void;
+  onCreateHighlight?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<string | undefined>;
+  onCreateLinkedNote?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
+  onLinkExistingNote?: (noteId: string, anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
+  isPhase12Reader?: boolean;
 }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [selectionUi, setSelectionUi] = useState<{ blockId: string; x: number; y: number } | null>(null);
   const page = edition.pages[pageIndex];
   const pageBlocks = useMemo(
     () => edition.blocks.filter((block) => block.pageId === page?.id).sort((a, b) => a.blockOrder - b.blockOrder),
     [edition.blocks, page?.id],
+  );
+  const outline = useMemo(
+    () => edition.blocks
+      .filter((block) => block.kind === "title" || block.kind === "header")
+      .map((block) => ({ id: block.id, label: block.text, pageIndex: block.pageIndex, level: block.kind === "title" ? 1 : 2 })),
+    [edition.blocks],
   );
   const passageAnnotationsByBlock = useMemo(() => {
     const map = new Map<string, EditionPassageAnnotation[]>();
@@ -272,11 +361,22 @@ export function EditionReader({
     return map;
   }, [edition.generatedNotes, edition.passageAnnotations]);
 
-  const blockRefs = useRef(new Map<string, HTMLParagraphElement>());
+  const blockRefs = useRef(new Map<string, HTMLElement>());
   useEffect(() => {
     for (const [blockId, el] of blockRefs.current) {
       const notes = passageAnnotationsByBlock.get(blockId);
       const matchedNotes = matchedNotesByBlock.get(blockId);
+      const blockHighlights = highlights.filter(
+        (highlight): highlight is HighlightRecord & { anchor: { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string } } =>
+          highlight.anchor.kind === "processed" && highlight.anchor.textBlockId === blockId,
+      );
+      applyHighlights(el, blockHighlights.map((highlight) => ({
+        id: highlight.id,
+        color: highlight.color,
+        quote: highlight.anchor.quote,
+        prefix: highlight.anchor.prefix,
+        suffix: highlight.anchor.suffix,
+      })));
       if ((!notes || notes.length === 0) && (!matchedNotes || matchedNotes.length === 0)) {
         clearAnnotationMarkers(el);
         continue;
@@ -310,14 +410,60 @@ export function EditionReader({
         ],
       );
     }
-  }, [matchedNotesByBlock, pageBlocks, passageAnnotationsByBlock]);
+  }, [highlights, matchedNotesByBlock, pageBlocks, passageAnnotationsByBlock, scriptDisplay]);
+
+  useEffect(() => {
+    if (!activeAnnotationId) return;
+    const annotation = edition.passageAnnotations.find((item) => item.id === activeAnnotationId);
+    if (!annotation?.textBlockId) return;
+    const block = edition.blocks.find((item) => item.id === annotation.textBlockId);
+    if (!block) return;
+    const frame = window.requestAnimationFrame(() => {
+      setPageIndex(block.pageIndex);
+      window.requestAnimationFrame(() => blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeAnnotationId, edition.blocks, edition.passageAnnotations]);
+
+  useEffect(() => {
+    const firstBlock = pageBlocks[0];
+    if (firstBlock) onPositionChange?.({ pageIndex, textBlockId: firstBlock.id });
+  }, [onPositionChange, pageBlocks, pageIndex]);
 
   const hoverNote = hover ? previewById.get(hover.id) : null;
 
+  function selectionAnchor(blockId: string) {
+    const element = blockRefs.current.get(blockId);
+    const block = edition.blocks.find((item) => item.id === blockId);
+    const anchor = element ? captureSelectionAnchor(element) : null;
+    if (!block || !anchor) return null;
+    return { pageIndex: block.pageIndex, textBlockId: blockId, ...anchor };
+  }
+
+  function showSelectionToolbar(blockId: string, element: HTMLElement) {
+    if (!captureSelectionAnchor(element)) {
+      setSelectionUi(null);
+      return;
+    }
+    const range = window.getSelection()?.getRangeAt(0);
+    const rect = range?.getBoundingClientRect();
+    if (!rect) return;
+    setSelectionUi({ blockId, x: rect.left + rect.width / 2, y: rect.top + window.scrollY });
+  }
+
+  async function runSelectionAction(action: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<unknown>) {
+    if (!selectionUi) return;
+    const anchor = selectionAnchor(selectionUi.blockId);
+    if (!anchor) return;
+    await action(anchor);
+    window.getSelection()?.removeAllRanges();
+    setSelectionUi(null);
+  }
+
   return (
-    <section aria-label="Published critical edition" className="mx-auto max-w-[72ch]">
-      <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
-        <strong>Edition v{edition.run.version}</strong>
+    <section aria-label={isPhase12Reader ? "Processed text" : "Published critical edition"} className="mx-auto max-w-[72ch]">
+      {!focusMode && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+        <strong>{isPhase12Reader ? "Processed text" : "Edition"} · run v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited"}</span>
         {edition.cost.breakdown.length > 0 ? (
           <details className="text-[var(--color-text-muted)]">
@@ -339,6 +485,14 @@ export function EditionReader({
          *  means anything else, so the default tooltip names the cause
          *  rather than a generic "stopped early". */}
         {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
+        {isPhase12Reader && outline.length > 0 && (
+          <details className="relative">
+            <summary className="cursor-pointer">Outline</summary>
+            <nav aria-label="Document outline" className="absolute left-0 top-6 z-20 max-h-64 w-64 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-2 shadow-lg">
+              {outline.map((item) => <button key={item.id} type="button" onClick={() => { setPageIndex(item.pageIndex); window.requestAnimationFrame(() => blockRefs.current.get(item.id)?.scrollIntoView({ block: "start", behavior: "smooth" })); }} className={`block w-full rounded px-2 py-1 text-left text-xs hover:bg-[var(--color-surface)] ${item.level === 2 ? "pl-4" : "font-medium"}`}>{item.label}</button>)}
+            </nav>
+          </details>
+        )}
         {page && (
           <>
             <span className="ml-auto">Page {page.pageIndex + 1} / {edition.pages.length}</span>
@@ -346,8 +500,44 @@ export function EditionReader({
             <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => setPageIndex((i) => i + 1)} className="disabled:opacity-40">Next →</button>
           </>
         )}
-      </div>
+      </div>}
       {edition.run.note && <p className="mb-5 rounded-md border border-[var(--color-border)] p-3 text-sm text-[var(--color-text-muted)]">{edition.run.note}</p>}
+
+      {focusMode && page && (
+        <div className="mb-4 flex items-center justify-between border-b border-[var(--color-border)] pb-2 text-sm">
+          <span>Page {page.pageIndex + 1} / {edition.pages.length}</span>
+          <div className="flex gap-3">
+            <button type="button" disabled={pageIndex === 0} onClick={() => setPageIndex((index) => index - 1)} className="disabled:opacity-40">← Prev</button>
+            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => setPageIndex((index) => index + 1)} className="disabled:opacity-40">Next →</button>
+          </div>
+        </div>
+      )}
+
+      {selectionUi && (
+        <div
+          className="fixed z-30 flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-md bg-[var(--color-accent-ink)] px-2 py-1.5 text-xs text-[var(--color-background)] shadow-lg"
+          style={{ left: selectionUi.x, top: selectionUi.y - 8, transform: "translate(-50%, -100%)" }}
+          role="toolbar"
+          aria-label="Selected text actions"
+        >
+          {onCreateHighlight && <button type="button" onClick={() => void runSelectionAction(onCreateHighlight)}>Highlight</button>}
+          {onCreateLinkedNote && <button type="button" onClick={() => void runSelectionAction(onCreateLinkedNote)}>New linked note</button>}
+          {onLinkExistingNote && notes.length > 0 && (
+            <select
+              aria-label="Link existing note"
+              defaultValue=""
+              className="max-w-32 rounded bg-[var(--color-background)] px-1 py-0.5 text-[var(--color-text)]"
+              onChange={(event) => {
+                const noteId = event.target.value;
+                if (noteId) void runSelectionAction((anchor) => onLinkExistingNote(noteId, anchor));
+              }}
+            >
+              <option value="">Link note…</option>
+              {notes.map((note) => <option key={note.id} value={note.id}>{note.body.slice(0, 42)}</option>)}
+            </select>
+          )}
+        </div>
+      )}
 
       {/* Annotations (anchored + whole-work) live in the sidebar's
        *  "Annotations" tab now (plan §36 11.5) — clicking an in-text marker
@@ -368,20 +558,23 @@ export function EditionReader({
             if (marker) setHover(null);
           }}
         >
-          {(pageBlocks.length ? pageBlocks : [{ id: "fallback", kind: "body", text: page.text ?? "" }]).map((block) => {
-            if (block.kind === "title") return <h1 key={block.id} className="font-serif text-3xl font-semibold">{block.text}</h1>;
-            if (block.kind === "header") return <h2 key={block.id} className="mt-4 font-serif text-xl font-semibold">{block.text}</h2>;
-            if (block.kind === "footnote") return <aside key={block.id} className="border-l-2 border-[var(--color-accent-ink)] pl-3 text-sm">{block.text}</aside>;
+          {(pageBlocks.length ? pageBlocks : [{ id: "fallback", pageIndex, kind: "body", text: page.text ?? "" }]).map((block) => {
+            const register = (element: HTMLElement | null) => {
+              if (element) blockRefs.current.set(block.id, element);
+              else blockRefs.current.delete(block.id);
+            };
+            const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay);
+            if (block.kind === "title") return <h1 key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="font-serif text-3xl font-semibold">{text}</h1>;
+            if (block.kind === "header") return <h2 key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="mt-4 font-serif text-xl font-semibold">{text}</h2>;
+            if (block.kind === "footnote") return <aside key={block.id} ref={register} onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)} className="border-l-2 border-[var(--color-accent-ink)] pl-3 text-sm">{text}</aside>;
             return (
               <p
                 key={block.id}
-                ref={(el) => {
-                  if (el) blockRefs.current.set(block.id, el);
-                  else blockRefs.current.delete(block.id);
-                }}
+                ref={register}
+                onMouseUp={(event) => showSelectionToolbar(block.id, event.currentTarget)}
                 className="whitespace-pre-wrap"
               >
-                {block.text}
+                {text}
               </p>
             );
           })}

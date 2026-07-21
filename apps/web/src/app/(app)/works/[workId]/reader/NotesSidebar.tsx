@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { BookmarkRecord, HighlightRecord, NoteRecord } from "./types";
 
 function positionLabel(p: BookmarkRecord["position"]) {
-  return p.kind === "pdf" ? `Page ${p.page}` : `Paragraph ${p.paragraphIndex + 1}`;
+  return p.kind === "pdf" ? `Page ${p.page}` : p.kind === "processed" ? `Processed page ${p.pageIndex + 1}` : `Paragraph ${p.paragraphIndex + 1}`;
 }
 
 export function NotesSidebar({
@@ -15,14 +15,16 @@ export function NotesSidebar({
   onAddNote,
   onDeleteNote,
   onDeleteBookmark,
+  pendingHighlightIds = [],
 }: {
   highlights: HighlightRecord[];
   notes: NoteRecord[];
   bookmarks: BookmarkRecord[];
   onDeleteHighlight: (id: string) => void;
-  onAddNote: (body: string, highlightId?: string) => void;
+  onAddNote: (body: string, highlightIds?: string[]) => void;
   onDeleteNote: (id: string) => void;
   onDeleteBookmark: (id: string) => void;
+  pendingHighlightIds?: string[];
 }) {
   const [draft, setDraft] = useState("");
 
@@ -30,6 +32,7 @@ export function NotesSidebar({
     <aside className="w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
       <section className="mb-6">
         <h2 className="mb-2 font-semibold text-[var(--color-text)]">Add a note</h2>
+        {pendingHighlightIds.length > 0 && <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.</p>}
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -41,7 +44,7 @@ export function NotesSidebar({
           type="button"
           disabled={!draft.trim()}
           onClick={() => {
-            onAddNote(draft.trim());
+            onAddNote(draft.trim(), pendingHighlightIds);
             setDraft("");
           }}
           className="mt-2 rounded-md bg-[var(--color-accent-ink)] px-3 py-1 text-xs text-[var(--color-background)] disabled:opacity-40"
@@ -65,7 +68,7 @@ export function NotesSidebar({
               </p>
               <div className="mt-1 flex items-center justify-between text-[var(--color-text-muted)]">
                 <span>
-                  {h.anchor.kind === "pdf" ? `Page ${h.anchor.page}` : `¶${h.anchor.paragraphIndex + 1}`}
+                  {h.anchor.kind === "pdf" ? `Page ${h.anchor.page}` : h.anchor.kind === "processed" ? `Processed page ${h.anchor.pageIndex + 1}` : `¶${h.anchor.paragraphIndex + 1}`}
                 </span>
                 <button type="button" onClick={() => onDeleteHighlight(h.id)} className="underline">
                   Remove
@@ -87,6 +90,7 @@ export function NotesSidebar({
           {notes.map((n) => (
             <li key={n.id} className="rounded-md border border-[var(--color-border)] p-2">
               <p className="whitespace-pre-wrap text-[var(--color-text)]">{n.body}</p>
+              {n.highlightIds.length > 0 && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Linked to {n.highlightIds.length} highlight{n.highlightIds.length === 1 ? "" : "s"}</p>}
               <button
                 type="button"
                 onClick={() => onDeleteNote(n.id)}

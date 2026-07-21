@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CATEGORY_META } from "./annotationMeta";
@@ -14,12 +14,21 @@ import {
   type EditionPassageAnnotation,
   type EditionPayload,
   type EditionResource,
+  type PassageAnnotationType,
 } from "./EditionReader";
 import { matchNoteToBlock } from "./matchNoteToBlock";
+import type { RelationshipCategory } from "./types";
 
-type Tab = "annotations" | "notes" | "sources";
+type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources";
 const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
 const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = { ...READER_LEVEL_LABEL, all: "Show all levels" };
+
+export interface EditionReaderFilters {
+  annotationType: PassageAnnotationType | "all";
+  relationship: RelationshipCategory | "all";
+  provenance: "all" | "ai" | "user";
+  apparatusKind: "all" | "footnote" | "endnote" | "bibliography_entry" | "citation_block";
+}
 
 /**
  * The published-edition's sidebar (plan §36 11.5) — modeled directly on
@@ -38,23 +47,39 @@ export function EditionAnnotationsPanel({
   readerLevel,
   levelMode,
   enableLevelFilter,
+  enablePhase12Reader = false,
+  filters,
   onReaderLevelChange,
   onLevelModeChange,
+  onFiltersChange,
+  onPreviousAnnotation,
+  onNextAnnotation,
+  onApproveTerm,
 }: {
   edition: EditionPayload;
   activeId: string | null;
   readerLevel: ReaderLevelFilter;
   levelMode: ReaderLevelMatchMode;
   enableLevelFilter: boolean;
+  enablePhase12Reader?: boolean;
+  filters: EditionReaderFilters;
   onReaderLevelChange: (level: ReaderLevelFilter) => void;
   onLevelModeChange: (mode: ReaderLevelMatchMode) => void;
+  onFiltersChange: (filters: EditionReaderFilters) => void;
+  onPreviousAnnotation?: () => void;
+  onNextAnnotation?: () => void;
+  onApproveTerm?: (termId: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
   const anchoredNotes = edition.passageAnnotations.filter((a) => a.textBlockId !== null);
   const annotationCount = anchoredNotes.length + edition.wholeWorkGuidance.length;
   const notesCount = edition.generatedNotes.length + edition.authorialNotes.length;
+  const apparatusCount = edition.authorApparatus.length;
+  const suggestedTerms = edition.terms.filter((term) => term.verificationStatus === "suggested");
   const activeIsGeneratedNote = activeId ? edition.generatedNotes.some((note) => note.id === activeId) : false;
+  const annotationTypes = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.annotationType))], [edition.passageAnnotations]);
+  const relationships = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.relationship))], [edition.passageAnnotations]);
 
   // Clicking an in-text marker always means "show me the annotation" — if
   // the reader is currently on another tab, switch to the tab that owns the
@@ -88,6 +113,8 @@ export function EditionAnnotationsPanel({
         >
           Notes{notesCount > 0 ? ` (${notesCount})` : ""}
         </button>
+        {enablePhase12Reader && <button type="button" aria-pressed={tab === "apparatus"} onClick={() => setTab("apparatus")} className="rounded px-3 py-1.5" style={{ background: tab === "apparatus" ? "var(--color-background)" : "transparent" }}>Apparatus{apparatusCount > 0 ? ` (${apparatusCount})` : ""}</button>}
+        {enablePhase12Reader && <button type="button" aria-pressed={tab === "terms"} onClick={() => setTab("terms")} className="rounded px-3 py-1.5" style={{ background: tab === "terms" ? "var(--color-background)" : "transparent" }}>Terms{suggestedTerms.length > 0 ? ` (${suggestedTerms.length})` : ""}</button>}
         <button
           type="button"
           aria-pressed={tab === "sources"}
@@ -124,6 +151,14 @@ export function EditionAnnotationsPanel({
               </select>
             </label>
           )}
+          {enablePhase12Reader && (
+            <>
+              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation type</span><select value={filters.annotationType} onChange={(event) => onFiltersChange({ ...filters, annotationType: event.target.value as EditionReaderFilters["annotationType"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All types</option>{annotationTypes.map((type) => <option key={type} value={type}>{PASSAGE_TYPE_LABEL[type]}</option>)}</select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Relationship</span><select value={filters.relationship} onChange={(event) => onFiltersChange({ ...filters, relationship: event.target.value as EditionReaderFilters["relationship"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All relationships</option>{relationships.map((relationship) => <option key={relationship} value={relationship}>{CATEGORY_META[relationship].label}</option>)}</select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation source</span><select value={filters.provenance} onChange={(event) => onFiltersChange({ ...filters, provenance: event.target.value as EditionReaderFilters["provenance"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">AI and user</option><option value="ai">AI annotations</option><option value="user">User annotations</option></select></label>
+              <div className="flex justify-end gap-2"><button type="button" onClick={onPreviousAnnotation} disabled={!onPreviousAnnotation} className="underline disabled:opacity-40">Previous</button><button type="button" onClick={onNextAnnotation} disabled={!onNextAnnotation} className="underline disabled:opacity-40">Next</button></div>
+            </>
+          )}
         </div>
       )}
 
@@ -131,6 +166,10 @@ export function EditionAnnotationsPanel({
         <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} />
       ) : tab === "notes" ? (
         <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} />
+      ) : tab === "apparatus" ? (
+        <ApparatusTab edition={edition} kind={filters.apparatusKind} onKindChange={(apparatusKind) => onFiltersChange({ ...filters, apparatusKind })} />
+      ) : tab === "terms" ? (
+        <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
       ) : (
         <SourcesTab edition={edition} />
       )}
@@ -197,6 +236,35 @@ function NotesTab({
       )}
     </div>
   );
+}
+
+function ApparatusTab({
+  edition,
+  kind,
+  onKindChange,
+}: {
+  edition: EditionPayload;
+  kind: EditionReaderFilters["apparatusKind"];
+  onKindChange: (kind: EditionReaderFilters["apparatusKind"]) => void;
+}) {
+  const entries = kind === "all" ? edition.authorApparatus : edition.authorApparatus.filter((entry) => entry.kind === kind);
+  return (
+    <div className="px-3 py-3">
+      <label className="flex items-center justify-between gap-2 text-xs"><span className="text-[var(--color-text-muted)]">Author apparatus</span><select value={kind} onChange={(event) => onKindChange(event.target.value as EditionReaderFilters["apparatusKind"])} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All apparatus</option><option value="footnote">Footnotes</option><option value="endnote">Endnotes</option><option value="bibliography_entry">Bibliography</option><option value="citation_block">Citation blocks</option></select></label>
+      {entries.length === 0 ? <p className="py-5 text-sm text-[var(--color-text-muted)]">No author apparatus matches this filter.</p> : <ol className="mt-3 flex flex-col gap-2 text-sm">{entries.map((entry) => <li key={entry.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2"><p className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{entry.kind.replace("_", " ")}{entry.marker ? ` · ${entry.marker}` : ""}</p><p className="mt-1 whitespace-pre-wrap">{entry.text}</p></li>)}</ol>}
+    </div>
+  );
+}
+
+function TermsTab({
+  terms,
+  onApproveTerm,
+}: {
+  terms: EditionPayload["terms"];
+  onApproveTerm?: (termId: string) => void;
+}) {
+  if (terms.length === 0) return <p className="px-4 py-6 text-sm text-[var(--color-text-muted)]">No verified or suggested original-script terms were found.</p>;
+  return <div className="flex flex-col gap-2 px-3 py-3">{terms.map((term) => <article key={term.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"><p lang={term.language} dir={term.direction === "rtl" ? "rtl" : "ltr"} className="font-medium text-[var(--color-accent-ink)]">{term.originalScript}</p><p className="text-[var(--color-text-muted)]">{term.transliteration}</p><p className="mt-1 text-[0.7rem] text-[var(--color-text-muted)]">{term.verificationStatus === "verified" ? "Verified pair" : "Suggested pair — not shown in the text until approved."}</p>{term.verificationStatus === "suggested" && onApproveTerm && <button type="button" onClick={() => onApproveTerm(term.id)} className="mt-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs">Approve pair</button>}</article>)}</div>;
 }
 
 function CriticalNoteCard({

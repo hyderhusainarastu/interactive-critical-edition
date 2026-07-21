@@ -1,12 +1,14 @@
 export type Position =
   | { kind: "pdf"; page: number }
-  | { kind: "text"; paragraphIndex: number };
+  | { kind: "text"; paragraphIndex: number }
+  | { kind: "processed"; pageIndex: number; textBlockId: string };
 
 export interface HighlightRecord {
   id: string;
   anchor:
     | { kind: "pdf"; page: number; quote: string; prefix: string; suffix: string }
-    | { kind: "text"; paragraphIndex: number; quote: string; prefix: string; suffix: string };
+    | { kind: "text"; paragraphIndex: number; quote: string; prefix: string; suffix: string }
+    | { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string };
   color: string;
   createdAt: string;
 }
@@ -14,6 +16,7 @@ export interface HighlightRecord {
 export interface NoteRecord {
   id: string;
   highlightId: string | null;
+  highlightIds: string[];
   body: string;
   createdAt: string;
   updatedAt: string;
