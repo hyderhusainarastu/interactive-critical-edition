@@ -62,8 +62,6 @@ export function providerEnabled(provider: ProviderName): boolean {
     // Free-tier keys required; disabled (honestly reported) when absent.
     case "tavily":
       return Boolean(process.env.TAVILY_API_KEY);
-    case "blogger":
-      return Boolean(process.env.BLOGGER_API_KEY && configuredBloggerBlogIds().length);
     case "youtube":
       return Boolean(process.env.YOUTUBE_API_KEY);
     // Status search requires both the target instance and an authorized token.
@@ -74,18 +72,6 @@ export function providerEnabled(provider: ProviderName): boolean {
     default:
       return false;
   }
-}
-
-/** Explicit public blogs to search through Blogger's per-blog API. The API
- * does not offer a web-wide blog search, so a key alone must not imply broad
- * coverage that it cannot provide. */
-export function configuredBloggerBlogIds(): string[] {
-  return [...new Set(
-    (process.env.BLOGGER_BLOG_IDS ?? "")
-      .split(",")
-      .map((blogId) => blogId.trim())
-      .filter(Boolean),
-  )];
 }
 
 /** Polite-pool / attribution contact sent to keyless scholarly APIs. */

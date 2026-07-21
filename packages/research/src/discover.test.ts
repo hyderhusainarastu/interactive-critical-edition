@@ -123,7 +123,7 @@ describe("lane-scoped discovery", () => {
     expect([...providersForLane("video_podcast")]).toEqual(expect.arrayContaining(["youtube"]));
     expect([...providersForLane("video_podcast")]).not.toContain("crossref");
     expect([...providersForLane("public_discussion")]).toEqual(expect.arrayContaining(["mastodon", "bluesky"]));
-    expect([...providersForLane("blog_newsletter")]).toEqual(expect.arrayContaining(["tavily", "blogger"]));
+    expect([...providersForLane("blog_newsletter")]).toEqual(["tavily"]);
     expect([...providersForLane("scholarly_debate")]).toEqual(expect.arrayContaining(["crossref", "openalex"]));
     expect([...providersForLane("scholarly_debate")]).not.toContain("youtube");
     // Primary texts are catalogued as books far more often than as articles.

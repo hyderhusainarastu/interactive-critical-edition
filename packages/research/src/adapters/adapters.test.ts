@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrossrefAdapter, OpenAlexAdapter, SemanticScholarAdapter } from "./scholarly";
-import { BloggerAdapter } from "./blogger";
 import { TavilyAdapter, YouTubeAdapter } from "./web";
 import { MastodonAdapter } from "./social";
 
@@ -92,8 +91,6 @@ describe("keyed adapters are honestly 'disabled' without a key", () => {
   const realFetch = global.fetch;
   beforeEach(() => {
     delete process.env.TAVILY_API_KEY;
-    delete process.env.BLOGGER_API_KEY;
-    delete process.env.BLOGGER_BLOG_IDS;
     delete process.env.YOUTUBE_API_KEY;
     delete process.env.MASTODON_INSTANCE_URL;
   });
@@ -111,8 +108,7 @@ describe("keyed adapters are honestly 'disabled' without a key", () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it("Blogger, YouTube, and Mastodon are disabled without their config", async () => {
-    expect(new BloggerAdapter().isEnabled()).toBe(false);
+  it("YouTube and Mastodon are disabled without their config", async () => {
     expect(new YouTubeAdapter().isEnabled()).toBe(false);
     expect(new MastodonAdapter().isEnabled()).toBe(false);
     expect((await new YouTubeAdapter().search(["x"], opts)).attempt.status).toBe("disabled");
@@ -123,8 +119,6 @@ describe("keyed adapters activate when configured", () => {
   const realFetch = global.fetch;
   afterEach(() => {
     delete process.env.TAVILY_API_KEY;
-    delete process.env.BLOGGER_API_KEY;
-    delete process.env.BLOGGER_BLOG_IDS;
     global.fetch = realFetch;
   });
 
@@ -143,33 +137,6 @@ describe("keyed adapters activate when configured", () => {
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer test-key" }) }),
     );
     expect(JSON.parse((global.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body)).not.toHaveProperty("api_key");
-  });
-
-  it("Blogger searches only configured public blogs and maps post metadata", async () => {
-    process.env.BLOGGER_API_KEY = "test-key";
-    process.env.BLOGGER_BLOG_IDS = "12345";
-    global.fetch = mockFetch(200, {
-      items: [{
-        title: "A philosophical note",
-        url: "https://example.blogspot.com/2026/07/note.html",
-        published: "2026-07-20T00:00:00Z",
-        content: "<p>A <strong>short</strong> post.</p>",
-        author: { displayName: "Example Author" },
-      }],
-    });
-    const res = await new BloggerAdapter().search(["philosophy"], opts);
-    expect(res.attempt.status).toBe("queried");
-    expect(res.resources[0]).toMatchObject({
-      provider: "blogger",
-      resourceType: "webpage",
-      venue: "Blogger",
-      authors: ["Example Author"],
-      snippet: "A short post.",
-    });
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining("/blogger/v3/blogs/12345/posts/search?"),
-      expect.anything(),
-    );
   });
 
   it("retains public Reddit result metadata through Tavily without a Reddit adapter", async () => {

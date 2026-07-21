@@ -37,15 +37,8 @@ export function charge(b: CostBudget, usd: number): void {
 }
 
 // ---- Per-provider result budgets ----
-export function perProviderLimit(p: ProviderName, lane?: QueryLane): number {
-  // Blog discovery has two web providers. Split the existing web cap between
-  // them instead of silently increasing the source-result budget.
-  if (lane === "blog_newsletter" && (p === "tavily" || p === "blogger")) {
-    return Math.ceil(RESEARCH_LIMITS.maxWebResults / 2);
-  }
+export function perProviderLimit(p: ProviderName): number {
   switch (p) {
-    case "blogger":
-      return Math.ceil(RESEARCH_LIMITS.maxWebResults / 2);
     case "youtube":
       return RESEARCH_LIMITS.maxYoutubeResults;
     case "tavily":
@@ -94,7 +87,7 @@ export function providersForLane(lane: QueryLane): ReadonlySet<ProviderName> {
     case "video_podcast":
       return new Set<ProviderName>(["youtube", "tavily"]);
     case "blog_newsletter":
-      return new Set<ProviderName>(["tavily", "blogger"]);
+      return new Set<ProviderName>(["tavily"]);
     case "public_discussion":
       return new Set<ProviderName>(["mastodon", "bluesky", "tavily"]);
     case "primary_prerequisite":
@@ -179,7 +172,7 @@ export async function runDiscovery(input: {
     const active = allowed ? input.adapters.filter((a) => allowed.has(a.provider)) : input.adapters;
     const results = await Promise.all(
       active.map((a) =>
-        a.search(queries, { maxResults: perProviderLimit(a.provider, lane), timeoutMs: input.timeoutMs }),
+        a.search(queries, { maxResults: perProviderLimit(a.provider), timeoutMs: input.timeoutMs }),
       ),
     );
     for (const r of results) {

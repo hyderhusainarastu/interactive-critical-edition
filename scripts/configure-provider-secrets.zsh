@@ -37,11 +37,9 @@ upsert_secret() {
 
 upsert_secret TAVILY_API_KEY
 upsert_secret YOUTUBE_API_KEY
-upsert_secret BLOGGER_API_KEY
 upsert_secret MASTODON_ACCESS_TOKEN
 upsert_secret BLUESKY_APP_PASSWORD
 upsert_secret MASTODON_INSTANCE_URL
 upsert_secret BLUESKY_IDENTIFIER
-upsert_secret BLOGGER_BLOG_IDS
 
 print "Saved provider configuration in ignored ${env_file}."
