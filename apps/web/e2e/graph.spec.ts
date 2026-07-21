@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedWorkWithGraphData } from "./helpers";
 
 /**
- * Phase 9.7/11.8 E2E: the visualization graph's node-type extension and shared
+ * Phase 9.7/11.8/11.9 E2E: the visualization graph's node-type extension and shared
  * filters. All graph data is SEEDED directly (`seedWorkWithGraphData`) —
  * `buildGraph()` has always been a pure DB read with no worker/live-API
  * dependency, so this is CI-safe the same way library.spec.ts/
@@ -88,17 +88,47 @@ test.describe("Visualization graph", () => {
     await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toHaveCount(0);
   });
 
-  test("the table and the 3D scene report the same filtered node count", async ({ page }) => {
+  test("the table and 3D graph are shown together from the same filtered data", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(userId);
 
     await login(page);
     await page.goto(`/works/${workId}/graph?type=concept`);
     await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    await expect(page.getByLabel("Accessible relationship table")).toBeVisible();
+    await expect(page.getByLabel("3D relationship graph")).toBeVisible();
+    await expect(page.getByRole("button", { name: "3D" })).toHaveCount(0);
+  });
 
-    await page.getByRole("button", { name: "3D" }).click();
-    // The 3D canvas mounts once WebGL is ready; the shared "N of M shown"
-    // summary above it is the identical-filters proof (plan §34.4 9.7) —
-    // unaffected by which view is active, since both read the same filtered data.
+  test("the Credibility filter persists in the URL and narrows to high-credibility references", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+
+    await page.getByLabel("Credibility").selectOption("high");
+    await expect(page).toHaveURL(/[?&]credibilityBand=high/);
     await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.getByLabel("Credibility")).toHaveValue("high");
+    await expect(page.locator(`[data-graph-node="bib:${bibId}"]`)).toBeVisible();
+  });
+
+  test("the Work filter scopes the global visualization to nodes associated with one work", async ({ page }) => {
+    const first = await seedWorkWithGraphData(userId);
+    const second = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto("/graph");
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toBeVisible();
+
+    await page.getByLabel("Associated work").selectOption(`work:${first.workId}`);
+    await expect(page).toHaveURL(new RegExp(`associatedWork=work%3A${first.workId}`));
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="bib:${first.bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
   });
 });

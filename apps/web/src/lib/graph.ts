@@ -54,6 +54,7 @@ export interface GraphNode {
   /** Best source authority (A–E) and discovering provider from v2 research,
    *  when this reference was surfaced by the edition pipeline; null for legacy. */
   authority: string | null;
+  credibilityScore: number | null;
   provider: string | null;
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
@@ -149,19 +150,19 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   const enrichRows =
     refIds.length > 0
       ? ((await db.execute(sql`
-          SELECT rr.bib_record_id AS bib_id, ca.authority, rr.provider
+          SELECT rr.bib_record_id AS bib_id, ca.authority, ca.score, rr.provider
           FROM research_resource rr
           LEFT JOIN credibility_assessment ca ON ca.resource_id = rr.id
           WHERE rr.bib_record_id IN ${refIds}
-        `)) as unknown as { bib_id: string; authority: string | null; provider: string | null }[])
+        `)) as unknown as { bib_id: string; authority: string | null; score: number | null; provider: string | null }[])
       : [];
   const AUTH_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
-  const enrichByBib = new Map<string, { authority: string | null; provider: string | null }>();
+  const enrichByBib = new Map<string, { authority: string | null; credibilityScore: number | null; provider: string | null }>();
   for (const row of enrichRows) {
     if (!row.bib_id) continue;
     const prior = enrichByBib.get(row.bib_id);
     const better = !prior || (AUTH_ORDER[row.authority ?? "E"] ?? 4) < (AUTH_ORDER[prior.authority ?? "E"] ?? 4);
-    if (better) enrichByBib.set(row.bib_id, { authority: row.authority, provider: row.provider });
+    if (better) enrichByBib.set(row.bib_id, { authority: row.authority, credibilityScore: row.score, provider: row.provider });
   }
 
   // 4) Reading state (records + ratings) for those references.
@@ -231,6 +232,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     year: null,
     url: null,
     authority: null,
+    credibilityScore: null,
     provider: null,
     kind: null,
   }));
@@ -262,6 +264,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       year: r.year,
       url: r.url,
       authority: enrich?.authority ?? null,
+      credibilityScore: enrich?.credibilityScore ?? null,
       provider: enrich?.provider ?? null,
       kind: null,
     });
@@ -280,6 +283,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       year: null,
       url: null,
       authority: null,
+      credibilityScore: null,
       provider: null,
       kind: c.kind,
     });
@@ -297,6 +301,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       year: null,
       url: null,
       authority: null,
+      credibilityScore: null,
       provider: null,
       kind: s.kind,
     });

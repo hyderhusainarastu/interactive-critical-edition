@@ -12,6 +12,7 @@ export interface GraphNode {
   /** v2 research enrichment (null for legacy analysis nodes, and for
    *  concept/section nodes, which don't have one). */
   authority?: string | null;
+  credibilityScore?: number | null;
   provider?: string | null;
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
@@ -109,7 +110,18 @@ export interface GraphFilters {
   authority: string | "all";
   provider: string | "all";
   relation: string | "all";
+  credibilityBand: CredibilityBand | "all";
+  associatedWork: string | "all";
 }
+
+export type CredibilityBand = "high" | "medium" | "low" | "unknown";
+
+export const CREDIBILITY_BAND_META: Record<CredibilityBand, { label: string }> = {
+  high: { label: "High credibility" },
+  medium: { label: "Medium credibility" },
+  low: { label: "Low credibility" },
+  unknown: { label: "Unknown credibility" },
+};
 
 export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
   state: "all",
@@ -117,7 +129,16 @@ export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
   authority: "all",
   provider: "all",
   relation: "all",
+  credibilityBand: "all",
+  associatedWork: "all",
 };
+
+export function credibilityBandFor(score: number | null | undefined): CredibilityBand {
+  if (score == null) return "unknown";
+  if (score >= 0.75) return "high";
+  if (score >= 0.45) return "medium";
+  return "low";
+}
 
 /**
  * The ONE filtering implementation both views consume (plan §34.4 9.7:
@@ -129,13 +150,28 @@ export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
  */
 export function filterGraphData(data: GraphData, filters: GraphFilters): GraphData {
   const byNode = edgeTypesByNode(data);
+  const associatedIds =
+    filters.associatedWork === "all"
+      ? null
+      : new Set([
+          filters.associatedWork,
+          ...data.links.flatMap((l) => {
+            const source = linkEndpointId(l.source);
+            const target = linkEndpointId(l.target);
+            if (source === filters.associatedWork) return [target];
+            if (target === filters.associatedWork) return [source];
+            return [];
+          }),
+        ]);
   const nodes = data.nodes.filter(
     (n) =>
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
       (filters.authority === "all" || n.authority === filters.authority) &&
       (filters.provider === "all" || n.provider === filters.provider) &&
-      (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation)),
+      (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation)) &&
+      (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand) &&
+      (!associatedIds || associatedIds.has(n.id)),
   );
   const visibleIds = new Set(nodes.map((n) => n.id));
   const links = data.links.filter((l) => visibleIds.has(linkEndpointId(l.source)) && visibleIds.has(linkEndpointId(l.target)));

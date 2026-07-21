@@ -487,6 +487,33 @@ export async function seedWorkWithGraphData(
     .insert(bibliographicRecords)
     .values({ source: "crossref", title: "Physics", authors: "Aristotle", year: -350, accessStatus: "metadata_only" })
     .returning({ id: bibliographicRecords.id });
+  const [resource] = await db
+    .insert(researchResources)
+    .values({
+      runId: run.id,
+      title: "Physics",
+      provider: "crossref",
+      resourceType: "book",
+      year: -350,
+      authors: ["Aristotle"],
+      bibRecordId: bib.id,
+      normalizedKey: `seeded-physics-${suffix}`,
+      workKey: `work:physics:aristotle:${suffix}`,
+      workCanonicalTitle: "Physics",
+      workAuthorSurname: "aristotle",
+      workEvidence: "seeded graph test",
+    })
+    .returning({ id: researchResources.id });
+  await db.insert(credibilityAssessments).values({
+    resourceId: resource.id,
+    score: 0.82,
+    authority: "A",
+    relevance: 0.9,
+    inspectionDepth: 1,
+    evidenceStrength: 0.8,
+    agreement: "strong",
+    rationale: "seeded graph test",
+  });
   const [concept] = await db
     .insert(concepts)
     .values({ slug: `hylomorphism-${suffix}`, kind: "doctrine", label: "Hylomorphism", summary: "Matter and form as co-constituents of a substance." })

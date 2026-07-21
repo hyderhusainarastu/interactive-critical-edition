@@ -6,12 +6,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
 import {
+  CREDIBILITY_BAND_META,
   DEFAULT_GRAPH_FILTERS,
   EDGE_FAMILY_META,
   EDGE_FAMILY_ORDER,
   STATE_META,
   STATE_ORDER,
   TYPE_LABEL,
+  credibilityBandFor,
   edgeFamilyFor,
   filterGraphData,
   type GraphData,
@@ -26,7 +28,7 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
   loading: () => <p className="py-10 text-center text-[var(--color-text-muted)]">Loading 3D view…</p>,
 });
 
-const FILTER_KEYS = ["state", "type", "authority", "provider", "relation"] as const;
+const FILTER_KEYS = ["state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
 
 function filtersFromParams(params: URLSearchParams): GraphFilters {
   const next = { ...DEFAULT_GRAPH_FILTERS };
@@ -39,10 +41,9 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
 
 /**
  * Orchestrates the visualization tab: fetches the per-user graph, offers
- * a visible 3D ⇄ table toggle (the table is the accessible equal, plan
- * §20), a state legend, summary counts, and a click-to-detail panel. The
- * table view is the default so the information is reachable with zero
- * WebGL — the 3D scene is opt-in.
+ * a persistent 3D scene plus accessible table (plan §36 11.9), a state
+ * legend, summary counts, and a click-to-detail panel. The table is never
+ * hidden behind WebGL: both panes consume the same filtered data at once.
  *
  * Phase 9.7 (plan §34.4): filters live HERE, not inside either view, and
  * are synced to the URL — so the table and the 3D scene are always showing
@@ -52,7 +53,6 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
 export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string; backHref: string; backLabel: string }) {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"table" | "3d">("table");
   const [selected, setSelected] = useState<GraphNode | null>(null);
 
   const router = useRouter();
@@ -109,6 +109,11 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
     [data],
   );
   const types = useMemo(() => (data ? [...new Set(data.nodes.map((n) => n.type))] : []), [data]);
+  const workNodes = useMemo(() => (data ? data.nodes.filter((n) => n.type === "work") : []), [data]);
+  const credibilityBands = useMemo(
+    () => (data ? [...new Set(data.nodes.map((n) => credibilityBandFor(n.credibilityScore)))].sort() : []),
+    [data],
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -123,26 +128,6 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
           <p className="text-sm text-[var(--color-text-muted)]">
             {data?.title ?? ""} · works, references, concepts, and (per-work) the text&rsquo;s own outline.
           </p>
-        </div>
-        <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="View mode">
-          <button
-            type="button"
-            aria-pressed={view === "table"}
-            onClick={() => setView("table")}
-            className="rounded px-3 py-1"
-            style={{ background: view === "table" ? "var(--color-surface)" : "transparent" }}
-          >
-            Table
-          </button>
-          <button
-            type="button"
-            aria-pressed={view === "3d"}
-            onClick={() => setView("3d")}
-            className="rounded px-3 py-1"
-            style={{ background: view === "3d" ? "var(--color-surface)" : "transparent" }}
-          >
-            3D
-          </button>
         </div>
       </div>
 
@@ -275,6 +260,42 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
               </label>
             )}
 
+            {credibilityBands.length > 0 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Credibility</span>
+                <select
+                  value={filters.credibilityBand}
+                  onChange={(e) => updateFilter("credibilityBand", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {credibilityBands.map((band) => (
+                    <option key={band} value={band}>
+                      {CREDIBILITY_BAND_META[band].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {workNodes.length > 1 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Associated work</span>
+                <select
+                  value={filters.associatedWork}
+                  onChange={(e) => updateFilter("associatedWork", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {workNodes.map((work) => (
+                    <option key={work.id} value={work.id}>
+                      {work.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <span className="ml-auto text-xs text-[var(--color-text-muted)]">
               {filtered.nodes.length} of {data.nodes.length} shown
             </span>
@@ -282,10 +303,15 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
 
           {filtered.nodes.length === 0 ? (
             <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
-          ) : view === "table" ? (
-            <GraphAccessibleFallback data={filtered} />
           ) : (
-            <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} />
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.9fr)]">
+              <section className="order-2 lg:order-1" aria-label="3D relationship graph">
+                <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} />
+              </section>
+              <section className="order-1 lg:order-2" aria-label="Accessible relationship table">
+                <GraphAccessibleFallback data={filtered} />
+              </section>
+            </div>
           )}
 
           {/* Node detail (from a 3D click) */}
