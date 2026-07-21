@@ -830,6 +830,10 @@ export async function analyzeEditionRun(input: {
     safetyIdentifier,
   });
   if (qg.usedModel) logUsage("query_generation", "research-discovery", cheapModel, qg.promptTokens, qg.completionTokens);
+  const explicitCitationMatchTexts = [
+    ...citationTexts,
+    ...(qg.lanes.find((lane) => lane.lane === "explicit_citation")?.queries ?? []),
+  ];
 
   // Discovery across every adapter (those never consulted still record an
   // honest attempt), each wrapped with the persistent result cache.
@@ -871,7 +875,7 @@ export async function analyzeEditionRun(input: {
       authors: resolvedAuthors,
     }),
     explicitCitationKeys: new Set(),
-    explicitCitationTexts: citationTexts,
+    explicitCitationTexts: explicitCitationMatchTexts,
     citedAuthorSurnames: citedSurnamesFrom(citationTexts),
     citationGraphKeys: new Set(),
   };

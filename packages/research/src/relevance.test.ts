@@ -640,4 +640,26 @@ describe("relevance gate — short distinctive canonical titles in citation entr
     expect(a.reasons).toContain("explicit_citation_match");
     expect(a.verdict).toBe("accepted");
   });
+
+  it("accepts a concise canonical title from the explicit-citation query without accepting articles merely about it", () => {
+    const withRefs: WorkIdentity = {
+      ...irwin,
+      explicitCitationTexts: ["Nicomachean Ethics"],
+    };
+    const canonical = assessCandidate(
+      R({ title: "Nicomachean Ethics", authors: [], year: null }),
+      withRefs,
+      "explicit_citation",
+    );
+    const commentary = assessCandidate(
+      R({ title: "Particularism in Aristotle’s Nicomachean Ethics", authors: [], year: null }),
+      withRefs,
+      "explicit_citation",
+    );
+
+    expect(canonical.signals.isExplicitCitation).toBe(true);
+    expect(canonical.verdict).toBe("accepted");
+    expect(commentary.signals.isExplicitCitation).toBe(false);
+    expect(commentary.verdict).not.toBe("accepted");
+  });
 });
