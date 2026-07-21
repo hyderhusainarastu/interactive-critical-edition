@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import { PageHeader } from "@/components/app/PageHeader";
 
 const ACCEPTED_TYPES = ["application/pdf", "application/epub+zip", "text/plain", "text/markdown"];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
@@ -149,9 +150,7 @@ export default function UploadPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
-      <h1 className="text-3xl font-semibold text-[var(--color-text)]">
-        Upload a work
-      </h1>
+      <PageHeader title="Upload a work" description="Add a PDF, EPUB, plain text, or Markdown file for private analysis." />
 
       <div
         onDragOver={(e) => {

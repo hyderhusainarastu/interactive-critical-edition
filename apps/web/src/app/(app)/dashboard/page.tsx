@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
 import { getLibrary } from "@/lib/library";
 import { STATUS_LABEL } from "@/lib/status";
+import { PageHeader } from "@/components/app/PageHeader";
 
 /**
  * Overview (plan §34.4 9.5) — this route used to BE the uploads list; that
@@ -47,14 +48,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
-      <div>
-        <h1 className="text-3xl font-semibold text-[var(--color-text)]">
-          Welcome back{me?.name ? `, ${me.name}` : ""}
-        </h1>
-        <p className="mt-1 text-[var(--color-text-muted)]">
-          {me?.email}
-        </p>
-      </div>
+      <PageHeader title={`Welcome back${me?.name ? `, ${me.name}` : ""}`} description={me?.email} />
 
       {continueReading && (
         <Link

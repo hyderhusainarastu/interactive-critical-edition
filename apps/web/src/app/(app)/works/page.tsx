@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
 import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
+import { PageHeader } from "@/components/app/PageHeader";
 
 /**
  * Your uploads (plan §34.4 9.5) — this used to be `/dashboard`'s whole
@@ -33,11 +34,10 @@ export default async function WorksPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold text-[var(--color-text)]">
-          Your works
-        </h1>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Your works"
+        description="Your uploaded source files and their current processing state."
+        actions={<>
           <Link
             href="/works/trash"
             className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
@@ -56,8 +56,8 @@ export default async function WorksPage() {
           >
             Upload a work
           </Link>
-        </div>
-      </div>
+        </>}
+      />
 
       {library.length === 0 ? (
         <p className="text-[var(--color-text-muted)]">

@@ -8,6 +8,7 @@ export {
   resetPipelineWarnings,
   type PipelineVersion,
 } from "./pipeline";
+export { PHASE_12_FEATURE_FLAGS, phase12FeatureEnabled, type Phase12Feature } from "./phase12";
 export {
   STAGE_LABEL,
   V2_STAGE_SEQUENCE,

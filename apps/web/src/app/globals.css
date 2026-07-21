@@ -70,6 +70,13 @@
   --color-focus-ring: #2e4057;
 }
 
+:root[data-font-size="small"] { --app-font-scale: 0.94; }
+:root[data-font-size="medium"] { --app-font-scale: 1; }
+:root[data-font-size="large"] { --app-font-scale: 1.12; }
+:root[data-reading-width="compact"] { --reading-measure: 58ch; }
+:root[data-reading-width="comfortable"] { --reading-measure: 72ch; }
+:root[data-reading-width="wide"] { --reading-measure: 88ch; }
+
 /*
   Distraction-reduced reading mode: a token overlay, not a separate
   palette — muted borders/chrome, same base colors, so the reading
@@ -209,7 +216,42 @@ body {
   background: var(--color-background);
   color: var(--color-text);
   font-family: var(--font-sans), Georgia, serif;
+  font-size: calc(1rem * var(--app-font-scale, 1));
 }
+
+.app-shell-main { min-width: 0; }
+.app-icon-button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: .375rem;
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+}
+.app-icon-button:hover { background: var(--color-surface); color: var(--color-text); }
+.app-icon-button::after {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + .35rem);
+  right: 0;
+  width: max-content;
+  max-width: 14rem;
+  padding: .3rem .45rem;
+  border-radius: .25rem;
+  background: var(--color-text);
+  color: var(--color-background);
+  content: attr(data-tooltip);
+  font-size: .72rem;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity .12s ease, transform .12s ease;
+}
+.app-icon-button:hover::after, .app-icon-button:focus-visible::after { opacity: 1; transform: translateY(0); }
+@media (prefers-reduced-motion: reduce) { .app-icon-button::after { transition: none; } }
 
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);

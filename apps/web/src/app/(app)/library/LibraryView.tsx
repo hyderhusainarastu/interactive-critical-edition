@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { suggestReaderLevelFromCompletions, type ReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
+import { PageHeader } from "@/components/app/PageHeader";
 import type { LibraryItem } from "@/lib/library";
 
 const SUGGESTION_DISMISSED_KEY = "library-reader-level-suggestion-dismissed";
@@ -170,11 +171,7 @@ export function LibraryView({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <h1 className="mb-1 font-serif text-2xl font-semibold text-[var(--color-text)]">Library</h1>
-      <p className="mb-5 max-w-2xl text-sm text-[var(--color-text-muted)]">
-        Every source recommended for your own works, in one place — separate from the works you&rsquo;ve uploaded
-        yourself. An AI-assisted aid; verify against the sources.
-      </p>
+      <div className="mb-5"><PageHeader title="Library" description="Every source recommended for your own works, separate from the files you uploaded. Verify against the sources." /></div>
 
       {showSuggestion && suggestedLevel && (
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">

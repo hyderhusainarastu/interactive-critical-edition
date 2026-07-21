@@ -162,14 +162,14 @@
     <section class="overview" aria-labelledby="overview-title">
       <div>
         <p class="eyebrow">Current position</p>
-        <h2 id="overview-title">Phase 11 is complete</h2>
-        <p>Phases 0–11 are complete. Phase 11 (Rebrand, UI/UX Overhaul, Reader/Relevance Fixes) started and completed 2026-07-21: all nine sub-phases shipped, including the Palimnote rebrand, reader/sidebar overhaul, production-canary-verified classification fix, and Visualization merge. The previously-Phase-11 Educational Companion Site is renumbered to Phase 12 and remains planned.</p>
+        <h2 id="overview-title">Phase 12 is underway</h2>
+        <p>Phases 0–11 are complete. Phase 12 (Production Research Workspace) began 2026-07-21. Its foundation is complete: shared responsive shell, command palette, recovery states, feature flags, persisted presentation preferences, and checked desktop/mobile baselines. The Educational Companion Site is now Phase 13 and remains planned.</p>
         <div class="progress">
-          <div class="progress-label"><span>Phase 11 scope items</span><span>9 of 9 complete</span></div>
-          <div class="bar" role="progressbar" aria-label="Phase 11 scope items complete" aria-valuemin="0" aria-valuemax="9" aria-valuenow="9"><span></span></div>
+          <div class="progress-label"><span>Phase 12 scope items</span><span>1 of 7 complete</span></div>
+          <div class="bar" role="progressbar" aria-label="Phase 12 scope items complete" aria-valuemin="0" aria-valuemax="7" aria-valuenow="1"><span style="width: 14.2857%"></span></div>
         </div>
       </div>
-      <div class="metric"><strong>12 / 13</strong><span>numbered phases complete</span></div>
+      <div class="metric"><strong>12 / 14</strong><span>numbered phases complete</span></div>
     </section>
 
     <section aria-labelledby="phase-index-title">
@@ -190,30 +190,29 @@
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 9</div><h3>Interactive learning workspace</h3></div><span class="status complete">Complete</span></div><p>All seven planned sub-phases shipped and production-verified. The originally-planned 9.8 was retired as a phantom requirement; see Phase 10.</p><div class="meta">tag · phase-9-complete</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 10</div><h3>Workspace depth &amp; adaptivity completion</h3></div><span class="status complete">Complete</span></div><p>Closed the concrete gaps 9.1–9.7 left in Phase 9's own original objective; the two AI-pipeline-touching items are production-canary-verified.</p><div class="meta">plan · docs/architecture/plan.md §35</div></li>
         <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 11</div><h3>Rebrand, UI/UX overhaul &amp; reader/relevance fixes</h3></div><span class="status complete">Complete</span></div><p>Palimnote rebrand, stronger theming, honest upload progress, Library work-scoping, a two-part reader overhaul, a classification fix, and a merged graph/table visualization.</p><div class="meta">plan · docs/architecture/plan.md §36</div></li>
-        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 11</div></li>
+        <li class="phase active"><div class="phase-top"><div><div class="phase-number">Phase 12</div><h3>Production research workspace</h3></div><span class="status active">Active</span></div><p>A production-oriented research and writing workspace: consistent UX, canonical sources, v4, graph, Writer mode, and hardening. Foundation complete.</p><div class="meta">plan · docs/architecture/plan.md §37</div></li>
+        <li class="phase"><div class="phase-top"><div><div class="phase-number">Phase 13</div><h3>Educational companion site</h3></div><span class="status planned">Planned</span></div><p>An independent, start-to-finish learning site documenting the completed main project.</p><div class="meta">depends on · phase 12</div></li>
       </ol>
     </section>
 
-    <section class="focus" aria-labelledby="phase-ten-title">
-      <div class="focus-header"><div><p class="eyebrow">Most recent phase</p><h2 id="phase-ten-title">Rebrand, UI/UX Overhaul &amp; Reader/Relevance Fixes</h2></div><span class="status complete">Complete</span></div>
-      <p>Nine sub-phases (11.1–11.9), sequenced so groundwork lands before what consumes it: branding, theming, upload progress, Library work-scoping, a two-part reader overhaul, a relevance/classification fix with a production canary, and a graph/visualization merge. All nine are complete.</p>
+    <section class="focus" aria-labelledby="phase-twelve-title">
+      <div class="focus-header"><div><p class="eyebrow">Active phase</p><h2 id="phase-twelve-title">Production Research Workspace</h2></div><span class="status active">Active</span></div>
+      <p>Seven parts turn Palimnote into a production research and writing workspace. Each is committed, verified, logged, and pushed before the next begins. Part 1 establishes the reusable shell and preference layer that later work consumes.</p>
       <ol class="subphases">
-        <li class="subphase complete"><h3>11.1 · Branding rename</h3><p>Public-facing product name becomes "Palimnote", via one shared constant. Backend/DB/package/repo names unchanged. Complete.</p></li>
-        <li class="subphase complete"><h3>11.2 · Theming</h3><p>Harsh/bright functional accents scoped to credibility alerting, a new 3-band credibility meter, general contrast turn-up, and consolidated annotation-color tokens. Complete.</p></li>
-        <li class="subphase complete"><h3>11.3 · Upload progress</h3><p>Real byte-level transfer progress (XHR) plus an honest, stage-by-stage processing indicator shared between web and worker via a new @ice/config module. Complete.</p></li>
-        <li class="subphase complete"><h3>11.4 · Library work-scoping</h3><p>Select one uploaded work and see everything the Library recommends for it specifically, via a new "Work" filter. Complete.</p></li>
-        <li class="subphase complete"><h3>11.5 · Reader overhaul, part 1</h3><p>The published edition is now the default reader, with a new annotations/sources sidebar, click-to-reveal in-text markers, and a hover preview. Complete.</p></li>
-        <li class="subphase complete"><h3>11.6 · Reader overhaul, part 2</h3><p>Critical notes and authorial footnotes now live in the edition sidebar's Notes tab; quote-matched generated notes get visibly inferred in-text markers. Complete.</p></li>
-        <li class="subphase complete"><h3>11.7 · Classification fix</h3><p>Sustained citation-frequency evidence and constrained explicit-work matching now classify Nicomachean Ethics as a prerequisite; production canary verified and purged. Complete.</p></li>
-        <li class="subphase complete"><h3>11.8 · Visualization: nav &amp; edge colors</h3><p>"Graph" renamed to "Visualization" and promoted in the nav; relationship-family edge coloring and a compact legend added. Complete.</p></li>
-        <li class="subphase complete"><h3>11.9 · Visualization: merged layout</h3><p>3D graph and the accessible table shown together, not toggled, plus new credibility-band and associated-work filters. Complete.</p></li>
+        <li class="subphase complete"><h3>12.1 · Foundation and site-wide UX</h3><p>Responsive shell, compact headers, mobile drawer, command palette, toasts, recovery states, feature flags, preferences, and desktop/mobile baselines. Complete.</p></li>
+        <li class="subphase"><h3>12.2 · Library, identity &amp; source coverage</h3><p>Canonical identity, duplicate uploads, broader transparent sources, and cumulative/exact level filtering.</p></li>
+        <li class="subphase"><h3>12.3 · Pipeline v4 &amp; annotations</h3><p>Section-aware chunks, richer anchors/apparatus, light processing, and costed backfill planning.</p></li>
+        <li class="subphase"><h3>12.4 · Interactive reader</h3><p>Processed reading default, outline/filters/focus, note-highlight joins, and verified script terms.</p></li>
+        <li class="subphase"><h3>12.5 · Cross-library graph</h3><p>Cached claim relationships, evidence workspace, accessible graph data, and budgeted expansion.</p></li>
+        <li class="subphase"><h3>12.6 · Writer mode</h3><p>Private projects, structured MLA drafting, source sidebar, citations, and export.</p></li>
+        <li class="subphase"><h3>12.7 · Production hardening</h3><p>Authenticated APIs, telemetry, audits, visual coverage, and safe destructive actions.</p></li>
       </ol>
       <details>
-        <summary>What “complete” means for this phase</summary>
+        <summary>What has shipped in Part 1</summary>
         <div class="evidence">
-          <div><strong>No regression</strong><span>Nothing built in Phases 1–10 is removed — Phase 11 only renames, restyles, adds, and fixes.</span></div>
-          <div><strong>Right discipline per item</strong><span>UI/web-only items need typecheck/lint/test/build plus CI-safe coverage; the one worker-touching item (11.7) additionally needs an owner-approved production canary.</span></div>
-          <div><strong>Traceable scope</strong><span>Every item in this phase is a concretely identified usability/correctness problem found during hands-on testing (plan.md §36), not speculative scope.</span></div>
+          <div><strong>Shared infrastructure</strong><span>Responsive app shell, keyboard command palette, mobile navigation, toasts, tooltips, compact headers, and failure recovery now serve every authenticated route.</span></div>
+          <div><strong>Preferences without flash</strong><span>Authenticated preferences validate and persist; local values apply before hydration and reduced-motion behavior remains respected.</span></div>
+          <div><strong>Verified baseline</strong><span>Desktop/mobile landing captures are tracked under <code>docs/baselines/phase-12-foundation</code>; config, typecheck, lint, build, and a local Playwright shell flow pass.</span></div>
         </div>
       </details>
     </section>

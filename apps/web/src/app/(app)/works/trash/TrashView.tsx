@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/app/PageHeader";
 
 interface TrashedWork {
   workId: string;
@@ -68,16 +69,9 @@ export function TrashView() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-semibold text-[var(--color-text)]">Trash</h1>
-        <Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+      <PageHeader title="Trash" description="Restore a work within 30 days before its reader data, analysis, and uploaded file are permanently deleted." actions={<Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Your works
-        </Link>
-      </div>
-      <p className="text-sm text-[var(--color-text-muted)]">
-        A trashed work is restorable for 30 days, then permanently and automatically deleted — including its
-        reader data, analysis, and uploaded file.
-      </p>
+        </Link>} />
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
       {!items && !error && <p className="text-[var(--color-text-muted)]">Loading…</p>}

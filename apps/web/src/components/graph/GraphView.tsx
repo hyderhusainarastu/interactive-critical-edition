@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { PageHeader } from "@/components/app/PageHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
 import {
@@ -122,14 +123,7 @@ export function GraphView({ endpoint, backHref, backLabel }: { endpoint: string;
           ← {backLabel}
         </Link>
       </div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-[var(--color-text)]">Visualization</h1>
-          <p className="text-sm text-[var(--color-text-muted)]">
-            {data?.title ?? ""} · works, references, concepts, and (per-work) the text&rsquo;s own outline.
-          </p>
-        </div>
-      </div>
+      <div className="mb-4"><PageHeader title="Visualization" description={`${data?.title ?? "Your library"} · works, references, concepts, and (per-work) the text’s own outline.`} /></div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
       {!data && !error && <p className="text-[var(--color-text-muted)]">Loading graph…</p>}

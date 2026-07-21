@@ -1,5 +1,9 @@
 import { db, users } from "@ice/db";
 import { eq } from "drizzle-orm";
+import {
+  normalizeWorkspacePreferences,
+  type WorkspacePreferences,
+} from "./workspacePreferences";
 
 /**
  * Phase 9.4 (plan §34.4): `expertise` retired from this jsonb blob onto the
@@ -11,6 +15,8 @@ import { eq } from "drizzle-orm";
 export interface UserPreferences {
   /** ISO timestamp; presence marks onboarding complete. */
   onboardedAt?: string;
+  /** Phase 12 workspace controls, deliberately namespaced inside existing JSONB. */
+  workspace?: WorkspacePreferences;
 }
 
 export async function getUserPreferences(userId: string): Promise<UserPreferences> {
@@ -29,4 +35,19 @@ export async function updateUserPreferences(userId: string, patch: UserPreferenc
     .update(users)
     .set({ preferences: { ...current, ...patch }, updatedAt: new Date() })
     .where(eq(users.id, userId));
+}
+
+export async function getWorkspacePreferences(userId: string): Promise<WorkspacePreferences> {
+  const preferences = await getUserPreferences(userId);
+  return normalizeWorkspacePreferences(preferences.workspace);
+}
+
+export async function updateWorkspacePreferences(
+  userId: string,
+  patch: Partial<WorkspacePreferences>,
+): Promise<WorkspacePreferences> {
+  const current = await getUserPreferences(userId);
+  const workspace = normalizeWorkspacePreferences({ ...current.workspace, ...patch });
+  await updateUserPreferences(userId, { workspace });
+  return workspace;
 }

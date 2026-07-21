@@ -58,7 +58,7 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 25 | This planning document itself | entire document |
 | 26 | Working rules post-approval | §30, and restated in docs/PROJECT-LOG.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 11, §31 |
+| — | *Added after initial planning, not in the original 26-section brief:* independent educational companion site | §23 Phase 13, §31 |
 | — | *Redefined 2026-07-19, completed 2026-07-20:* Phase 9 = Interactive Learning Workspace, sub-phases 9.1–9.7 (9.8 "Comprehensive dossier" retired as a phantom requirement — never enumerated anywhere it was referenced by count — before implementation) | §23 Phase 9, §34 |
 | — | *Added 2026-07-20:* Phase 10 = Workspace Depth & Adaptivity Completion (closes the concrete gaps 9.1–9.7 left in Phase 9's own original objective, rather than inventing new scope) | §23 Phase 10, §35 |
 | — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
@@ -486,10 +486,16 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Dependencies: Phase 9 complete (`phase-9-complete`, 2026-07-20).
 - DoD: see §35 acceptance gates; `phase-10-complete` tagged.
 
-**Phase 11 — Educational Companion Site (added by explicit user request, runs after Phase 10; renumbered from Phase 10 on 2026-07-20)**
-- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–10 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 11 itself (no infinite regress).
-- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–10, content sourced primarily from this repo's own `docs/PROJECT-LOG.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
-- Dependencies: all of Phases 0–10 complete (it teaches what was actually built, not a plan).
+**Phase 12 — Production Research Workspace (added 2026-07-21; full detail in §37)**
+- Objective: turn Palimnote into a production-oriented research and writing workspace: a consistent responsive shell, canonical source identity, pipeline v4, a reader with credible annotations, a persistent cross-library graph, Writer mode, and release hardening.
+- Tasks: seven independently reviewable parts, with Phase 12.1 Foundation complete and Parts 2–7 deliberately gated behind their own Phase 12 flags. See §37.
+- Dependencies: Phases 0–11 complete.
+- DoD: §37's verification and rollout gates pass; v2/v3 remain immediately recoverable until v4 has production verification.
+
+**Phase 13 — Educational Companion Site (added by explicit user request, runs after Phase 12; renumbered 2026-07-21)**
+- Objective: a second, fully independent website that teaches, start to end, everything done in Phases 0–12 of this project — a step-by-step course for someone who wants to learn how to build this kind of system themselves. Excludes documenting Phase 13 itself (no infinite regress).
+- Tasks: see §31 for full detail — new sibling folder + new independent git repo/GitHub repo, Astro Starlight-based docs/tutorial site, chapters mirroring Phases 0–12, content sourced primarily from this repo's own `docs/PROJECT-LOG.md` changelog/decision log (already continuously maintained per the working rules), deployed to a free static host.
+- Dependencies: all of Phases 0–12 complete (it teaches what was actually built, not a plan).
 - Deliverables: a deployed, independent, publicly reachable tutorial site with one chapter per phase plus an intro and retrospective.
 - Tests: build/link-check CI on the new site's repo; a content read-through pass verifying each chapter's claims match the actual repo's code/history at time of writing.
 - DoD: someone with no prior context could follow the site from Chapter 1 onward and understand, and largely reproduce, the architecture and decisions of the main project.
@@ -567,9 +573,9 @@ In order, each its own small commit:
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Educational Companion Site (Phase 11 detail — renumbered from Phase 9 on 2026-07-19, then from Phase 10 on 2026-07-20)
+## 31. Educational Companion Site (Phase 13 detail — renumbered from Phase 9 on 2026-07-19, Phase 10 on 2026-07-20, and Phase 12 on 2026-07-21)
 
-**Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened deployment. It documents everything done in Phases 0–10 of this plan; it does not document its own creation.
+**Purpose:** a genuinely separate, independent website — not a subsection of the main app — that teaches a reader how to build this entire project themselves, in order, from the empty-repo starting point through the hardened deployment. It documents everything done in Phases 0–12 of this plan; it does not document its own creation.
 
 **Location and independence:** a new sibling folder next to this project (e.g. `/Users/hyderhusainarastu/Documents/interactive-critical-edition-course`), with its own `git init`, its own new private-or-public GitHub repo (recommend **public** at Phase 8 kickoff, since the content is generic educational material with no user data, scholarly uploads, or secrets in it — but this is a recommendation to confirm with the user at that time, not decided now), and its own deploy — fully decoupled from `interactive-critical-edition`'s codebase, history, and hosting.
 
@@ -588,7 +594,9 @@ In order, each its own small commit:
 7. The 3D knowledge-graph visualizer.
 8. Landing page and onboarding.
 9. Hardening, testing, deployment, observability.
-10. Retrospective — what was hard, what would change next time, real cost numbers from the admin dashboard (§20/§22).
+10. Workspace depth, adaptivity, and the Phase 11 visual overhaul.
+11. Production research workspace — canonical sources, v4, cross-work graph, Writer mode, and rollout discipline.
+12. Retrospective — what was hard, what would change next time, real cost numbers from the admin dashboard (§20/§22).
 
 **Tests:** CI on the new repo runs the Astro build and a link-checker on every push; before each chapter is marked done, a read-through pass confirms its code references and claims match the actual state of the `interactive-critical-edition` repo at that point (not idealized/aspirational descriptions).
 
@@ -624,7 +632,7 @@ In order, each its own small commit:
 
 ## 34. Phase 9 — Interactive Learning Workspace (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, **complete 2026-07-20** — sub-phases 9.1–9.7 shipped and canary-verified/production-applied, tagged `phase-9-complete`. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 11 (§31). This section is the plan of record; `docs/PROJECT-LOG.md`'s changelog remains the record of what actually shipped. **9.8 "Comprehensive dossier" was retired before implementation** (see §34.2/§34.4 note below) — Phase 9's own original objective is completed instead by Phase 10 (§35).
+**Status:** approved 2026-07-20, **complete 2026-07-20** — sub-phases 9.1–9.7 shipped and canary-verified/production-applied, tagged `phase-9-complete`. Supersedes the old "Phase 9 = Educational Companion Site", which is now Phase 13 (§31). This section is the plan of record; `docs/PROJECT-LOG.md`'s changelog remains the record of what actually shipped. **9.8 "Comprehensive dossier" was retired before implementation** (see §34.2/§34.4 note below) — Phase 9's own original objective is completed instead by Phase 10 (§35).
 
 ### 34.1 Objective
 
@@ -679,7 +687,7 @@ Pure logic unit-tested offline; the pipeline proven by canary — the Phase 8 pa
 
 ## 35. Phase 10 — Workspace Depth & Adaptivity Completion (approved plan; complete 2026-07-20)
 
-**Status:** approved 2026-07-20, **complete 2026-07-20** — all 6 audited scope items shipped, the two AI-pipeline-touching items production-canary-verified, tagged `phase-10-complete`. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 (Educational Companion Site) is renumbered Phase 11 (§23, §31).
+**Status:** approved 2026-07-20, **complete 2026-07-20** — all 6 audited scope items shipped, the two AI-pipeline-touching items production-canary-verified, tagged `phase-10-complete`. Returns to and completes Phase 9's own original objective (§34.1, restated below) rather than inventing new scope, after 9.8 was retired as a phantom requirement (§34.2). Nothing built in 9.1–9.7 is removed or replaced — this phase only adds/enhances. The old Phase 10 Educational Companion Site has since moved to Phase 13 (§23, §31).
 
 ### 35.1 Objective
 
@@ -716,3 +724,35 @@ Full reasoning and verification for each: `docs/PROJECT-LOG.md`'s Phase 10 entry
 ### 35.4 Acceptance gates
 
 Every pure-UI item ships with typecheck/lint/test/build green, relevant CI-safe Playwright coverage, and a manual screenshot. Every AI-pipeline-touching item ships with the same plus a migration (if needed) and an owner-approved production canary. No regression in any 9.1–9.7 behavior. Then tag `phase-10-complete`. **All met, 2026-07-20** — see `docs/PROJECT-LOG.md` for the full canary narrative (cost $0.051906, non-degraded, 29 resources, 7 passage annotations, 4 correctly typed `definition`).
+
+---
+
+## 36. Phase 11 — Rebrand, UI/UX Overhaul, Reader/Relevance Fixes (complete 2026-07-21)
+
+**Status:** complete. The public product became **Palimnote**; the authenticated shell, reader, Library, and Visualization received the audited UI/relevance repairs recorded in `docs/PROJECT-LOG.md` Phase 11.1–11.9. This compact section repairs the former missing plan anchor referenced by that log; it does not revise the shipped scope.
+
+---
+
+## 37. Phase 12 — Production Research Workspace (approved 2026-07-21; active)
+
+**Goal.** Turn the current application into a production-oriented research and writing workspace. The separate educational companion is now Phase 13 and remains unchanged. Prior-art ideas may inform internal relationship caching, incremental graph computation, library navigation, and cost controls, but no third-party branding or assets appear in the product.
+
+### 37.1 Delivery discipline
+
+The seven parts below are completed one at a time. Each part updates the code, `docs/PROJECT-LOG.md`, `progress-checklist.html`, and GitHub before the next begins. `PHASE_12_FOUNDATION_ENABLED` defaults on; `PHASE_12_LIBRARY_IDENTITY_ENABLED`, `PHASE_12_PIPELINE_V4_ENABLED`, `PHASE_12_INTERACTIVE_READER_ENABLED`, `PHASE_12_CROSS_LIBRARY_GRAPH_ENABLED`, and `PHASE_12_WRITER_ENABLED` default off. Flags are release controls only, never authorization controls.
+
+### 37.2 Parts
+
+1. **Foundation and site-wide UX — complete 2026-07-21.** Renumber roadmap/project records; add the Phase 12 flag contract; capture desktop/mobile baselines; build a responsive app shell with compact headers, mobile drawer, command palette, toasts, loading/error recovery, tooltips, and keyboard navigation. Persist system/light/dark theme, font size, reading width, focus mode, and script-display preferences in the authenticated user preference record, apply local presentation values before hydration, and honor reduced motion. Baselines: `docs/baselines/phase-12-foundation/landing-desktop.png` and `landing-mobile.png`.
+2. **Library, identity, and source coverage.** Make `learning_resource` canonical and deduplicated by DOI/ISBN/canonical URL/title-author-year; add SHA-256 duplicate upload resolution; broaden Library source coverage with transparent source-type/peer-review/authority/verification/credibility labels; retain only web-search citation metadata for public Reddit results; enforce cumulative reader-level filtering everywhere with an exact-level facet.
+3. **Pipeline v4 and annotations.** Add `ANALYSIS_PIPELINE=v4` while retaining v2/v3 rollback; replace one 12,000-character sample with at most eight section-aware 12,000-character chunks under cost limits; anchor/deduplicate annotations; classify author apparatus; use resolved bibliographic title/author in synthesis; light-process all works and produce a dry-run backfill forecast before paid work.
+4. **Interactive reader.** Default to processed Interactive text, label source files Original PDF/Original text, add outline/position/filter/annotation navigation and focus-mode controls, many-to-many note/highlight linking, user-only filters, and verified original-script/transliteration term rendering without modifying original PDFs.
+5. **Cross-library 3D graph.** Extract source-grounded claims, shortlist cross-work pairs with BM25 plus `text-embedding-3-small`, cache new-pair judgments permanently, show every work/resource/concept, and provide a responsive graph workspace plus accessible table. Automatic upload expansion is capped at 20 candidates/$0.25; manual expansion estimates cost, confirms above $1, and never exceeds $5.
+6. **Writer mode.** Add private multi-document projects with autosave/recovery; Tiptap/ProseMirror JSON and MLA 9 controls; a resizable Library/reader source sidebar; CSL-JSON citation ingestion from Library, DOI/ISBN/title, BibTeX, and RIS; MLA citations/Works Cited and structured DOCX/PDF export.
+7. **Production hardening.** Finish authenticated Zod APIs, authorization/rate limits/idempotency/safe upload validation/cost telemetry and dormant Sentry wiring; complete accessibility, load, restore, visual-regression, keyboard, RTL, dark-mode, graph, Writer, and rollback verification; add undo/confirmation for reversible destructive, paid, permanent-delete, and archive actions.
+
+### 37.3 Data, API, and rollout constraints
+
+Additive migrations only: user preferences, content hashes/edition identity, richer passage annotations, note-highlight joins, verified term variants/occurrences, library membership, CSL metadata, Writer entities, work claims, cached relationships, and relationship evidence. Add authenticated routes for preferences, citation import/resolution, Writer operations/recovery/export, graph expansion preview/execution, and duplicate-upload resolution. Do not remove v2/v3 data until v4 passes production verification.
+
+Normal processing must stay below $1/work; no job may exceed $5. The existing $2 soft/$5 hard limits remain, and source-result/inspection caps do not grow without a separate cost report and approval. Writer collaboration/public sharing/non-MLA styles and the educational companion remain out of scope.
