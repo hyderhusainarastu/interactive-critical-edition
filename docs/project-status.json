@@ -8,10 +8,10 @@
   },
   "updated": "2026-07-21",
   "current": {
-    "phase": 15,
-    "headline": "Phase 15 complete — confirmation required",
-    "summary": "Visualization is now an owner-scoped, provenance-backed research web with bounded licensed-source retrieval, multi-work pinning, and a shared graph/table inspector.",
-    "nextAction": "Review the Phase 15 handoff and confirm whether to begin Phase 16."
+    "phase": 16,
+    "headline": "Phase 16 complete — confirmation required",
+    "summary": "Reliable structural processing, clearly labelled immutable source and processed reader modes, and an evidence-grounded annotation apparatus are released and production-canary verified.",
+    "nextAction": "Review the Phase 16 handoff and confirm whether to begin Phase 17."
   },
   "phases": [
     {
@@ -204,10 +204,10 @@
     {
       "number": 15,
       "title": "Visualization as a connected research web",
-      "state": "awaiting_confirmation",
+      "state": "complete",
       "summary": "Expanded the owner-scoped graph to sources, people, and provenance-backed source relationships; added strictly license-evidenced, bounded source-text retrieval and synchronized accessible graph interaction.",
       "tag": "phase-15-complete",
-      "confirmation": "Closeout confirmation is required before Phase 16 begins.",
+      "confirmation": "Phase 16 authorization received 2026-07-21.",
       "evidence": [
         "Additive migration 0026 is applied locally and in production (Drizzle ledger 27); source text has a separate cascading provenance/content record.",
         "Automatic retrieval accepts explicit approved license metadata only, is capped at 12 source texts per run, and adds no AI spend to the existing $1 normal / $5 hard limits.",
@@ -243,9 +243,41 @@
     {
       "number": 16,
       "title": "Reliable processing and the Interactive Reader",
-      "state": "planned",
-      "summary": "Strengthen structural extraction, clarify reader modes, and redesign the annotation apparatus.",
-      "confirmation": "Closeout confirmation is required before Phase 17 begins."
+      "state": "complete",
+      "summary": "Preserved page/block-anchored source structures, released immutable-source and processed-reader modes, and made the annotation apparatus evidence-grounded and responsive.",
+      "tag": "phase-16-complete",
+      "confirmation": "Closeout confirmation is required before Phase 17 begins.",
+      "evidence": [
+        "Additive migration 0027 is applied locally and in production (Drizzle ledger 28): text blocks now carry source markers and the structural enum distinguishes endnotes.",
+        "Ingestion, worker, schema, web, and targeted reader browser checks pass locally; the targeted 11-flow Phase 16 Chromium suite verifies processed-text separation, modes, apparatus, evidence, and accessibility labels.",
+        "The deployed Vercel and Render revisions are live. One cleaned production PDF canary completed as full structure at $0.0845135: 116 body blocks, 4 separate footnotes, 13 apparatus records, page/block anchors, and zero footnote-text matches in body blocks."
+      ],
+      "subphases": [
+        {
+          "id": "16.1",
+          "title": "Reliable structural processing",
+          "state": "complete",
+          "summary": "Persisted body, footnote, endnote, bibliography, and caption blocks independently with source markers and page/block anchors; limited parsing is explicitly labelled structure-limited."
+        },
+        {
+          "id": "16.2",
+          "title": "Reader modes and navigation",
+          "state": "complete",
+          "summary": "Published edition exposes the immutable original PDF or source text; Interactive reader exposes only continuous processed prose with outline and source-page/block position navigation."
+        },
+        {
+          "id": "16.3",
+          "title": "Evidence-grounded annotation apparatus",
+          "state": "complete",
+          "summary": "Added desktop hover/focus margin notes, narrow-screen inline details, an index/detail sidebar, and labelled linked Footnotes apparatus with source, confidence, and provenance."
+        },
+        {
+          "id": "16.4",
+          "title": "Verification and closeout",
+          "state": "complete",
+          "summary": "Passed focused structural and reader tests, production build, production migration, and one fully cleaned cost-bounded PDF canary; checklist, mirror, handoff, deployment, and tag are governed at closeout."
+        }
+      ]
     },
     {
       "number": 17,
@@ -257,7 +289,7 @@
   ],
   "operationalAudit": {
     "performed": "2026-07-21",
-    "scope": "Local verification used the existing local Postgres stack with release gates enabled where applicable. Production inspection was read-only: Render logs, Vercel deployment status, and a Supabase aggregate query only.",
+    "scope": "Local verification used the existing local Postgres stack with release gates enabled where applicable. Phase 16 also used one disposable authenticated production PDF canary through the deployed upload-completion path; its data, Storage object, queue rows, credentials, and session artifacts were removed and absence was verified.",
     "items": [
       {
         "surface": "v4 processing",
@@ -281,12 +313,12 @@
       },
       {
         "surface": "Interactive Reader",
-        "state": "release_gated",
-        "summary": "The processed-text reader is implemented and locally rendered behind its flag, but no authenticated production reader mutation was initiated for this audit.",
+        "state": "operational",
+        "summary": "The reliable processed reader is released with immutable-source access, labelled modes, structured apparatus, and responsive annotation expansion.",
         "evidence": [
-          "Local: the enabled gate rendered the Processed text surface, outline, apparatus sidebar, and reader controls; seeded reader coverage passed after correcting one stale heading assertion.",
-          "Production: the Vercel deployment is Ready and the retained work has a full published v4 run.",
-          "Production: no note-link, term-approval, highlight, or position mutation was performed during this read-only audit."
+          "Local: 11 focused seeded Chromium reader checks passed for continuous processed text, footnote/bibliography separation, labels, outline/position controls, apparatus, evidence metadata, and accessible responsive expansion.",
+          "Production: Vercel and Render are live on the Phase 16 revision; an authenticated canary reader response exposed both the immutable PDF URL and processed extraction.",
+          "Production: the one-run PDF canary was full structure with 4 page-anchored footnotes, 13 apparatus records, and zero footnote-text matches in body blocks before complete cleanup."
         ]
       },
       {
