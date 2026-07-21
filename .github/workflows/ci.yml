@@ -95,7 +95,7 @@ jobs:
             curl -sf http://localhost:3000/login > /dev/null && break
             sleep 2
           done
-          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts edition.spec.ts diagnostic.spec.ts library.spec.ts curriculum.spec.ts graph.spec.ts trash.spec.ts workspace-shell.spec.ts
+          pnpm --filter web exec playwright test landing.spec.ts onboarding.spec.ts security.spec.ts edition.spec.ts diagnostic.spec.ts library.spec.ts upload.spec.ts curriculum.spec.ts graph.spec.ts trash.spec.ts workspace-shell.spec.ts
           STATUS=$?
           kill $SERVER_PID 2>/dev/null || true
           exit $STATUS

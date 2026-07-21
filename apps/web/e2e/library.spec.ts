@@ -1,7 +1,7 @@
-import { db, readingRecords, users } from "@ice/db";
+import { db, readingRecords, users, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
-import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItem } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItem, seedWorkWithLibraryItems } from "./helpers";
 
 /**
  * Phase 9.5 E2E: the Library page. `work_identity`/`learning_resource`/
@@ -102,6 +102,7 @@ test.describe("Library (Phase 9.5)", () => {
 
     await page.goto("/library");
     const libraryContent = page.locator("#main-content");
+    await libraryContent.getByLabel("Focus work").selectOption("");
     await expect(libraryContent.getByText(/you might be ready for the/i)).toBeVisible();
     await expect(page.getByRole("button", { name: "Switch to Advanced" })).toBeVisible();
 
@@ -147,7 +148,7 @@ test.describe("Library (Phase 9.5)", () => {
     await deleteTestUser(acceptEmail);
   });
 
-  test("the Work filter scopes to items recommended for one selected work (plan §36 11.4)", async ({ page }) => {
+  test("the Focus selector scopes to one work and can show all works", async ({ page }) => {
     const scopeEmail = `e2e-library-scope-${Date.now()}@example.com`;
     const scopeUserId = await createVerifiedTestUser(scopeEmail, PASSWORD);
     await seedWorkWithLibraryItem(scopeUserId, { title: "First Work", resourceTitle: "Item For First Work" });
@@ -161,14 +162,15 @@ test.describe("Library (Phase 9.5)", () => {
 
     await page.goto("/library");
     const libraryContent = page.locator("#main-content");
+    await libraryContent.getByLabel("Focus work", { exact: true }).selectOption("");
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
 
-    await libraryContent.getByLabel("Work", { exact: true }).selectOption({ label: "First Work" });
+    await libraryContent.getByLabel("Focus work", { exact: true }).selectOption({ label: "First Work" });
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For First Work" })).toBeVisible();
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).not.toBeVisible();
 
-    await libraryContent.getByLabel("Work", { exact: true }).selectOption({ label: "All my works" });
+    await libraryContent.getByLabel("Focus work", { exact: true }).selectOption({ label: "All works" });
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Item For Second Work" })).toBeVisible();
 
     await deleteTestUser(scopeEmail);
@@ -188,12 +190,14 @@ test.describe("Library (Phase 9.5)", () => {
     await page.waitForURL("**/dashboard");
 
     await page.goto("/library");
-    await page.getByLabel("Reader level").selectOption("undergraduate");
-    await expect(page.getByRole("listitem").filter({ hasText: "Foundational source" })).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Advanced source" })).not.toBeVisible();
+    const libraryContent = page.locator("#main-content");
+    await libraryContent.getByLabel("Focus work").selectOption("");
+    await libraryContent.getByLabel("Reader level").selectOption("undergraduate");
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Advanced source" })).not.toBeVisible();
 
-    await page.getByLabel("Level match").selectOption("exact");
-    await expect(page.getByRole("listitem").filter({ hasText: "Foundational source" })).not.toBeVisible();
+    await libraryContent.getByLabel("Level match").selectOption("exact");
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).not.toBeVisible();
 
     await deleteTestUser(levelEmail);
   });
@@ -210,8 +214,86 @@ test.describe("Library (Phase 9.5)", () => {
     await page.waitForURL("**/dashboard");
 
     await page.goto("/library");
-    await expect(page.getByText(/Nothing here yet/)).toBeVisible();
+    const libraryContent = page.locator("#main-content");
+    await expect(libraryContent.getByRole("link", { name: "Owner's Private Work", exact: true })).toBeVisible();
+    await expect(libraryContent.getByText("No items match these filters.")).toBeVisible();
 
     await deleteTestUser(freshEmail);
+  });
+
+  test("defaults Focus to the newest uploaded work even when it has no recommendations", async ({ page }) => {
+    const focusEmail = `e2e-library-newest-${Date.now()}@example.com`;
+    const focusUserId = await createVerifiedTestUser(focusEmail, PASSWORD);
+    await seedWorkWithLibraryItem(focusUserId, { title: "Older analyzed work", resourceTitle: "Older recommendation" });
+    const [newest] = await db.insert(works).values({ userId: focusUserId, title: "Newest unprocessed upload" }).returning({ id: works.id });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(focusEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto("/library");
+
+    const libraryContent = page.locator("#main-content");
+    await expect(libraryContent.locator(`[data-focus-work="${newest.id}"]`)).toContainText("Newest unprocessed upload");
+    await expect(libraryContent.getByText("No items match these filters.")).toBeVisible();
+    await expect(libraryContent.getByText(/Your uploaded work is the focus/)).toBeVisible();
+
+    await deleteTestUser(focusEmail);
+  });
+
+  test("honors a focus deep link and ranks relationship relevance before credibility, then title", async ({ page }) => {
+    const focusEmail = `e2e-library-ranking-${Date.now()}@example.com`;
+    const focusUserId = await createVerifiedTestUser(focusEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItems(focusUserId, "Ranking focus", [
+      { resourceTitle: "Zulu low relevance", relationship: "prerequisite", relationshipConfidence: 0.4, credibilityScore: 0.99 },
+      { resourceTitle: "Gamma strongest credibility", relationship: "explicit_reference", relationshipConfidence: 0.9, credibilityScore: 0.99 },
+      { resourceTitle: "Beta shared score", relationship: "conceptual_influence", relationshipConfidence: 0.9, credibilityScore: 0.95 },
+      { resourceTitle: "Alpha same relevance", relationship: "historical_context", relationshipConfidence: 0.9, credibilityScore: 0.95 },
+    ]);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(focusEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto(`/library?focus=${workId}`);
+
+    const libraryContent = page.locator("#main-content");
+    await expect(libraryContent.locator(`[data-focus-work="${workId}"]`)).toContainText("Ranking focus");
+    await expect(libraryContent.getByLabel("Focus work")).toHaveValue(workId);
+    const titles = await libraryContent.locator("[data-library-item]").evaluateAll((rows) => rows.map((row) => row.textContent?.trim() ?? ""));
+    expect(titles[0]).toContain("Gamma strongest credibility");
+    expect(titles[1]).toContain("Alpha same relevance");
+    expect(titles[2]).toContain("Beta shared score");
+    expect(titles[3]).toContain("Zulu low relevance");
+    await expect(libraryContent.locator("[data-library-item]").first()).toContainText("Relationship relevance 90%");
+
+    await deleteTestUser(focusEmail);
+  });
+
+  test("keeps the Focus control usable on a narrow viewport and does not animate when motion is reduced", async ({ page }) => {
+    const accessibilityEmail = `e2e-library-motion-${Date.now()}@example.com`;
+    const accessibilityUserId = await createVerifiedTestUser(accessibilityEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItem(accessibilityUserId, { title: "Accessible focus", resourceTitle: "Accessible source" });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 375, height: 720 });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(accessibilityEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto("/library");
+
+    const libraryContent = page.locator("#main-content");
+    const focus = libraryContent.getByLabel("Focus work");
+    await expect(focus).toBeVisible();
+    await focus.focus();
+    await focus.selectOption(workId);
+    await expect(libraryContent.locator(`[data-focus-work="${workId}"]`)).toBeVisible();
+    await expect(libraryContent.locator(`[data-focus-work="${workId}"]`)).not.toHaveAttribute("data-reveal-ready", "true");
+
+    await deleteTestUser(accessibilityEmail);
   });
 });

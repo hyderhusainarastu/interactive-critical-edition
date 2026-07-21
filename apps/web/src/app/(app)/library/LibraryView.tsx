@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   matchesReaderLevel,
   suggestReaderLevelFromCompletions,
@@ -11,7 +12,8 @@ import {
 } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
-import type { LibraryItem } from "@/lib/library";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import type { LibraryItem, LibraryWork } from "@/lib/library";
 
 const SUGGESTION_DISMISSED_KEY = "library-reader-level-suggestion-dismissed";
 
@@ -65,8 +67,9 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "completed", label: "Completed" },
 ];
 
-type SortKey = "recency" | "title" | "credibility";
+type SortKey = "relevance" | "recency" | "title" | "credibility";
 const READING_STATUSES = ["planned", "reading", "completed", "abandoned"] as const;
+const AUTHORITY_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 function matchesTab(item: LibraryItem, tab: Tab): boolean {
   if (tab === "all") return true;
@@ -76,10 +79,14 @@ function matchesTab(item: LibraryItem, tab: Tab): boolean {
 
 export function LibraryView({
   initialItems,
+  initialWorks,
+  initialFocusWorkId,
   initialReaderLevel = "all",
   enablePhase12Identity = false,
 }: {
   initialItems: LibraryItem[];
+  initialWorks: LibraryWork[];
+  initialFocusWorkId: string;
   /** The reader's saved global level, or "all" if they never chose one.
    *  Selecting a different level here is a page-local view filter only — it
    *  never overwrites the saved global level (plan §35.2: bringing Library
@@ -87,14 +94,18 @@ export function LibraryView({
   initialReaderLevel?: ReaderLevelFilter;
   enablePhase12Identity?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const focusRef = useScrollReveal<HTMLElement>();
+  const controlsRef = useScrollReveal<HTMLDivElement>();
   const [items, setItems] = useState(initialItems);
   const [tab, setTab] = useState<Tab>("all");
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>(enablePhase12Identity ? "cumulative" : "exact");
-  const [workId, setWorkId] = useState<string>("");
-  const [sort, setSort] = useState<SortKey>("recency");
+  const [workId, setWorkId] = useState<string>(initialFocusWorkId);
+  const [sort, setSort] = useState<SortKey>("relevance");
 
   // Suggested-reader-level nudge (plan §35.2): a pure inference over what the
   // reader has actually finished, never a silent write — "Switch" is the only
@@ -137,19 +148,7 @@ export function LibraryView({
   const relationships = useMemo(() => [...new Set(items.flatMap((item) => item.roles.map((role) => role.relationship)))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
 
-  // Work-scoping (plan §36 11.4): "select one of my own uploaded works, see
-  // everything the Library recommends for it specifically" — reuses the
-  // Library's own real relatedness mechanism (resource_role/recommendedFor,
-  // already carried per item) rather than the Graph's different, fuzzy
-  // title-matched graph_edge mechanism, which would give an inconsistent
-  // second answer to the same question.
-  const works = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const item of items) {
-      for (const w of item.recommendedFor) byId.set(w.workId, w.title);
-    }
-    return [...byId.entries()].map(([id, title]) => ({ id, title })).sort((a, b) => a.title.localeCompare(b.title));
-  }, [items]);
+  const focusedWork = initialWorks.find((work) => work.id === workId) ?? null;
 
   // Per-level counts use exactly the selected matching rule, so a cumulative
   // Undergraduate view counts universal + Beginner + Undergraduate material.
@@ -176,13 +175,36 @@ export function LibraryView({
     if (relationship) filtered = filtered.filter((item) => item.roles.some((role) => role.relationship === relationship));
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
     if (readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel, levelMode)));
-    if (workId) filtered = filtered.filter((i) => i.recommendedFor.some((w) => w.workId === workId));
+    if (workId) filtered = filtered.filter((i) => i.focusMetrics.some((metric) => metric.workId === workId));
     const sorted = [...filtered];
-    if (sort === "title") sorted.sort((a, b) => a.title.localeCompare(b.title));
-    else if (sort === "credibility") sorted.sort((a, b) => (b.credibility?.score ?? -1) - (a.credibility?.score ?? -1));
-    else sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const metricFor = (item: LibraryItem) => {
+      if (workId) return item.focusMetrics.find((metric) => metric.workId === workId) ?? null;
+      return [...item.focusMetrics].sort((left, right) => right.relevance - left.relevance || (right.credibility?.score ?? -1) - (left.credibility?.score ?? -1))[0] ?? null;
+    };
+    const stableTitle = (left: LibraryItem, right: LibraryItem) => left.title.localeCompare(right.title) || left.id.localeCompare(right.id);
+    const credibilityFor = (item: LibraryItem) => metricFor(item)?.credibility ?? item.credibility;
+    const credibilityOrder = (left: LibraryItem, right: LibraryItem) => {
+      const leftCredibility = credibilityFor(left);
+      const rightCredibility = credibilityFor(right);
+      const leftAuthority = AUTHORITY_RANK[leftCredibility?.authority ?? "E"] ?? 5;
+      const rightAuthority = AUTHORITY_RANK[rightCredibility?.authority ?? "E"] ?? 5;
+      return leftAuthority - rightAuthority || (rightCredibility?.score ?? -1) - (leftCredibility?.score ?? -1);
+    };
+    if (sort === "title") sorted.sort(stableTitle);
+    else if (sort === "credibility") sorted.sort((left, right) => credibilityOrder(left, right) || stableTitle(left, right));
+    else if (sort === "recency") sorted.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || stableTitle(left, right));
+    else sorted.sort((left, right) => (metricFor(right)?.relevance ?? -1) - (metricFor(left)?.relevance ?? -1) || credibilityOrder(left, right) || stableTitle(left, right));
     return sorted;
   }, [items, tab, relationship, resourceType, readerLevel, levelMode, workId, sort]);
+
+  function selectFocus(nextWorkId: string) {
+    setWorkId(nextWorkId);
+    const params = new URLSearchParams(window.location.search);
+    if (nextWorkId) params.set("focus", nextWorkId);
+    else params.delete("focus");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   async function setReadingStatus(resourceId: string, status: (typeof READING_STATUSES)[number] | null) {
     setItems((prev) => prev.map((i) => (i.id === resourceId ? { ...i, readingStatus: status } : i)));
@@ -195,7 +217,12 @@ export function LibraryView({
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
-      <div className="mb-5"><PageHeader title="Library" description="Every source recommended for your own works, separate from the files you uploaded. Verify against the sources." /></div>
+      <div className="mb-5"><PageHeader title="Library" description="A focused research shelf for the works you upload." /></div>
+
+      <aside className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+        <span className="font-medium text-[var(--color-text)]">Your uploaded work is the focus.</span>{" "}
+        Upload texts you want Palimnote to index. External texts are fetched and indexed only when clearly open access; other recommendations remain source records.
+      </aside>
 
       {showSuggestion && suggestedLevel && (
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
@@ -215,15 +242,23 @@ export function LibraryView({
         </div>
       )}
 
-      {items.length === 0 && (
+      {initialWorks.length === 0 && (
         <p className="rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
-          Nothing here yet. The Library fills in once one of your works has been analyzed under the newer research
-          pipeline — if you just uploaded something, check back after analysis completes.
+          Nothing here yet. <Link href="/upload" className="underline">Upload a work</Link> to start a private research shelf.
         </p>
       )}
 
-      {items.length > 0 && (
+      {initialWorks.length > 0 && (
         <>
+          <section ref={focusRef} data-focus-work={focusedWork?.id} className="app-reveal mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Focused work</p>
+            {focusedWork ? (
+              <>
+                <Link href={`/works/${focusedWork.id}`} className="mt-1 inline-block font-serif text-xl font-semibold text-[var(--color-text)] underline decoration-[var(--color-accent-umber)] underline-offset-4">{focusedWork.title}</Link>
+                <p className="mt-1 text-sm text-[var(--color-text-muted)]">Recommendations below are ranked by their relationship to this work, then evidence-backed credibility.</p>
+              </>
+            ) : <p className="mt-1 text-sm text-[var(--color-text-muted)]">Showing recommendations across all uploaded works.</p>}
+          </section>
           <div className="mb-4 flex flex-wrap gap-2 border-b border-[var(--color-border)] text-sm">
             {TABS.map((t) => (
               <button
@@ -242,17 +277,17 @@ export function LibraryView({
             ))}
           </div>
 
-          <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+          <div ref={controlsRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Work</span>
+              <span className="text-xs text-[var(--color-text-muted)]">Focus</span>
               <select
                 value={workId}
-                onChange={(e) => setWorkId(e.target.value)}
-                aria-label="Work"
-                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                onChange={(e) => selectFocus(e.target.value)}
+                aria-label="Focus work"
+                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
               >
-                <option value="">All my works</option>
-                {works.map((w) => (
+                <option value="">All works</option>
+                {initialWorks.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.title}
                   </option>
@@ -261,7 +296,7 @@ export function LibraryView({
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Relationship</span>
-              <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {relationships.map((r) => (
                   <option key={r} value={r}>
@@ -272,7 +307,7 @@ export function LibraryView({
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Source type</span>
-              <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {resourceTypes.map((t) => (
                   <option key={t} value={t}>
@@ -293,7 +328,7 @@ export function LibraryView({
               <select
                 value={readerLevel}
                 onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
               >
                 {READER_LEVEL_FILTER_OPTIONS.map((level) => (
                   <option key={level} value={level}>
@@ -308,7 +343,7 @@ export function LibraryView({
                 <select
                   value={levelMode}
                   onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="cumulative">Selected + foundations</option>
                   <option value="exact">Exact level</option>
@@ -317,9 +352,10 @@ export function LibraryView({
             )}
             <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Sort</span>
-              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
-                <option value="recency">Recently added</option>
+              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+                <option value="relevance">Most relevant and credible</option>
                 <option value="title">Title A–Z</option>
+                <option value="recency">Recently added</option>
                 <option value="credibility">Credibility</option>
               </select>
             </label>
@@ -333,8 +369,8 @@ export function LibraryView({
           )}
 
           <ul className="flex flex-col gap-2">
-            {visible.map((item) => (
-              <LibraryRow key={item.id} item={item} onSetStatus={setReadingStatus} />
+              {visible.map((item) => (
+              <LibraryRow key={item.id} item={item} focusMetric={workId ? item.focusMetrics.find((metric) => metric.workId === workId) ?? null : null} onSetStatus={setReadingStatus} />
             ))}
           </ul>
         </>
@@ -345,13 +381,19 @@ export function LibraryView({
 
 function LibraryRow({
   item,
+  focusMetric,
   onSetStatus,
 }: {
   item: LibraryItem;
+  focusMetric: LibraryItem["focusMetrics"][number] | null;
   onSetStatus: (resourceId: string, status: (typeof READING_STATUSES)[number] | null) => void;
 }) {
+  const relationship = focusMetric?.relationship ?? item.relationship;
+  const rationale = focusMetric?.rationale ?? item.rationale;
+  const credibility = focusMetric?.credibility ?? item.credibility;
+  const readerLevel = focusMetric?.readerLevel ?? item.readerLevel;
   return (
-    <li data-library-item={item.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3">
+    <li data-library-item={item.id} className="app-control rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 hover:bg-[var(--color-surface)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-medium text-[var(--color-text)]">
@@ -365,22 +407,23 @@ function LibraryRow({
             {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
           </p>
           {item.authors.length > 0 && <p className="text-xs text-[var(--color-text-muted)]">{item.authors.join(", ")}</p>}
-          {item.rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{item.rationale}</p>}
+          {rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{rationale}</p>}
 
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
-            <span>{RELATIONSHIP_LABEL[item.relationship] ?? item.relationship}</span>
+            <span>{RELATIONSHIP_LABEL[relationship] ?? relationship}</span>
+            {focusMetric && <><span>·</span><span>Relationship relevance {Math.round(focusMetric.relevance * 100)}%</span></>}
             <span>·</span>
             <span>{SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</span>
-            {item.credibility?.authority && (
+            {credibility?.authority && (
               <>
                 <span>·</span>
-                <span>Authority {item.credibility.authority.toUpperCase()}</span>
+                <span>Authority {credibility.authority.toUpperCase()}</span>
               </>
             )}
-            {item.credibility?.score != null && (
+            {credibility?.score != null && (
               <>
                 <span>·</span>
-                <CredibilityMeter score={item.credibility.score} />
+                <CredibilityMeter score={credibility.score} />
               </>
             )}
             <span>·</span>
@@ -391,10 +434,10 @@ function LibraryRow({
                 <span>{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</span>
               </>
             )}
-            {item.readerLevel && (
+            {readerLevel && (
               <>
                 <span>·</span>
-                <span>{READER_LEVEL_LABEL[item.readerLevel] ?? item.readerLevel}</span>
+                <span>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</span>
               </>
             )}
           </div>
@@ -414,7 +457,7 @@ function LibraryRow({
             <select
               value={item.readingStatus ?? ""}
               onChange={(e) => onSetStatus(item.id, (e.target.value || null) as (typeof READING_STATUSES)[number] | null)}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+              className="app-control rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
               aria-label={`Reading status of ${item.title}`}
             >
               <option value="">To read</option>

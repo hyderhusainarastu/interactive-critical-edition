@@ -8,10 +8,10 @@
   },
   "updated": "2026-07-21",
   "current": {
-    "phase": 13,
-    "headline": "Phase 13 complete — confirmation required",
-    "summary": "The roadmap, generated status record, tracker workflow, and evidence-based operational audit are complete. Phase 14 remains blocked by its explicit confirmation gate.",
-    "nextAction": "Review the Phase 13 handoff and confirm whether to begin Phase 14."
+    "phase": 14,
+    "headline": "Phase 14 complete — confirmation required",
+    "summary": "The focused Library, shared reduced-motion-safe interaction patterns, and sequential private batch upload are implemented and fully verified locally.",
+    "nextAction": "Review the Phase 14 handoff and confirm whether to begin Phase 15."
   },
   "phases": [
     {
@@ -126,10 +126,10 @@
     {
       "number": 13,
       "title": "Project record, checklist, and operational audit",
-      "state": "awaiting_confirmation",
+      "state": "complete",
       "summary": "Replaced obsolete roadmap references, introduced the generated status checklist and CI guard, recorded the tracker workflow, and audited released surfaces.",
       "tag": "phase-13-complete",
-      "confirmation": "Phase 14 must not begin until Phase 13 closeout is confirmed.",
+      "confirmation": "Phase 14 confirmation received 2026-07-21.",
       "evidence": [
         "docs/project-status.json is the tracked source; progress-checklist.html is generated and CI checks it for drift.",
         "13 targeted config/worker tests and 27 seeded Chromium flows passed locally.",
@@ -165,9 +165,41 @@
     {
       "number": 14,
       "title": "Library focus, interface, motion, and multi-work upload",
-      "state": "planned",
-      "summary": "Focus the Library on uploaded work, establish shared interaction patterns, and add batch upload.",
-      "confirmation": "Closeout confirmation is required before Phase 15 begins."
+      "state": "awaiting_confirmation",
+      "summary": "Focused Library ranking, shared warm-academic interactions, and sequential private multi-work upload are complete and locally verified.",
+      "tag": "phase-14-complete",
+      "confirmation": "Closeout confirmation is required before Phase 15 begins.",
+      "evidence": [
+        "The Library payload now includes every active upload plus per-focus relationship relevance and work-scoped credibility evidence.",
+        "12 targeted Chromium checks passed for Library focus/ranking/accessibility and the batch-upload queue, duplicate decisions, and file-level errors.",
+        "The complete 46-test CI-safe Chromium matrix passed locally, alongside workspace typecheck, unit tests, web lint, production build, generated-status validation, and diff validation."
+      ],
+      "subphases": [
+        {
+          "id": "14.1",
+          "title": "Focused Library ranking",
+          "state": "complete",
+          "summary": "Added newest-upload Focus defaults, focus deep links, empty focused shelves, anchor context, and honest relevance/credibility/title ordering."
+        },
+        {
+          "id": "14.2",
+          "title": "Shared interaction and motion patterns",
+          "state": "complete",
+          "summary": "Added shared responsive control states and progressive scroll reveal that is disabled for reduced motion; decorative 3D remains confined to Visualization."
+        },
+        {
+          "id": "14.3",
+          "title": "Sequential multi-work upload",
+          "state": "complete",
+          "summary": "Replaced the one-file redirect with a private sequential batch queue, per-file transfer/progress/error states, and explicit duplicate decisions."
+        },
+        {
+          "id": "14.4",
+          "title": "Verification and closeout",
+          "state": "complete",
+          "summary": "All workspace checks, the production build, 12 targeted browser checks, and the full 46-test CI-safe browser matrix passed; generated record and mirror were synchronized."
+        }
+      ]
     },
     {
       "number": 15,

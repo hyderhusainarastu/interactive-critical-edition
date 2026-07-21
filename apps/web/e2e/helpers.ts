@@ -612,14 +612,19 @@ export async function seedWorkWithLibraryItems(
     resourceTitle: string;
     relationship: "prerequisite" | "conceptual_influence" | "explicit_reference" | "historical_context" | "optional_extension";
     resourceType?: string;
+    /** resource_role confidence — the Library's per-focus relevance evidence. */
+    relationshipConfidence?: number;
+    /** Creates the matching run-scoped credibility evidence when supplied. */
+    credibilityScore?: number;
   }[],
+  opts: { createdAt?: Date } = {},
 ): Promise<{ workId: string; resourceIds: string[] }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const [work] = await db
     .insert(works)
-    .values({ userId, title: workTitle, authorName: "Terence Irwin" })
+    .values({ userId, title: workTitle, authorName: "Terence Irwin", ...(opts.createdAt ? { createdAt: opts.createdAt } : {}) })
     .returning({ id: works.id });
-  await db.insert(documents).values({
+  const [document] = await db.insert(documents).values({
     userId,
     workId: work.id,
     storagePath: `${userId}/${work.id}/none.txt`,
@@ -629,20 +634,25 @@ export async function seedWorkWithLibraryItems(
     processingStatus: "ready",
     analysisStatus: "complete",
     extractedText: "Seeded text for curriculum tests.",
-  });
+  }).returning({ id: documents.id });
   const [identity] = await db
     .insert(workIdentities)
     .values({ workKey: `work:test:${suffix}`, canonicalTitle: workTitle, authorSurname: "irwin", authors: ["Terence Irwin"], evidence: "seeded for test" })
     .returning({ id: workIdentities.id });
   await db.update(works).set({ workIdentityId: identity.id }).where(eq(works.id, work.id));
 
+  const needsCredibility = items.some((item) => item.credibilityScore !== undefined);
+  const [run] = needsCredibility
+    ? await db.insert(processingRuns).values({ documentId: document.id, version: 1, pipelineVersion: "v4", status: "complete" }).returning({ id: processingRuns.id })
+    : [];
+
   const resourceIds: string[] = [];
   for (const [i, item] of items.entries()) {
     const [resource] = await db
       .insert(learningResources)
       .values({
-        title: item.resourceTitle,
-        normalizedKey: `title:${suffix}:${i}`,
+      title: item.resourceTitle,
+      normalizedKey: `title:${suffix}:${i}`,
         resourceType: item.resourceType ?? "book",
         provider: "openalex",
         authors: ["Aristotle"],
@@ -656,9 +666,19 @@ export async function seedWorkWithLibraryItems(
       relationship: item.relationship,
       readerLevel: null,
       rationale: "Seeded rationale text for a Playwright fixture.",
-      confidence: 0.8,
+      confidence: item.relationshipConfidence ?? 0.8,
       createdBy: "system",
     });
+    if (run && item.credibilityScore !== undefined) {
+      const [researchResource] = await db.insert(researchResources).values({
+        runId: run.id,
+        title: item.resourceTitle,
+        normalizedKey: `title:${suffix}:${i}`,
+        provider: "openalex",
+        resourceType: item.resourceType ?? "book",
+      }).returning({ id: researchResources.id });
+      await db.insert(credibilityAssessments).values({ resourceId: researchResource.id, score: item.credibilityScore, authority: "B" });
+    }
     resourceIds.push(resource.id);
   }
 

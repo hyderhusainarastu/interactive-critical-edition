@@ -11,7 +11,7 @@ import {
   works,
 } from "@ice/db";
 import type { ReaderLevel } from "@ice/roadmap";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 /**
  * The Library (plan §34.4 9.5): every source the research pipeline has
@@ -23,8 +23,8 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
  * Scoping: a `resource_role` targets a `work_identity`, not a `works` row
  * directly, so "recommended for one of MY works" means joining through
  * `works.workIdentityId` — set the first time one of the user's uploads is
- * analyzed under v3. A user with no v3-analyzed work has an empty Library;
- * that is the honest state while production stays on v2, not a bug.
+ * analyzed under v3. A user with no v3-analyzed work has no Library sources
+ * yet, but still receives a focusable empty shelf for their uploaded works.
  */
 export interface LibraryItem {
   id: string;
@@ -41,6 +41,20 @@ export interface LibraryItem {
   confidence: number;
   rationale: string | null;
   readerLevel: string | null;
+  /**
+   * The relationship and credibility evidence for each one of the owner's
+   * works this source supports. A Library resource has no one intrinsic
+   * relevance: it is relevant in relation to a particular uploaded work.
+   */
+  focusMetrics: Array<{
+    workId: string;
+    relationship: string;
+    rationale: string | null;
+    readerLevel: ReaderLevel | null;
+    /** resource_role confidence: relationship relevance for this work. */
+    relevance: number;
+    credibility: { authority: string | null; score: number } | null;
+  }>;
   /** Every role this one canonical resource plays across the reader's works. */
   roles: Array<{
     relationship: string;
@@ -58,6 +72,18 @@ export interface LibraryItem {
   updatedAt: Date;
 }
 
+export interface LibraryWork {
+  id: string;
+  title: string;
+  createdAt: Date;
+}
+
+export interface LibraryData {
+  /** All active uploads, newest first — including works with no sources yet. */
+  works: LibraryWork[];
+  items: LibraryItem[];
+}
+
 function creatorVerification(creator: unknown): string | null {
   if (!creator || typeof creator !== "object") return null;
   const verification = (creator as { verification?: unknown }).verification;
@@ -66,11 +92,13 @@ function creatorVerification(creator: unknown): string | null {
 
 const AUTHORITY_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
-export async function getLibrary(userId: string): Promise<LibraryItem[]> {
+export async function getLibrary(userId: string): Promise<LibraryData> {
   const ownedWorks = await db
-    .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId })
+    .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId, createdAt: works.createdAt })
     .from(works)
-    .where(and(eq(works.userId, userId), isNull(works.deletedAt)));
+    .where(and(eq(works.userId, userId), isNull(works.deletedAt)))
+    .orderBy(desc(works.createdAt), works.id);
+  const libraryWorks: LibraryWork[] = ownedWorks.map(({ id, title, createdAt }) => ({ id, title, createdAt }));
   const identityToWorks = new Map<string, { workId: string; title: string }[]>();
   for (const w of ownedWorks) {
     if (!w.workIdentityId) continue;
@@ -79,13 +107,16 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
     identityToWorks.set(w.workIdentityId, list);
   }
   const ownedIdentityIds = [...identityToWorks.keys()];
-  if (!ownedIdentityIds.length) return [];
+  // Keep all uploads in the payload even before a v3/v4 run establishes a
+  // work_identity. The Library's focus selector must be able to open on a
+  // newly uploaded work with an honest empty-recommendations state.
+  if (!ownedIdentityIds.length) return { works: libraryWorks, items: [] };
 
   const roles = await db
     .select()
     .from(resourceRoles)
     .where(inArray(resourceRoles.workIdentityId, ownedIdentityIds));
-  if (!roles.length) return [];
+  if (!roles.length) return { works: libraryWorks, items: [] };
 
   const resourceIds = [...new Set(roles.map((r) => r.learningResourceId))];
   const resources = await db.select().from(learningResources).where(inArray(learningResources.id, resourceIds));
@@ -142,6 +173,7 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
   for (const [resourceId, resourceRolesForResource] of rolesByResourceId) {
     const resource = resourceById.get(resourceId);
     if (!resource) continue;
+    const currentResource = resource;
     const sortedRoles = [...resourceRolesForResource].sort((left, right) => right.confidence - left.confidence);
     const libraryRoles = sortedRoles.map((role) => ({
       relationship: role.relationship,
@@ -154,19 +186,24 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
     for (const role of libraryRoles) {
       for (const work of role.recommendedFor) recommendedByWorkId.set(work.workId, work);
     }
-    const recommendedFor = [...recommendedByWorkId.values()];
+    const recommendedFor = [...recommendedByWorkId.values()].sort((left, right) => left.title.localeCompare(right.title) || left.workId.localeCompare(right.workId));
     const primaryRole = libraryRoles[0];
     if (!primaryRole) continue;
     const reading = readingByResourceId.get(resource.id);
     const rating = ratingByResourceId.get(resource.id);
 
+    function credibilityForWork(workId: string): LibraryItem["credibility"] {
+      if (!currentResource.normalizedKey) return null;
+      const found = latestResourceIdByWorkKey.get(`${workId}:${currentResource.normalizedKey}`);
+      const cred = found ? credByResourceId.get(found.resourceId) : undefined;
+      return cred ? { authority: cred.authority, score: cred.score } : null;
+    }
+
     let credibility: LibraryItem["credibility"] = null;
     if (resource.normalizedKey) {
       for (const { workId } of recommendedFor) {
-        const found = latestResourceIdByWorkKey.get(`${workId}:${resource.normalizedKey}`);
-        const cred = found ? credByResourceId.get(found.resourceId) : undefined;
-        if (cred) {
-          const candidate = { authority: cred.authority, score: cred.score };
+        const candidate = credibilityForWork(workId);
+        if (candidate) {
           const candidateRank = AUTHORITY_ORDER[candidate.authority ?? "E"] ?? 5;
           const currentRank = AUTHORITY_ORDER[credibility?.authority ?? "E"] ?? 5;
           if (!credibility || candidateRank < currentRank || (candidateRank === currentRank && candidate.score > credibility.score)) {
@@ -175,6 +212,21 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
         }
       }
     }
+
+    const focusMetrics = recommendedFor.flatMap((work) => {
+      const role = resourceRolesForResource
+        .filter((candidate) => identityToWorks.get(candidate.workIdentityId)?.some((owned) => owned.workId === work.workId))
+        .sort((left, right) => right.confidence - left.confidence || left.relationship.localeCompare(right.relationship))[0];
+      if (!role) return [];
+      return [{
+        workId: work.workId,
+        relationship: role.relationship,
+        rationale: role.rationale,
+        readerLevel: role.readerLevel as ReaderLevel | null,
+        relevance: role.confidence,
+        credibility: credibilityForWork(work.workId),
+      }];
+    });
 
     items.push({
       id: resource.id,
@@ -191,6 +243,7 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
       confidence: primaryRole.confidence,
       rationale: primaryRole.rationale,
       readerLevel: primaryRole.readerLevel,
+      focusMetrics,
       roles: libraryRoles,
       recommendedFor,
       credibility,
@@ -202,5 +255,5 @@ export async function getLibrary(userId: string): Promise<LibraryItem[]> {
     });
   }
 
-  return items;
+  return { works: libraryWorks, items };
 }

@@ -253,6 +253,20 @@ body {
 .app-icon-button:hover::after, .app-icon-button:focus-visible::after { opacity: 1; transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) { .app-icon-button::after { transition: none; } }
 
+/* Shared interaction vocabulary for the signed-in workspace: surfaces gain a
+   light, warm boundary on intent; reveal is a single scroll entry and remains
+   entirely off for readers who reduce motion. 3D remains graph-only. */
+.app-control {
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease;
+}
+.app-control:hover { border-color: var(--color-accent-umber); }
+.app-control:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-ink) 18%, transparent); }
+@media (prefers-reduced-motion: no-preference) {
+  .app-reveal[data-reveal-ready="true"] { opacity: 0; transform: translateY(10px); }
+  .app-reveal[data-revealed="true"] { animation: app-scroll-reveal .28s ease-out both; }
+  @keyframes app-scroll-reveal { to { opacity: 1; transform: translateY(0); } }
+}
+
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;

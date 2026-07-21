@@ -40,11 +40,11 @@ export default async function DashboardPage() {
 
   const continueReading = myWorks.find((w) => w.status === "ready") ?? null;
 
-  // Library data only exists once a work has been analyzed under the v3
-  // pipeline (see apps/worker/src/analyze.ts) — while production stays on
-  // v2, this is honestly zero for every real user, not a bug.
-  const libraryItems = await getLibrary(userId);
-  const toReadCount = libraryItems.filter((item) => item.readingStatus === null || item.readingStatus === "planned").length;
+  // Source counts only become nonzero once a work has been analyzed under the
+  // canonical pipeline. The Library page itself can still focus an upload
+  // before then; this dashboard card intentionally reports only sources.
+  const library = await getLibrary(userId);
+  const toReadCount = library.items.filter((item) => item.readingStatus === null || item.readingStatus === "planned").length;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
