@@ -47,9 +47,18 @@ The in-app browser runtime is unavailable in this agent session, so the interact
 | Trash | Move, restore, permanent-delete confirmation and Delete now | working | Existing `trash.spec.ts` covers normal-list removal, route protection, 30-day messaging, restore, and actual database deletion; full suite is 4/4 after the new journey. |
 | Work status | Metadata-confirm form, reprocess action, processing progress, failed-state recovery, and trashed-work Undo/Trash link | pending | Source-mapped but needs distinct fixtures that can safely exercise each state without depending on the live analysis pipeline. |
 
+## Reader controls
+
+| Surface | Control family | Classification | Evidence / disposition |
+|---|---|---|---|
+| Reader | Published edition / Interactive reader view switch | working | Existing seeded `edition.spec.ts` exercises both modes and verifies the labelled reader-view group’s pressed state and content. |
+| Reader | Annotation markers; Annotations, Notes, Apparatus, and Sources sidebar controls | working | Existing seeded Edition E2E opens in-text markers, follows a quote-matched note to its owning tab, and exercises apparatus/notes/sources content and their `aria-pressed` state. |
+| Reader | Split-view chooser open/close disclosure | fixed — D-19-18 | Pre-fix trigger had no state/relationship or Escape behavior. It now exposes `aria-expanded`/`aria-controls`, a labelled chooser group, and Escape focus restoration; the regression proves the empty chooser path. Selecting a second work remains pending. |
+| Reader | Highlight creation/color, bookmark, notes sidebar, reader analysis toggle, contextual Ask Library, footnote modal, and non-empty split selection | pending | Source-mapped; the remaining required interactions need purpose-built seeded fixtures or live-pipeline-independent APIs. |
+
 ## Control families queued for subsequent passes
 
-The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; remaining work-status/reprocess states; remaining Library navigation/CTA links; Reader source/processed toggles, selection actions, notes, highlights, bookmarks, annotation filters, footnotes, split view, and contextual RAG sheet; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all other empty-state calls to action.
+The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; remaining work-status/reprocess states; remaining Library navigation/CTA links; remaining Reader selection/actions/notes/highlights/bookmarks/filters/footnotes/non-empty split/RAG controls; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all other empty-state calls to action.
 
 ## Defects surfaced by this tranche
 
@@ -58,5 +67,6 @@ The following are source-mapped but not yet classified by interactive evidence. 
 - **D-19-15:** Mobile navigation overlay lacked modal semantics, initial focus, focus containment, Escape handling, and trigger-focus restoration.
 - **D-19-16:** Library’s active reading-status filter state was visual-only and unlabelled for assistive technology.
 - **D-19-17:** Global and work-specific Visualization links shared an ambiguous accessible name.
+- **D-19-18:** The Reader split-view picker omitted programmatic disclosure state and Escape dismissal.
 
-All five are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
+All six are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.

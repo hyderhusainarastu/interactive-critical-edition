@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface WorkOption {
   workId: string;
@@ -21,6 +21,8 @@ export function WorkPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<WorkOption[] | null>(null);
+  const listId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!open || options) return;
@@ -37,13 +39,26 @@ export function WorkPicker({
     );
   }
 
+  function closePicker() {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setOpen((v) => !v)}>
+    <div
+      className="relative"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          closePicker();
+        }
+      }}
+    >
+      <button ref={triggerRef} type="button" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
         Split view
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md">
+        <div id={listId} role="group" aria-label="Choose a work for split view" className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md">
           {!options && <p className="px-2 py-1.5 text-[var(--color-text-muted)]">Loading…</p>}
           {options?.length === 0 && (
             <p className="px-2 py-1.5 text-[var(--color-text-muted)]">No other works ready yet.</p>

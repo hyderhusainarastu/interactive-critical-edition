@@ -189,3 +189,15 @@ test("the reader-view toggle plainly distinguishes immutable source from process
   await expect(interactiveButton).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByRole("region", { name: /published edition.*original source text/i })).toBeVisible();
 });
+
+test("the Split view work picker exposes and dismisses its disclosure state", async ({ page }) => {
+  const splitView = page.getByRole("button", { name: "Split view" });
+  await expect(splitView).toHaveAttribute("aria-expanded", "false");
+  await splitView.focus();
+  await splitView.click();
+  await expect(splitView).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("group", { name: "Choose a work for split view" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(splitView).toHaveAttribute("aria-expanded", "false");
+  await expect(splitView).toBeFocused();
+});
