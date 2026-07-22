@@ -62,3 +62,6 @@ external-reference/
 # tesseract.js downloads its OCR language model into the worker's CWD at
 # runtime the first time OCR is exercised — a cache artifact, not source.
 apps/worker/eng.traineddata
+
+# Local-only gold-baseline fixtures (copyrighted source PDFs must never enter git)
+baseline-test/
