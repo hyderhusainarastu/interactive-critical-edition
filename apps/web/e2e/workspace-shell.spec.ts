@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { db, users } from "@ice/db";
 import { eq } from "drizzle-orm";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, seedPublishedEdition } from "./helpers";
 
 const EMAIL = `e2e-workspace-shell-${Date.now()}@example.com`;
 const PASSWORD = "password123";
+let userId = "";
 
 test.describe("Phase 12 workspace foundation", () => {
   test.beforeAll(async () => {
-    const userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
     await db
       .update(users)
       .set({
@@ -255,5 +256,96 @@ test.describe("Phase 12 workspace foundation", () => {
     await page.keyboard.press("Escape");
     await expect(drawer).toBeHidden();
     await expect(trigger).toBeFocused();
+  });
+
+  // Phase 22.5/22.6 (plan §22.6): the shell-level global RAG sidebar
+  // (D-22-8 — previously there was no entry point to Ask Library outside
+  // the Reader and a full-page nav link at all). Named distinctly from the
+  // Reader's own contextual "Ask Library" toggle ("Library chat sidebar"
+  // vs. "Ask Library") specifically to avoid the substring accessible-name
+  // ambiguity D-19-1 already fixed once for "Theme" — both buttons are
+  // reachable on the same Reader page, so the two names must not overlap.
+  test.describe("Global Ask Library sidebar", () => {
+    test.skip(process.env.PHASE_18_RAG_ENABLED !== "true", "requires the local-only Phase 18 RAG gate");
+
+    test("offers a persistent sidebar trigger on a non-Reader route as a keyboard-managed dialog", async ({ page }) => {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      const trigger = page.getByRole("button", { name: "Library chat sidebar" });
+      await expect(trigger).toBeVisible();
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+      await trigger.focus();
+      await trigger.click();
+      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      await expect(dialog).toBeVisible();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      await expect(dialog.getByRole("button", { name: "Close chat" })).toBeFocused();
+      await expect(dialog.getByText("Scope: Entire Library")).toBeVisible();
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+      await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    });
+
+    test("keeps the sidebar open across a route navigation", async ({ page }) => {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
+      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      await expect(dialog).toBeVisible();
+
+      await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Library", exact: true }).click();
+      await page.waitForURL("**/library");
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText("Scope: Entire Library")).toBeVisible();
+    });
+
+    test("scopes the sidebar to the current work when opened from a work-scoped route", async ({ page }) => {
+      const { workId } = await seedPublishedEdition(userId);
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      await page.goto(`/works/${workId}`);
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
+      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      await expect(dialog.getByText("Scope: Current work")).toBeVisible();
+    });
+
+    test("renders as a bottom sheet on mobile, reachable from its own visible trigger", async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 844 });
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      const trigger = page.getByRole("button", { name: "Library chat sidebar" });
+      await expect(trigger).toBeVisible();
+      await trigger.click();
+      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      await expect(dialog).toBeVisible();
+      // The desktop-only resize separator must not appear on a mobile sheet.
+      await expect(page.getByRole("separator", { name: "Resize Ask Library sidebar" })).toBeHidden();
+      // Anchored as a bottom sheet (some gap above it), not a full-height drawer.
+      const box = await dialog.boundingBox();
+      expect(box?.y).toBeGreaterThan(100);
+
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+    });
   });
 });

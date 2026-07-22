@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import {
@@ -74,6 +74,12 @@ export function ReaderShell({
   // shell disclosure (WorkPicker's split-view chooser, AppShell's
   // preferences/mobile-nav dialogs).
   const footnoteTriggerRef = useRef<HTMLElement | null>(null);
+  // Same trigger-focus-restoration pattern, applied to this reader's own
+  // contextual "Ask Library" drawer (D-22-9 — this instance previously had
+  // no aria-expanded/aria-controls relationship and no focus restoration
+  // on close, unlike every other reader-shell disclosure).
+  const ragTriggerRef = useRef<HTMLButtonElement>(null);
+  const ragPanelId = useId();
 
   useEffect(() => {
     let ignore = false;
@@ -276,6 +282,11 @@ export function ReaderShell({
     window.requestAnimationFrame(() => footnoteTriggerRef.current?.focus());
   }, []);
 
+  const closeRagChat = useCallback(() => {
+    setShowRagChat(false);
+    window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
+  }, []);
+
   const approveTerm = useCallback(async (termId: string) => {
     await jsonFetch(`/api/works/${workId}/reader/terms/${termId}`, {
       method: "PATCH",
@@ -402,7 +413,17 @@ export function ReaderShell({
             <button type="button" onClick={() => setShowNotes((v) => !v)}>
               {showNotes ? "Hide notes" : "Notes"}
             </button>
-            {enablePhase18Rag && !embedded && <button type="button" onClick={() => setShowRagChat(true)}>Ask Library</button>}
+            {enablePhase18Rag && !embedded && (
+              <button
+                ref={ragTriggerRef}
+                type="button"
+                aria-expanded={showRagChat}
+                aria-controls={ragPanelId}
+                onClick={() => setShowRagChat((v) => !v)}
+              >
+                Ask Library
+              </button>
+            )}
           </div>}
 
           <div
@@ -511,7 +532,7 @@ export function ReaderShell({
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel contextWorkId={workId} onClose={() => setShowRagChat(false)} />}
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} />}
     </div>
   );
 }

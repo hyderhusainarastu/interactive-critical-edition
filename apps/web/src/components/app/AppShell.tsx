@@ -6,8 +6,15 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { CommandPalette } from "./CommandPalette";
+import { GlobalRagSidebar } from "./GlobalRagSidebar";
 import { ToastProvider } from "./ToastProvider";
 import { WorkspacePreferencesProvider, useWorkspacePreferences } from "./WorkspacePreferencesProvider";
+
+/** Matches only a real (UUID-shaped) work id segment, e.g. `/works/<id>` or
+ * `/works/<id>/roadmap` — deliberately excludes non-id siblings like
+ * `/works/trash` and the bare `/works` listing, which have no "current
+ * work" for the global RAG sidebar to scope to. */
+const WORK_ROUTE_PATTERN = /^\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\/|$)/i;
 
 interface NavItem { href: string; label: string }
 
@@ -39,12 +46,16 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [ragOpen, setRagOpen] = useState(false);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
+  const ragTriggerRef = useRef<HTMLButtonElement>(null);
   const focusModeExitRef = useRef<HTMLButtonElement>(null);
   const focusModeFocusRequestRef = useRef<"enter" | "exit" | null>(null);
   const preferencesMenuId = useId();
+  const ragSidebarId = useId();
   const { preferences, updatePreferences } = useWorkspacePreferences();
+  const routeWorkId = WORK_ROUTE_PATTERN.exec(pathname)?.[1] ?? null;
   const navItems: NavItem[] = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/graph", label: "Visualization" },
@@ -77,6 +88,10 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
     setPreferencesOpen(false);
     window.requestAnimationFrame(() => preferencesTriggerRef.current?.focus());
   }
+  function closeRag() {
+    setRagOpen(false);
+    window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
+  }
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
@@ -97,6 +112,20 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
               <button ref={preferencesTriggerRef} type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
               {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} onClose={closePreferences} />}
             </div>
+            {ragEnabled && (
+              <button
+                ref={ragTriggerRef}
+                type="button"
+                className="app-icon-button"
+                data-tooltip="Library chat sidebar"
+                aria-label="Library chat sidebar"
+                aria-expanded={ragOpen}
+                aria-controls={ragSidebarId}
+                onClick={() => (ragOpen ? closeRag() : setRagOpen(true))}
+              >
+                💬
+              </button>
+            )}
             <form action={logoutAction} className="hidden lg:block">
               <button type="submit" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
             </form>
@@ -107,6 +136,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
       {drawerOpen && <MobileDrawer items={navItems} pathname={pathname} email={email} onClose={closeDrawer} />}
       <main id="main-content" className="app-shell-main flex-1">{children}</main>
       <CommandPalette items={navItems.map((item) => ({ ...item, shortcut: item.href === "/upload" ? "U" : undefined }))} />
+      {ragEnabled && ragOpen && <GlobalRagSidebar id={ragSidebarId} contextWorkId={routeWorkId} onClose={closeRag} />}
     </div>
   );
 }

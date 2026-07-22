@@ -69,4 +69,26 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await chat.getByRole("button", { name: "Ask" }).click();
     await expect(chat).toContainText(/couldn't find support/i);
   });
+
+  // D-22-9: the Reader's own contextual drawer had no aria-expanded/
+  // aria-controls relationship to its trigger and no Escape/focus-restore
+  // lifecycle at all, unlike every other reader-shell disclosure this
+  // codebase already brought to that standard (D-19-18/19/20).
+  test("supports Escape-to-close and trigger-focus restoration on the Reader's own contextual drawer", async ({ page }) => {
+    const trigger = page.getByRole("button", { name: "Ask Library" });
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await trigger.focus();
+    await trigger.click();
+
+    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    await expect(chat).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(chat.getByRole("button", { name: "Close chat" })).toBeFocused();
+    await expect(chat.getByText("Scope: Current work")).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(chat).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
 });

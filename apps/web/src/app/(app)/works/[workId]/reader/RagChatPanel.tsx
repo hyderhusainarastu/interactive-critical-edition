@@ -16,13 +16,19 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export function RagChatPanel({
+  id,
   contextWorkId = null,
   onClose,
   presentation = "drawer",
+  widthPx,
 }: {
+  /** Stable DOM id so a trigger button elsewhere can `aria-controls` this panel. */
+  id?: string;
   contextWorkId?: string | null;
   onClose?: () => void;
   presentation?: "drawer" | "page";
+  /** Desktop-only drawer width override (e.g. from a resizable sidebar wrapper); ignored below the `md` breakpoint, which always renders full-width. */
+  widthPx?: number;
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -31,6 +37,16 @@ export function RagChatPanel({
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Matches the FootnoteModal/PreferencesMenu/MobileDrawer precedent
+  // (D-19-18/19/20): a dialog-presentation instance takes initial focus
+  // on mount. Since this component is always conditionally mounted fresh
+  // when opened (never toggled via a hidden/visible style), an
+  // empty-dependency mount effect is the right shape here, same as those.
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,19 +142,32 @@ export function RagChatPanel({
   }
 
   const isDrawer = presentation === "drawer";
+  const scopeLabel = contextWorkId ? "Current work" : "Entire Library";
 
   return (
     <section
+      id={id}
       className={isDrawer
-        ? "fixed inset-y-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl"
+        ? "fixed inset-y-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl md:w-[var(--rag-sidebar-width,min(26rem,100vw))] max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl"
         : "flex min-h-[min(46rem,calc(100vh-12rem))] w-full flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] shadow-sm"}
+      style={isDrawer && widthPx ? { ["--rag-sidebar-width" as string]: `${widthPx}px` } : undefined}
       aria-label="Library-grounded Socratic chat"
       role={isDrawer ? "dialog" : "region"}
       aria-modal={isDrawer ? true : undefined}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && onClose) {
+          event.preventDefault();
+          onClose();
+        }
+      }}
     >
       <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] p-4">
-        <div><h2 className="font-serif text-lg font-semibold">Ask your Library</h2><p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p></div>
-        <div className="flex gap-1"><button type="button" className="app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button type="button" className="app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
+        <div>
+          <h2 className="font-serif text-lg font-semibold">Ask your Library</h2>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p>
+          <p className="mt-1 text-xs font-medium text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
+        </div>
+        <div className="flex gap-1"><button type="button" className="app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
       </header>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
