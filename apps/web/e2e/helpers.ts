@@ -647,8 +647,25 @@ export async function seedWorkWithConcepts(
  */
 export async function seedWorkWithGraphData(
   userId: string,
-  options: { title?: string; withRelatedSource?: boolean; withPublicSources?: boolean; conceptId?: string } = {},
-): Promise<{ workId: string; documentId: string; bibId: string; resourceId: string; relatedResourceId?: string; publicResourceIds: string[]; conceptId: string; sectionBlockId: string }> {
+  options: {
+    title?: string;
+    withRelatedSource?: boolean;
+    withPublicSources?: boolean;
+    conceptId?: string;
+    /** Adds a SECOND `graph_edge` of a different edge type between the same
+     *  (work, bib) pair — the multi-edge-type shape D-21-1's relation-filter
+     *  edge test needs (a `cites` and an `influences` edge can coexist for
+     *  one pair because citation-resolution and classification write
+     *  independently). */
+    withSecondEdgeType?: boolean;
+    /** Links the work to a `work_identity` and seeds a `learning_resource`
+     *  (keyed to the same bib record) with a `resource_role` pointing at that
+     *  identity — the exact eligibility shape `/library/[resourceId]`
+     *  enforces, so the graph contract's `destination` field has a real,
+     *  non-404 route to point at. */
+    withLibraryResource?: boolean;
+  } = {},
+): Promise<{ workId: string; documentId: string; bibId: string; resourceId: string; relatedResourceId?: string; publicResourceIds: string[]; conceptId: string; sectionBlockId: string; libraryResourceId?: string }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const workTitle = options.title ?? "On the Soul";
   const [work] = await db
@@ -820,9 +837,46 @@ export async function seedWorkWithGraphData(
       userId, sourceType: "work", sourceId: work.id, targetType: "concept", targetId: concept.id,
       edgeType: "presupposes", confidence: 0.8, evidence: { role: "central", reason: "Core doctrine of the work." }, createdBy: "system",
     },
+    ...(options.withSecondEdgeType
+      ? [{
+          userId, sourceType: "work" as const, sourceId: work.id, targetType: "bibliographic_record" as const, targetId: bib.id,
+          edgeType: "influences" as const, confidence: 0.7, evidence: { category: "conceptual_influence" }, createdBy: "system" as const,
+        }]
+      : []),
   ]);
 
-  return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, publicResourceIds, conceptId: concept.id, sectionBlockId: sectionBlock.id };
+  let libraryResourceId: string | undefined;
+  if (options.withLibraryResource) {
+    const [identity] = await db
+      .insert(workIdentities)
+      .values({ workKey: `work:graph-test:${suffix}`, canonicalTitle: workTitle, authorSurname: "aristotle", authors: ["Aristotle"], evidence: "seeded graph contract test" })
+      .returning({ id: workIdentities.id });
+    await db.update(works).set({ workIdentityId: identity.id }).where(eq(works.id, work.id));
+    const [libraryResource] = await db
+      .insert(learningResources)
+      .values({
+        title: "Physics",
+        normalizedKey: `seeded-lr-${suffix}`,
+        resourceType: "book",
+        provider: "crossref",
+        authors: ["Aristotle"],
+        year: -350,
+        bibRecordId: bib.id,
+      })
+      .returning({ id: learningResources.id });
+    libraryResourceId = libraryResource.id;
+    await db.insert(resourceRoles).values({
+      learningResourceId: libraryResource.id,
+      workIdentityId: identity.id,
+      relationship: "explicit_reference",
+      readerLevel: null,
+      rationale: "Cited directly by the source work.",
+      confidence: 0.85,
+      createdBy: "system",
+    });
+  }
+
+  return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, publicResourceIds, conceptId: concept.id, sectionBlockId: sectionBlock.id, libraryResourceId };
 }
 
 /**

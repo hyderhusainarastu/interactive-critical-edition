@@ -1,11 +1,37 @@
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
 export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
 
+/**
+ * THE graph data contract (plan §21.1). This module is the single typed
+ * source of truth for the payload `buildGraph()` (server) emits and that the
+ * 3D scene, accessible table, inspector, and filters all consume — one
+ * shared dataset filtered once by `filterGraphData()`, never two
+ * independently filtered ones. `apps/web/src/lib/graph.ts` imports these
+ * types rather than declaring parallel copies.
+ */
 export interface GraphNode {
+  /** Stable canonical id: `work:<uuid>`, `external:bib:<uuid>`,
+   *  `external:source:<key>`, `concept:<uuid>`, or `section:<uuid>` —
+   *  post-canonical-collapse, so one real-world work is one id. */
   id: string;
   label: string;
   type: NodeType;
   state: NodeState;
+  /** True only for the reader's OWN uploaded works — the graph's private
+   *  anchors (plan §21.1 "uploaded/private status"). Everything else
+   *  (references, sources, concepts, sections) is false. */
+  uploaded: boolean;
+  /** Node ids (`work:<uuid>`) of the uploaded works this node is directly
+   *  associated with; self-inclusive for work nodes. Precomputed by
+   *  `buildGraph()` so filters/inspector/table never re-derive it from
+   *  edge walks (plan §21.1 "associated work IDs"). */
+  associatedWorkIds: string[];
+  /** In-app route for this entity when a real one exists: `/works/<id>` for
+   *  uploaded works, `/library/<learningResourceId>` for Library-backed
+   *  external records (only when the Library page's own ownership gate would
+   *  resolve it), null otherwise — never a guessed/404 route. */
+  destination: string | null;
+  /** Secondary label material (authors/year), shown where appropriate. */
   authors: string | null;
   year: number | null;
   url: string | null;
@@ -32,9 +58,18 @@ export interface GraphNode {
 }
 
 export interface GraphLink {
+  /** Stable id (`source|edgeType|target`) — unique after `buildGraph()`'s
+   *  read-side dedup, since that dedup keys on exactly this triple. */
+  id: string;
   source: string;
   target: string;
   edgeType: string;
+  /** False for inherently symmetric relations (`is_comparable_to`) — the
+   *  contract's explicit direction flag, so no consumer has to guess
+   *  whether source→target order is meaningful (plan §21.1 "direction"). */
+  directed: boolean;
+  /** Union of both endpoints' `associatedWorkIds`. */
+  associatedWorkIds: string[];
   category: string | null;
   confidence: number;
   explanation?: string | null;
@@ -44,12 +79,35 @@ export interface GraphLink {
   provenances?: { relationId: string; runId: string; depth: number }[];
 }
 
-export interface GraphData {
-  title: string;
-  analysisStatus?: string;
+export interface GraphStats {
+  works: number;
+  references: number;
+  sources: number;
+  concepts: number;
+  people: number;
+  missing: number;
+  read: number;
+}
+
+/** What `buildGraph()` returns — the API routes add `title`/`analysisStatus`. */
+export interface GraphPayload {
   nodes: GraphNode[];
   links: GraphLink[];
-  stats: { works: number; references: number; sources: number; concepts: number; people: number; missing: number; read: number };
+  stats: GraphStats;
+}
+
+export interface GraphData extends GraphPayload {
+  title: string;
+  analysisStatus?: string;
+}
+
+/** Relation types that are symmetric — direction carries no meaning.
+ *  Everything else in the vocabulary (cites/review_of/translates/…) is a
+ *  directed claim about which end does what. */
+export const UNDIRECTED_EDGE_TYPES: ReadonlySet<string> = new Set(["is_comparable_to", "parallel_comparison"]);
+
+export function isDirectedEdgeType(edgeType: string): boolean {
+  return !UNDIRECTED_EDGE_TYPES.has(edgeType);
 }
 
 // State → palette token + human label. Color is never the only signal —
@@ -106,12 +164,65 @@ export const EDGE_FAMILY_META: Record<EdgeFamily, { label: string; colorVar: str
 
 export const EDGE_FAMILY_ORDER: EdgeFamily[] = ["reference", "prerequisite", "influence", "opposition", "structural"];
 
+/**
+ * Explicit family assignment for every edge-type string the payload actually
+ * produces (plan §21.5 audit finding: the old keyword-only matcher silently
+ * defaulted `review_of`/`translation_of`/`edition_of`/`excerpt_of`/
+ * `responds_to`/`translates`/`is_edition_of`/`is_comparable_to`/
+ * `is_recommended_by`/`discovered_source` into "influence"). Covers the
+ * 14-value `edge_type` enum, the synthetic `outline_section`/
+ * `discovered_source` edges, the `edition_relation` `${workRole}_of` strings,
+ * and the relation-category strings `edition_relation.relation_type` carries.
+ */
+const EDGE_TYPE_FAMILY: Record<string, EdgeFamily> = {
+  // Citation / reference: pointers at a work — citations, quotations,
+  // recommendations, reviews, replies, and discovered/supplementary sources.
+  cites: "reference",
+  quotes: "reference",
+  is_recommended_by: "reference",
+  review_of: "reference",
+  responds_to: "reference",
+  discovered_source: "reference",
+  supplementary_context: "reference",
+  explicit_reference: "reference",
+  secondary_scholarly_recommendation: "reference",
+  // Influence / agreement (the `is_comparable_to` mapping is deliberate:
+  // parallel/comparison shares this family rather than inventing a sixth).
+  influences: "influence",
+  provides_context_for: "influence",
+  interprets: "influence",
+  is_comparable_to: "influence",
+  historical_context: "influence",
+  conceptual_influence: "influence",
+  interpretive_aid: "influence",
+  parallel_comparison: "influence",
+  // Opposition.
+  criticizes: "opposition",
+  disagrees_with: "opposition",
+  disagreement_polemical_target: "opposition",
+  // Prerequisite.
+  presupposes: "prerequisite",
+  is_prerequisite_for: "prerequisite",
+  prerequisite: "prerequisite",
+  // Structure: the work's own outline plus work-form relations
+  // (editions, translations, excerpts of the same work).
+  outline_section: "structural",
+  translates: "structural",
+  is_edition_of: "structural",
+  edition_of: "structural",
+  translation_of: "structural",
+  excerpt_of: "structural",
+};
+
 export function edgeFamilyFor(edgeType: string, category?: string | null): EdgeFamily {
+  const exact = EDGE_TYPE_FAMILY[edgeType] ?? (category ? EDGE_TYPE_FAMILY[category] : undefined);
+  if (exact) return exact;
+  // Keyword fallback for genuinely unknown/category-augmented strings only.
   const normalized = `${edgeType} ${category ?? ""}`.toLowerCase();
-  if (normalized.includes("outline") || normalized.includes("section")) return "structural";
+  if (normalized.includes("outline") || normalized.includes("section") || normalized.includes("edition") || normalized.includes("translat") || normalized.includes("excerpt")) return "structural";
   if (normalized.includes("prerequisite") || normalized.includes("presupposes")) return "prerequisite";
   if (normalized.includes("disagrees") || normalized.includes("criticizes") || normalized.includes("polemical")) return "opposition";
-  if (normalized.includes("cites") || normalized.includes("quotes") || normalized.includes("reference")) return "reference";
+  if (normalized.includes("cites") || normalized.includes("quotes") || normalized.includes("reference") || normalized.includes("review") || normalized.includes("recommend")) return "reference";
   return "influence";
 }
 
@@ -181,41 +292,52 @@ export function credibilityBandFor(score: number | null | undefined): Credibilit
  * out means neither view can ever show a dangling edge to an invisible
  * node — a stricter, more consistent guarantee than filtering nodes and
  * links independently.
+ *
+ * Two contract-semantics guarantees (plan §21.1/§21.3, D-21-1/D-21-10):
+ * 1. When a relation filter is active, EDGES are filtered by relation too —
+ *    a non-matching edge between two visible nodes is hidden, never drawn.
+ * 2. Uploaded-work nodes are the graph's anchors: they stay visible under
+ *    every attribute filter (search/state/type/authority/provider/relation/
+ *    credibility) by default, not only when pinned. The one filter that can
+ *    scope them out is `associatedWork` — the UI's work-scoping control,
+ *    i.e. the plan's "Works visibility is disabled" case — and explicit
+ *    pinning still overrides even that.
  */
 export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWorkIds: readonly string[] = []): GraphData {
   const byNode = edgeTypesByNode(data);
-  const associatedIds =
-    filters.associatedWork === "all"
-      ? null
-      : new Set([
-          filters.associatedWork,
-          ...data.links.flatMap((l) => {
-            const source = linkEndpointId(l.source);
-            const target = linkEndpointId(l.target);
-            if (source === filters.associatedWork) return [target];
-            if (target === filters.associatedWork) return [source];
-            return [];
-          }),
-        ]);
   const normalizedSearch = filters.search.trim().toLocaleLowerCase();
   const pinned = new Set(pinnedWorkIds);
-  const nodes = data.nodes.filter(
-    (n) =>
-      // Pinned uploaded works remain visible in both projections even when a
-      // filter would otherwise exclude them. Their connected nodes remain
-      // honestly filtered; pinning is a selection affordance, not a claim
-      // that every relationship matches the filter.
-      (pinned.has(n.id) ||
+  const matchesAssociatedWork = (n: GraphNode) =>
+    filters.associatedWork === "all" ||
+    n.id === filters.associatedWork ||
+    (n.associatedWorkIds ?? []).includes(filters.associatedWork);
+  const nodes = data.nodes.filter((n) => {
+    // Pinned uploaded works remain visible in both projections even when a
+    // filter would otherwise exclude them. Their connected nodes remain
+    // honestly filtered; pinning is a selection affordance, not a claim
+    // that every relationship matches the filter.
+    if (pinned.has(n.id)) return true;
+    if (!matchesAssociatedWork(n)) return false;
+    // D-21-10: uploaded-work anchors are exempt from attribute filters.
+    if (n.uploaded) return true;
+    return (
       (!normalizedSearch || `${n.label} ${n.authors ?? ""} ${n.kind ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) &&
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
       (filters.authority === "all" || n.authority === filters.authority) &&
-      (filters.provider === "all" || n.provider === filters.provider || n.providers?.includes(filters.provider)) &&
-      (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation)) &&
-      (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand) &&
-      (!associatedIds || associatedIds.has(n.id))),
-  );
+      (filters.provider === "all" || n.provider === filters.provider || n.providers?.includes(filters.provider) === true) &&
+      (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation) === true) &&
+      (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand)
+    );
+  });
   const visibleIds = new Set(nodes.map((n) => n.id));
-  const links = data.links.filter((l) => visibleIds.has(linkEndpointId(l.source)) && visibleIds.has(linkEndpointId(l.target)));
+  // D-21-1: an edge must itself match the active relation filter — endpoint
+  // visibility alone is not enough.
+  const links = data.links.filter(
+    (l) =>
+      visibleIds.has(linkEndpointId(l.source)) &&
+      visibleIds.has(linkEndpointId(l.target)) &&
+      (filters.relation === "all" || l.edgeType === filters.relation),
+  );
   return { ...data, nodes, links };
 }

@@ -1,6 +1,7 @@
 import { conceptMastery, db, readingRecords, understandingRatings, workRelationshipJudgments } from "@ice/db";
 import { KNOWN_THRESHOLD } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
 
 /**
  * Builds the per-user knowledge-graph data (plan §9/§16, extended by plan
@@ -40,56 +41,17 @@ import { and, eq, inArray, sql } from "drizzle-orm";
  * source of truth in `text_block`.
  */
 
-export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
-export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
+// The node/edge shapes are the ONE shared graph contract (plan §21.1),
+// declared in `@/components/graph/types` and consumed identically by this
+// builder, the 3D scene, the accessible table, the inspector, and the
+// filters. This module deliberately declares no parallel copies.
+export type { GraphLink, GraphNode, GraphPayload, NodeState, NodeType } from "@/components/graph/types";
 
-export interface GraphNode {
-  id: string;
-  label: string;
-  type: NodeType;
-  state: NodeState;
-  authors: string | null;
-  year: number | null;
-  url: string | null;
-  /** Best source authority (A–E) and discovering provider from v2 research,
-   *  when this reference was surfaced by the edition pipeline; null for legacy. */
-  authority: string | null;
-  credibilityScore: number | null;
-  provider: string | null;
-  providers?: string[];
-  /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
-   *  nodes; null for every other node type. */
-  kind: string | null;
-  /** External-source access is deliberately distinct from node read state. */
-  accessStatus?: string | null;
-  sourceTextStatus?: string | null;
-  license?: string | null;
-  sourceUrl?: string | null;
-  provenance?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number } | null;
-  provenances?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number }[];
-  supplementary?: boolean;
-}
-
-export interface GraphLink {
-  source: string;
-  target: string;
-  edgeType: string;
-  category: string | null;
-  confidence: number;
-  /** Cross-library judgement explanation and grounded claim anchors, when present. */
-  explanation?: string | null;
-  evidence?: unknown;
-  provenance?: { relationId: string; runId: string; depth: number } | null;
-  evidences?: unknown[];
-  provenances?: { relationId: string; runId: string; depth: number }[];
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  links: GraphLink[];
-  /** Counts for the legend / summary. */
-  stats: { works: number; references: number; sources: number; concepts: number; people: number; missing: number; read: number };
-}
+/** Node/link fields the contract requires but that are only computable once
+ *  the full link set exists — filled in by the finalization pass at the end
+ *  of `buildGraph()`, so intermediate construction can stay incremental. */
+type DraftNode = Omit<GraphNode, "uploaded" | "associatedWorkIds" | "destination">;
+type DraftLink = Omit<GraphLink, "id" | "directed" | "associatedWorkIds">;
 
 interface WorkRow {
   id: string;
@@ -168,7 +130,7 @@ function displayAuthors(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-export async function buildGraph(userId: string, rootWorkId?: string): Promise<GraphData> {
+export async function buildGraph(userId: string, rootWorkId?: string): Promise<GraphPayload> {
   // 1) Work nodes (all the user's, or just the root when work-scoped).
   // Trashed works (plan §34.4 9.7) are excluded — same as gone until restored.
   const works = (await db.execute(sql`
@@ -326,8 +288,33 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // observation of that work (possibly from several providers/runs), not a
   // second node. Keep a separate identity for genuinely distinct public
   // objects such as an individual video or social post.
-  const nodeById = new Map<string, GraphNode>();
-  const addNode = (node: GraphNode) => nodeById.set(node.id, node);
+  // Contract `destination` (plan §21.1): a graph node navigates to its
+  // Library entry only when `/library/[resourceId]`'s own ownership gate
+  // (a `resource_role` pointing at one of the caller's owned, non-deleted
+  // work identities) would actually resolve it — never a guessed 404 route.
+  const libraryRows = (await db.execute(sql`
+    SELECT lr.id, lr.bib_record_id, lr.normalized_key
+    FROM learning_resource lr
+    WHERE EXISTS (
+      SELECT 1
+      FROM resource_role role
+      JOIN work w ON w.work_identity_id = role.work_identity_id
+      WHERE role.learning_resource_id = lr.id
+        AND w.user_id = ${userId} AND w.deleted_at IS NULL
+    )
+  `)) as unknown as { id: string; bib_record_id: string | null; normalized_key: string | null }[];
+  const libraryIdByBib = new Map<string, string>();
+  const libraryIdByKey = new Map<string, string>();
+  for (const row of libraryRows) {
+    if (row.bib_record_id && !libraryIdByBib.has(row.bib_record_id)) libraryIdByBib.set(row.bib_record_id, row.id);
+    if (row.normalized_key && !libraryIdByKey.has(row.normalized_key)) libraryIdByKey.set(row.normalized_key, row.id);
+  }
+  /** Canonical node id → `/library/<id>` destination, recorded while nodes
+   *  are built so aliased/merged ids resolve through the same collapse. */
+  const libraryDestinationByNodeId = new Map<string, string>();
+
+  const nodeById = new Map<string, DraftNode>();
+  const addNode = (node: DraftNode) => nodeById.set(node.id, node);
   for (const w of works) addNode({
     id: `work:${w.id}`, label: w.title, type: "work", state: "primary",
     authors: null, year: null, url: null, authority: null, credibilityScore: null, provider: null, kind: null,
@@ -373,7 +360,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   const publicOnlyByNode = new Map<string, boolean>();
   const providerIsPublic = (provider: string) => ["youtube", "mastodon", "bluesky"].includes(provider.toLocaleLowerCase());
 
-  const mergeExternal = (id: string, incoming: GraphNode, isPublic: boolean) => {
+  const mergeExternal = (id: string, incoming: DraftNode, isPublic: boolean) => {
     const current = nodeById.get(id);
     if (!current) {
       addNode({ ...incoming, providers: incoming.provider ? [incoming.provider] : [], provenances: incoming.provenance ? [incoming.provenance] : [] });
@@ -420,6 +407,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
           : "unread";
     const enrich = enrichByBib.get(r.id);
     const bibNodeId = canonicalNodeId(`external:bib:${r.id}`);
+    const libraryId = libraryIdByBib.get(r.id);
+    if (libraryId && !libraryDestinationByNodeId.has(bibNodeId)) libraryDestinationByNodeId.set(bibNodeId, `/library/${libraryId}`);
     mergeExternal(bibNodeId, {
       id: bibNodeId, label: r.title, type: "reference", state,
       authors: r.authors, year: r.year, url: r.url,
@@ -431,6 +420,10 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   for (const source of sourceRows) {
     const id = canonicalExternalId(source);
     sourceNodeIds.set(source.id, id);
+    const libraryId =
+      (source.bib_record_id ? libraryIdByBib.get(source.bib_record_id) : undefined) ??
+      (source.normalized_key ? libraryIdByKey.get(source.normalized_key) : undefined);
+    if (libraryId && !libraryDestinationByNodeId.has(id)) libraryDestinationByNodeId.set(id, `/library/${libraryId}`);
     const sourceBibStatus = source.bib_record_id ? statusByBib.get(source.bib_record_id) : undefined;
     const sourceBibScore = source.bib_record_id ? scoreByBib.get(source.bib_record_id) ?? 0 : 0;
     const state: NodeState = sourceBibStatus === "completed" || sourceBibScore >= KNOWN_THRESHOLD
@@ -477,7 +470,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     }
   }
 
-  const links: GraphLink[] = [
+  const links: DraftLink[] = [
     ...edges.map((e) => ({
       source: `work:${e.source_id}`,
       target: canonicalNodeId(`external:bib:${e.target_id}`),
@@ -570,7 +563,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // Logical duplicate links arise when a citation, a discovery run, and a
   // provider relation all describe the same relationship. Retain their
   // evidence/provenance in one edge rather than rendering parallel lines.
-  const linkByIdentity = new Map<string, GraphLink>();
+  const linkByIdentity = new Map<string, DraftLink>();
   for (const link of links) {
     if (link.source === link.target) continue;
     const key = `${link.source}\u0000${link.target}\u0000${link.edgeType}`;
@@ -600,11 +593,44 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   const visualNodes = [...nodeById.values()].filter((node) => connectedIds.has(node.id));
   const visualIds = new Set(visualNodes.map((node) => node.id));
   const visualLinks = deduplicatedLinks.filter((link) => visualIds.has(link.source) && visualIds.has(link.target));
-  const count = (predicate: (node: GraphNode) => boolean) => visualNodes.filter(predicate).length;
+
+  // Finalization pass — the contract fields that need the complete link set
+  // (plan §21.1): `uploaded`, per-node/per-edge `associatedWorkIds`, stable
+  // edge ids, explicit `directed`, and the in-app `destination`.
+  const workNodeIds = new Set(works.map((work) => `work:${work.id}`));
+  const associatedByNode = new Map<string, Set<string>>();
+  const associate = (nodeId: string, workNodeId: string) => {
+    const set = associatedByNode.get(nodeId) ?? new Set<string>();
+    set.add(workNodeId);
+    associatedByNode.set(nodeId, set);
+  };
+  for (const id of workNodeIds) associate(id, id);
+  for (const link of visualLinks) {
+    if (workNodeIds.has(link.source)) associate(link.target, link.source);
+    if (workNodeIds.has(link.target)) associate(link.source, link.target);
+  }
+  const associatedWorkIdsFor = (nodeId: string) => [...(associatedByNode.get(nodeId) ?? [])].sort();
+
+  const finalNodes: GraphNode[] = visualNodes.map((node) => ({
+    ...node,
+    uploaded: workNodeIds.has(node.id),
+    associatedWorkIds: associatedWorkIdsFor(node.id),
+    destination: workNodeIds.has(node.id)
+      ? `/works/${node.id.slice("work:".length)}`
+      : libraryDestinationByNodeId.get(node.id) ?? null,
+  }));
+  const finalLinks: GraphLink[] = visualLinks.map((link) => ({
+    ...link,
+    // Unique after the read-side dedup above, which keys on this triple.
+    id: `${link.source}|${link.edgeType}|${link.target}`,
+    directed: isDirectedEdgeType(link.edgeType),
+    associatedWorkIds: [...new Set([...associatedWorkIdsFor(link.source), ...associatedWorkIdsFor(link.target)])].sort(),
+  }));
+  const count = (predicate: (node: GraphNode) => boolean) => finalNodes.filter(predicate).length;
 
   return {
-    nodes: visualNodes,
-    links: visualLinks,
+    nodes: finalNodes,
+    links: finalLinks,
     stats: {
       works: count((node) => node.type === "work"),
       references: count((node) => node.type === "reference"),

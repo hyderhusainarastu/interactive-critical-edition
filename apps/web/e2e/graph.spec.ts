@@ -83,7 +83,9 @@ test.describe("Visualization graph", () => {
     await expect(page).toHaveURL(/[?&]type=concept/);
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toHaveCount(0);
-    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toHaveCount(0);
+    // The uploaded work stays visible as the graph's anchor (D-21-10,
+    // plan §21.12) — the Kind filter narrows the surrounding research web.
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
 
     // Reloading from the URL alone reproduces the same filtered view —
     // proves the filter is actually IN the URL, not just component state.
@@ -99,7 +101,8 @@ test.describe("Visualization graph", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/graph?type=concept`);
-    await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    // 2 = the matching concept + the uploaded-work anchor (D-21-10).
+    await expect(page.getByText("2 of 4 shown")).toBeVisible();
     await expect(page.getByLabel("Accessible relationship browser")).toBeVisible();
     await expect(page.getByRole("table")).toHaveCount(0);
     await page.getByText("Accessible node browser").click();
@@ -116,7 +119,8 @@ test.describe("Visualization graph", () => {
 
     await page.getByLabel("Credibility").selectOption("high");
     await expect(page).toHaveURL(/[?&]credibilityBand=high/);
-    await expect(page.getByText("1 of 4 shown")).toBeVisible();
+    // 2 = the high-credibility reference + the uploaded-work anchor (D-21-10).
+    await expect(page.getByText("2 of 4 shown")).toBeVisible();
     await page.getByText("Accessible node browser").click();
     await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
@@ -232,23 +236,118 @@ test.describe("Visualization graph", () => {
   });
 
   test("pinned uploaded works remain in the graph and table despite filters and survive a URL reload", async ({ page }) => {
+    // Since D-21-10, uploaded works are visible by default under attribute
+    // filters, so pinning's remaining visibility power is against the one
+    // work-scoping filter (Associated work) — which is exactly what this
+    // exercises: an unrelated work is scoped out, pinning brings it back,
+    // and the pin round-trips through the URL.
     const first = await seedWorkWithGraphData(userId, { title: "Pinned first work" });
     const second = await seedWorkWithGraphData(userId, { title: "Pinned second work" });
     await login(page);
-    await page.goto("/graph?type=concept");
+    await page.goto(`/graph?associatedWork=${encodeURIComponent(`work:${first.workId}`)}`);
 
     await page.getByText("Accessible node browser").click();
-    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toHaveCount(0);
-    const pinned = page.getByLabel("Pinned uploaded works");
-    await pinned.getByLabel("Pinned first work").check();
-    await expect(page).toHaveURL(new RegExp(`pinnedWork=work%3A${first.workId}`));
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
+    const pinned = page.getByLabel("Pinned uploaded works");
+    await pinned.getByLabel("Pinned second work").check();
+    await expect(page).toHaveURL(new RegExp(`pinnedWork=work%3A${second.workId}`));
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
 
     await page.reload();
     await page.getByText("Accessible node browser").click();
-    await expect(pinned.getByLabel("Pinned first work")).toBeChecked();
-    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
+    await expect(pinned.getByLabel("Pinned second work")).toBeChecked();
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toBeVisible();
+  });
+
+  test("the Relation filter hides non-matching edges between two visible nodes (D-21-1)", async ({ page }) => {
+    // Two graph_edge rows of DIFFERENT edge types between the same
+    // (work, bib) pair — plausible today because citation-resolution and
+    // classification write independently. Filtering to one relation must
+    // hide the other EDGE, not merely non-matching nodes (types.ts:219
+    // previously kept every edge between two surviving endpoints).
+    const { workId, bibId } = await seedWorkWithGraphData(userId, { withSecondEdgeType: true });
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph?relation=cites`);
+    await page.getByText("Accessible node browser").click();
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    await expect(bibRow).toBeVisible();
+    await expect(bibRow).toContainText("cites");
+    await expect(bibRow).not.toContainText("influences");
+
+    // getByLabel("Relation") is ambiguous here (it substring-matches the
+    // "Relationship color legend" / "3D relationship graph" regions), so
+    // target the select through its own <label> element.
+    await page.locator("label", { hasText: "Relation" }).locator("select").selectOption("influences");
+    await expect(bibRow).toContainText("influences");
+    await expect(bibRow).not.toContainText("cites");
+  });
+
+  test("uploaded-work anchors stay visible under non-work-exclusion filters without pinning (D-21-10)", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph?type=concept`);
+    await page.getByText("Accessible node browser").click();
+    // The concept filter still honestly narrows the surrounding research web…
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toHaveCount(0);
+    // …but the uploaded work is the graph's anchor and stays visible by
+    // default (plan §21.12), without requiring the user to pin it first.
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+  });
+
+  test("the graph payload carries the typed contract: uploaded, associatedWorkIds, destination, edge id/direction (21.1)", async ({ page }) => {
+    const { workId, bibId, libraryResourceId } = await seedWorkWithGraphData(userId, { withLibraryResource: true });
+    expect(libraryResourceId).toBeTruthy();
+
+    await login(page);
+    const response = await page.request.get(`/api/works/${workId}/graph`);
+    expect(response.ok()).toBeTruthy();
+    const graph = await response.json() as {
+      nodes: { id: string; uploaded: boolean; associatedWorkIds: string[]; destination: string | null }[];
+      links: { id: string; source: string; target: string; edgeType: string; directed: boolean; associatedWorkIds: string[] }[];
+    };
+
+    const workNode = graph.nodes.find((node) => node.id === `work:${workId}`);
+    expect(workNode).toBeTruthy();
+    expect(workNode!.uploaded).toBe(true);
+    expect(workNode!.destination).toBe(`/works/${workId}`);
+    expect(workNode!.associatedWorkIds).toContain(`work:${workId}`);
+
+    const bibNode = graph.nodes.find((node) => node.id === `external:bib:${bibId}`);
+    expect(bibNode).toBeTruthy();
+    expect(bibNode!.uploaded).toBe(false);
+    expect(bibNode!.destination).toBe(`/library/${libraryResourceId}`);
+    expect(bibNode!.associatedWorkIds).toEqual([`work:${workId}`]);
+
+    // Every edge carries the full contract: stable id, explicit direction,
+    // and its own associated-work attribution.
+    for (const link of graph.links) {
+      expect(typeof link.id).toBe("string");
+      expect(link.id.length).toBeGreaterThan(0);
+      expect(typeof link.directed).toBe("boolean");
+      expect(Array.isArray(link.associatedWorkIds)).toBeTruthy();
+    }
+    const cites = graph.links.find((link) => link.edgeType === "cites");
+    expect(cites).toBeTruthy();
+    expect(cites!.directed).toBe(true);
+    expect(cites!.associatedWorkIds).toEqual([`work:${workId}`]);
+  });
+
+  test("the inspector and table offer a node's in-app destination when one exists", async ({ page }) => {
+    const { workId, bibId, libraryResourceId } = await seedWorkWithGraphData(userId, { withLibraryResource: true });
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    await expect(bibRow.getByRole("link", { name: "Library entry" })).toHaveAttribute("href", `/library/${libraryResourceId}`);
+    await bibRow.click();
+    const inspector = page.getByLabel("Graph inspector");
+    await expect(inspector.getByRole("link", { name: "View Library entry" })).toHaveAttribute("href", `/library/${libraryResourceId}`);
   });
 
   test("state legend displays 'Uploaded work' label (plan §20.2)", async ({ page }) => {

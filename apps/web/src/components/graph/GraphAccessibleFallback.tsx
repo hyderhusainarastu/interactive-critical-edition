@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode } from "./types";
 
@@ -34,8 +35,15 @@ export function GraphAccessibleFallback({
       const s = typeof l.source === "string" ? l.source : (l.source as { id: string }).id;
       const t = typeof l.target === "string" ? l.target : (l.target as { id: string }).id;
       const evidence = l.explanation ? ` — ${l.explanation}` : "";
-      byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} → ${labelById.get(t) ?? t}${evidence}`]);
-      byNode.set(t, [...(byNode.get(t) ?? []), `← ${edgeTypeLabel(l.edgeType)} from ${labelById.get(s) ?? s}${evidence}`]);
+      // The contract's explicit `directed` flag (plan §21.1): symmetric
+      // relations read as "↔ with", never implying a direction they lack.
+      if (l.directed === false) {
+        byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} ↔ ${labelById.get(t) ?? t}${evidence}`]);
+        byNode.set(t, [...(byNode.get(t) ?? []), `${edgeTypeLabel(l.edgeType)} ↔ ${labelById.get(s) ?? s}${evidence}`]);
+      } else {
+        byNode.set(s, [...(byNode.get(s) ?? []), `${edgeTypeLabel(l.edgeType)} → ${labelById.get(t) ?? t}${evidence}`]);
+        byNode.set(t, [...(byNode.get(t) ?? []), `← ${edgeTypeLabel(l.edgeType)} from ${labelById.get(s) ?? s}${evidence}`]);
+      }
     }
     return byNode;
   }, [data]);
@@ -136,7 +144,19 @@ function NodeRow({
           {node.year ? <span className="text-[var(--color-text-muted)]"> ({node.year})</span> : null}
         </button>
         {node.authors && <div className="text-xs text-[var(--color-text-muted)]">{node.authors}</div>}
-        {node.url && <a href={node.url} target="_blank" rel="noopener noreferrer" className="text-xs underline" onClick={(event) => event.stopPropagation()}>open source ↗</a>}
+        <div className="flex gap-3">
+          {node.destination && node.type !== "work" && (
+            <Link href={node.destination} className="text-xs underline" onClick={(event) => event.stopPropagation()}>
+              Library entry
+            </Link>
+          )}
+          {node.destination && node.type === "work" && (
+            <Link href={node.destination} className="text-xs underline" onClick={(event) => event.stopPropagation()}>
+              Open work
+            </Link>
+          )}
+          {node.url && <a href={node.url} target="_blank" rel="noopener noreferrer" className="text-xs underline" onClick={(event) => event.stopPropagation()}>open source ↗</a>}
+        </div>
       </td>
       <td className="py-2 pr-4 text-[var(--color-text-muted)]">{TYPE_LABEL[node.type]}</td>
       <td className="py-2 pr-4">

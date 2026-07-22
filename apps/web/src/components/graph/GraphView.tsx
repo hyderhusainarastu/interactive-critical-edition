@@ -469,6 +469,13 @@ function GraphInspector({
             </div>
           )}
           {(selected.provenances?.length ?? 0) > 0 && <div className="mt-3 text-xs text-[var(--color-text-muted)]"><p className="font-medium text-[var(--color-text)]">Provenance</p><ul className="mt-1 space-y-1">{selected.provenances!.map((provenance) => <li key={`${provenance.runId}:${provenance.provider}`}>{provenance.provider} · inspection depth {provenance.inspectionDepth}{provenance.inspectedAt ? ` · ${new Date(provenance.inspectedAt).toLocaleDateString()}` : ""}</li>)}</ul></div>}
+          {selected.destination && (
+            <p className="mt-3">
+              <Link href={selected.destination} className="text-sm underline">
+                {selected.type === "work" ? "Open work" : "View Library entry"}
+              </Link>
+            </p>
+          )}
           {selected.url && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">open source record ↗</a>}
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <p className="text-xs font-medium text-[var(--color-text)]">Direct connections</p>
@@ -483,7 +490,7 @@ function GraphInspector({
             <button type="button" className="text-xs underline" onClick={onCloseLink}>Close</button>
           </div>
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}%{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}</p>
+          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}% · {selectedLink.directed === false ? "bidirectional" : "directed"}{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}</p>
           {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
           {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
         </div>
