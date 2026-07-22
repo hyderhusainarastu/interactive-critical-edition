@@ -41,7 +41,7 @@ import { deleteDocumentFile } from "@ice/ingestion";
 import { generateToken } from "@/lib/tokens";
 import type { Page } from "@playwright/test";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 /**
  * Seeds a password-reset token exactly the way `requestPasswordReset` does
@@ -94,7 +94,24 @@ export async function createVerifiedTestUser(email: string, password: string) {
  * fails noisily as "Document not found" once a worker dequeues it —
  * found via a local worker boot draining hours of these from prior
  * test runs during the Phase 19 backend/data audit (D-19-2).
+ *
+ * D-20-65: `work_identity`/`learning_resource` are shared, unscoped catalog
+ * tables with no user FK at all (same design precedent as
+ * `bibliographic_record` — see PROJECT-LOG Design Decisions), so nothing in
+ * the user-delete cascade ever reaches them, and every seed helper below
+ * that creates one leaks it into the shared local Postgres forever (found
+ * at 1,500+/1,973+ rows respectively before this fix). Every one of those
+ * helpers tags its rows with a recognizable test-only key so a sweep can
+ * find them without guessing: `work:test:...`/`work:graph-test:...`
+ * `work_identity.work_key`s, and `title:...`/`seeded-lr-...`
+ * `learning_resource.normalized_key`s. Production's real identity keys
+ * (`work:<hash>` from `apps/worker/src/analyze.ts`'s `identity.key`) never
+ * match either pattern, so this sweep can never touch real canonical data
+ * even if this helper were ever pointed at a non-test database.
  */
+const TEST_WORK_IDENTITY_KEY_PATTERN = /^work:(test|graph-test):/;
+const TEST_LEARNING_RESOURCE_KEY_PATTERN = /^(title:|seeded-lr-)/;
+
 export async function deleteTestUser(email: string) {
   const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (!user) return;
@@ -106,7 +123,65 @@ export async function deleteTestUser(email: string) {
 
   await Promise.all(docs.map((d) => deleteDocumentFile(d.storagePath).catch(() => {})));
   await cancelQueuedJobsForDocuments(docs.map((d) => d.id));
+
+  // Collect every work_identity this user's own works reference, BEFORE the
+  // cascading delete removes those works — this is the only place they're
+  // still reachable via `works.work_identity_id`.
+  const ownedIdentityRows = await db
+    .selectDistinct({ id: workIdentities.id })
+    .from(works)
+    .innerJoin(workIdentities, eq(works.workIdentityId, workIdentities.id))
+    .where(eq(works.userId, user.id));
+  const candidateIdentityIds = new Set(ownedIdentityRows.map((r) => r.id));
+
+  // A recommended (not-owned) learning_resource carries its OWN canonical
+  // identity directly on `learning_resource.work_identity_id`, reached only
+  // via `resource_role.work_identity_id` pointing at one of the identities
+  // above (see `seedLibraryItemForSourceAttach`) — collect both directions
+  // before anything is deleted.
+  let candidateLearningResourceIds: string[] = [];
+  if (candidateIdentityIds.size > 0) {
+    const roleRows = await db
+      .selectDistinct({ id: resourceRoles.learningResourceId })
+      .from(resourceRoles)
+      .where(inArray(resourceRoles.workIdentityId, [...candidateIdentityIds]));
+    candidateLearningResourceIds = roleRows.map((r) => r.id);
+
+    if (candidateLearningResourceIds.length > 0) {
+      const ownIdentityRows = await db
+        .select({ id: learningResources.workIdentityId })
+        .from(learningResources)
+        .where(inArray(learningResources.id, candidateLearningResourceIds));
+      for (const row of ownIdentityRows) if (row.id) candidateIdentityIds.add(row.id);
+    }
+  }
+
   await db.delete(users).where(eq(users.id, user.id));
+
+  // Only delete a candidate if (a) its key still matches the test-only
+  // pattern and (b) no work anywhere still references it — the second
+  // check is what keeps a concurrent test's still-live fixture (same key
+  // pattern, different random suffix) safe from this sweep.
+  for (const identityId of candidateIdentityIds) {
+    const [identity] = await db.select({ workKey: workIdentities.workKey }).from(workIdentities).where(eq(workIdentities.id, identityId)).limit(1);
+    if (!identity || !TEST_WORK_IDENTITY_KEY_PATTERN.test(identity.workKey)) continue;
+    const [stillOwned] = await db.select({ id: works.id }).from(works).where(eq(works.workIdentityId, identityId)).limit(1);
+    if (stillOwned) continue;
+    // Cascades any resource_role still pointing at this identity.
+    await db.delete(workIdentities).where(eq(workIdentities.id, identityId));
+  }
+
+  for (const learningResourceId of candidateLearningResourceIds) {
+    const [resource] = await db
+      .select({ normalizedKey: learningResources.normalizedKey })
+      .from(learningResources)
+      .where(eq(learningResources.id, learningResourceId))
+      .limit(1);
+    if (!resource || !TEST_LEARNING_RESOURCE_KEY_PATTERN.test(resource.normalizedKey)) continue;
+    const [stillReferenced] = await db.select({ id: resourceRoles.id }).from(resourceRoles).where(eq(resourceRoles.learningResourceId, learningResourceId)).limit(1);
+    if (stillReferenced) continue;
+    await db.delete(learningResources).where(eq(learningResources.id, learningResourceId));
+  }
 }
 
 /**
