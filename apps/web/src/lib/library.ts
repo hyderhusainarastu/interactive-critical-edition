@@ -1,5 +1,7 @@
 import {
   credibilityAssessments,
+  citations,
+  citationLibraryLinks,
   db,
   documents,
   learningResources,
@@ -63,6 +65,12 @@ export interface LibraryItem {
     confidence: number;
     recommendedFor: { workId: string; title: string }[];
   }>;
+  /** Exact authorial/direct citation evidence, separate from discovery provenance. */
+  citationProvenance: Array<{
+    source: "Bibliography" | "Footnote" | "Endnote" | "Direct citation";
+    location: string;
+    resolutionState: "pending" | "resolved" | "unresolved";
+  }>;
   recommendedFor: { workId: string; title: string }[];
   credibility: { authority: string | null; score: number } | null;
   creatorVerification: string | null;
@@ -121,6 +129,39 @@ export async function getLibrary(userId: string): Promise<LibraryData> {
   const resourceIds = [...new Set(roles.map((r) => r.learningResourceId))];
   const resources = await db.select().from(learningResources).where(inArray(learningResources.id, resourceIds));
   const resourceById = new Map(resources.map((r) => [r.id, r]));
+
+  const citationProvenanceRows = resourceIds.length
+    ? await db
+        .select({
+          learningResourceId: citationLibraryLinks.learningResourceId,
+          sourceType: citations.sourceType,
+          sourceAnchor: citations.sourceAnchor,
+          resolutionState: citations.resolutionState,
+        })
+        .from(citationLibraryLinks)
+        .innerJoin(citations, eq(citations.id, citationLibraryLinks.citationId))
+        .where(inArray(citationLibraryLinks.learningResourceId, resourceIds))
+    : [];
+  const citationProvenanceByResourceId = new Map<string, LibraryItem["citationProvenance"]>();
+  for (const provenance of citationProvenanceRows) {
+    const anchor = provenance.sourceAnchor as { pageIndex?: number | null; marker?: string | null } | null;
+    const location = [
+      anchor?.pageIndex != null ? `page ${anchor.pageIndex + 1}` : null,
+      anchor?.marker ? `note ${anchor.marker}` : null,
+    ].filter(Boolean).join(" · ") || "source location unavailable";
+    const source = provenance.sourceType === "bibliography"
+      ? "Bibliography"
+      : provenance.sourceType === "footnote"
+        ? "Footnote"
+        : provenance.sourceType === "endnote"
+          ? "Endnote"
+          : "Direct citation";
+    const existing = citationProvenanceByResourceId.get(provenance.learningResourceId) ?? [];
+    if (!existing.some((entry) => entry.source === source && entry.location === location && entry.resolutionState === provenance.resolutionState)) {
+      existing.push({ source, location, resolutionState: provenance.resolutionState });
+      citationProvenanceByResourceId.set(provenance.learningResourceId, existing);
+    }
+  }
 
   const [readingByResource, ratingByResource] = await Promise.all([
     db.select().from(readingRecords).where(and(eq(readingRecords.userId, userId), inArray(readingRecords.learningResourceId, resourceIds))),
@@ -245,6 +286,7 @@ export async function getLibrary(userId: string): Promise<LibraryData> {
       readerLevel: primaryRole.readerLevel,
       focusMetrics,
       roles: libraryRoles,
+      citationProvenance: citationProvenanceByResourceId.get(resource.id) ?? [],
       recommendedFor,
       credibility,
       creatorVerification: creatorVerification(resource.creator),

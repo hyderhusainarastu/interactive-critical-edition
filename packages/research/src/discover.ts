@@ -108,6 +108,41 @@ export interface LaneRound {
   queries: string[];
 }
 
+interface ScheduledRound extends LaneRound {
+  /** A one-query coverage pass for a specific enabled public provider. */
+  forcedProvider?: ProviderName;
+}
+
+const PUBLIC_PROVIDER_LANES: Record<"youtube" | "mastodon" | "bluesky", readonly QueryLane[]> = {
+  youtube: ["video_podcast", "lecture_course"],
+  mastodon: ["public_discussion"],
+  bluesky: ["public_discussion"],
+};
+
+/**
+ * Reserve one bounded, upload-derived query for every enabled public adapter.
+ * It runs before saturation-prone general discovery: a relevant source must
+ * not be absent merely because its provider was never selected by an earlier
+ * lane. The fallback remains an existing upload-derived query, never a made-up
+ * topic string.
+ */
+export function publicProviderCoverageRounds(
+  adapters: readonly SourceAdapter[],
+  rounds: readonly LaneRound[],
+): ScheduledRound[] {
+  const fallback = rounds.flatMap((round) => round.queries).find((query) => query.trim().length > 3);
+  const scheduled: ScheduledRound[] = [];
+  for (const provider of ["youtube", "mastodon", "bluesky"] as const) {
+    const adapter = adapters.find((candidate) => candidate.provider === provider);
+    if (!adapter?.isEnabled()) continue;
+    const preferred = rounds.find((round) => PUBLIC_PROVIDER_LANES[provider].includes(round.lane) && round.queries.some((query) => query.trim().length > 3));
+    const query = preferred?.queries.find((value) => value.trim().length > 3) ?? fallback;
+    if (!query) continue;
+    scheduled.push({ lane: preferred?.lane ?? "public_discussion", queries: [query], forcedProvider: provider });
+  }
+  return scheduled;
+}
+
 export interface DiscoveryResult {
   resources: RawResource[];
   attempts: ProviderAttempt[];
@@ -157,7 +192,13 @@ export async function runDiscovery(input: {
     return [r];
   });
 
-  for (const round of normalized) {
+  // Public coverage runs before the general search rounds so a saturation cap
+  // cannot silently turn an enabled YouTube/Mastodon/Bluesky adapter into
+  // "not selected". The later normal rounds still retain their richer,
+  // lane-wide discovery behavior.
+  const scheduled: ScheduledRound[] = [...publicProviderCoverageRounds(input.adapters, normalized), ...normalized];
+
+  for (const round of scheduled) {
     const { lane, queries } = round;
     if (resources.length >= RESEARCH_LIMITS.maxResourcesPreDedup) {
       saturationNote = `Reached pre-dedup resource cap (${RESEARCH_LIMITS.maxResourcesPreDedup}).`;
@@ -169,7 +210,11 @@ export async function runDiscovery(input: {
     // records an attempt across the run as a whole, so "not consulted for this
     // lane" never masquerades as "not consulted at all".
     const allowed = lane ? providersForLane(lane) : null;
-    const active = allowed ? input.adapters.filter((a) => allowed.has(a.provider)) : input.adapters;
+    const active = round.forcedProvider
+      ? input.adapters.filter((adapter) => adapter.provider === round.forcedProvider)
+      : allowed
+        ? input.adapters.filter((adapter) => allowed.has(adapter.provider))
+        : input.adapters;
     const results = await Promise.all(
       active.map((a) =>
         a.search(queries, { maxResults: perProviderLimit(a.provider), timeoutMs: input.timeoutMs }),

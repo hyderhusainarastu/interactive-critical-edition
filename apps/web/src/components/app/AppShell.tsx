@@ -60,6 +60,10 @@ function AppShellContents({ email, admin, writerEnabled, children }: { email: st
           </nav>
           <div className="flex items-center gap-1.5">
             <button type="button" className="app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}>⌕</button>
+            <div className="hidden items-center rounded-md border border-[var(--color-border)] p-0.5 sm:flex" aria-label="Color theme">
+              <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "light" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "light"} onClick={() => updatePreferences({ theme: "light" })}>Light</button>
+              <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
+            </div>
             <div className="relative">
               <button type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} onClick={() => setPreferencesOpen((open) => !open)}>⚙</button>
               {preferencesOpen && <PreferencesMenu preferences={preferences} onUpdate={updatePreferences} onClose={() => setPreferencesOpen(false)} />}

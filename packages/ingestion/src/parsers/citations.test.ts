@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCitations } from "./citations";
+import { extractCitationMentions, extractCitations } from "./citations";
 
 const WITH_BIBLIOGRAPHY = `The Question of Being
 
@@ -170,5 +170,30 @@ describe("inline citations are never emitted malformed", () => {
       const closes = (c.query.match(/\)/g) ?? []).length;
       expect(opens, `unbalanced: ${c.query}`).toBe(closes);
     }
+  });
+});
+
+describe("structurally anchored citation mentions", () => {
+  it("preserves source type, parser confidence, and page/block anchor", () => {
+    const found = extractCitationMentions([
+      { sourceType: "bibliography", text: "Sarah Broadie, Ethics with Aristotle (Oxford: OUP, 1991).", textBlockId: "bib-1", pageIndex: 9, blockOrder: 2, parserConfidence: 0.98 },
+      { sourceType: "footnote", text: "See Julia Annas, Plato and Aristotle on Friendship (1977).", textBlockId: "note-1", pageIndex: 3, blockOrder: 8, marker: "12" },
+      { sourceType: "endnote", text: "David Charles, Aristotle's Philosophy of Action (1984).", textBlockId: "end-1", pageIndex: 14, blockOrder: 1, marker: "3" },
+      { sourceType: "inline", text: "Aristotle's Nicomachean Ethics (Irwin 1985) frames the discussion.", textBlockId: "body-1", pageIndex: 4, blockOrder: 5 },
+    ]);
+
+    expect(found.map((citation) => citation.sourceType)).toEqual(expect.arrayContaining(["bibliography", "footnote", "endnote", "inline"]));
+    expect(found.find((citation) => citation.sourceType === "footnote")?.anchor).toMatchObject({ textBlockId: "note-1", pageIndex: 3, blockOrder: 8, marker: "12" });
+    expect(found.find((citation) => citation.sourceType === "bibliography")?.parserConfidence).toBe(0.98);
+    expect(found.some((citation) => citation.query.includes("Nicomachean Ethics"))).toBe(true);
+  });
+
+  it("keeps an unresolved structural entry instead of dropping it for missing metadata", () => {
+    const found = extractCitationMentions([
+      { sourceType: "bibliography", text: "A. Unknown, A Work the catalog does not contain.", textBlockId: "bib-unresolved", pageIndex: 22, blockOrder: 4 },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ sourceType: "bibliography", text: "A. Unknown, A Work the catalog does not contain." });
+    expect(found[0].anchor).toMatchObject({ textBlockId: "bib-unresolved", pageIndex: 22 });
   });
 });

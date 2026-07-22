@@ -1,0 +1,28 @@
+{
+  "bodyText": "Vice and Reason body text used to prove that apparatus stays outside the reader body.",
+  "references": [
+    { "key": "annas", "sourceType": "footnote", "text": "Julia Annas, Plato and Aristotle on Friendship and Altruism (1977).", "title": "Plato and Aristotle on Friendship and Altruism", "authors": "Julia Annas" },
+    { "key": "anscombe", "sourceType": "footnote", "text": "G. E. M. Anscombe, Modern Moral Philosophy (1958).", "title": "Modern Moral Philosophy", "authors": "G. E. M. Anscombe" },
+    { "key": "aquinas-summa", "sourceType": "bibliography", "text": "Thomas Aquinas, Summa Theologiae (1265).", "title": "Summa Theologiae", "authors": "Thomas Aquinas" },
+    { "key": "aristotle-eudemian", "sourceType": "bibliography", "text": "Aristotle, Eudemian Ethics.", "title": "Eudemian Ethics", "authors": "Aristotle" },
+    { "key": "aristotle-metaphysics", "sourceType": "bibliography", "text": "Aristotle, Metaphysics.", "title": "Metaphysics", "authors": "Aristotle" },
+    { "key": "aristotle-nicomachean", "sourceType": "bibliography", "text": "Aristotle, Nicomachean Ethics.", "title": "Nicomachean Ethics", "authors": "Aristotle" },
+    { "key": "aristotle-politics", "sourceType": "bibliography", "text": "Aristotle, Politics.", "title": "Politics", "authors": "Aristotle" },
+    { "key": "aristotle-rhetoric", "sourceType": "bibliography", "text": "Aristotle, Rhetoric.", "title": "Rhetoric", "authors": "Aristotle" },
+    { "key": "broadie", "sourceType": "footnote", "text": "Sarah Broadie, Ethics with Aristotle (1991).", "title": "Ethics with Aristotle", "authors": "Sarah Broadie" },
+    { "key": "bywater", "sourceType": "bibliography", "text": "I. Bywater, Contributions to the Textual Criticism of Aristotle's Nicomachean Ethics (1892).", "title": "Contributions to the Textual Criticism of Aristotle's Nicomachean Ethics", "authors": "I. Bywater" },
+    { "key": "charles", "sourceType": "footnote", "text": "David Charles, Aristotle's Philosophy of Action (1984).", "title": "Aristotle's Philosophy of Action", "authors": "David Charles" },
+    { "key": "cooper", "sourceType": "bibliography", "text": "John M. Cooper, Reason and Emotion (1999).", "title": "Reason and Emotion", "authors": "John M. Cooper" },
+    { "key": "green", "sourceType": "endnote", "text": "T. H. Green, Prolegomena to Ethics (1883).", "title": "Prolegomena to Ethics", "authors": "T. H. Green" },
+    { "key": "hampton", "sourceType": "bibliography", "text": "Jean Hampton, The Authority of Reason (1998).", "title": "The Authority of Reason", "authors": "Jean Hampton" },
+    { "key": "hardie", "sourceType": "footnote", "text": "W. F. R. Hardie, Aristotle's Ethical Theory (1980).", "title": "Aristotle's Ethical Theory", "authors": "W. F. R. Hardie" },
+    { "key": "irwin-first-principles", "sourceType": "bibliography", "text": "Terence Irwin, Aristotle's First Principles (1988).", "title": "Aristotle's First Principles", "authors": "Terence Irwin" },
+    { "key": "irwin-plato-ethics", "sourceType": "endnote", "text": "Terence Irwin, Plato's Ethics (1995).", "title": "Plato's Ethics", "authors": "Terence Irwin" },
+    { "key": "plato-gorgias", "sourceType": "inline", "text": "The issue is staged in Plato's Gorgias.", "title": "Gorgias", "authors": "Plato" },
+    { "key": "plato-phaedrus", "sourceType": "inline", "text": "Plato's Phaedrus supplies the companion contrast.", "title": "Phaedrus", "authors": "Plato" },
+    { "key": "rogers", "sourceType": "bibliography", "text": "K. M. Rogers, The Perfection of Love (1999).", "title": "The Perfection of Love", "authors": "K. M. Rogers" },
+    { "key": "sherman", "sourceType": "footnote", "text": "Nancy Sherman, The Fabric of Character (1989).", "title": "The Fabric of Character", "authors": "Nancy Sherman" },
+    { "key": "smith", "sourceType": "endnote", "text": "Michael Smith, The Moral Problem (1994).", "title": "The Moral Problem", "authors": "Michael Smith" }
+  ],
+  "unresolved": { "sourceType": "footnote", "text": "The Archive of Lost Virtues, anonymous manuscript.", "title": "The Archive of Lost Virtues" }
+}

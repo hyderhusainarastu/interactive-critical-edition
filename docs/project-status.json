@@ -8,10 +8,10 @@
   },
   "updated": "2026-07-21",
   "current": {
-    "phase": 16,
-    "headline": "Phase 16 complete — confirmation required",
-    "summary": "Reliable structural processing, clearly labelled immutable source and processed reader modes, and an evidence-grounded annotation apparatus are released and production-canary verified.",
-    "nextAction": "Review the Phase 16 handoff and confirm whether to begin Phase 17."
+    "phase": 17,
+    "headline": "Phase 17 local acceptance complete — host handoff required",
+    "summary": "Phase 16 is reconciled as complete. Phase 17's citation, Library, public-source, and canonical Visualization changes pass local acceptance; governed progression remains blocked until a host can create a fresh Phase 18 context.",
+    "nextAction": "Configure or invoke a real host/session adapter to atomically replace this context from docs/handoffs/phase-17-to-18.md. Do not perform the separately approved production migration, deployment, or paid canary without authorization."
   },
   "phases": [
     {
@@ -281,10 +281,54 @@
     },
     {
       "number": 17,
+      "title": "Citation Completeness, Library Integrity, and Research-Web Repair",
+      "state": "in_progress",
+      "summary": "Local acceptance is complete: structurally anchored citations reach Library before asynchronous resolution; public sources remain supplementary D/E; and Visualization uses canonical entities, topics, a focal inspector, graph-stage fullscreen, and visible theme controls. Host-context handoff remains required for phase advancement.",
+      "confirmation": "The controller preflight correctly fails closed without a real host context-replacement adapter. Production migration, deployment, and paid canary remain separately approval-gated.",
+      "evidence": [
+        "Local additive migration 0028 adds citation source/anchor/resolution fields and citation-to-Library provenance; it was applied only to the local development database.",
+        "The fixture-backed Vice and Reason worker test resolves 22 distinct targets, persists 23 anchored Library items including an unresolved citation, and writes 22 graph targets without live search.",
+        "Mocked worker public-source projection verifies relevant YouTube, Mastodon, and Bluesky results remain Library/graph-visible as D/E non-scholarly supplementary material; 13 focused Chromium graph checks pass."
+      ],
+      "subphases": [
+        {
+          "id": "17.1",
+          "title": "Context lifecycle and tracking reconciliation",
+          "state": "complete",
+          "summary": "Added the host-adapter lifecycle contract, reconciled Phase 16 as complete, and renumbered RAG to Phase 18."
+        },
+        {
+          "id": "17.2",
+          "title": "Citation and Library integrity",
+          "state": "complete",
+          "summary": "Persisted anchored bibliography, footnote, endnote, and inline mentions, projected every citation immediately to Library, and queued rate-limited metadata resolution."
+        },
+        {
+          "id": "17.3",
+          "title": "Public-source repair and canonical graph data",
+          "state": "complete",
+          "summary": "Reserved bounded public-provider queries, retained D/E supplementary material, merged canonical external nodes and logical edges, and connected works through shared topics."
+        },
+        {
+          "id": "17.4",
+          "title": "Visualization interaction and accessibility",
+          "state": "complete",
+          "summary": "Added persistent 3D labels, focal direct-connection inspector, secondary keyboard browser, graph-stage fullscreen, reset/focus behavior, and header Light/Dark controls."
+        },
+        {
+          "id": "17.5",
+          "title": "Local acceptance and governed handoff",
+          "state": "in_progress",
+          "summary": "Local verification and compact handoff are complete. The required host-context replacement is unavailable in this session, so the controller intentionally leaves Phase 18 undispatched."
+        }
+      ]
+    },
+    {
+      "number": 18,
       "title": "Library-grounded Socratic RAG chat",
       "state": "planned",
       "summary": "Index owner-scoped sources and add citation-grounded, Socratic conversations across the workspace.",
-      "confirmation": "Closeout confirmation is required before any follow-on phase begins."
+      "confirmation": "Phase 17 closeout must create a fresh host context from its compact handoff before Phase 18 local work begins."
     }
   ],
   "operationalAudit": {

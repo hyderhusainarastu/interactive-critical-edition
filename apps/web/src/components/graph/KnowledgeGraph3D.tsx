@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
+import * as THREE from "three";
 import {
   EDGE_FAMILY_META,
   STATE_META,
@@ -50,12 +51,17 @@ export function KnowledgeGraph3D({
   onLinkClick,
   pinnedWorkIds = [],
   selectedNodeId,
+  resetSignal = 0,
+  isFullscreen = false,
 }: {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
   onLinkClick?: (link: GraphLink) => void;
   pinnedWorkIds?: readonly string[];
   selectedNodeId?: string | null;
+  /** Incremented by the stage control; keeps reset independent from selection. */
+  resetSignal?: number;
+  isFullscreen?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Typed loosely: the library's own generic ref shape (wrapping NodeType in
@@ -161,8 +167,57 @@ export function KnowledgeGraph3D({
   }, [hoverNode, neighborsByNode]);
   const effectsEnabled = motionAllowed && data.nodes.length <= 140;
 
+  const nodeThreeObject = useCallback((value: object) => {
+    const node = value as GraphNode;
+    const radius = NODE_SIZE[node.type] + (pinnedWorkIds.includes(node.id) ? 2 : 0) + (selectedNodeId === node.id ? 1 : 0);
+    const color = typeColors?.[node.type] ?? "#888";
+    const group = new THREE.Group();
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 18, 14),
+      new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.92 }),
+    );
+    group.add(sphere);
+
+    // Canvas sprites always face the camera. The two-line, contrast-backed
+    // label remains visible at rest and becomes naturally larger/readable on
+    // zoom; hover text is supplementary rather than the only label.
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 104;
+    const context = canvas.getContext("2d");
+    if (context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = "rgba(20, 18, 15, 0.78)";
+      context.roundRect(8, 8, canvas.width - 16, canvas.height - 16, 18);
+      context.fill();
+      context.fillStyle = "#ffffff";
+      context.font = "600 34px system-ui, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      const label = node.label.length > 42 ? `${node.label.slice(0, 39)}…` : node.label;
+      context.fillText(label, canvas.width / 2, 42, canvas.width - 28);
+      context.fillStyle = "rgba(255,255,255,0.78)";
+      context.font = "24px system-ui, sans-serif";
+      context.fillText(`${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}`, canvas.width / 2, 74, canvas.width - 28);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const labelSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+    const labelScale = Math.max(20, Math.min(42, 16 + node.label.length * 0.45));
+    labelSprite.scale.set(labelScale, labelScale * 0.203, 1);
+    labelSprite.position.set(0, radius + labelScale * 0.13, 0);
+    labelSprite.renderOrder = 1;
+    group.add(labelSprite);
+    return group;
+  }, [pinnedWorkIds, selectedNodeId, typeColors]);
+
+  useEffect(() => {
+    if (!resetSignal) return;
+    (fgRef.current as ForceGraphMethods | undefined)?.cameraPosition({ x: 0, y: 0, z: 260 }, { x: 0, y: 0, z: 0 }, effectsEnabled ? 450 : 0);
+  }, [effectsEnabled, resetSignal]);
+
   return (
-    <div ref={containerRef} className="h-[520px] w-full overflow-hidden rounded-lg border border-[var(--color-border)]" data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
+    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[520px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
       {colors && typeColors && linkColors && (
         <ForceGraph3D
           ref={fgRef as never}
@@ -170,6 +225,7 @@ export function KnowledgeGraph3D({
           width={size.w}
           height={size.h}
           backgroundColor="rgba(0,0,0,0)"
+          nodeThreeObject={nodeThreeObject as never}
           nodeColor={(n: object) => {
             const node = n as GraphNode;
             const base = typeColors[node.type];

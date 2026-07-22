@@ -197,6 +197,13 @@
       "when": 1784673523248,
       "tag": "0027_phase16_reliable_reader",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1784677519092,
+      "tag": "0028_wooden_frank_castle",
+      "breakpoints": true
     }
   ]
 }

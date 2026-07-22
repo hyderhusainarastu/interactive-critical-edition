@@ -508,19 +508,36 @@ export const bibliographicRecords = pgTable("bibliographic_record", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/** Where a work was cited in the uploaded source, never inferred from lookup metadata. */
+export const citationSourceTypeEnum = pgEnum("citation_source_type", ["bibliography", "footnote", "endnote", "inline"]);
+export const citationResolutionStateEnum = pgEnum("citation_resolution_state", ["pending", "resolved", "unresolved"]);
+
 export const citations = pgTable("citation", {
   id: uuid("id").primaryKey().defaultRandom(),
   documentId: uuid("document_id")
     .notNull()
     .references(() => documents.id, { onDelete: "cascade" }),
+  processingRunId: uuid("processing_run_id").references(() => processingRuns.id, { onDelete: "cascade" }),
+  textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "set null" }),
   rawText: text("raw_text").notNull(),
+  normalizedQuery: text("normalized_query").notNull(),
+  sourceType: citationSourceTypeEnum("source_type").notNull().default("inline"),
+  parserConfidence: real("parser_confidence").notNull().default(0),
+  /** { pageIndex, blockOrder, marker, startOffset, endOffset }. */
+  sourceAnchor: jsonb("source_anchor"),
   resolvedBibId: uuid("resolved_bib_id").references(() => bibliographicRecords.id, {
     onDelete: "set null",
   }),
   // "crossref" | "openalex" | "openlibrary" | "unresolved"
   resolutionSource: text("resolution_source").notNull().default("unresolved"),
+  resolutionState: citationResolutionStateEnum("resolution_state").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (t) => [index("citation_document_idx").on(t.documentId)]);
+}, (t) => [
+  index("citation_document_idx").on(t.documentId),
+  index("citation_run_idx").on(t.processingRunId),
+  index("citation_block_idx").on(t.textBlockId),
+  index("citation_source_type_idx").on(t.sourceType),
+]);
 
 export const annotations = pgTable("annotation", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -1475,6 +1492,18 @@ export const resourceRoles = pgTable("resource_role", {
     .on(t.learningResourceId, t.workIdentityId, t.readerLevel)
     .nullsNotDistinct(),
 ]);
+
+/**
+ * A citation mention's projection into the Library. This keeps citation
+ * provenance many-to-one: one canonical work can be cited in several notes
+ * and bibliography entries without creating duplicate Library rows.
+ */
+export const citationLibraryLinks = pgTable("citation_library_link", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  citationId: uuid("citation_id").notNull().references(() => citations.id, { onDelete: "cascade" }).unique(),
+  learningResourceId: uuid("learning_resource_id").notNull().references(() => learningResources.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [index("citation_library_resource_idx").on(t.learningResourceId)]);
 
 /**
  * What KIND of note a passage annotation is making about the primary text —

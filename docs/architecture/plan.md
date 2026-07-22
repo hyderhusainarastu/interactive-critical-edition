@@ -58,7 +58,7 @@ Every numbered section of the user's brief maps to a plan section below; nothing
 | 25 | This planning document itself | entire document |
 | 26 | Working rules post-approval | §30, and restated in docs/PROJECT-LOG.md itself |
 | — | *Added after initial planning, not in the original 26-section brief:* 3D knowledge-graph visualizer | §9, §16, §17, §19, §20, §23 Phase 5 |
-| — | *Added 2026-07-21:* Phase 13–17 delivery roadmap for project records, Library, Visualization, reader reliability, and grounded chat | §23 Phases 13–17, §31 |
+| — | *Revised 2026-07-21:* Phase 13–18 delivery roadmap: Phase 17 repairs citations, Library integrity, public-source processing, and Visualization before Phase 18 grounded chat | §23 Phases 13–18, §31 |
 | — | *Redefined 2026-07-19, completed 2026-07-20:* Phase 9 = Interactive Learning Workspace, sub-phases 9.1–9.7 (9.8 "Comprehensive dossier" retired as a phantom requirement — never enumerated anywhere it was referenced by count — before implementation) | §23 Phase 9, §34 |
 | — | *Added 2026-07-20:* Phase 10 = Workspace Depth & Adaptivity Completion (closes the concrete gaps 9.1–9.7 left in Phase 9's own original objective, rather than inventing new scope) | §23 Phase 10, §35 |
 | — | *Redefined this session:* Phase 8 = Critical Edition Recovery, Autonomous Research & Public-Source Discovery (repairs + autonomous critical-edition generation) | §23 Phase 8, §33 |
@@ -516,13 +516,19 @@ Each phase: objective, tasks, dependencies, deliverables, tests, definition of d
 - Tests: PDF footnote/body separation, anchor stability, reader accessibility, source/processed labels, and a cost-bounded production canary.
 - DoD: no authorial footnote is duplicated into body text; every reader mode is plainly labelled; and generated notes identify the evidence supporting or opposing them.
 
-**Phase 17 — Library-grounded Socratic RAG Chat**
+**Phase 17 — Citation Completeness, Library Integrity, and Research-Web Repair**
+- Objective: make structurally extracted citations first-class, guarantee that every mentioned work reaches the Library, repair bounded public-source processing without promoting its authority, and rebuild Visualization around canonical works and shared evidence-backed topics.
+- Tasks: introduce a host/session lifecycle controller that reads `CLAUDE.md`, the canonical project record, and tracker at every task start and fails closed when a fresh context cannot be created; preserve bibliography, footnote, endnote, and direct-inline citation anchors with source/confidence/resolution state; promote every mention immediately into a canonical or unresolved Library item; use the deterministic *Vice and Reason* 22-work fixture plus an unresolved fixture; make enabled YouTube/Mastodon/Bluesky adapters receive bounded relevant queries; use canonical external-work nodes, merged edge provenance, topic-mediated links, readable 3D labels, a focal inspector, graph-stage fullscreen, and header Light/Dark controls.
+- Tests: parser and worker integration; citation/Library canonical identity; public-source provider provenance and D/E authority; graph canonical-node, topic, no-dangling-link, inspector, fullscreen, theme, accessibility, and visual regression coverage; deterministic *Vice and Reason* acceptance before any production action.
+- DoD: every cited work, including unresolved references, has a Library item and source anchor; no apparatus text is duplicated into processed reader body; public material remains supplementary; graph nodes/links are canonical and connected; the lifecycle controller writes durable closeout then uses a real host context replacement for Phase 18 or clearly stops when unavailable.
+
+**Phase 18 — Library-grounded Socratic RAG Chat**
 - Objective: add owner-scoped, citation-grounded Socratic conversation without inventing support outside the reader's Library.
 - Tasks: index eligible upload/open-access chunks with anchors, hashes, embeddings, and deletion propagation; add authenticated persistent streamed conversations and retrieval-first responses; add desktop sidebar/mobile sheet; use SocraticLM's dialogue method through the provider layer while respecting its code/data/weights licensing boundary; preview existing-library indexing and automatically index new eligible sources within limits.
 - Tests: retrieval quality, citation grounding, prompt injection, cross-user isolation, deletion, latency, and cost caps.
 - DoD: every substantive answer cites and links to a source location, unsupported claims receive an explicit not-found response, and no conversation or chunk crosses ownership boundaries.
 
-**Phase closeout contract (Phases 13–17).** Every sub-phase ends with relevant tests, `docs/PROJECT-LOG.md`, the root `CLAUDE.md` mirror, generated checklist, commit, push, and confirmation. At each phase closeout, tag the commit, create a compact handoff, clear working context, and do not begin the next phase without confirmation. Preserve and ignore `research/` and `research.zip`; do not move, commit, or deploy them.
+**Phase closeout contract (Phases 13–18).** Every sub-phase ends with relevant tests, `docs/PROJECT-LOG.md`, the root `CLAUDE.md` mirror, generated checklist, commit, push, and confirmation. At each phase closeout, the lifecycle controller runs verification, preflights a host/session adapter that can atomically terminate the active context and dispatch the next phase, then writes a compact handoff and updates the tracker before invoking that atomic replacement using only the handoff. If the host lacks that capability, it fails visibly before tracker advancement rather than claim compaction. `research/`, rollout records, and similar material are in scope whenever relevant; unknown-provenance local material remains uncommitted and undeployed.
 
 **Post-MVP (kept explicitly separate so it never blocks core delivery — see §27).**
 
@@ -596,7 +602,7 @@ In order, each its own small commit:
 8. Tag `phase-0-complete`.
 9. Begin Phase 1: scaffold the Next.js app in `apps/web` (this becomes the first Phase 1 commit).
 
-## 31. Phase 13–17 Delivery Roadmap
+## 31. Phase 13–18 Delivery Roadmap
 
 This section is the detailed execution record for the active roadmap in §23. It replaces the obsolete separate-site proposal; no separate-site code was created. The source of record for current status is `docs/project-status.json`, which generates `progress-checklist.html`; `docs/PROJECT-LOG.md` remains the canonical narrative and decision record.
 
@@ -606,17 +612,18 @@ This section is the detailed execution record for the active roadmap in §23. It
 - The source must carry phase/sub-phase state, confirmation gate, evidence, next action, and totals. CI rejects generated HTML that does not exactly match it.
 - Update `docs/PROJECT-LOG.md` in the same change, then copy it to the ignored root `CLAUDE.md` mirror. The mirror never carries independent content.
 - Do not infer completion from code alone: record local test commands and a read-only production observation where the release claim concerns production.
-- Keep `research/` and `research.zip` outside version control and deployment scope.
+- Treat `research/`, rollout records, and other local research material as task inputs when relevant; keep unknown-provenance material out of version control and deployment until it is intentionally reviewed.
 
 ### 31.2 Phase 13 audit rubric
 
 Classify each surface as **operational** only when its intended release behavior has local evidence and a read-only production observation; **release-gated** when implemented and locally verified but production behavior remains intentionally unexercised or contingent on a release flag/data condition; **incomplete** when either implementation or evidence is missing. The audit records v4 processing, Interactive Reader, Visualization, Library, and Writer in the structured status source and project log.
 
-### 31.3 Phases 14–17 constraints
+### 31.3 Phases 14–18 constraints
 
 - **Library:** uploaded work stays first-class even with zero recommendations. Default sorting must use values returned in the Library payload; source authority and credibility remain distinct.
 - **Visualization:** ownership isolation and graph/table parity are non-negotiable. Automation retrieves source text only with clear open-access and license evidence; unavailable content stays metadata-only.
 - **Reader:** original files stay immutable. Structural uncertainty is visible rather than normalized away, and authorial apparatus never becomes generated prose.
+- **Citation and graph repair:** bibliography, footnote, endnote, and inline/direct citation provenance is durable; unresolved references remain visible; canonical external works and shared topics prevent duplicated/orphaned graph entities.
 - **Chat:** retrieval is owner-scoped and precedes every answer. Citations jump to the anchored reader location. SocraticLM informs dialogue method only: use its Apache-2.0 repository code where appropriate, never its CC BY-NC 4.0 data or weight-diff artifacts.
 - **Cost:** retain the existing $1 normal/$5 hard limits. No new automatic source acquisition, graph expansion, or indexing pathway can exceed its approved cap.
 

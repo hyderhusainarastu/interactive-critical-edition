@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, PROVIDER_NOT_SELECTED_ERROR, runDiscovery } from "./discover";
+import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, publicProviderCoverageRounds, runDiscovery } from "./discover";
 import type { AdapterResult, AdapterSearchOptions, ProviderName, RawResource, SourceAdapter } from "./types";
 
 function res(i: number, provider: ProviderName = "crossref"): RawResource {
@@ -130,7 +130,7 @@ describe("lane-scoped discovery", () => {
     expect([...providersForLane("primary_prerequisite")]).toEqual(expect.arrayContaining(["openlibrary", "googlebooks"]));
   });
 
-  it("only queries the adapters a lane routes to", async () => {
+  it("reserves an upload-derived coverage query for enabled public adapters", async () => {
     const calls: string[] = [];
     const spy = (provider: ProviderName): SourceAdapter => ({
       provider,
@@ -145,7 +145,7 @@ describe("lane-scoped discovery", () => {
     });
     const adapters = [spy("crossref"), spy("youtube"), spy("bluesky")];
     await runDiscovery({ adapters, rounds: [{ lane: "scholarly_debate", queries: ["aristotle vice"] }] });
-    expect(calls).toEqual(["crossref"]);
+    expect(calls).toEqual(expect.arrayContaining(["crossref", "youtube", "bluesky"]));
   });
 
   it("tags each resource with the lane that first surfaced it", async () => {
@@ -176,30 +176,21 @@ describe("lane-scoped discovery", () => {
     expect(r.laneByKey.get("doi:10.1080/09608788.2015.1022855")).toBe("explicit_citation");
   });
 
-  it("records an honest attempt for adapters no lane consulted", async () => {
-    const never: SourceAdapter = {
-      provider: "youtube",
+  it("uses bounded relevant queries for YouTube, Mastodon, and Bluesky", () => {
+    const adapters = (["youtube", "mastodon", "bluesky"] as const).map((provider) => ({
+      provider,
       isEnabled: () => true,
-      async search() {
-        throw new Error("must not be called");
-      },
-    };
-    const used: SourceAdapter = {
-      provider: "crossref",
-      isEnabled: () => true,
-      async search(queries) {
-        return {
-          attempt: { provider: "crossref", status: "queried", queries, resultCount: 0, inspectionDepth: 0, latencyMs: 1 },
-          resources: [],
-        };
-      },
-    };
-    const r = await runDiscovery({ adapters: [used, never], rounds: [{ lane: "scholarly_debate", queries: ["x y z"] }] });
-    const yt = r.attempts.find((a) => a.provider === "youtube");
-    // Silence must never be mistaken for "nothing was found".
-    expect(yt).toBeDefined();
-    expect(yt?.status).toBe("unavailable");
-    expect(yt?.error).toBe(PROVIDER_NOT_SELECTED_ERROR);
+      search: async () => ({ attempt: { provider, status: "queried" as const, queries: [], resultCount: 0, inspectionDepth: 0, latencyMs: 0 }, resources: [] }),
+    }));
+    const rounds = publicProviderCoverageRounds(adapters, [
+      { lane: "video_podcast", queries: ["vice and reason lecture"] },
+      { lane: "public_discussion", queries: ["vice and reason discussion"] },
+    ]);
+    expect(rounds).toEqual([
+      expect.objectContaining({ forcedProvider: "youtube", queries: ["vice and reason lecture"] }),
+      expect.objectContaining({ forcedProvider: "mastodon", queries: ["vice and reason discussion"] }),
+      expect.objectContaining({ forcedProvider: "bluesky", queries: ["vice and reason discussion"] }),
+    ]);
   });
 
   it("still accepts plain (lane-less) rounds", async () => {

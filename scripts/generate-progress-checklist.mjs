@@ -30,9 +30,12 @@ function validate(status) {
   if (!Number.isInteger(status.current?.phase)) fail("current.phase must be an integer");
   if (!Array.isArray(status.phases) || status.phases.length === 0) fail("phases must be a non-empty array");
 
-  const expectedNumbers = Array.from({ length: 18 }, (_, index) => index);
+  // The tracker is a living roadmap. Require its phase IDs to start at zero
+  // and remain contiguous, but do not freeze validation to an old terminal
+  // phase when a governed roadmap extension is added.
+  const expectedNumbers = Array.from({ length: status.phases.length }, (_, index) => index);
   const actualNumbers = status.phases.map((phase) => phase?.number);
-  if (JSON.stringify(actualNumbers) !== JSON.stringify(expectedNumbers)) fail("phases must list phases 0 through 17 exactly once, in order");
+  if (JSON.stringify(actualNumbers) !== JSON.stringify(expectedNumbers)) fail(`phases must list phases 0 through ${status.phases.length - 1} exactly once, in order`);
   if (!actualNumbers.includes(status.current.phase)) fail("current.phase must exist in phases");
 
   for (const phase of status.phases) {
@@ -150,7 +153,7 @@ function render(status) {
       <div class="metric"><strong>${completedSubphases} / ${currentSubphases.length}</strong><span>current-phase subphases complete</span></div>
     </section>
     <section aria-labelledby="roadmap-title">
-      <p class="eyebrow">Roadmap</p><h2 id="roadmap-title">Phases 0–17</h2>
+      <p class="eyebrow">Roadmap</p><h2 id="roadmap-title">Phases 0–${status.phases.at(-1)?.number ?? 0}</h2>
       <ol class="phases">${status.phases.map(renderPhase).join("")}</ol>
     </section>
     <section aria-labelledby="audit-title">

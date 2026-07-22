@@ -3,6 +3,7 @@ import {
   annotations,
   bibliographicRecords,
   citations,
+  citationLibraryLinks,
   claimEvidence,
   concepts as conceptsTable,
   db,
@@ -28,6 +29,7 @@ import {
   workIdentities,
   learningResources,
   resourceRoles,
+  enqueueCitationMetadataResolution,
 } from "@ice/db";
 import {
   classifyRelationship,
@@ -40,8 +42,9 @@ import {
   type RelationshipCategory,
 } from "@ice/ai-adapters";
 import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
-import { extractCitations, type ExtractedAuthorApparatus, type RawCitation } from "@ice/ingestion";
+import { extractCitationMentions, extractCitations, type CitationSourceInput, type ExtractedAuthorApparatus, type RawCitation } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
+import { createHash } from "node:crypto";
 import {
   allAdapters,
   buildCredibility,
@@ -297,21 +300,45 @@ function targetLabel(candidate: RawCitation, record: ResolvedRecord | null): str
 }
 
 async function findOrCreateBibRecord(record: ResolvedRecord): Promise<string> {
-  // Reuse an existing catalog entry by DOI or external id (plan §9
-  // shared-catalog direction) so re-analysis doesn't duplicate records.
-  if (record.doi) {
+  // Canonical identity has a deliberate, conservative precedence order. Do
+  // not merge Aristotle/Plato works merely because their author matches: the
+  // final fallback requires normalized title + author + year together.
+  const doi = canonicalizeDoi(record.doi);
+  const isbn = canonicalizeIsbn(record.externalId);
+  const canonicalUrl = canonicalizeUrl(record.url);
+  if (doi) {
     const [existing] = await db
       .select({ id: bibliographicRecords.id })
       .from(bibliographicRecords)
-      .where(eq(bibliographicRecords.doi, record.doi))
+      .where(eq(bibliographicRecords.doi, doi))
       .limit(1);
     if (existing) return existing.id;
-  } else if (record.externalId) {
+  }
+  if (isbn ?? record.externalId) {
     const [existing] = await db
       .select({ id: bibliographicRecords.id })
       .from(bibliographicRecords)
-      .where(eq(bibliographicRecords.externalId, record.externalId))
+      .where(eq(bibliographicRecords.externalId, isbn ?? record.externalId!))
       .limit(1);
+    if (existing) return existing.id;
+  }
+  if (canonicalUrl || record.url) {
+    const [existing] = await db.execute(sql`
+      SELECT id FROM bibliographic_record
+      WHERE url = ${canonicalUrl ?? record.url} OR url = ${record.url ?? canonicalUrl}
+      LIMIT 1
+    `) as unknown as { id: string }[];
+    if (existing) return existing.id;
+  }
+  if (record.title.trim() && record.authors?.trim() && record.year != null) {
+    const normalize = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    const [existing] = await db.execute(sql`
+      SELECT id FROM bibliographic_record
+      WHERE regexp_replace(lower(title), '[^a-z0-9]', '', 'g') = ${normalize(record.title)}
+        AND regexp_replace(lower(COALESCE(authors, '')), '[^a-z0-9]', '', 'g') = ${normalize(record.authors)}
+        AND year = ${record.year}
+      LIMIT 1
+    `) as unknown as { id: string }[];
     if (existing) return existing.id;
   }
 
@@ -319,17 +346,229 @@ async function findOrCreateBibRecord(record: ResolvedRecord): Promise<string> {
     .insert(bibliographicRecords)
     .values({
       source: record.source,
-      externalId: record.externalId,
+      externalId: isbn ?? record.externalId,
       title: record.title,
       authors: record.authors,
       year: record.year,
-      doi: record.doi,
-      url: record.url,
+      doi,
+      url: canonicalUrl ?? record.url,
       accessStatus: record.accessStatus,
       raw: record.raw,
     })
     .returning({ id: bibliographicRecords.id });
   return created.id;
+}
+
+function citationIdentityKey(query: string): string {
+  return `citation:${createHash("sha256").update(query.trim().toLocaleLowerCase()).digest("hex")}`;
+}
+
+function citationSourceLabel(sourceType: "bibliography" | "footnote" | "endnote" | "inline"): string {
+  return sourceType === "bibliography" ? "Bibliography" : sourceType === "footnote" ? "Footnote" : sourceType === "endnote" ? "Endnote" : "Direct citation";
+}
+
+function citationRoleRationale(citation: RawCitation): string {
+  const anchor = citation.anchor;
+  const page = anchor?.pageIndex != null ? ` page ${anchor.pageIndex + 1}` : "";
+  const marker = anchor?.marker ? ` note ${anchor.marker}` : "";
+  return `${citationSourceLabel(citation.sourceType ?? "inline")}${page}${marker}: ${citation.text}`.slice(0, 2_000);
+}
+
+async function ensureCitationRole(input: {
+  learningResourceId: string;
+  workIdentityId: string;
+  citation: RawCitation;
+}): Promise<void> {
+  await db
+    .insert(resourceRoles)
+    .values({
+      learningResourceId: input.learningResourceId,
+      workIdentityId: input.workIdentityId,
+      relationship: "explicit_reference",
+      readerLevel: null,
+      rationale: citationRoleRationale(input.citation),
+      confidence: input.citation.parserConfidence ?? 0,
+      createdBy: "system",
+    })
+    .onConflictDoUpdate({
+      target: [resourceRoles.learningResourceId, resourceRoles.workIdentityId, resourceRoles.readerLevel],
+      set: {
+        relationship: "explicit_reference",
+        rationale: citationRoleRationale(input.citation),
+        confidence: input.citation.parserConfidence ?? 0,
+      },
+    });
+}
+
+/**
+ * Citation projection deliberately happens before any catalogue lookup or AI
+ * stage. The exact source citation becomes a visible Library item immediately;
+ * a later resolver may enrich it, but a provider failure can never erase it.
+ */
+export async function createCitationLibraryProjection(input: {
+  citationId: string;
+  citation: RawCitation;
+  workIdentityId: string;
+}): Promise<string> {
+  const normalizedKey = citationIdentityKey(input.citation.query);
+  const [resource] = await db
+    .insert(learningResources)
+    .values({
+      normalizedKey,
+      title: `Needs bibliographic resolution — ${input.citation.text}`.slice(0, 2_000),
+      resourceType: "unresolved-citation",
+      provider: "citation-extraction",
+      authors: [],
+    })
+    .onConflictDoUpdate({
+      target: learningResources.normalizedKey,
+      set: {
+        title: `Needs bibliographic resolution — ${input.citation.text}`.slice(0, 2_000),
+        resourceType: "unresolved-citation",
+        provider: "citation-extraction",
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ id: learningResources.id });
+
+  await ensureCitationRole({ learningResourceId: resource.id, workIdentityId: input.workIdentityId, citation: input.citation });
+  await db
+    .insert(citationLibraryLinks)
+    .values({ citationId: input.citationId, learningResourceId: resource.id })
+    .onConflictDoUpdate({
+      target: citationLibraryLinks.citationId,
+      set: { learningResourceId: resource.id },
+    });
+  return resource.id;
+}
+
+function resolvedCitationLibraryFields(record: ResolvedRecord) {
+  const authors = record.authors
+    ? record.authors.split(/\s*;\s*|\s+and\s+|\s*,\s*/).map((author) => author.trim()).filter(Boolean)
+    : [];
+  return {
+    title: record.title,
+    url: record.url,
+    canonicalUrl: canonicalizeUrl(record.url),
+    doi: canonicalizeDoi(record.doi),
+    isbn: null,
+    resourceType: "bibliographic",
+    provider: record.source,
+    year: record.year,
+    authors,
+    venue: null,
+    peerReviewed: null,
+  };
+}
+
+/**
+ * Worker-queue consumer for metadata resolution. It is intentionally
+ * serialized by the worker queue; this makes external lookup rate-limited and
+ * keeps the immediate citation projection independent from provider health.
+ */
+export async function resolveCitationMetadata(citationId: string): Promise<void> {
+  const [citation] = await db
+    .select({
+      id: citations.id,
+      documentId: citations.documentId,
+      rawText: citations.rawText,
+      normalizedQuery: citations.normalizedQuery,
+      sourceType: citations.sourceType,
+      parserConfidence: citations.parserConfidence,
+      sourceAnchor: citations.sourceAnchor,
+      workId: documents.workId,
+      workIdentityId: works.workIdentityId,
+      userId: documents.userId,
+    })
+    .from(citations)
+    .innerJoin(documents, eq(documents.id, citations.documentId))
+    .innerJoin(works, eq(works.id, documents.workId))
+    .where(eq(citations.id, citationId))
+    .limit(1);
+  if (!citation) return;
+
+  let record: ResolvedRecord | null = null;
+  try {
+    record = await resolveCitation(citation.normalizedQuery);
+  } catch (error) {
+    // Resolution availability is not a prerequisite for Library coverage.
+    reportError(error, { scope: "worker.resolveCitationMetadata", citationId });
+  }
+  if (!record) {
+    await db.update(citations).set({ resolutionState: "unresolved", resolutionSource: "unresolved" }).where(eq(citations.id, citationId));
+    return;
+  }
+
+  const bibId = await findOrCreateBibRecord(record);
+  const [link] = await db
+    .select({ learningResourceId: citationLibraryLinks.learningResourceId })
+    .from(citationLibraryLinks)
+    .where(eq(citationLibraryLinks.citationId, citationId))
+    .limit(1);
+  const citationMention: RawCitation = {
+    text: citation.rawText,
+    query: citation.normalizedQuery,
+    kind: citation.sourceType === "inline" ? "inline" : "reference",
+    sourceType: citation.sourceType,
+    parserConfidence: citation.parserConfidence,
+    anchor: citation.sourceAnchor as RawCitation["anchor"],
+  };
+  const fields = resolvedCitationLibraryFields(record);
+  const canonicalKey = normalizedKey({
+    doi: fields.doi,
+    isbn: fields.isbn,
+    url: fields.url,
+    title: fields.title,
+    authors: fields.authors,
+    year: fields.year,
+  });
+
+  if (link && canonicalKey) {
+    const [existing] = await db
+      .select({ id: learningResources.id })
+      .from(learningResources)
+      .where(eq(learningResources.normalizedKey, canonicalKey))
+      .limit(1);
+    const targetId = existing?.id ?? link.learningResourceId;
+    if (citation.workIdentityId) await ensureCitationRole({ learningResourceId: targetId, workIdentityId: citation.workIdentityId, citation: citationMention });
+    if (existing && existing.id !== link.learningResourceId) {
+      // Merge every provenance link before removing the temporary stub. This
+      // makes DOI/ISBN/URL/title identity canonical without duplicate rows.
+      await db.update(citationLibraryLinks).set({ learningResourceId: existing.id }).where(eq(citationLibraryLinks.learningResourceId, link.learningResourceId));
+      await db.delete(resourceRoles).where(eq(resourceRoles.learningResourceId, link.learningResourceId));
+      await db.delete(learningResources).where(eq(learningResources.id, link.learningResourceId));
+    } else {
+      await db.update(learningResources).set({ ...fields, normalizedKey: canonicalKey, bibRecordId: bibId, updatedAt: new Date() }).where(eq(learningResources.id, link.learningResourceId));
+    }
+  }
+
+  await db.update(citations).set({ resolvedBibId: bibId, resolutionSource: record.source, resolutionState: "resolved" }).where(eq(citations.id, citationId));
+  const [existingEdge] = await db
+    .select({ id: graphEdges.id })
+    .from(graphEdges)
+    .where(and(
+      eq(graphEdges.userId, citation.userId),
+      eq(graphEdges.sourceType, "work"),
+      eq(graphEdges.sourceId, citation.workId),
+      eq(graphEdges.targetType, "bibliographic_record"),
+      eq(graphEdges.targetId, bibId),
+      eq(graphEdges.edgeType, "cites"),
+    ))
+    .limit(1);
+  if (!existingEdge) {
+    await db.insert(graphEdges).values({
+      userId: citation.userId,
+      sourceType: "work",
+      sourceId: citation.workId,
+      targetType: "bibliographic_record",
+      targetId: bibId,
+      edgeType: "cites",
+      weight: 1,
+      confidence: citation.parserConfidence,
+      evidence: { citationId, sourceType: citation.sourceType, anchor: citation.sourceAnchor },
+      createdBy: "system",
+    });
+  }
 }
 
 export async function analyzeWork(documentId: string): Promise<void> {
@@ -413,8 +652,12 @@ export async function analyzeWork(documentId: string): Promise<void> {
       await db.insert(citations).values({
         documentId,
         rawText: candidate.text,
+        normalizedQuery: candidate.query,
+        sourceType: candidate.kind === "inline" ? "inline" : "bibliography",
+        parserConfidence: candidate.kind === "inline" ? 0.74 : 0.8,
         resolvedBibId: bibId,
         resolutionSource: record?.source ?? "unresolved",
+        resolutionState: record ? "resolved" : "unresolved",
       });
 
       // --- Anchoring (text docs only) ---
@@ -638,14 +881,17 @@ export async function analyzeEditionRun(input: {
       : [];
   const resolvedAuthorName = resolvedAuthors.join(", ") || null;
 
-  // Plan §34.4 9.5, v3 only: give the PRIMARY work its own canonical identity
+  // Give the PRIMARY work its own canonical identity before citation
+  // projection. Citation Library coverage must not wait for discovery or AI
+  // classification, so this identity is established at the start of every
+  // edition pipeline that can persist structural citations.
   // — the same `deriveWorkIdentity` computation already applied to every
   // cited resource (migration 0014) — so the Library can later join "what
   // was recommended for MY works" via `works.workIdentityId` instead of
   // re-deriving/matching workKey strings in application code. Lazy and
   // idempotent: only set once, harmless to repeat on reprocess.
   let primaryWorkIdentityId: string | null = null;
-  if (isModernPipeline) {
+  if (input.pipeline !== "v1") {
     const primaryIdentity = deriveWorkIdentity({
       title: resolvedTitle,
       authors: resolvedAuthors,
@@ -810,8 +1056,69 @@ export async function analyzeEditionRun(input: {
 
   await setStage("research-discovery", "explicit-citations", "explicit-citations");
 
-  // Stage 1 (cheap, deterministic): candidate citations seed the query set.
-  const citationCandidates = extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
+  // Stage 1 (cheap, deterministic): source-aware citation mentions seed the
+  // query set. Apparatus stays out of processed body text, but it is a
+  // first-class extraction input with its own anchor and provenance.
+  const structuralCitationSources: CitationSourceInput[] = [
+    ...(input.bodyBlocks ?? []).map((block) => ({
+      sourceType: "inline" as const,
+      text: block.text,
+      textBlockId: block.id,
+      pageIndex: block.pageIndex ?? null,
+      blockOrder: block.blockOrder ?? null,
+      parserConfidence: 0.82,
+    })),
+    ...(input.apparatus ?? []).flatMap((entry): CitationSourceInput[] => {
+      const sourceType = entry.kind === "bibliography_entry"
+        ? "bibliography"
+        : entry.kind === "footnote"
+          ? "footnote"
+          : entry.kind === "endnote"
+            ? "endnote"
+            : null;
+      if (!sourceType) return [];
+      const scope = entry.scope as { pageIndex?: number; blockOrder?: number };
+      return [{
+        sourceType,
+        text: entry.text,
+        textBlockId: entry.textBlockId,
+        pageIndex: scope.pageIndex ?? null,
+        blockOrder: scope.blockOrder ?? null,
+        marker: entry.marker,
+        parserConfidence: entry.source === "structure" ? 0.98 : 0.65,
+      }];
+    }),
+  ];
+  const citationCandidates = structuralCitationSources.length
+    ? extractCitationMentions(structuralCitationSources, RESEARCH_LIMITS.maxCitationCandidates)
+    : extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);
+
+  if (primaryWorkIdentityId) {
+    for (const citation of citationCandidates) {
+      const [persisted] = await db
+        .insert(citations)
+        .values({
+          documentId: input.documentId,
+          processingRunId: input.runId,
+          textBlockId: citation.anchor?.textBlockId ?? null,
+          rawText: citation.text,
+          normalizedQuery: citation.query,
+          sourceType: citation.sourceType ?? (citation.kind === "inline" ? "inline" : "bibliography"),
+          parserConfidence: citation.parserConfidence ?? 0,
+          sourceAnchor: citation.anchor ?? null,
+          resolutionSource: "unresolved",
+          resolutionState: "pending",
+        })
+        .returning({ id: citations.id });
+      await createCitationLibraryProjection({ citationId: persisted.id, citation, workIdentityId: primaryWorkIdentityId });
+      try {
+        await enqueueCitationMetadataResolution(persisted.id);
+      } catch (error) {
+        // Queue availability cannot turn a durable citation into an omission.
+        reportError(error, { scope: "worker.enqueueCitationMetadata", citationId: persisted.id });
+      }
+    }
+  }
   // Two different consumers, two different shapes:
   //  - `citationTexts` keeps the VERBATIM entry, which the relevance gate
   //    matches a discovered title against for containment.

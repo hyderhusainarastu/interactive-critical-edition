@@ -14,6 +14,8 @@ export interface GraphNode {
   authority?: string | null;
   credibilityScore?: number | null;
   provider?: string | null;
+  /** All provider records collapsed into this canonical external-work node. */
+  providers?: string[];
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
   kind?: string | null;
@@ -23,6 +25,10 @@ export interface GraphNode {
   license?: string | null;
   sourceUrl?: string | null;
   provenance?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number } | null;
+  /** Provenance is plural once multiple runs/providers describe one work. */
+  provenances?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number }[];
+  /** D/E public material is useful context, never stand-alone factual support. */
+  supplementary?: boolean;
 }
 
 export interface GraphLink {
@@ -34,6 +40,8 @@ export interface GraphLink {
   explanation?: string | null;
   evidence?: unknown;
   provenance?: { relationId: string; runId: string; depth: number } | null;
+  evidences?: unknown[];
+  provenances?: { relationId: string; runId: string; depth: number }[];
 }
 
 export interface GraphData {
@@ -202,7 +210,7 @@ export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWo
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
       (filters.authority === "all" || n.authority === filters.authority) &&
-      (filters.provider === "all" || n.provider === filters.provider) &&
+      (filters.provider === "all" || n.provider === filters.provider || n.providers?.includes(filters.provider)) &&
       (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation)) &&
       (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand) &&
       (!associatedIds || associatedIds.has(n.id))),

@@ -13,6 +13,8 @@ export const QUEUE_EXTRACT_TEXT = "extract-text";
 // extraction so a slow/failed analysis never blocks the reader from
 // opening a document whose text already extracted fine.
 export const QUEUE_ANALYZE_WORK = "analyze-work";
+/** Metadata resolution is intentionally decoupled from citation-to-Library projection. */
+export const QUEUE_RESOLVE_CITATION_METADATA = "resolve-citation-metadata";
 /** Paid, source-grounded cross-work judgements (Phase 12.5). */
 export const QUEUE_EXPAND_CROSS_LIBRARY_GRAPH = "expand-cross-library-graph";
 
@@ -22,6 +24,10 @@ export interface ExtractTextJob {
 
 export interface AnalyzeWorkJob {
   documentId: string;
+}
+
+export interface ResolveCitationMetadataJob {
+  citationId: string;
 }
 
 export interface ExpandCrossLibraryGraphJob {
@@ -45,6 +51,7 @@ export function getQueue(): Promise<PgBoss> {
       .start()
       .then(() => boss.createQueue(QUEUE_EXTRACT_TEXT))
       .then(() => boss.createQueue(QUEUE_ANALYZE_WORK))
+      .then(() => boss.createQueue(QUEUE_RESOLVE_CITATION_METADATA))
       .then(() => boss.createQueue(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH))
       .then(() => boss);
   }
@@ -74,6 +81,20 @@ export async function enqueueExtractText(documentId: string) {
 export async function enqueueAnalyzeWork(documentId: string) {
   const boss = await getQueue();
   return boss.send(QUEUE_ANALYZE_WORK, { documentId } satisfies AnalyzeWorkJob);
+}
+
+/**
+ * One citation per job keeps resolver traffic rate-limited by the single
+ * worker consumer and lets a metadata outage leave the durable Library stub
+ * intact rather than failing the whole edition run.
+ */
+export async function enqueueCitationMetadataResolution(citationId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_RESOLVE_CITATION_METADATA,
+    { citationId } satisfies ResolveCitationMetadataJob,
+    { retryLimit: 1, retryDelay: 15 },
+  );
 }
 
 /** Idempotency lives in `graph_expansion_request`; this queue payload is its immutable ID. */

@@ -58,6 +58,8 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<GraphNode | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [resetSignal, setResetSignal] = useState(0);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -65,6 +67,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const [filters, setFilters] = useState<GraphFilters>(() => filtersFromParams(searchParams));
   const [pinnedWorkIds, setPinnedWorkIds] = useState<string[]>(() => searchParams.getAll(PINNED_WORK_PARAM).filter((id) => id.startsWith("work:")));
   const graphWorkspaceRef = useRef<HTMLDivElement>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -104,22 +107,30 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     setSelectedLink(null);
   }, []);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      const active = document.fullscreenElement === graphWorkspaceRef.current;
+      setIsFullscreen(active);
+      if (!active) window.setTimeout(() => fullscreenButtonRef.current?.focus(), 0);
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   const togglePinnedWork = useCallback((workId: string, checked: boolean) => {
-    setPinnedWorkIds((current) => {
-      const next = checked ? [...new Set([...current, workId])] : current.filter((id) => id !== workId);
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete(PINNED_WORK_PARAM);
-      for (const id of next) params.append(PINNED_WORK_PARAM, id);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-      return next;
-    });
-  }, [pathname, router, searchParams]);
+    const next = checked ? [...new Set([...pinnedWorkIds, workId])] : pinnedWorkIds.filter((id) => id !== workId);
+    setPinnedWorkIds(next);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(PINNED_WORK_PARAM);
+    for (const id of next) params.append(PINNED_WORK_PARAM, id);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [pathname, pinnedWorkIds, router, searchParams]);
 
   function toggleFullscreen() {
     const target = graphWorkspaceRef.current;
     if (!target) return;
-    if (document.fullscreenElement) void document.exitFullscreen();
+    if (document.fullscreenElement === target) void document.exitFullscreen();
     else void target.requestFullscreen();
   }
 
@@ -142,7 +153,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     [data],
   );
   const providers = useMemo(
-    () => (data ? [...new Set(data.nodes.map((n) => n.provider).filter(Boolean) as string[])].sort() : []),
+    () => (data ? [...new Set(data.nodes.flatMap((n) => n.providers?.length ? n.providers : n.provider ? [n.provider] : []))].sort() : []),
     [data],
   );
   const types = useMemo(() => (data ? [...new Set(data.nodes.map((n) => n.type))] : []), [data]);
@@ -151,6 +162,17 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     () => (data ? [...new Set(data.nodes.map((n) => credibilityBandFor(n.credibilityScore)))].sort() : []),
     [data],
   );
+  const directConnections = useMemo(() => {
+    if (!filtered || !selected) return [] as { node: GraphNode; link: GraphLink }[];
+    const nodesById = new Map(filtered.nodes.map((node) => [node.id, node]));
+    return filtered.links.flatMap((link) => {
+      const source = typeof link.source === "string" ? link.source : (link.source as { id: string }).id;
+      const target = typeof link.target === "string" ? link.target : (link.target as { id: string }).id;
+      const otherId = source === selected.id ? target : target === selected.id ? source : null;
+      const node = otherId ? nodesById.get(otherId) : null;
+      return node ? [{ node, link }] : [];
+    });
+  }, [filtered, selected]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -360,20 +382,33 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           {filtered.nodes.length === 0 ? (
             <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
           ) : (
-            <div ref={graphWorkspaceRef} className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.9fr)]">
-              <section className="order-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:order-1" aria-label="3D relationship graph">
-                <div className="mb-2 flex justify-end gap-2 text-xs">
-                  <button type="button" onClick={toggleFullscreen} className="rounded border border-[var(--color-border)] px-2 py-1">Fullscreen</button>
-                  <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
+            <div className="space-y-4">
+              <section
+                ref={graphWorkspaceRef}
+                className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
+                aria-label="3D relationship graph"
+                data-graph-stage
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <p className="text-[var(--color-text-muted)]">Select a labeled node to focus it; drag to orbit and scroll to zoom.</p>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setResetSignal((value) => value + 1)} className="rounded border border-[var(--color-border)] px-2 py-1">Reset view</button>
+                    <button ref={fullscreenButtonRef} type="button" onClick={toggleFullscreen} aria-pressed={isFullscreen} className="rounded border border-[var(--color-border)] px-2 py-1">{isFullscreen ? "Exit fullscreen" : "Fullscreen"}</button>
+                    <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
+                  </div>
                 </div>
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_17rem]">
-                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} />
-                  <GraphInspector selected={selected} selectedLink={selectedLink} onCloseNode={() => setSelected(null)} onCloseLink={() => setSelectedLink(null)} />
+                <div className={`${isFullscreen ? "grid h-[calc(100vh-4.5rem)] min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]"}`}>
+                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} resetSignal={resetSignal} isFullscreen={isFullscreen} />
+                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={() => setSelected(null)} onCloseLink={() => setSelectedLink(null)} />
                 </div>
               </section>
-              <section className="order-1 overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 lg:order-2" aria-label="Accessible relationship table">
-                <GraphAccessibleFallback data={filtered} selectedNodeId={selected?.id} onNodeClick={onNodeClick} />
-              </section>
+              <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible relationship browser">
+                <summary className="cursor-pointer text-sm font-medium">Accessible node browser</summary>
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace.</p>
+                <div className="mt-2 overflow-x-auto">
+                  <GraphAccessibleFallback data={filtered} selectedNodeId={selected?.id} onNodeClick={onNodeClick} />
+                </div>
+              </details>
             </div>
           )}
         </>
@@ -395,11 +430,15 @@ function EvidenceAnchors({ evidence }: { evidence: unknown }) {
 function GraphInspector({
   selected,
   selectedLink,
+  connections,
+  onSelectNode,
   onCloseNode,
   onCloseLink,
 }: {
   selected: GraphNode | null;
   selectedLink: GraphLink | null;
+  connections: { node: GraphNode; link: GraphLink }[];
+  onSelectNode: (node: GraphNode) => void;
   onCloseNode: () => void;
   onCloseLink: () => void;
 }) {
@@ -419,6 +458,8 @@ function GraphInspector({
             {TYPE_LABEL[selected.type]} · {STATE_META[selected.state].label}{selected.year ? ` · ${selected.year}` : ""}
           </p>
           {selected.authority && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Authority {selected.authority}{selected.credibilityScore != null ? ` · credibility ${Math.round(selected.credibilityScore * 100)}%` : ""}</p>}
+          {selected.supplementary && <p className="mt-2 rounded border border-[var(--color-credibility-warning)] px-2 py-1 text-xs text-[var(--color-text-muted)]">Supplementary public material — useful context, not stand-alone factual support.</p>}
+          {(selected.providers?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Providers: {selected.providers!.join(", ")}</p>}
           {selected.sourceTextStatus && (
             <div className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs">
               <p className="font-medium text-[var(--color-text)]">Source access</p>
@@ -427,8 +468,12 @@ function GraphInspector({
               {selected.sourceUrl && <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block underline">open licensed source ↗</a>}
             </div>
           )}
-          {selected.provenance && <div className="mt-3 text-xs text-[var(--color-text-muted)]"><p className="font-medium text-[var(--color-text)]">Provenance</p><p className="mt-1">{selected.provenance.provider} · inspection depth {selected.provenance.inspectionDepth}{selected.provenance.inspectedAt ? ` · ${new Date(selected.provenance.inspectedAt).toLocaleDateString()}` : ""}</p></div>}
+          {(selected.provenances?.length ?? 0) > 0 && <div className="mt-3 text-xs text-[var(--color-text-muted)]"><p className="font-medium text-[var(--color-text)]">Provenance</p><ul className="mt-1 space-y-1">{selected.provenances!.map((provenance) => <li key={`${provenance.runId}:${provenance.provider}`}>{provenance.provider} · inspection depth {provenance.inspectionDepth}{provenance.inspectedAt ? ` · ${new Date(provenance.inspectedAt).toLocaleDateString()}` : ""}</li>)}</ul></div>}
           {selected.url && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">open source record ↗</a>}
+          <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+            <p className="text-xs font-medium text-[var(--color-text)]">Direct connections</p>
+            {connections.length === 0 ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">No visible direct connections under the current filters.</p> : <ul className="mt-2 space-y-1.5">{connections.map(({ node, link }) => <li key={`${node.id}:${link.edgeType}`}><button type="button" onClick={() => onSelectNode(node)} className="text-left text-xs underline underline-offset-2"><span className="font-medium">{node.label}</span> · {link.edgeType.replace(/_/g, " ")}</button></li>)}</ul>}
+          </div>
         </div>
       )}
       {selectedLink && (
@@ -440,6 +485,7 @@ function GraphInspector({
           <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
           <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}%{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}</p>
           {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
+          {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
         </div>
       )}
     </aside>

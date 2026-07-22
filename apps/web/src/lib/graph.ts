@@ -56,6 +56,7 @@ export interface GraphNode {
   authority: string | null;
   credibilityScore: number | null;
   provider: string | null;
+  providers?: string[];
   /** `concept_kind` (concept/doctrine/person/tradition/debate) for concept
    *  nodes; null for every other node type. */
   kind: string | null;
@@ -65,6 +66,8 @@ export interface GraphNode {
   license?: string | null;
   sourceUrl?: string | null;
   provenance?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number } | null;
+  provenances?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number }[];
+  supplementary?: boolean;
 }
 
 export interface GraphLink {
@@ -77,6 +80,8 @@ export interface GraphLink {
   explanation?: string | null;
   evidence?: unknown;
   provenance?: { relationId: string; runId: string; depth: number } | null;
+  evidences?: unknown[];
+  provenances?: { relationId: string; runId: string; depth: number }[];
 }
 
 export interface GraphData {
@@ -121,6 +126,7 @@ interface SourceRow {
   run_id: string;
   work_id: string;
   bib_record_id: string | null;
+  normalized_key: string | null;
   title: string;
   authors: unknown;
   year: number | null;
@@ -262,7 +268,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // The LATERAL join deliberately picks one provenance record per source so
   // a source node is never duplicated by its audit trail.
   const sourceRows = (await db.execute(sql`
-    SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.title, rr.authors,
+    SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.normalized_key, rr.title, rr.authors,
       rr.year, rr.url, rr.resource_type, rr.provider, rr.access_status,
       ca.authority, ca.score, ca.peer_reviewed,
       rrc.status AS content_status, rrc.license, rrc.source_url,
@@ -314,96 +320,87 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         `)) as unknown as SectionRow[])
       : [];
 
-  const nodes: GraphNode[] = works.map((w) => ({
-    id: `work:${w.id}`,
-    label: w.title,
-    type: "work",
-    state: "primary",
-    authors: null,
-    year: null,
-    url: null,
-    authority: null,
-    credibilityScore: null,
-    provider: null,
-    kind: null,
-  }));
+  // `bibliographic_record` is a canonical work. A research result is an
+  // observation of that work (possibly from several providers/runs), not a
+  // second node. Keep a separate identity for genuinely distinct public
+  // objects such as an individual video or social post.
+  const nodeById = new Map<string, GraphNode>();
+  const addNode = (node: GraphNode) => nodeById.set(node.id, node);
+  for (const w of works) addNode({
+    id: `work:${w.id}`, label: w.title, type: "work", state: "primary",
+    authors: null, year: null, url: null, authority: null, credibilityScore: null, provider: null, kind: null,
+  });
 
-  let missing = 0;
-  let read = 0;
-  for (const r of refs) {
-    const status = statusByBib.get(r.id);
-    const score = scoreByBib.get(r.id) ?? 0;
-    let state: NodeState;
-    if (status === "completed" || score >= KNOWN_THRESHOLD) {
-      state = "read";
-      read++;
-    } else if (status === "reading") {
-      state = "reading";
-    } else if (!r.in_library) {
-      state = "missing";
-      missing++;
-    } else {
-      state = "unread";
-    }
-    const enrich = enrichByBib.get(r.id);
-    nodes.push({
-      id: `bib:${r.id}`,
-      label: r.title,
-      type: "reference",
-      state,
-      authors: r.authors,
-      year: r.year,
-      url: r.url,
-      authority: enrich?.authority ?? null,
-      credibilityScore: enrich?.credibilityScore ?? null,
-      provider: enrich?.provider ?? null,
-      kind: null,
-    });
-  }
-
-  for (const c of conceptRows) {
-    const score = masteryByConcept.get(c.id) ?? 0;
-    const state: NodeState = score >= KNOWN_THRESHOLD ? "read" : "unread";
-    if (state === "read") read++;
-    nodes.push({
-      id: `concept:${c.id}`,
-      label: c.label,
-      type: c.kind === "person" ? "person" : "concept",
-      state,
-      authors: null,
-      year: null,
-      url: null,
-      authority: null,
-      credibilityScore: null,
-      provider: null,
-      kind: c.kind,
-    });
-  }
-
-  for (const s of sectionRows) {
-    nodes.push({
-      id: `section:${s.id}`,
-      // text_block.text for a title/header is the heading text itself —
-      // truncate defensively in case a heading-kind block is unusually long.
-      label: s.text.length > 120 ? `${s.text.slice(0, 117)}...` : s.text,
-      type: "section",
-      state: "structural",
-      authors: null,
-      year: null,
-      url: null,
-      authority: null,
-      credibilityScore: null,
-      provider: null,
-      kind: s.kind,
-    });
-  }
-
+  const authorityRank = (authority: string | null | undefined) => AUTH_ORDER[authority ?? "E"] ?? 4;
   const sourceTypeFor = (source: SourceRow): NodeType => {
     if (source.peer_reviewed) return "peer_reviewed_source";
     if (["webpage", "video", "social_post", "dataset"].includes(source.resource_type)) return "online_source";
     return "reference";
   };
+  const canonicalExternalId = (source: SourceRow) => source.bib_record_id
+    ? `external:bib:${source.bib_record_id}`
+    : `external:source:${source.normalized_key ?? source.id}`;
+  const sourceNodeIds = new Map<string, string>();
+  const publicOnlyByNode = new Map<string, boolean>();
+  const providerIsPublic = (provider: string) => ["youtube", "mastodon", "bluesky"].includes(provider.toLocaleLowerCase());
+
+  const mergeExternal = (id: string, incoming: GraphNode, isPublic: boolean) => {
+    const current = nodeById.get(id);
+    if (!current) {
+      addNode({ ...incoming, providers: incoming.provider ? [incoming.provider] : [], provenances: incoming.provenance ? [incoming.provenance] : [] });
+      publicOnlyByNode.set(id, isPublic);
+      return;
+    }
+    const providers = [...new Set([...(current.providers ?? (current.provider ? [current.provider] : [])), ...(incoming.provider ? [incoming.provider] : [])])];
+    const provenances = [...(current.provenances ?? (current.provenance ? [current.provenance] : [])), ...(incoming.provenance ? [incoming.provenance] : [])]
+      .filter((value, index, values) => values.findIndex((other) => `${other.runId}:${other.provider}:${other.inspectionDepth}` === `${value.runId}:${value.provider}:${value.inspectionDepth}`) === index);
+    const incomingBetter = authorityRank(incoming.authority) < authorityRank(current.authority);
+    nodeById.set(id, {
+      ...current,
+      ...(incomingBetter ? {
+        authority: incoming.authority,
+        credibilityScore: incoming.credibilityScore,
+        provider: incoming.provider,
+      } : {}),
+      // A canonical bibliography row is a work-level label; only use the
+      // source type when no canonical bibliography node has supplied one.
+      type: current.type === "reference" ? current.type : incoming.type,
+      url: current.url ?? incoming.url,
+      authors: current.authors ?? incoming.authors,
+      year: current.year ?? incoming.year,
+      accessStatus: current.accessStatus ?? incoming.accessStatus,
+      sourceTextStatus: current.sourceTextStatus ?? incoming.sourceTextStatus,
+      license: current.license ?? incoming.license,
+      sourceUrl: current.sourceUrl ?? incoming.sourceUrl,
+      providers,
+      provenances,
+      provenance: provenances[0] ?? null,
+    });
+    publicOnlyByNode.set(id, (publicOnlyByNode.get(id) ?? false) && isPublic);
+  };
+
+  for (const r of refs) {
+    const status = statusByBib.get(r.id);
+    const score = scoreByBib.get(r.id) ?? 0;
+    const state: NodeState = status === "completed" || score >= KNOWN_THRESHOLD
+      ? "read"
+      : status === "reading"
+        ? "reading"
+        : !r.in_library
+          ? "missing"
+          : "unread";
+    const enrich = enrichByBib.get(r.id);
+    mergeExternal(`external:bib:${r.id}`, {
+      id: `external:bib:${r.id}`, label: r.title, type: "reference", state,
+      authors: r.authors, year: r.year, url: r.url,
+      authority: enrich?.authority ?? null, credibilityScore: enrich?.credibilityScore ?? null,
+      provider: enrich?.provider ?? null, kind: null,
+    }, false);
+  }
+
   for (const source of sourceRows) {
+    const id = canonicalExternalId(source);
+    sourceNodeIds.set(source.id, id);
     const sourceBibStatus = source.bib_record_id ? statusByBib.get(source.bib_record_id) : undefined;
     const sourceBibScore = source.bib_record_id ? scoreByBib.get(source.bib_record_id) ?? 0 : 0;
     const state: NodeState = sourceBibStatus === "completed" || sourceBibScore >= KNOWN_THRESHOLD
@@ -411,31 +408,37 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       : sourceBibStatus === "reading"
         ? "reading"
         : "unread";
-    if (state === "read") read++;
-    nodes.push({
-      id: `source:${source.id}`,
-      label: source.title,
-      type: sourceTypeFor(source),
-      state,
-      authors: displayAuthors(source.authors),
-      year: source.year,
-      url: source.url,
-      authority: source.authority,
-      credibilityScore: source.score,
-      provider: source.provider,
-      kind: source.resource_type,
-      accessStatus: source.access_status,
-      sourceTextStatus: source.content_status ?? "metadata_only",
-      license: source.license,
-      sourceUrl: source.source_url,
+    mergeExternal(id, {
+      id, label: source.title, type: sourceTypeFor(source), state,
+      authors: displayAuthors(source.authors), year: source.year, url: source.url,
+      authority: source.authority, credibilityScore: source.score, provider: source.provider,
+      kind: source.resource_type, accessStatus: source.access_status,
+      sourceTextStatus: source.content_status ?? "metadata_only", license: source.license, sourceUrl: source.source_url,
       provenance: {
-        runId: source.run_id,
-        provider: source.provenance_provider ?? source.provider,
+        runId: source.run_id, provider: source.provenance_provider ?? source.provider,
         inspectedAt: source.inspected_at ? new Date(source.inspected_at).toISOString() : null,
         inspectionDepth: source.provenance_depth ?? 0,
       },
+    }, providerIsPublic(source.provider));
+  }
+  for (const [id, publicOnly] of publicOnlyByNode) {
+    const node = nodeById.get(id);
+    if (node) node.supplementary = publicOnly && ["D", "E"].includes(node.authority ?? "");
+  }
+
+  for (const c of conceptRows) {
+    const score = masteryByConcept.get(c.id) ?? 0;
+    addNode({
+      id: `concept:${c.id}`, label: c.label, type: c.kind === "person" ? "person" : "concept",
+      state: score >= KNOWN_THRESHOLD ? "read" : "unread", authors: null, year: null, url: null,
+      authority: null, credibilityScore: null, provider: null, kind: c.kind,
     });
   }
+  for (const s of sectionRows) addNode({
+    id: `section:${s.id}`, label: s.text.length > 120 ? `${s.text.slice(0, 117)}...` : s.text,
+    type: "section", state: "structural", authors: null, year: null, url: null,
+    authority: null, credibilityScore: null, provider: null, kind: s.kind,
+  });
 
   const directRelationBySource = new Map<string, ResourceRelationRow>();
   for (const relation of resourceRelations) {
@@ -447,7 +450,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   const links: GraphLink[] = [
     ...edges.map((e) => ({
       source: `work:${e.source_id}`,
-      target: `bib:${e.target_id}`,
+      target: `external:bib:${e.target_id}`,
       edgeType: e.edge_type,
       category: e.category,
       confidence: e.confidence,
@@ -474,7 +477,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       const relation = directRelationBySource.get(source.id);
       return {
         source: `work:${source.work_id}`,
-        target: `source:${source.id}`,
+        target: sourceNodeIds.get(source.id)!,
         edgeType: relation?.relation_type ?? "discovered_source",
         category: relation?.relation_type ?? null,
         confidence: relation?.confidence ?? 0,
@@ -485,8 +488,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     ...resourceRelations
       .filter((relation) => relation.resource_id && relation.related_resource_id && sourceIds.has(relation.resource_id) && sourceIds.has(relation.related_resource_id))
       .map((relation) => ({
-        source: `source:${relation.resource_id!}`,
-        target: `source:${relation.related_resource_id!}`,
+        source: sourceNodeIds.get(relation.resource_id!)!,
+        target: sourceNodeIds.get(relation.related_resource_id!)!,
         edgeType: relation.relation_type,
         category: "source_provenance",
         confidence: relation.confidence,
@@ -534,17 +537,52 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     })));
   }
 
+  // Logical duplicate links arise when a citation, a discovery run, and a
+  // provider relation all describe the same relationship. Retain their
+  // evidence/provenance in one edge rather than rendering parallel lines.
+  const linkByIdentity = new Map<string, GraphLink>();
+  for (const link of links) {
+    if (link.source === link.target) continue;
+    const key = `${link.source}\u0000${link.target}\u0000${link.edgeType}`;
+    const prior = linkByIdentity.get(key);
+    if (!prior) {
+      linkByIdentity.set(key, {
+        ...link,
+        evidences: link.evidence ? [link.evidence] : [],
+        provenances: link.provenance ? [link.provenance] : [],
+      });
+      continue;
+    }
+    const evidences = [...(prior.evidences ?? []), ...(link.evidence ? [link.evidence] : [])];
+    const provenances = [...(prior.provenances ?? []), ...(link.provenance ? [link.provenance] : [])]
+      .filter((value, index, values) => values.findIndex((other) => other.relationId === value.relationId) === index);
+    linkByIdentity.set(key, {
+      ...prior,
+      confidence: Math.max(prior.confidence, link.confidence),
+      evidence: prior.evidence ?? link.evidence,
+      provenance: prior.provenance ?? link.provenance,
+      evidences,
+      provenances,
+    });
+  }
+  const deduplicatedLinks = [...linkByIdentity.values()];
+  const connectedIds = new Set(deduplicatedLinks.flatMap((link) => [link.source, link.target]));
+  const visualNodes = [...nodeById.values()].filter((node) => connectedIds.has(node.id));
+  const visualIds = new Set(visualNodes.map((node) => node.id));
+  const visualLinks = deduplicatedLinks.filter((link) => visualIds.has(link.source) && visualIds.has(link.target));
+  const count = (predicate: (node: GraphNode) => boolean) => visualNodes.filter(predicate).length;
+
   return {
-    nodes,
-    links,
+    nodes: visualNodes,
+    links: visualLinks,
     stats: {
-      works: works.length,
-      references: refs.length,
-      sources: sourceRows.length,
-      concepts: conceptRows.filter((concept) => concept.kind !== "person").length,
-      people: conceptRows.filter((concept) => concept.kind === "person").length,
-      missing,
-      read,
+      works: count((node) => node.type === "work"),
+      references: count((node) => node.type === "reference"),
+      sources: count((node) => node.type === "peer_reviewed_source" || node.type === "online_source"),
+      concepts: count((node) => node.type === "concept"),
+      people: count((node) => node.type === "person"),
+      missing: count((node) => node.state === "missing"),
+      read: count((node) => node.state === "read"),
     },
   };
 }

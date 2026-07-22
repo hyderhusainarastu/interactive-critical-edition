@@ -451,8 +451,8 @@ export async function seedWorkWithConcepts(
  */
 export async function seedWorkWithGraphData(
   userId: string,
-  options: { title?: string; withRelatedSource?: boolean } = {},
-): Promise<{ workId: string; documentId: string; bibId: string; resourceId: string; relatedResourceId?: string; conceptId: string; sectionBlockId: string }> {
+  options: { title?: string; withRelatedSource?: boolean; withPublicSources?: boolean; conceptId?: string } = {},
+): Promise<{ workId: string; documentId: string; bibId: string; resourceId: string; relatedResourceId?: string; publicResourceIds: string[]; conceptId: string; sectionBlockId: string }> {
   const suffix = crypto.randomUUID().slice(0, 8);
   const workTitle = options.title ?? "On the Soul";
   const [work] = await db
@@ -586,10 +586,34 @@ export async function seedWorkWithGraphData(
       confidence: 1,
     });
   }
-  const [concept] = await db
-    .insert(concepts)
-    .values({ slug: `hylomorphism-${suffix}`, kind: "doctrine", label: "Hylomorphism", summary: "Matter and form as co-constituents of a substance." })
-    .returning({ id: concepts.id });
+  const publicResourceIds: string[] = [];
+  if (options.withPublicSources) {
+    for (const [provider, title, resourceType, authority] of [
+      ["youtube", "A relevant lecture on Aristotle", "video", "D"],
+      ["mastodon", "A relevant Mastodon discussion", "social_post", "E"],
+      ["bluesky", "A relevant Bluesky discussion", "social_post", "E"],
+    ] as const) {
+      const [publicSource] = await db.insert(researchResources).values({
+        runId: run.id,
+        title,
+        url: `https://example.test/${provider}/${suffix}`,
+        provider,
+        resourceType,
+        accessStatus: "metadata_only",
+        normalizedKey: `seeded-${provider}-${suffix}`,
+      }).returning({ id: researchResources.id });
+      publicResourceIds.push(publicSource.id);
+      await db.insert(credibilityAssessments).values({ resourceId: publicSource.id, score: authority === "D" ? 0.25 : 0.1, authority, peerReviewed: false });
+      await db.insert(resourceProvenance).values({ resourceId: publicSource.id, provider, query: "On the Soul relevant discussion", inspectionDepth: 0, inspectedAt: new Date("2026-07-21T12:02:00.000Z") });
+      await db.insert(editionRelations).values({ runId: run.id, resourceId: publicSource.id, relationType: "supplementary_context", depth: 0, importance: 0.2, evidence: { provider, supplementary: true }, confidence: 0.5 });
+    }
+  }
+  const concept = options.conceptId
+    ? { id: options.conceptId }
+    : (await db
+        .insert(concepts)
+        .values({ slug: `hylomorphism-${suffix}`, kind: "doctrine", label: "Hylomorphism", summary: "Matter and form as co-constituents of a substance." })
+        .returning({ id: concepts.id }))[0]!;
 
   await db.insert(graphEdges).values([
     {
@@ -602,7 +626,7 @@ export async function seedWorkWithGraphData(
     },
   ]);
 
-  return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, conceptId: concept.id, sectionBlockId: sectionBlock.id };
+  return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, publicResourceIds, conceptId: concept.id, sectionBlockId: sectionBlock.id };
 }
 
 /**

@@ -452,6 +452,19 @@ function LibraryRow({
             </div>
           )}
 
+          {item.citationProvenance.length > 0 && (
+            <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Citation provenance for ${item.title}`}>
+              <p className="font-medium text-[var(--color-text)]">Cited in this upload</p>
+              <ul className="mt-1 list-disc pl-4">
+                {item.citationProvenance.map((provenance) => (
+                  <li key={`${provenance.source}:${provenance.location}:${provenance.resolutionState}`}>
+                    {provenance.source} · {provenance.location} · {provenance.resolutionState === "resolved" ? "Resolved" : provenance.resolutionState === "pending" ? "Resolving bibliographic metadata" : "Needs bibliographic resolution"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mt-2 flex items-center gap-2 text-xs">
             <span className="text-[var(--color-text-muted)]">Status</span>
             <select

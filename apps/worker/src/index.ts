@@ -2,6 +2,7 @@ import { isEditionPipeline, phase12FeatureEnabled, pipelineAtLeast, pipelineVers
 import { createHash } from "node:crypto";
 import {
   type AnalyzeWorkJob,
+  type ResolveCitationMetadataJob,
   db,
   documents,
   docFootnotes,
@@ -15,6 +16,7 @@ import {
   processingRuns,
   pages,
   QUEUE_ANALYZE_WORK,
+  QUEUE_RESOLVE_CITATION_METADATA,
   QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
   type ExpandCrossLibraryGraphJob,
   QUEUE_EXTRACT_TEXT,
@@ -24,7 +26,7 @@ import {
 import { detectFootnotes, downloadDocumentFile, extractAuthorApparatus, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { and, desc, eq, lt, sql } from "drizzle-orm";
-import { analyzeEditionRun, analyzeWork } from "./analyze";
+import { analyzeEditionRun, analyzeWork, resolveCitationMetadata } from "./analyze";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
 import "./sentry";
@@ -386,6 +388,14 @@ async function main() {
     }
   });
 
+  await boss.work<ResolveCitationMetadataJob>(QUEUE_RESOLVE_CITATION_METADATA, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    // Deliberately sequential: one external bibliographic lookup at a time is
+    // the rate limit; a miss records an unresolved Library item rather than
+    // holding up extraction or discovery.
+    for (const job of batch) await resolveCitationMetadata(job.data.citationId);
+  });
+
   await boss.work<ExpandCrossLibraryGraphJob>(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
@@ -401,7 +411,7 @@ async function main() {
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary
   // runs to production quietly running something other than what was assumed.
   console.log(
-    `[worker] listening for "${QUEUE_EXTRACT_TEXT}", "${QUEUE_ANALYZE_WORK}", and "${QUEUE_EXPAND_CROSS_LIBRARY_GRAPH}" jobs (pipeline ${activePipelineVersion()})`,
+    `[worker] listening for "${QUEUE_EXTRACT_TEXT}", "${QUEUE_ANALYZE_WORK}", "${QUEUE_RESOLVE_CITATION_METADATA}", and "${QUEUE_EXPAND_CROSS_LIBRARY_GRAPH}" jobs (pipeline ${activePipelineVersion()})`,
   );
 }
 

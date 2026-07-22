@@ -15,6 +15,28 @@
  */
 
 export type CitationKind = "reference" | "inline";
+export type CitationSourceType = "bibliography" | "footnote" | "endnote" | "inline";
+
+/** The durable source anchor passed through to citation persistence. */
+export interface CitationAnchor {
+  textBlockId: string | null;
+  pageIndex: number | null;
+  blockOrder: number | null;
+  marker: string | null;
+  startOffset: number | null;
+  endOffset: number | null;
+}
+
+export interface CitationSourceInput {
+  sourceType: CitationSourceType;
+  text: string;
+  textBlockId?: string | null;
+  pageIndex?: number | null;
+  blockOrder?: number | null;
+  marker?: string | null;
+  /** Structural extraction has a stronger evidence basis than PDF fallback. */
+  parserConfidence?: number | null;
+}
 
 export interface RawCitation {
   /** The verbatim citation text as it appears in the document. */
@@ -23,6 +45,10 @@ export interface RawCitation {
    *  trailing page ranges, and "ibid."-style noise stripped). */
   query: string;
   kind: CitationKind;
+  /** Source form is intentionally independent from resolution. */
+  sourceType?: CitationSourceType;
+  parserConfidence?: number;
+  anchor?: CitationAnchor;
 }
 
 const SECTION_HEADING =
@@ -35,6 +61,11 @@ const YEAR = /\b(1[0-9]{3}|20[0-2][0-9])\b/;
 // Inline author–year: "(Kant 1781)", "(Verene 1981, 12)", "Kant (1781)".
 const INLINE_PAREN = /\(([A-Z][A-Za-z.'-]+(?:\s+(?:and|&|et al\.?)\s+[A-Z][A-Za-z.'-]+)?),?\s+((?:1[0-9]{3}|20[0-2][0-9]))[a-z]?(?:,\s*\d+)?\)/g;
 const INLINE_NARRATIVE = /\b([A-Z][A-Za-z.'-]+)\s+\((?:1[0-9]{3}|20[0-2][0-9])[a-z]?\)/g;
+
+// Direct citations without an author-year form are common in philosophy prose.
+// Keep this deliberately narrow: it catches named canonical works, not every
+// title-cased phrase in a reader's body text.
+const DIRECT_CLASSICAL_WORK = /\b(Eudemian Ethics|Metaphysics|Nicomachean Ethics|Politics|Rhetoric|Gorgias|Phaedrus)\b/g;
 
 /**
  * Note-style citations — the humanities convention, where full references live
@@ -180,4 +211,111 @@ export function extractCitations(text: string, max = 300): RawCitation[] {
   }
 
   return out.slice(0, max);
+}
+
+function defaultConfidence(sourceType: CitationSourceType): number {
+  switch (sourceType) {
+    case "bibliography": return 0.98;
+    case "footnote": return 0.92;
+    case "endnote": return 0.9;
+    case "inline": return 0.74;
+  }
+}
+
+function kindForSource(sourceType: CitationSourceType): CitationKind {
+  return sourceType === "inline" ? "inline" : "reference";
+}
+
+function anchorFor(source: CitationSourceInput, raw: string): CitationAnchor {
+  const startOffset = source.text.indexOf(raw);
+  return {
+    textBlockId: source.textBlockId ?? null,
+    pageIndex: source.pageIndex ?? null,
+    blockOrder: source.blockOrder ?? null,
+    marker: source.marker ?? null,
+    startOffset: startOffset >= 0 ? startOffset : null,
+    endOffset: startOffset >= 0 ? startOffset + raw.length : null,
+  };
+}
+
+/**
+ * Extract citation *mentions* from independently anchored structural sources.
+ * The older `extractCitations` API remains the discovery-friendly de-duplicated
+ * query list; this API preserves one result per source block/occurrence so a
+ * bibliography entry, footnote, endnote, or direct body citation can be
+ * persisted and shown with its own provenance.
+ */
+export function extractCitationMentions(
+  sources: readonly CitationSourceInput[],
+  max = 300,
+): RawCitation[] {
+  const mentions: RawCitation[] = [];
+
+  const add = (source: CitationSourceInput, candidate: RawCitation) => {
+    if (mentions.length >= max || candidate.query.trim().length < 3) return;
+    mentions.push({
+      ...candidate,
+      kind: kindForSource(source.sourceType),
+      sourceType: source.sourceType,
+      parserConfidence: source.parserConfidence ?? defaultConfidence(source.sourceType),
+      anchor: anchorFor(source, candidate.text),
+    });
+  };
+
+  for (const source of sources) {
+    if (mentions.length >= max || !source.text.trim()) continue;
+    // Apparatus extraction has already separated bibliography entries into
+    // individually anchored blocks. Preserve one exact entry here instead of
+    // letting an author-year heuristic reinterpret words inside its title as
+    // additional inline citations (for example, Bywater's title contains
+    // "Nicomachean Ethics"). Foot/endnotes can contain several citations, so
+    // they still use the reference parser below.
+    if (source.sourceType === "bibliography") {
+      const query = cleanQuery(source.text);
+      if (query.length >= 3) add(source, { text: source.text.trim(), query, kind: "reference" });
+      continue;
+    }
+
+    const rawCandidates = extractCitations(source.text, Math.max(1, max - mentions.length));
+    const candidates = source.sourceType === "inline"
+      ? rawCandidates.filter((candidate) => candidate.kind === "inline")
+      : rawCandidates.filter((candidate) => candidate.kind === "reference");
+    const seen = new Set<string>();
+    for (const candidate of candidates) {
+      const key = `${candidate.text}\u0000${candidate.query}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      add(source, candidate);
+    }
+
+    // A structural bibliography/reference block is itself evidence even when
+    // it lacks a four-digit year or uses a catalog style the generic heuristic
+    // does not recognize. Never manufacture metadata: preserve it verbatim as
+    // a low-confidence lookup candidate instead.
+    if ((source.sourceType === "footnote" || source.sourceType === "endnote") && candidates.length === 0) {
+      const query = cleanQuery(source.text);
+      if (query.length >= 8) add(source, { text: source.text.trim(), query, kind: "reference" });
+    }
+
+    if (source.sourceType === "inline") {
+      DIRECT_CLASSICAL_WORK.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = DIRECT_CLASSICAL_WORK.exec(source.text)) && mentions.length < max) {
+        const title = match[1];
+        // Include Aristotle/Plato when it appears in the immediate local
+        // context, while keeping the query honest when the author is omitted.
+        const before = source.text.slice(Math.max(0, match.index - 24), match.index);
+        const author = /Aristotle(?:['’]s)?\s*$/i.test(before)
+          ? "Aristotle, "
+          : /Plato(?:['’]s)?\s*$/i.test(before)
+            ? "Plato, "
+            : "";
+        const text = `${author}${title}`;
+        if (mentions.some((mention) => mention.sourceType === "inline" && mention.anchor?.textBlockId === (source.textBlockId ?? null) && mention.query === text)) continue;
+        add(source, { text, query: text, kind: "inline" });
+      }
+    }
+  }
+
+  return mentions;
 }

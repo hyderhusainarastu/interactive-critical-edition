@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "updated": "2026-07-21",
+  "activePhase": 17,
+  "nextPhase": 18,
+  "taskStartRecords": [
+    "CLAUDE.md",
+    "docs/PROJECT-LOG.md",
+    "docs/project-status.json"
+  ],
+  "handoff": "docs/handoffs/phase-17-to-18.md",
+  "verification": "local acceptance complete",
+  "hostAdapter": "unavailable-host-session-adapter",
+  "closeoutStatus": "awaiting_host_context_replacement",
+  "contextReplaced": false,
+  "note": "No model context was cleared and no Phase 18 context was dispatched. A real host/session adapter must perform one atomic replacement using only the compact handoff."
+}
