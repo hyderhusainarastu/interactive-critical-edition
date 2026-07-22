@@ -71,6 +71,24 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(trigger).toBeFocused();
   });
 
+  test("opens workspace preferences as a keyboard-managed dialog", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const trigger = page.getByRole("button", { name: "Workspace preferences" });
+    await trigger.focus();
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Workspace preferences" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Close preferences" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
   test("treats mobile navigation as a modal drawer and restores its trigger", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 844 });
     await page.goto("/login");

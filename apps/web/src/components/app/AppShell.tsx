@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { CommandPalette } from "./CommandPalette";
@@ -40,6 +40,8 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
+  const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
+  const preferencesMenuId = useId();
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const navItems: NavItem[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -55,6 +57,10 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
   function closeDrawer() {
     setDrawerOpen(false);
     window.requestAnimationFrame(() => drawerTriggerRef.current?.focus());
+  }
+  function closePreferences() {
+    setPreferencesOpen(false);
+    window.requestAnimationFrame(() => preferencesTriggerRef.current?.focus());
   }
 
   return (
@@ -73,8 +79,8 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
               <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
             </div>
             <div className="relative">
-              <button type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} onClick={() => setPreferencesOpen((open) => !open)}>⚙</button>
-              {preferencesOpen && <PreferencesMenu preferences={preferences} onUpdate={updatePreferences} onClose={() => setPreferencesOpen(false)} />}
+              <button ref={preferencesTriggerRef} type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
+              {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onClose={closePreferences} />}
             </div>
             <form action={logoutAction} className="hidden lg:block">
               <button type="submit" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
@@ -141,10 +147,16 @@ function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; p
   );
 }
 
-function PreferencesMenu({ preferences, onUpdate, onClose }: { preferences: WorkspacePreferences; onUpdate: (patch: Partial<WorkspacePreferences>) => void; onClose: () => void }) {
+function PreferencesMenu({ id, preferences, onUpdate, onClose }: { id: string; preferences: WorkspacePreferences; onUpdate: (patch: Partial<WorkspacePreferences>) => void; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
   return (
-    <section className="absolute end-0 top-11 z-40 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 shadow-xl" aria-label="Workspace preferences" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-      <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Workspace preferences</h2><button type="button" className="app-icon-button h-7 w-7" aria-label="Close preferences" onClick={onClose}>×</button></div>
+    <section id={id} role="dialog" className="absolute end-0 top-11 z-40 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 shadow-xl" aria-label="Workspace preferences" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
+      <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Workspace preferences</h2><button ref={closeButtonRef} type="button" className="app-icon-button h-7 w-7" aria-label="Close preferences" onClick={onClose}>×</button></div>
       <PreferenceField label="Theme"><select value={preferences.theme} onChange={(event) => onUpdate({ theme: event.target.value as WorkspacePreferences["theme"] })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></PreferenceField>
       <PreferenceField label="Text size"><select value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
       <PreferenceField label="Reading width"><select value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>

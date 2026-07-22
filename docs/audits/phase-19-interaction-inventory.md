@@ -11,7 +11,9 @@ The in-app browser runtime is unavailable in this agent session, so the interact
 | Desktop shell | Primary nav, product-home link, visible feature-gated nav links | working | Existing `workspace-shell.spec.ts` authenticates and navigates the shell; feature-gate content assertion is covered by `hardening.spec.ts` (Writer) and `rag.spec.ts` (Ask Library). |
 | Desktop shell | Search icon and `Ctrl/Cmd+K` command palette | fixed — D-19-14 | Pre-fix Shift+Tab escaped the dialog and Escape left focus outside it. The command palette now traps Tab/Shift+Tab and restores its trigger; `workspace-shell.spec.ts` exercises both paths. |
 | Desktop shell | Light/dark quick switch and persisted theme select | working | `workspace-shell.spec.ts` and `hardening.spec.ts` exercise theme change and HTML token update. |
-| Desktop shell | Preferences menu: text size, reading width, script display, focus-mode checkbox | pending | Controls are source-mapped and have an owned persistence API, but their complete interaction matrix is scheduled for the next inventory pass. |
+| Desktop shell | Workspace preferences popup lifecycle | fixed — D-19-19 | Pre-fix floating section had no dialog semantics, initial focus, trigger relationship, or restoration. It is now a labelled non-modal dialog whose close control receives focus and whose close/Escape returns the trigger; regression covers all of that. |
+| Desktop shell | Preferences Theme selector | working | Existing workspace E2E selects Light and verifies the document theme token updates. |
+| Desktop shell | Preferences text size, reading width, script display, and focus-mode checkbox | pending | Source-mapped and backed by the same persistence API, but each user-visible effect needs a distinct assertion in a later inventory pass. |
 | Desktop shell | Desktop logout | pending | Source-mapped form action; needs an explicit logout→protected-route journey assertion. |
 | Mobile shell | Open/close navigation, nav links, mobile logout | fixed — D-19-15 | Pre-fix overlay was a non-modal `aside` with no focus placement, trap, Escape, or restoration. It is now an accessible modal dialog; narrow-viewport Playwright test verifies initial focus, Shift+Tab containment, Escape, and trigger restoration. |
 | Focus mode | Exit-focus-mode control | pending | Source-mapped; must be exercised with focus mode enabled. |
@@ -68,5 +70,6 @@ The following are source-mapped but not yet classified by interactive evidence. 
 - **D-19-16:** Library’s active reading-status filter state was visual-only and unlabelled for assistive technology.
 - **D-19-17:** Global and work-specific Visualization links shared an ambiguous accessible name.
 - **D-19-18:** The Reader split-view picker omitted programmatic disclosure state and Escape dismissal.
+- **D-19-19:** The Workspace preferences popup lacked accessible dialog/focus lifecycle.
 
-All six are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
+All seven are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
