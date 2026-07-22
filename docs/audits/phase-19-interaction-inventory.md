@@ -27,14 +27,26 @@ The in-app browser runtime is unavailable in this agent session, so the interact
 | Writer editor | Desktop Library-source sidebar resize | fixed — D-19-13 | Pre-fix control was a pointer-only `<button>`: keyboard activation had no effect. It is now a `separator` with value semantics and Arrow/Home/End support; the regression verifies `aria-valuenow` and rendered width. |
 | Writer editor | Archive confirmation | working | Existing Writer E2E accepts the confirmation and verifies the archive/restore result. |
 
+## Library controls
+
+| Surface | Control family | Classification | Evidence / disposition |
+|---|---|---|---|
+| Library | Reading-status filter (All, To read, Reading, Completed) | fixed — D-19-16 | Pre-fix active state was colour/border only. It is now a labelled `group` with `aria-pressed`; a new Library E2E changes the filter and proves the selected state and result set. |
+| Library | Relationship, source-type, and sort selectors | working | New `library.spec.ts` control-inventory regression exercises relationship filtering, source-type filtering, reset, and title ordering against distinct seeded rows. |
+| Library | Per-resource reading-status selector | working | Existing Library E2E writes a scoped `reading_record` through the real UI and verifies persisted state after reload. |
+| Library | Focus selector, newest-default and deep link | working | Existing Library E2E proves All works/work scoping, newest-upload focus, `?focus=` state, and narrow/reduced-motion use. |
+| Library | Reader-level facets and level suggestion Switch/Dismiss | working | Existing Library E2E proves cumulative/exact matching, saved-level write, and locally remembered dismissal. |
+| Library | Focused-work title, recommended-for chips, external resource links, and empty-state upload CTA | pending | Rendered/partially asserted, but their navigation targets have not yet been clicked through in this literal inventory. |
+
 ## Control families queued for subsequent passes
 
-The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; work-status/reprocess/trash controls; Library search/focus/filter/sort/pagination controls; Reader source/processed toggles, selection actions, notes, highlights, bookmarks, annotation filters, footnotes, split view, and contextual RAG sheet; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all empty-state calls to action.
+The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; work-status/reprocess/trash controls; remaining Library navigation/CTA links; Reader source/processed toggles, selection actions, notes, highlights, bookmarks, annotation filters, footnotes, split view, and contextual RAG sheet; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all other empty-state calls to action.
 
 ## Defects surfaced by this tranche
 
 - **D-19-13:** Writer sidebar resize was exposed as a button but only listened for pointer drag; keyboard users had no functional control.
 - **D-19-14:** Command-palette dialog lacked a focus trap and trigger-focus restoration.
 - **D-19-15:** Mobile navigation overlay lacked modal semantics, initial focus, focus containment, Escape handling, and trigger-focus restoration.
+- **D-19-16:** Library’s active reading-status filter state was visual-only and unlabelled for assistive technology.
 
-All three are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
+All four are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.

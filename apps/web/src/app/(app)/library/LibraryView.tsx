@@ -259,11 +259,12 @@ export function LibraryView({
               </>
             ) : <p className="mt-1 text-sm text-[var(--color-text-muted)]">Showing recommendations across all uploaded works.</p>}
           </section>
-          <div className="mb-4 flex flex-wrap gap-2 border-b border-[var(--color-border)] text-sm">
+          <div role="group" aria-label="Reading status filter" className="mb-4 flex flex-wrap gap-2 border-b border-[var(--color-border)] text-sm">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 type="button"
+                aria-pressed={tab === t.key}
                 onClick={() => setTab(t.key)}
                 className="border-b-2 px-3 py-2"
                 style={{

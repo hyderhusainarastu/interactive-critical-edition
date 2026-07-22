@@ -296,4 +296,57 @@ test.describe("Library (Phase 9.5)", () => {
 
     await deleteTestUser(accessibilityEmail);
   });
+
+  test("exposes the selected status filter and applies Library relationship, source-type, and sort controls", async ({ page }) => {
+    const filterEmail = `e2e-library-controls-${Date.now()}@example.com`;
+    const filterUserId = await createVerifiedTestUser(filterEmail, PASSWORD);
+    const { workId, resourceIds } = await seedWorkWithLibraryItems(filterUserId, "Control inventory work", [
+      { resourceTitle: "Alpha reading article", relationship: "prerequisite", resourceType: "article" },
+      { resourceTitle: "Beta completed book", relationship: "explicit_reference", resourceType: "book" },
+      { resourceTitle: "Gamma to-read webpage", relationship: "historical_context", resourceType: "webpage" },
+    ]);
+    await db.insert(readingRecords).values([
+      { userId: filterUserId, learningResourceId: resourceIds[0], status: "reading" },
+      { userId: filterUserId, learningResourceId: resourceIds[1], status: "completed" },
+    ]);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(filterEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto(`/library?focus=${workId}`);
+
+    const libraryContent = page.locator("#main-content");
+    const alpha = libraryContent.locator("[data-library-item]").filter({ hasText: "Alpha reading article" });
+    const beta = libraryContent.locator("[data-library-item]").filter({ hasText: "Beta completed book" });
+    const gamma = libraryContent.locator("[data-library-item]").filter({ hasText: "Gamma to-read webpage" });
+    const statusFilters = libraryContent.getByRole("group", { name: "Reading status filter" });
+    const all = statusFilters.getByRole("button", { name: "All (3)" });
+    const reading = statusFilters.getByRole("button", { name: "Reading (1)" });
+    await expect(all).toHaveAttribute("aria-pressed", "true");
+    await reading.click();
+    await expect(reading).toHaveAttribute("aria-pressed", "true");
+    await expect(alpha).toBeVisible();
+    await expect(beta).not.toBeVisible();
+
+    await all.click();
+    await libraryContent.getByLabel("Relationship").selectOption("explicit_reference");
+    await expect(beta).toBeVisible();
+    await expect(alpha).not.toBeVisible();
+
+    await libraryContent.getByLabel("Relationship").selectOption("");
+    await libraryContent.getByLabel("Source type").selectOption("article");
+    await expect(alpha).toBeVisible();
+    await expect(gamma).not.toBeVisible();
+
+    await libraryContent.getByLabel("Source type").selectOption("");
+    await libraryContent.getByLabel("Sort").selectOption("title");
+    const titles = await libraryContent.locator("[data-library-item]").evaluateAll((rows) => rows.map((row) => row.textContent?.trim() ?? ""));
+    expect(titles[0]).toContain("Alpha reading article");
+    expect(titles[1]).toContain("Beta completed book");
+    expect(titles[2]).toContain("Gamma to-read webpage");
+
+    await deleteTestUser(filterEmail);
+  });
 });
