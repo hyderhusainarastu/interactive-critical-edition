@@ -41,6 +41,8 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
+  const focusModeExitRef = useRef<HTMLButtonElement>(null);
+  const focusModeFocusRequestRef = useRef<"enter" | "exit" | null>(null);
   const preferencesMenuId = useId();
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const navItems: NavItem[] = [
@@ -54,6 +56,19 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
   const focusMode = preferences.focusMode;
+  useEffect(() => {
+    const request = focusModeFocusRequestRef.current;
+    if ((request === "enter" && !focusMode) || (request === "exit" && focusMode) || !request) return;
+    focusModeFocusRequestRef.current = null;
+    window.requestAnimationFrame(() => (request === "enter" ? focusModeExitRef.current : preferencesTriggerRef.current)?.focus());
+  }, [focusMode]);
+
+  function setFocusMode(enabled: boolean) {
+    focusModeFocusRequestRef.current = enabled ? "enter" : "exit";
+    if (enabled) setPreferencesOpen(false);
+    updatePreferences({ focusMode: enabled });
+  }
+
   function closeDrawer() {
     setDrawerOpen(false);
     window.requestAnimationFrame(() => drawerTriggerRef.current?.focus());
@@ -65,8 +80,8 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
-      {focusMode && <button type="button" className="fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => updatePreferences({ focusMode: false })}>Exit focus mode</button>}
-      <header className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
+      {focusMode && <button ref={focusModeExitRef} type="button" className="fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
+      <header inert={focusMode} className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
           <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
@@ -80,7 +95,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
             </div>
             <div className="relative">
               <button ref={preferencesTriggerRef} type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
-              {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onClose={closePreferences} />}
+              {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} onClose={closePreferences} />}
             </div>
             <form action={logoutAction} className="hidden lg:block">
               <button type="submit" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
@@ -147,7 +162,7 @@ function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; p
   );
 }
 
-function PreferencesMenu({ id, preferences, onUpdate, onClose }: { id: string; preferences: WorkspacePreferences; onUpdate: (patch: Partial<WorkspacePreferences>) => void; onClose: () => void }) {
+function PreferencesMenu({ id, preferences, onUpdate, onFocusModeChange, onClose }: { id: string; preferences: WorkspacePreferences; onUpdate: (patch: Partial<WorkspacePreferences>) => void; onFocusModeChange: (enabled: boolean) => void; onClose: () => void }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -161,7 +176,7 @@ function PreferencesMenu({ id, preferences, onUpdate, onClose }: { id: string; p
       <PreferenceField label="Text size"><select value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
       <PreferenceField label="Reading width"><select value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>
       <PreferenceField label="Script display"><select value={preferences.scriptDisplay} onChange={(event) => onUpdate({ scriptDisplay: event.target.value as WorkspacePreferences["scriptDisplay"] })}><option value="original">Verified original script</option><option value="transliteration">Transliteration</option></select></PreferenceField>
-      <label className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3 text-sm"><span>Focus mode</span><input type="checkbox" checked={preferences.focusMode} onChange={(event) => onUpdate({ focusMode: event.target.checked })} /></label>
+      <label className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3 text-sm"><span>Focus mode</span><input type="checkbox" checked={preferences.focusMode} onChange={(event) => onFocusModeChange(event.target.checked)} /></label>
     </section>
   );
 }

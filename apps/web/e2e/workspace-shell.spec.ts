@@ -89,6 +89,30 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(trigger).toBeFocused();
   });
 
+  test("moves focus to the exit control when focus mode hides the shell", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    await page.getByRole("button", { name: "Workspace preferences" }).click();
+    const focusMode = page.getByRole("checkbox", { name: "Focus mode" });
+    await focusMode.focus();
+    await page.keyboard.press("Space");
+
+    const exit = page.getByRole("button", { name: "Exit focus mode" });
+    await expect(exit).toBeVisible();
+    await expect(exit).toBeFocused();
+    const shellHeader = page.getByRole("banner");
+    await expect(shellHeader).toHaveAttribute("inert", "");
+    await page.keyboard.press("Tab");
+    await expect(shellHeader.locator(":focus")).toHaveCount(0);
+
+    await exit.click();
+    await expect(page.getByRole("button", { name: "Workspace preferences" })).toBeFocused();
+  });
+
   test("treats mobile navigation as a modal drawer and restores its trigger", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 844 });
     await page.goto("/login");

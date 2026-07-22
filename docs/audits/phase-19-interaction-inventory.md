@@ -16,7 +16,7 @@ The in-app browser runtime is unavailable in this agent session, so the interact
 | Desktop shell | Preferences text size, reading width, script display, and focus-mode checkbox | pending | Source-mapped and backed by the same persistence API, but each user-visible effect needs a distinct assertion in a later inventory pass. |
 | Desktop shell | Desktop logout | pending | Source-mapped form action; needs an explicit logout→protected-route journey assertion. |
 | Mobile shell | Open/close navigation, nav links, mobile logout | fixed — D-19-15 | Pre-fix overlay was a non-modal `aside` with no focus placement, trap, Escape, or restoration. It is now an accessible modal dialog; narrow-viewport Playwright test verifies initial focus, Shift+Tab containment, Escape, and trigger restoration. |
-| Focus mode | Exit-focus-mode control | pending | Source-mapped; must be exercised with focus mode enabled. |
+| Focus mode | Enable/exit focus mode | fixed — D-19-20 | Pre-fix, enabling Focus mode left keyboard focus on the now-visually-hidden preferences checkbox, and Tab could still reach the hidden shell. The real Chromium regression proves entry focus moves to Exit focus mode, the hidden shell is inert, and exit restores Workspace preferences focus. |
 
 ## Writer controls
 
@@ -71,5 +71,6 @@ The following are source-mapped but not yet classified by interactive evidence. 
 - **D-19-17:** Global and work-specific Visualization links shared an ambiguous accessible name.
 - **D-19-18:** The Reader split-view picker omitted programmatic disclosure state and Escape dismissal.
 - **D-19-19:** The Workspace preferences popup lacked accessible dialog/focus lifecycle.
+- **D-19-20:** Focus mode visually hid the shell while leaving its current checkbox and navigation focusable, with no focus transfer to its Exit control.
 
-All seven are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
+All eight are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
