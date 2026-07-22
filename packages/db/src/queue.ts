@@ -36,22 +36,41 @@ export interface ExpandCrossLibraryGraphJob {
 
 let bossPromise: Promise<PgBoss> | undefined;
 
+/**
+ * pg-boss's internal `pg` client re-parses `connectionString` inside
+ * node-postgres's `ConnectionParameters` constructor via
+ * `Object.assign({}, config, parse(config.connectionString))` — the parsed
+ * result is spread LAST, so it silently overwrites any explicit `ssl` option
+ * passed alongside `connectionString`. Combined with pg-connection-string
+ * >=2.7 now treating sslmode=require/prefer/verify-ca as verify-full, this
+ * broke pg-boss startup against Supabase's Supavisor pooler cert chain
+ * (SELF_SIGNED_CERT_IN_CHAIN) after its connection string was refreshed with
+ * `sslmode=require` during the Phase 18 DB password rotation. Passing
+ * discrete host/port/database/user/password fields (no `connectionString`
+ * key at all) sidesteps that override path so our explicit `ssl` actually
+ * takes effect. Local dev's connection string has no sslmode, so `ssl` stays
+ * undefined there, matching its non-TLS local Postgres.
+ */
+function buildPgBossConfig(connectionString: string): PgBoss.ConstructorOptions {
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+  return {
+    host: url.hostname,
+    port: url.port ? Number(url.port) : 5432,
+    database: decodeURIComponent(url.pathname.replace(/^\//, "")),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    ssl: sslMode && sslMode !== "disable" ? { rejectUnauthorized: false } : undefined,
+  };
+}
+
 export function getQueue(): Promise<PgBoss> {
   if (!bossPromise) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set — required for the job queue.");
     }
-    // pg-boss's internal `pg` client (unlike the postgres.js client `packages/db`
-    // uses elsewhere) now treats sslmode=require/prefer/verify-ca as verify-full
-    // (pg-connection-string >=2.7 tightened this), which fails against Supabase's
-    // Supavisor pooler cert chain with SELF_SIGNED_CERT_IN_CHAIN. Local dev's
-    // connection string has no sslmode at all, so this only applies in
-    // environments (Render/Vercel) whose Supabase connection string requests SSL.
-    const ssl = /\bsslmode=(?!disable\b)\w+/.test(connectionString)
-      ? { rejectUnauthorized: false }
-      : undefined;
-    const boss = new PgBoss({ connectionString, ssl });
+    const boss = new PgBoss(buildPgBossConfig(connectionString));
     boss.on("error", (error) => console.error("[pg-boss]", error));
     // pg-boss v10 requires a queue to be explicitly created before
     // send()/work() — send() no longer auto-creates it, and silently
