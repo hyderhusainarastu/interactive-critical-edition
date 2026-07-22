@@ -3,6 +3,7 @@ import {
   annotations,
   bibliographicRecords,
   bookmarks,
+  cancelQueuedJobsForDocuments,
   claimEvidence,
   concepts,
   conceptMastery,
@@ -63,17 +64,24 @@ export async function createVerifiedTestUser(email: string, password: string) {
  * that uploads a file would otherwise leak it into the bucket forever.
  * Found this the hard way: 16 orphaned files accumulated in Storage
  * from earlier manual + first E2E test runs before this existed.
+ * Same gap applies to pg-boss: any still-queued `extract-text`/
+ * `analyze-work` job for one of this user's documents survives the
+ * user delete (pgboss.job has no FK to document either) and later
+ * fails noisily as "Document not found" once a worker dequeues it —
+ * found via a local worker boot draining hours of these from prior
+ * test runs during the Phase 19 backend/data audit (D-19-2).
  */
 export async function deleteTestUser(email: string) {
   const [user] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (!user) return;
 
   const docs = await db
-    .select({ storagePath: documents.storagePath })
+    .select({ id: documents.id, storagePath: documents.storagePath })
     .from(documents)
     .where(eq(documents.userId, user.id));
 
   await Promise.all(docs.map((d) => deleteDocumentFile(d.storagePath).catch(() => {})));
+  await cancelQueuedJobsForDocuments(docs.map((d) => d.id));
   await db.delete(users).where(eq(users.id, user.id));
 }
 

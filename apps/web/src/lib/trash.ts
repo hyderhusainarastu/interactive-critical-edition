@@ -1,4 +1,4 @@
-import { db, documents, works } from "@ice/db";
+import { cancelQueuedJobsForDocuments, db, documents, works } from "@ice/db";
 import { deleteDocumentFile } from "@ice/ingestion";
 import { and, eq, isNotNull, lt } from "drizzle-orm";
 
@@ -42,17 +42,23 @@ export async function listTrashedWorks(userId: string): Promise<TrashedWork[]> {
  * paths first (Postgres cascades the DB rows on work delete, but has no
  * idea Supabase Storage exists — same gap `deleteDocumentFile`'s other
  * caller, `apps/web/e2e/helpers.ts`'s `deleteTestUser`, works around),
- * best-effort removes each Storage object, then hard-deletes the `work`
- * row — cascading through document/processing_run/page/text_block/
+ * best-effort removes each Storage object, cancels any not-yet-run
+ * `extract-text`/`analyze-work` pg-boss jobs still queued for those
+ * documents (pg-boss's job table is a separate schema with no FK to
+ * `document` either, so a queued job for a deleted document would
+ * otherwise survive and later fail as "Document not found" — see
+ * `cancelQueuedJobsForDocuments`), then hard-deletes the `work` row —
+ * cascading through document/processing_run/page/text_block/
  * research_resource/.../reading_record/understanding_rating/
  * roadmap_override, the full blast radius trash exists to guard against
  * doing by accident.
  */
 async function purgeWork(workId: string): Promise<void> {
-  const docs = await db.select({ storagePath: documents.storagePath }).from(documents).where(eq(documents.workId, workId));
+  const docs = await db.select({ id: documents.id, storagePath: documents.storagePath }).from(documents).where(eq(documents.workId, workId));
   for (const doc of docs) {
     await deleteDocumentFile(doc.storagePath).catch(() => {});
   }
+  await cancelQueuedJobsForDocuments(docs.map((d) => d.id));
   await db.delete(works).where(eq(works.id, workId));
 }
 
