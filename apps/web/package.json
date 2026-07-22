@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "node --env-file-if-exists=../../packages/db/.env --env-file-if-exists=.env.local ./node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.7.4",

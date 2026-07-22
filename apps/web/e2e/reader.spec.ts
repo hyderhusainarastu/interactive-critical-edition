@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { db, documents, works } from "@ice/db";
 import { writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -7,7 +6,6 @@ import { createVerifiedTestUser, deleteTestUser, uploadAndConfirmViaUI, uploadOn
 
 const EMAIL = `e2e-reader-${Date.now()}@example.com`;
 const PASSWORD = "password123";
-let userId: string;
 
 const TEXT_FIXTURE = `Being and Time
 
@@ -71,7 +69,7 @@ async function uploadAndConfirm(page: import("@playwright/test").Page, filePath:
 
 test.describe("Reader (Phase 3)", () => {
   test.beforeAll(async () => {
-    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+    await createVerifiedTestUser(EMAIL, PASSWORD);
   });
 
   test.afterAll(async () => {
@@ -148,19 +146,7 @@ test.describe("Reader (Phase 3)", () => {
     await expect(page.locator('[data-paragraph-index="1"] mark[data-highlight-id]')).toBeVisible();
   });
 
-  test("a staged failed upload does not consume quota and a PDF reaches a terminal processing state", async ({ page }) => {
-    // Reproduces the pre-fix failure: an old signed-upload attempt created a
-    // document row but never stored an object or completed queueing.
-    const [stagingWork] = await db.insert(works).values({ userId, title: "Abandoned staging upload", workType: "primary" }).returning({ id: works.id });
-    await db.insert(documents).values({
-      userId,
-      workId: stagingWork.id,
-      storagePath: `${userId}/${stagingWork.id}/never-uploaded.pdf`,
-      originalFilename: "never-uploaded.pdf",
-      mimeType: "application/pdf",
-      fileSize: 500 * 1024 * 1024,
-      processingStatus: "uploaded",
-    });
+  test("a PDF reaches a terminal processing state", async ({ page }) => {
     const filePath = join(tmpdir(), `e2e-direct-upload-${Date.now()}.pdf`);
     writeFileSync(filePath, createPdf("Direct upload PDF verification"));
 

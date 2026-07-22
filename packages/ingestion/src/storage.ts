@@ -62,6 +62,30 @@ export async function deleteDocumentFile(path: string) {
 }
 
 /**
+ * Reads the byte count that Storage recorded for a direct signed upload.
+ * The client-provided size is only a staging reservation: a signed URL can
+ * otherwise be used to store different bytes, so `/upload/complete` must
+ * compare this authoritative value before it queues processing or charges
+ * the user's Storage quota.
+ */
+export async function getDocumentFileSize(path: string): Promise<number | null> {
+  const slash = path.lastIndexOf("/");
+  const folder = slash === -1 ? "" : path.slice(0, slash);
+  const filename = slash === -1 ? path : path.slice(slash + 1);
+  const supabase = getSupabase();
+  const { data, error } = await supabase.storage.from(bucket()).list(folder, { search: filename });
+  if (error) throw error;
+  const object = data.find((entry) => entry.name === filename);
+  const size = object?.metadata?.size;
+  if (typeof size === "number" && Number.isFinite(size)) return size;
+  if (typeof size === "string") {
+    const parsed = Number(size);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
  * Short-lived signed URL for direct client-side fetch (the PDF reader
  * loads the file straight from Storage rather than proxying bytes
  * through a Next.js route). Ownership is checked by the caller before

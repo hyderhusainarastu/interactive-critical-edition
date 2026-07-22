@@ -26,6 +26,13 @@ async function login(page: import("@playwright/test").Page) {
   await page.waitForURL("**/dashboard");
 }
 
+// Next streams an unmounted server segment in a hidden template while a page
+// is hydrating. Scope this real-page control to the app shell so a transient
+// duplicate inside that hidden template cannot make the assertion flaky.
+function routeSelect(page: import("@playwright/test").Page) {
+  return page.locator("#main-content").getByLabel("Route");
+}
+
 test.describe("Curriculum (Phase 9.6)", () => {
   test.beforeAll(async () => {
     userId = await createVerifiedTestUser(EMAIL, PASSWORD);
@@ -48,7 +55,7 @@ test.describe("Curriculum (Phase 9.6)", () => {
 
     // Graduate route (selected explicitly, since the default depends on the
     // reader's saved level) shows every seeded item across its stage.
-    await page.getByLabel("Route").selectOption("graduate");
+    await routeSelect(page).selectOption("graduate");
     await expect(page.getByText("Prior Analytics")).toBeVisible();
     await expect(page.getByText("The Republic")).toBeVisible();
     await expect(page.getByText("A Commentary on the Ethics")).toBeVisible();
@@ -68,12 +75,12 @@ test.describe("Curriculum (Phase 9.6)", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/curriculum`);
-    await page.getByLabel("Route").selectOption("minimal");
+    await routeSelect(page).selectOption("minimal");
 
     await expect(page.getByText("Only Prereq")).toBeVisible();
     await expect(page.getByText("Hidden In Minimal")).not.toBeVisible();
 
-    await page.getByLabel("Route").selectOption("graduate");
+    await routeSelect(page).selectOption("graduate");
     await expect(page.getByText("Hidden In Minimal")).toBeVisible();
   });
 
@@ -85,7 +92,7 @@ test.describe("Curriculum (Phase 9.6)", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/curriculum`);
-    await page.getByLabel("Route").selectOption("graduate");
+    await routeSelect(page).selectOption("graduate");
 
     const item = page.locator(`[data-curriculum-item="${resourceId}"]`);
     await expect(item).toBeVisible();
@@ -106,7 +113,7 @@ test.describe("Curriculum (Phase 9.6)", () => {
     await expect(item.getByText("review only")).toBeVisible();
 
     await page.reload();
-    await page.getByLabel("Route").selectOption("graduate");
+    await routeSelect(page).selectOption("graduate");
     await expect(page.locator(`[data-curriculum-item="${resourceId}"]`)).toBeVisible();
     await expect(page.locator(`[data-curriculum-item="${resourceId}"]`).getByText("review only")).toBeVisible();
   });

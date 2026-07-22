@@ -1,5 +1,6 @@
-import { db, documents, enqueueExtractText, processingJobs } from "@ice/db";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { db, documents, enqueueExtractText, processingJobs, works } from "@ice/db";
+import { deleteDocumentFile, getDocumentFileSize } from "@ice/ingestion";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
@@ -16,14 +17,45 @@ export async function POST(request: Request) {
   if (!rate.allowed) return rateLimitResponse(rate);
   const input = schema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: "Invalid upload completion." }, { status: 400 });
-  const [document] = await db.select({ id: documents.id, fileSize: documents.fileSize }).from(documents).where(and(eq(documents.id, input.data.documentId), eq(documents.workId, input.data.workId), eq(documents.userId, userId))).limit(1);
+  const [document] = await db
+    .select({ id: documents.id, fileSize: documents.fileSize, storagePath: documents.storagePath })
+    .from(documents)
+    .where(and(eq(documents.id, input.data.documentId), eq(documents.workId, input.data.workId), eq(documents.userId, userId)))
+    .limit(1);
   if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Enforce the quota again when a staged direct upload becomes a document.
-  // This is the authoritative check; the init-route check is only an early
-  // user-facing guard while the file is still in the browser.
-  const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(and(eq(documents.userId, userId), ne(documents.processingStatus, "uploaded")));
+  let storedSize: number | null;
+  try {
+    storedSize = await getDocumentFileSize(document.storagePath);
+  } catch (error) {
+    reportWebError(error, { scope: "api.upload.complete.metadata", userId, documentId: document.id, workId: input.data.workId });
+    return NextResponse.json({ error: "Could not verify the uploaded file. Please retry shortly." }, { status: 502 });
+  }
+  if (storedSize === null) {
+    // No object was ever PUT, so this reservation cannot be retried. Remove
+    // it now rather than permanently consuming the user's quota.
+    try {
+      await db.delete(works).where(and(eq(works.id, input.data.workId), eq(works.userId, userId)));
+    } catch (error) {
+      reportWebError(error, { scope: "api.upload.complete.missing_cleanup", userId, documentId: document.id, workId: input.data.workId });
+      return NextResponse.json({ error: "The missing upload could not be safely removed. Please retry shortly." }, { status: 502 });
+    }
+    return NextResponse.json({ error: "The upload was not found in Storage. Please upload the file again." }, { status: 400 });
+  }
+  if (storedSize !== document.fileSize) {
+    try {
+      await deleteDocumentFile(document.storagePath);
+      await db.delete(works).where(and(eq(works.id, input.data.workId), eq(works.userId, userId)));
+    } catch (error) {
+      reportWebError(error, { scope: "api.upload.complete.mismatch_cleanup", userId, documentId: document.id, workId: input.data.workId });
+      return NextResponse.json({ error: "The uploaded bytes could not be verified or safely removed. Please retry shortly." }, { status: 502 });
+    }
+    return NextResponse.json({ error: "Uploaded bytes do not match the selected file; the incomplete upload was removed." }, { status: 400 });
+  }
+  // The staged row already reserves its declared byte count, so the current
+  // document is included once in this sum rather than added again.
+  const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(eq(documents.userId, userId));
   const usedBytes = Number(used);
-  if (!Number.isFinite(usedBytes) || usedBytes + document.fileSize > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB). Remove an existing work and try again." }, { status: 413 });
+  if (!Number.isFinite(usedBytes) || usedBytes > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB). Remove an existing work and try again." }, { status: 413 });
   const [queued] = await db.update(documents)
     .set({ processingStatus: "processing", updatedAt: new Date() })
     .where(and(eq(documents.id, document.id), eq(documents.processingStatus, "uploaded")))

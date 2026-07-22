@@ -37,13 +37,13 @@ Full raw list captured via `find apps/web/src/app -iname route.ts`; grouped by o
 | Writer | `/api/writer/projects(+[id])`, `/citations`, `/documents(+[id])`, `/documents/[id]/revisions(+/[revisionId]/restore)`, `/export`, `/sources` | `requireWriterApiUser()` → `getApiUserId()`; feature-gated. |
 | Admin | `/api/admin/pipeline-v4/backfill-forecast` | `getApiUserId()` + admin-email check (verify at implementation, not assumed from naming). |
 
-## E2E spec coverage map (20 spec files)
+## E2E spec coverage map (23 spec files)
 
-`annotations`, `auth`, `curriculum`, `diagnostic`, `edition`, `graph`, `graph-expansion`, `hardening`, `landing`, `landing-contract` (new, Phase 19.4), `library`, `onboarding`, `rag`, `reader`, `roadmap`, `security`, `trash`, `upload`, `visual`, `workspace-shell`, `writer`.
+`accessibility-sweep`, `annotations`, `auth`, `curriculum`, `diagnostic`, `edition`, `graph`, `graph-expansion`, `hardening`, `landing`, `landing-contract` (new, Phase 19.4), `library`, `onboarding`, `rag`, `reader`, `roadmap`, `security`, `trash`, `upload`, `upload-integrity` (new, Phase 19.7), `visual`, `workspace-shell`, `writer`.
 
-**CI-safe subset** (`.github/workflows/ci.yml`, runs on every push): `landing`, `onboarding`, `security`, `edition`, `diagnostic`, `library`, `upload`, `curriculum`, `graph`, `trash`, `workspace-shell` — 11 of 20 spec files. `landing-contract` is deliberately not yet added (see its own file header — becomes a gate starting Phase 22).
+**CI-safe subset** (`.github/workflows/ci.yml`, runs on every push): `landing`, `onboarding`, `security`, `edition`, `diagnostic`, `library`, `upload`, `curriculum`, `graph`, `trash`, `workspace-shell` — 11 of 23 spec files.
 
-**Manual-only subset** (needs worker + Storage + live APIs, per `docs/PROJECT-LOG.md`'s documented CI-safe/full-suite split): `annotations`, `auth`, `graph-expansion`, `hardening`, `rag`, `reader`, `roadmap`, `visual`, `writer` — 9 of 20 spec files.
+**Manual/non-CI subset**: `accessibility-sweep`, `annotations`, `auth`, `graph-expansion`, `hardening`, `landing-contract`, `rag`, `reader`, `roadmap`, `upload-integrity`, `visual`, `writer` — 12 of 23 spec files. The first group needs worker, Storage, or live APIs; `landing-contract` and `visual` are deliberately local visual gates. The new `upload-integrity` suite intentionally uses a real signed Storage URL and is isolated from CI's dummy-Storage upload fixture.
 
 ## Known gap surfaced by this inventory, not previously in the register
 

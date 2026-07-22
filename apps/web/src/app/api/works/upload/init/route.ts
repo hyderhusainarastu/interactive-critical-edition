@@ -1,7 +1,7 @@
 import { phase12FeatureEnabled } from "@ice/config";
 import { db, documents, works } from "@ice/db";
 import { createSignedUploadUrl } from "@ice/ingestion";
-import { and, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
@@ -44,11 +44,12 @@ export async function POST(request: Request) {
       });
     }
   }
-  // `uploaded` is a short-lived staging state: a signed URL has been issued,
-  // but the browser has not yet proven that it stored an object and queued
-  // extraction. Counting it here made a failed browser request permanently
-  // consume quota even though it never uploaded a document.
-  const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(and(eq(documents.userId, userId), ne(documents.processingStatus, "uploaded")));
+  // A direct signed-upload row is a quota reservation from the moment its
+  // URL is issued. The browser controls the declared size and can abandon a
+  // PUT before completion, so excluding `uploaded` rows lets one account
+  // accumulate unaccounted Storage objects indefinitely. Completion verifies
+  // the object's actual byte count before releasing this into processing.
+  const [{ used }] = await db.select({ used: sql<number>`coalesce(sum(${documents.fileSize}), 0)` }).from(documents).where(eq(documents.userId, userId));
   // PostgreSQL SUM(int) is bigint. Some production drivers decode bigint as
   // a string, so normalize it before arithmetic (string + number would
   // concatenate and falsely exceed the quota after the first upload).
