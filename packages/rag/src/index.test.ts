@@ -19,6 +19,7 @@ const chunk: RetrievedRagChunk = {
   sourceUrl: null,
   license: null,
   workTitle: "Nicomachean Ethics",
+  workId: "work-1",
   documentId: "document-1",
 };
 

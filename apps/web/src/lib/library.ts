@@ -35,6 +35,24 @@ export { matchesLibrarySearch, normalizeForSearch, SOURCE_TYPE_LABEL };
  * analyzed under v3. A user with no v3-analyzed work has no Library sources
  * yet, but still receives a focusable empty shelf for their uploaded works.
  */
+/**
+ * Phase 20.6: a review/edition/translation/excerpt record displayed UNDER its
+ * canonical work entry rather than beside it as a sibling row. Everything the
+ * record carried is preserved here — attachment is a display decision, not a
+ * data merge.
+ */
+export interface AttachedLibraryRecord {
+  id: string;
+  title: string;
+  role: string;
+  url: string | null;
+  provider: string;
+  resourceType: string;
+  year: number | null;
+  authors: string[];
+  citationProvenance: LibraryItem["citationProvenance"];
+}
+
 export interface LibraryItem {
   id: string;
   title: string;
@@ -81,6 +99,10 @@ export interface LibraryItem {
     resolutionState: "pending" | "resolved" | "unresolved";
   }>;
   recommendedFor: { workId: string; title: string }[];
+  /** Phase 20.6: how this record relates to its canonical work identity. */
+  workRole: string;
+  /** Phase 20.6: reviews/editions/translations collapsed under this entry. */
+  attached: AttachedLibraryRecord[];
   credibility: { authority: string | null; score: number } | null;
   creatorVerification: string | null;
   readingStatus: "planned" | "reading" | "completed" | "abandoned" | null;
@@ -220,6 +242,9 @@ export async function getLibrary(userId: string, options: { search?: string } = 
   }
 
   const items: LibraryItem[] = [];
+  /** Phase 20.6: the canonical work identity of each ITEM's resource (not of
+   *  the uploads it is recommended for) — the display-collapse group key. */
+  const resourceIdentityByItemId = new Map<string, string>();
   for (const [resourceId, resourceRolesForResource] of rolesByResourceId) {
     const resource = resourceById.get(resourceId);
     if (!resource) continue;
@@ -299,12 +324,73 @@ export async function getLibrary(userId: string, options: { search?: string } = 
       roles: libraryRoles,
       citationProvenance: citationProvenanceByResourceId.get(resource.id) ?? [],
       recommendedFor,
+      workRole: resource.workRole,
+      attached: [],
       credibility,
       creatorVerification: creatorVerification(resource.creator),
       readingStatus: reading?.status ?? null,
       understandingScore: rating?.score ?? null,
       createdAt: resource.createdAt,
       updatedAt: resource.updatedAt,
+    });
+    if (resource.workIdentityId) resourceIdentityByItemId.set(resource.id, resource.workIdentityId);
+  }
+
+  // Phase 20.6 canonical display collapse: resources sharing one canonical
+  // work identity render as ONE Library entry — the primary text — with its
+  // reviews/editions/translations ATTACHED under it, never merged into it
+  // (each attached record keeps its id, role, provenance, and reading state
+  // in the payload). Resources with no established identity (including every
+  // directly-seeded test fixture) are untouched. Recommendations and focus
+  // evidence from attached records are folded into the canonical entry so
+  // work-focus filtering still finds the group.
+  const ROLE_DISPLAY_RANK: Record<string, number> = { primary: 0, edition: 1, translation: 2, excerpt: 3, review: 4 };
+  const groupsByIdentity = new Map<string, LibraryItem[]>();
+  const collapsedItems: LibraryItem[] = [];
+  for (const item of items) {
+    const identityId = resourceIdentityByItemId.get(item.id);
+    if (!identityId) {
+      collapsedItems.push(item);
+      continue;
+    }
+    groupsByIdentity.set(identityId, [...(groupsByIdentity.get(identityId) ?? []), item]);
+  }
+  for (const group of groupsByIdentity.values()) {
+    if (group.length === 1) {
+      collapsedItems.push(group[0]);
+      continue;
+    }
+    const sorted = [...group].sort((left, right) =>
+      (ROLE_DISPLAY_RANK[left.workRole] ?? 5) - (ROLE_DISPLAY_RANK[right.workRole] ?? 5) ||
+      (right.doi ? 1 : 0) - (left.doi ? 1 : 0) ||
+      (right.isbn ? 1 : 0) - (left.isbn ? 1 : 0) ||
+      left.createdAt.getTime() - right.createdAt.getTime() ||
+      left.id.localeCompare(right.id));
+    const [head, ...rest] = sorted;
+    const mergedRecommended = new Map(head.recommendedFor.map((work) => [work.workId, work]));
+    const mergedFocus = new Map(head.focusMetrics.map((metric) => [metric.workId, metric]));
+    const mergedRoles = [...head.roles];
+    for (const item of rest) {
+      for (const work of item.recommendedFor) if (!mergedRecommended.has(work.workId)) mergedRecommended.set(work.workId, work);
+      for (const metric of item.focusMetrics) if (!mergedFocus.has(metric.workId)) mergedFocus.set(metric.workId, metric);
+      mergedRoles.push(...item.roles);
+    }
+    collapsedItems.push({
+      ...head,
+      recommendedFor: [...mergedRecommended.values()].sort((left, right) => left.title.localeCompare(right.title) || left.workId.localeCompare(right.workId)),
+      focusMetrics: [...mergedFocus.values()],
+      roles: mergedRoles,
+      attached: rest.map((item) => ({
+        id: item.id,
+        title: item.title,
+        role: item.workRole,
+        url: item.url,
+        provider: item.provider,
+        resourceType: item.resourceType,
+        year: item.year,
+        authors: item.authors,
+        citationProvenance: item.citationProvenance,
+      })),
     });
   }
 
@@ -316,7 +402,7 @@ export async function getLibrary(userId: string, options: { search?: string } = 
   // above (credibility, roles, recommendedFor) with no risk of excluding
   // a resource before its search-relevant fields (doi/isbn/venue) are set.
   const normalizedQuery = options.search ? normalizeForSearch(options.search) : "";
-  const searchedItems = normalizedQuery ? items.filter((item) => matchesLibrarySearch(item, normalizedQuery)) : items;
+  const searchedItems = normalizedQuery ? collapsedItems.filter((item) => matchesLibrarySearch(item, normalizedQuery)) : collapsedItems;
 
   return { works: libraryWorks, items: searchedItems };
 }

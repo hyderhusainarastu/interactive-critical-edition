@@ -12,6 +12,7 @@ import {
 import {
   SOCRATIC_SYSTEM_PROMPT,
   buildSocraticInput,
+  canonicalWorkDisplayTitles,
   fallbackSocraticAnswer,
   retrieveOwnerRagChunks,
   RAG_RESPONSE_HARD_CAP_USD,
@@ -109,6 +110,7 @@ export async function getRagConversationView(userId: string, conversationId: str
       sourceUrl: ragChunks.sourceUrl,
       license: ragChunks.license,
       workTitle: works.title,
+      workId: ragChunks.workId,
     })
     .from(ragMessages)
     .leftJoin(ragMessageCitations, eq(ragMessages.id, ragMessageCitations.messageId))
@@ -117,11 +119,19 @@ export async function getRagConversationView(userId: string, conversationId: str
     .where(eq(ragMessages.conversationId, conversation.id))
     .orderBy(asc(ragMessages.createdAt), asc(ragMessageCitations.ordinal));
 
+  // Phase 20.6: historical citations also display under the canonical work
+  // entry (same resolution `retrieveOwnerRagChunks` applies to new answers).
+  const canonicalTitles = await canonicalWorkDisplayTitles(
+    userId,
+    rows.map((row) => row.workId).filter((id): id is string => Boolean(id)),
+  );
+
   const messages = new Map<string, RagMessageView>();
   for (const row of rows) {
     const existing = messages.get(row.id) ?? messageView({ id: row.id, role: row.role, content: row.content, createdAt: row.createdAt, latencyMs: row.latencyMs });
     if (row.chunkId && row.anchor && row.sourceType && row.workTitle && row.ordinal != null) {
-      existing.citations.push(citationView({ id: row.chunkId, anchor: row.anchor, sourceType: row.sourceType, sourceUrl: row.sourceUrl, license: row.license, workTitle: row.workTitle }, row.ordinal));
+      const displayTitle = (row.workId ? canonicalTitles.get(row.workId) : undefined) ?? row.workTitle;
+      existing.citations.push(citationView({ id: row.chunkId, anchor: row.anchor, sourceType: row.sourceType, sourceUrl: row.sourceUrl, license: row.license, workTitle: displayTitle }, row.ordinal));
     }
     messages.set(row.id, existing);
   }

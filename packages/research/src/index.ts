@@ -7,6 +7,10 @@ export * from "./normalize";
 // ever scored for authority.
 export * from "./relevance";
 export * from "./workIdentity";
+// Phase 20.6: the canonical-identity precedence chain (DOI → ISBN → provider
+// id → title/author/year → content hash → fuzzy-suggestion-only) that plans
+// duplicate-identity collapse and classifies record-to-work relations.
+export * from "./canonicalIdentity";
 export * from "./credibility";
 // Phase 9.2: creator identity, and credibility as separated dimensions. The
 // Phase 8 A–E band above is retained — it still gates factual claims — but the

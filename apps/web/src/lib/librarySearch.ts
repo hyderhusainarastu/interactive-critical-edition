@@ -59,6 +59,14 @@ export function matchesLibrarySearch(item: LibraryItem, normalizedQuery: string)
     item.isbn,
     item.resourceType,
     SOURCE_TYPE_LABEL[item.resourceType],
+    // Phase 20.6: records attached under this canonical entry (reviews,
+    // editions, translations) are still searchable — finding a review's
+    // title must surface the canonical work it hangs off.
+    ...(item.attached ?? []).flatMap((attached) => [
+      attached.title,
+      ...attached.authors,
+      attached.year != null ? String(attached.year) : null,
+    ]),
   ]
     .filter((value): value is string => typeof value === "string" && value.length > 0)
     .map(normalizeForSearch);

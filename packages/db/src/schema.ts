@@ -1537,11 +1537,60 @@ export const workIdentities = pgTable("work_identity", {
   authorSurname: text("author_surname"),
   authors: jsonb("authors"),
   year: integer("year"),
+  /**
+   * Phase 20.6 verified identifiers — the canonical-identity precedence chain
+   * (`packages/research/src/canonicalIdentity.ts`) matches on these BEFORE
+   * falling back to the title/author `workKey`. Only ever populated from a
+   * PRIMARY-role record (a review's own DOI must never become the work's),
+   * and only backfilled when null — never overwritten.
+   */
+  doi: text("doi"),
+  isbn: text("isbn"),
+  /** Canonical external provider id (e.g. "openalex:W…"), when one is known. */
+  externalId: text("external_id"),
+  /** Verified content hash of an uploaded document established as this work. */
+  contentHash: text("content_hash"),
   /** Why records were grouped here — a wrong grouping must be explainable. */
   evidence: text("evidence"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Plain (non-unique) indexes: pre-existing rows may already duplicate an
+  // identifier — exactly what the 20.6 audit finds — so uniqueness here would
+  // make the migration itself fail on real data. Conflict-safe upserts stay
+  // keyed on `workKey`; the precedence lookups use these indexes.
+  index("work_identity_doi_idx").on(t.doi),
+  index("work_identity_isbn_idx").on(t.isbn),
+  index("work_identity_content_hash_idx").on(t.contentHash),
+]);
+
+/**
+ * Phase 20.6: a REVERSIBLE record of one applied identity merge. The loser
+ * `work_identity` row is never deleted — every row that pointed at it
+ * (`works`, `learning_resource`, `resource_role`) is repointed to the winner,
+ * and the exact pre-merge state is captured in `reversal` so
+ * `revertWorkIdentityMerge` can restore it precisely. A loser can be merged
+ * at most once while the merge is active (partial unique below); reverting
+ * clears that slot so a corrected re-merge stays possible.
+ */
+export const workIdentityMerges = pgTable("work_identity_merge", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  winnerIdentityId: uuid("winner_identity_id").notNull().references(() => workIdentities.id, { onDelete: "cascade" }),
+  loserIdentityId: uuid("loser_identity_id").notNull().references(() => workIdentities.id, { onDelete: "cascade" }),
+  /** Which precedence-chain rule justified the merge (doi/isbn/provider-id/…). */
+  method: text("method").notNull(),
+  evidence: jsonb("evidence"),
+  /** Exact ids/rows repointed or displaced, captured for precise reversal. */
+  reversal: jsonb("reversal").notNull(),
+  createdBy: provenanceEnum("created_by").notNull().default("system"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  revertedAt: timestamp("reverted_at"),
+}, (t) => [
+  index("work_identity_merge_winner_idx").on(t.winnerIdentityId),
+  uniqueIndex("work_identity_merge_active_loser_unique")
+    .on(t.loserIdentityId)
+    .where(sql`reverted_at is null`),
+]);
 
 /**
  * A resource a reader can learn from, shared across runs and users — the
@@ -1556,6 +1605,14 @@ export const workIdentities = pgTable("work_identity", {
 export const learningResources = pgTable("learning_resource", {
   id: uuid("id").primaryKey().defaultRandom(),
   workIdentityId: uuid("work_identity_id").references(() => workIdentities.id, { onDelete: "set null" }),
+  /**
+   * Phase 20.6: how this record relates to its `workIdentityId` — primary
+   * text, review, edition, translation, or excerpt. Durable projection of the
+   * run-scoped `research_resource.work_role`, so the Library can show ONE
+   * canonical entry per work with reviews/editions attached rather than five
+   * sibling rows (the canary-10 defect).
+   */
+  workRole: recordRoleEnum("work_role").notNull().default("primary"),
   title: text("title").notNull(),
   url: text("url"),
   canonicalUrl: text("canonical_url"),

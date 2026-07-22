@@ -65,6 +65,14 @@ const TABS: { key: Tab; label: string }[] = [
 
 type SortKey = "relevance" | "recency" | "title" | "credibility";
 const READING_STATUSES = ["planned", "reading", "completed", "abandoned"] as const;
+/** Phase 20.6: labels for records attached under their canonical work entry. */
+const ATTACHED_ROLE_LABEL: Record<string, string> = {
+  review: "Review",
+  edition: "Edition",
+  translation: "Translation",
+  excerpt: "Excerpt",
+  primary: "Primary text",
+};
 const AUTHORITY_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 function matchesTab(item: LibraryItem, tab: Tab): boolean {
@@ -488,7 +496,13 @@ function LibraryRow({
                 {item.title}
               </a>
             ) : (
-              item.title
+              // Structural-only addition (Phase 20.4): links to the new
+              // Library entry detail page (source-text attach lives there).
+              // Deliberately not touching this row's other label strings —
+              // those are Phase 20.2's scope.
+              <Link href={`/library/${item.id}`} className="underline">
+                {item.title}
+              </Link>
             )}
             {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
           </p>
@@ -535,6 +549,28 @@ function LibraryRow({
                   {w.title}
                 </Link>
               ))}
+            </div>
+          )}
+
+          {(item.attached ?? []).length > 0 && (
+            <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Related records for ${item.title}`}>
+              <p className="font-medium text-[var(--color-text)]">Related records of this work</p>
+              <ul className="mt-1 list-disc pl-4">
+                {item.attached.map((attached) => (
+                  <li key={attached.id} data-attached-record={attached.id}>
+                    {ATTACHED_ROLE_LABEL[attached.role] ?? attached.role}
+                    {": "}
+                    {attached.url ? (
+                      <a href={attached.url} target="_blank" rel="noreferrer" className="underline">
+                        {attached.title}
+                      </a>
+                    ) : (
+                      attached.title
+                    )}
+                    {attached.year ? ` (${attached.year})` : null}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

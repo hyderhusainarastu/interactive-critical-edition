@@ -800,12 +800,75 @@ async function findOrCreateBibFromResource(r: RawResource): Promise<string | nul
 
 /**
  * Find-or-create the shared `work_identity` row for a computed identity key
- * (plan §34.4 9.5). Unlike `findOrCreateBibFromResource`'s catalogue,
- * `work_identity.workKey` carries a real unique constraint, so a plain
- * select-then-insert can lose a race between two concurrent runs that
- * resolve to the same work — `onConflictDoNothing` + re-select closes it.
+ * (plan §34.4 9.5), upgraded in Phase 20.6 to run the canonical-identity
+ * precedence chain BEFORE the title/author key: verified DOI, then verified
+ * ISBN, then canonical provider id, then the `workKey` (normalized
+ * title+author), then a verified upload content hash. Identifiers are only
+ * ever accepted from PRIMARY-role records — a review carries its own DOI,
+ * and storing it here is exactly how one work becomes five entries — and
+ * only backfilled onto an existing identity when the column is still null,
+ * never overwritten.
+ *
+ * Unlike `findOrCreateBibFromResource`'s catalogue, `work_identity.workKey`
+ * carries a real unique constraint, so a plain select-then-insert can lose a
+ * race between two concurrent runs that resolve to the same work —
+ * `onConflictDoNothing` + re-select closes it.
  */
-async function findOrCreateWorkIdentity(identity: WorkIdentityKey, authors: string[]): Promise<string | null> {
+export async function findOrCreateWorkIdentity(
+  identity: WorkIdentityKey,
+  authors: string[],
+  verified: { doi?: string | null; isbn?: string | null; externalId?: string | null; contentHash?: string | null; year?: number | null } = {},
+): Promise<string | null> {
+  const doi = canonicalizeDoi(verified.doi);
+  const isbn = canonicalizeIsbn(verified.isbn);
+  const externalId = verified.externalId?.trim().toLowerCase() || null;
+  const contentHash = verified.contentHash?.trim() || null;
+
+  const backfill = async (id: string) => {
+    if (!doi && !isbn && !externalId && !contentHash) return;
+    await db
+      .update(workIdentities)
+      .set({
+        doi: sql`coalesce(${workIdentities.doi}, ${doi})`,
+        isbn: sql`coalesce(${workIdentities.isbn}, ${isbn})`,
+        externalId: sql`coalesce(${workIdentities.externalId}, ${externalId})`,
+        contentHash: sql`coalesce(${workIdentities.contentHash}, ${contentHash})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(workIdentities.id, id));
+  };
+
+  // Precedence 1–3: a verified identifier outranks the title/author key.
+  for (const clause of [
+    doi ? eq(workIdentities.doi, doi) : null,
+    isbn ? eq(workIdentities.isbn, isbn) : null,
+    externalId ? eq(workIdentities.externalId, externalId) : null,
+  ]) {
+    if (!clause) continue;
+    const [match] = await db.select({ id: workIdentities.id }).from(workIdentities).where(clause).limit(1);
+    if (match) {
+      await backfill(match.id);
+      return match.id;
+    }
+  }
+
+  // Precedence 4: the normalized title+author key (the unique `workKey`).
+  const [byKey] = await db.select({ id: workIdentities.id }).from(workIdentities).where(eq(workIdentities.workKey, identity.key)).limit(1);
+  if (byKey) {
+    await backfill(byKey.id);
+    return byKey.id;
+  }
+
+  // Precedence 5: identical uploaded bytes — the same document re-uploaded
+  // under a different filename can extract a slightly different title.
+  if (contentHash) {
+    const [byHash] = await db.select({ id: workIdentities.id }).from(workIdentities).where(eq(workIdentities.contentHash, contentHash)).limit(1);
+    if (byHash) {
+      await backfill(byHash.id);
+      return byHash.id;
+    }
+  }
+
   const inserted = await db
     .insert(workIdentities)
     .values({
@@ -813,12 +876,18 @@ async function findOrCreateWorkIdentity(identity: WorkIdentityKey, authors: stri
       canonicalTitle: identity.canonicalTitle,
       authorSurname: identity.authorSurname,
       authors,
+      year: verified.year ?? null,
+      doi,
+      isbn,
+      externalId,
+      contentHash,
       evidence: identity.evidence,
     })
     .onConflictDoNothing({ target: workIdentities.workKey })
     .returning({ id: workIdentities.id });
   if (inserted[0]) return inserted[0].id;
   const [existing] = await db.select({ id: workIdentities.id }).from(workIdentities).where(eq(workIdentities.workKey, identity.key)).limit(1);
+  if (existing) await backfill(existing.id);
   return existing?.id ?? null;
 }
 
@@ -844,7 +913,7 @@ export async function analyzeEditionRun(input: {
   apparatus?: ExtractedAuthorApparatus[];
 }): Promise<void> {
   const [doc] = await db
-    .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName })
+    .select({ userId: documents.userId, workId: documents.workId, title: works.title, authorName: works.authorName, contentHash: documents.contentHash })
     .from(documents)
     .innerJoin(works, eq(works.id, documents.workId))
     .where(eq(documents.id, input.documentId))
@@ -900,7 +969,10 @@ export async function analyzeEditionRun(input: {
       isbn: null,
       resourceType: "book",
     });
-    primaryWorkIdentityId = await findOrCreateWorkIdentity(primaryIdentity, resolvedAuthors);
+    // The upload's verified content hash participates in the precedence chain
+    // (plan §20.6 rule 5): the same bytes re-uploaded under another filename
+    // must resolve to the same canonical work identity.
+    primaryWorkIdentityId = await findOrCreateWorkIdentity(primaryIdentity, resolvedAuthors, { contentHash: doc.contentHash });
     if (primaryWorkIdentityId) {
       await db
         .update(works)
@@ -1612,9 +1684,17 @@ export async function analyzeEditionRun(input: {
     if (isModernPipeline && primaryWorkIdentityId && r.resourceType !== "unresolved-citation") {
       const libraryKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
       if (libraryKey) {
-        const resourceWorkIdentityId = await findOrCreateWorkIdentity(resourceWork, r.authors);
+        // Verified identifiers feed the precedence chain only from a
+        // PRIMARY-role record: a review's own DOI must never become the
+        // reviewed work's DOI (plan §20.6).
+        const resourceWorkIdentityId = await findOrCreateWorkIdentity(
+          resourceWork,
+          r.authors,
+          resourceWork.role === "primary" ? { doi: r.doi, isbn: r.isbn, year: r.year } : {},
+        );
         const libraryFields = {
           workIdentityId: resourceWorkIdentityId,
+          workRole: resourceWork.role,
           title: r.title,
           url: r.url,
           canonicalUrl: canonicalizeUrl(r.url),

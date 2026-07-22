@@ -127,6 +127,8 @@ interface SourceRow {
   work_id: string;
   bib_record_id: string | null;
   normalized_key: string | null;
+  work_key: string | null;
+  work_role: string;
   title: string;
   authors: unknown;
   year: number | null;
@@ -268,7 +270,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // The LATERAL join deliberately picks one provenance record per source so
   // a source node is never duplicated by its audit trail.
   const sourceRows = (await db.execute(sql`
-    SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.normalized_key, rr.title, rr.authors,
+    SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.normalized_key, rr.work_key, rr.work_role, rr.title, rr.authors,
       rr.year, rr.url, rr.resource_type, rr.provider, rr.access_status,
       ca.authority, ca.score, ca.peer_reviewed,
       rrc.status AS content_status, rrc.license, rrc.source_url,
@@ -337,9 +339,36 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     if (["webpage", "video", "social_post", "dataset"].includes(source.resource_type)) return "online_source";
     return "reference";
   };
-  const canonicalExternalId = (source: SourceRow) => source.bib_record_id
+  const rawExternalId = (source: SourceRow) => source.bib_record_id
     ? `external:bib:${source.bib_record_id}`
     : `external:source:${source.normalized_key ?? source.id}`;
+
+  // Phase 20.6 canonical collapse: PRIMARY/EDITION records that share a
+  // derived work identity (`research_resource.work_key`) are ONE work — a
+  // cited book that resolved to two bibliographic records (canary-10's
+  // defect) must be one node, with editions nested into it. Reviews and
+  // other non-primary roles deliberately stay separate nodes: they are
+  // ATTACHED via their `review_of`-style relation edges, never merged.
+  // Only groups with 2+ distinct raw ids are aliased, so every
+  // single-record work keeps its exact pre-existing node id.
+  const idsByWorkKey = new Map<string, { rawId: string; hasBib: boolean }[]>();
+  for (const source of sourceRows) {
+    if (!source.work_key || !["primary", "edition"].includes(source.work_role)) continue;
+    const rawId = rawExternalId(source);
+    const list = idsByWorkKey.get(source.work_key) ?? [];
+    if (!list.some((entry) => entry.rawId === rawId)) list.push({ rawId, hasBib: Boolean(source.bib_record_id) });
+    idsByWorkKey.set(source.work_key, list);
+  }
+  const aliasByRawId = new Map<string, string>();
+  for (const entries of idsByWorkKey.values()) {
+    if (entries.length < 2) continue;
+    const representative = [...entries].sort((a, b) => Number(b.hasBib) - Number(a.hasBib) || a.rawId.localeCompare(b.rawId))[0];
+    for (const entry of entries) {
+      if (entry.rawId !== representative.rawId) aliasByRawId.set(entry.rawId, representative.rawId);
+    }
+  }
+  const canonicalNodeId = (rawId: string) => aliasByRawId.get(rawId) ?? rawId;
+  const canonicalExternalId = (source: SourceRow) => canonicalNodeId(rawExternalId(source));
   const sourceNodeIds = new Map<string, string>();
   const publicOnlyByNode = new Map<string, boolean>();
   const providerIsPublic = (provider: string) => ["youtube", "mastodon", "bluesky"].includes(provider.toLocaleLowerCase());
@@ -390,8 +419,9 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
           ? "missing"
           : "unread";
     const enrich = enrichByBib.get(r.id);
-    mergeExternal(`external:bib:${r.id}`, {
-      id: `external:bib:${r.id}`, label: r.title, type: "reference", state,
+    const bibNodeId = canonicalNodeId(`external:bib:${r.id}`);
+    mergeExternal(bibNodeId, {
+      id: bibNodeId, label: r.title, type: "reference", state,
       authors: r.authors, year: r.year, url: r.url,
       authority: enrich?.authority ?? null, credibilityScore: enrich?.credibilityScore ?? null,
       provider: enrich?.provider ?? null, kind: null,
@@ -450,7 +480,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   const links: GraphLink[] = [
     ...edges.map((e) => ({
       source: `work:${e.source_id}`,
-      target: `external:bib:${e.target_id}`,
+      target: canonicalNodeId(`external:bib:${e.target_id}`),
       edgeType: e.edge_type,
       category: e.category,
       confidence: e.confidence,

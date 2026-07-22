@@ -276,8 +276,52 @@ export type RetrievedRagChunk = {
   sourceUrl: string | null;
   license: string | null;
   workTitle: string;
+  workId: string;
   documentId: string;
 };
+
+/**
+ * Phase 20.6: resolve the CANONICAL display title for each owned work. When
+ * several non-deleted uploads share one `work_identity` (the same work
+ * uploaded twice), they must present as ONE display entry — the
+ * representative is the earliest-created upload, deterministically — so a
+ * RAG citation from either copy points at the same canonical entry name.
+ * Works without an established identity keep their own confirmed title;
+ * nothing here invents or rewrites titles (§2.5).
+ */
+export async function canonicalWorkDisplayTitles(userId: string, workIds: readonly string[]): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set(workIds)];
+  if (!uniqueIds.length) return new Map();
+  const [{ db, works }, { and, eq, inArray, isNull }] = await Promise.all([
+    import("@ice/db"),
+    import("drizzle-orm"),
+  ]);
+  const requested = await db
+    .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId })
+    .from(works)
+    .where(inArray(works.id, uniqueIds));
+  const identityIds = [...new Set(requested.map((row) => row.workIdentityId).filter((id): id is string => Boolean(id)))];
+  const titles = new Map(requested.map((row) => [row.id, row.title]));
+  if (!identityIds.length) return titles;
+  const siblings = await db
+    .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId, createdAt: works.createdAt })
+    .from(works)
+    .where(and(eq(works.userId, userId), isNull(works.deletedAt), inArray(works.workIdentityId, identityIds)));
+  const representative = new Map<string, { title: string; createdAt: Date; id: string }>();
+  for (const sibling of siblings) {
+    if (!sibling.workIdentityId) continue;
+    const current = representative.get(sibling.workIdentityId);
+    if (!current || sibling.createdAt < current.createdAt || (sibling.createdAt.getTime() === current.createdAt.getTime() && sibling.id < current.id)) {
+      representative.set(sibling.workIdentityId, { title: sibling.title, createdAt: sibling.createdAt, id: sibling.id });
+    }
+  }
+  for (const row of requested) {
+    if (!row.workIdentityId) continue;
+    const rep = representative.get(row.workIdentityId);
+    if (rep) titles.set(row.id, rep.title);
+  }
+  return titles;
+}
 
 /** Owner scope is part of the SQL predicate, not a post-query filter. */
 export async function retrieveOwnerRagChunks(userId: string, query: string, limit = RAG_RETRIEVAL_LIMIT): Promise<RetrievedRagChunk[]> {
@@ -294,6 +338,7 @@ export async function retrieveOwnerRagChunks(userId: string, query: string, limi
       sourceUrl: ragChunks.sourceUrl,
       license: ragChunks.license,
       workTitle: works.title,
+      workId: ragChunks.workId,
       documentId: ragChunks.documentId,
     })
     .from(ragChunks)
@@ -301,8 +346,12 @@ export async function retrieveOwnerRagChunks(userId: string, query: string, limi
     // A trashed work is hidden from RAG retrieval (Phase 20.3): its chunks
     // stay in place for restore, but Ask Library must not answer from them.
     .where(and(eq(ragChunks.userId, userId), isNull(works.deletedAt)));
+  // Phase 20.6: citations display under the canonical work entry, so two
+  // uploads of the same work never present as two different sources.
+  const canonicalTitles = await canonicalWorkDisplayTitles(userId, rows.map((row) => row.workId));
   return rankLexically(query, rows.map((row) => ({
     ...row,
+    workTitle: canonicalTitles.get(row.workId) ?? row.workTitle,
     anchor: row.anchor as RagAnchor,
     sourceType: row.sourceType as "uploaded" | "open_access",
   })), limit);
