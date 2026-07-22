@@ -1,4 +1,4 @@
-import { db, readingRecords, users, works } from "@ice/db";
+import { db, learningResources, readingRecords, users, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItem, seedWorkWithLibraryItems } from "./helpers";
@@ -348,5 +348,79 @@ test.describe("Library (Phase 9.5)", () => {
     expect(titles[2]).toContain("Gamma to-read webpage");
 
     await deleteTestUser(filterEmail);
+  });
+
+  test("clicking the focused-work title and a recommended-for chip navigates to the real work pages", async ({ page }) => {
+    const navEmail = `e2e-library-nav-${Date.now()}@example.com`;
+    const navUserId = await createVerifiedTestUser(navEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItems(navUserId, "Navigable focus work", [
+      { resourceTitle: "Navigable recommendation", relationship: "prerequisite" },
+    ]);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(navEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto(`/library?focus=${workId}`);
+
+    const libraryContent = page.locator("#main-content");
+    await libraryContent.locator("[data-focus-work]").getByRole("link", { name: "Navigable focus work" }).click();
+    await page.waitForURL(new RegExp(`/works/${workId}$`));
+    await expect(page.getByRole("heading", { name: "Navigable focus work" })).toBeVisible();
+
+    await page.goBack();
+    await page.goto(`/library?focus=${workId}`);
+    await libraryContent.locator("[data-library-item]").filter({ hasText: "Navigable recommendation" }).getByRole("link", { name: "Navigable focus work" }).click();
+    await page.waitForURL(new RegExp(`/works/${workId}$`));
+    await expect(page.getByRole("heading", { name: "Navigable focus work" })).toBeVisible();
+
+    await deleteTestUser(navEmail);
+  });
+
+  test("an external resource link opens the real source URL in a new tab, and the empty-state CTA navigates to Upload", async ({ page }) => {
+    const externalEmail = `e2e-library-external-${Date.now()}@example.com`;
+    const externalUserId = await createVerifiedTestUser(externalEmail, PASSWORD);
+    const { resourceIds } = await seedWorkWithLibraryItems(externalUserId, "External link work", [
+      { resourceTitle: "Externally hosted source", relationship: "prerequisite" },
+    ]);
+    await db.update(learningResources).set({ url: "https://example.com/externally-hosted-source" }).where(eq(learningResources.id, resourceIds[0]));
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(externalEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto("/library");
+
+    const libraryContent = page.locator("#main-content");
+    const externalLink = libraryContent.getByRole("link", { name: "Externally hosted source" });
+    await expect(externalLink).toHaveAttribute("href", "https://example.com/externally-hosted-source");
+    await expect(externalLink).toHaveAttribute("target", "_blank");
+    const [popup] = await Promise.all([page.waitForEvent("popup"), externalLink.click()]);
+    await popup.waitForLoadState("domcontentloaded").catch(() => undefined);
+    expect(popup.url()).toBe("https://example.com/externally-hosted-source");
+    await popup.close();
+
+    await deleteTestUser(externalEmail);
+  });
+
+  test("the empty-state Upload CTA navigates to /upload", async ({ page }) => {
+    const emptyEmail = `e2e-library-upload-cta-${Date.now()}@example.com`;
+    await createVerifiedTestUser(emptyEmail, PASSWORD);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(emptyEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto("/library");
+
+    const libraryContent = page.locator("#main-content");
+    await libraryContent.getByRole("link", { name: "Upload a work" }).click();
+    await page.waitForURL("**/upload");
+    await expect(page.getByRole("heading", { name: /upload/i }).first()).toBeVisible();
+
+    await deleteTestUser(emptyEmail);
   });
 });

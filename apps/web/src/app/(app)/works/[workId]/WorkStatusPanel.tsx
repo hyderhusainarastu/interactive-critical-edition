@@ -203,6 +203,15 @@ export function WorkStatusPanel({
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           {data.processingError ?? "An unknown error occurred."}
         </p>
+        {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
+        <button
+          type="button"
+          onClick={handleReprocess}
+          disabled={reprocessing}
+          className="mt-3 rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60"
+        >
+          {reprocessing ? "Retrying…" : "Retry processing"}
+        </button>
       </div>
     );
   }

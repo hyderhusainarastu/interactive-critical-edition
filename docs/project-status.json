@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-22",
   "current": {
-    "phase": 19,
-    "headline": "Phase 19 pre-flight verification and checklist rebuild complete; interaction inventory and journeys next",
-    "summary": "Phase 18 (Ask Library) remains production-complete. The Phase 19 pre-flight gate (19.P) re-verified the whole stack before continuing: typecheck, lint, all unit tests, and the production build pass; CI is green on the last 5 pushes to main; the live Render worker (instance srv-d9dgiamrnols73ccpa10-ksj74, commit b9b5bcc, pipeline v4) and the latest Vercel production deployment are both healthy and match main; the Supabase migration ledger is confirmed at 30; and the full 11-spec/60-test CI-safe Playwright subset passes locally. The generated checklist (19.C) is rebuilt to schemaVersion 2 with per-sub-phase model assignments, a Phases 19-24 program progress view, and a defect-register summary. Remaining Phase 19 work: the per-control interaction inventory and user-journey pass (19.I/19.J), the owner-authorized production cleanup of D-19-11's orphaned Storage/catalog rows and the test-reader acceptance account (19.D), and closeout (19.X).",
-    "nextAction": "Complete the interaction inventory and journey audit (19.I/19.J), run the authorized production cleanup (19.D), and close Phase 19 (19.X) before Phase 20 begins."
+    "phase": 20,
+    "headline": "Phase 19 complete and tagged; Phase 20 (Library integrity, file lifecycle, processing reliability, backend repair) begins",
+    "summary": "Phase 19 closed 2026-07-22 (tag phase-19-complete): pre-flight verification, the rebuilt generated checklist, a complete interaction inventory and user-journey pass (4 new defects found and fixed: D-19-21/25/29/34), and the owner-authorized production cleanup (9 orphaned Storage objects, 7 orphaned catalog rows, the test-reader account) are all done, with 24 total register findings, zero open, zero P0. Two residual gaps are recorded rather than silently dropped: contextual Ask Library (deferred to Phase 22.5) and a fully-scripted signup-through-email-verification E2E (historically manually verified, not yet automated). Phase 20 begins under the owner's standing 2026-07-22 authorization to proceed autonomously through the Phases 19-24 program.",
+    "nextAction": "Begin Phase 20.1 (Library search) per the prioritized order, following the same audit-before-edit discipline: reproduce the reported reprocess/duplicate/permanent-delete gaps first, then implement in dependency order (search -> terminology/filter-visibility -> permanent delete -> source-text attach -> reprocess reliability -> canonical identity/duplicate collapse -> cross-surface consistency -> Phase 20 gate)."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -28,10 +28,10 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-22",
-    "total": 20,
-    "bySeverity": { "P0": 0, "P1": 5, "P2": 13, "P3": 2 },
-    "byStatus": { "fixed": 17, "partially_fixed": 1, "fixed_pending_cleanup": 1, "open": 1 },
-    "note": "No P0 defects found. All 5 P1s (D-19-1, D-19-3, D-19-4, D-19-7, D-19-10) are fixed in code. D-19-10 is 'fixed_pending_cleanup': the code fix shipped, but the 8 pre-existing orphaned Storage objects it can no longer retroactively touch are the same objects tracked by D-19-11 (P2, open - owner action), both scheduled for the authorized Phase 19.D cleanup. D-19-6 is partially fixed: the environment-drift repair shipped, but two live-pipeline-timing-bound tests and the legacy AnnotationsPanel/annotations.spec.ts question remain an open, documented decision rather than silently patched."
+    "total": 24,
+    "bySeverity": { "P0": 0, "P1": 6, "P2": 16, "P3": 2 },
+    "byStatus": { "fixed": 23, "partially_fixed": 1, "fixed_pending_cleanup": 0, "open": 0 },
+    "note": "No P0 defects found; zero open. All 6 P1s (D-19-1, D-19-3, D-19-4, D-19-7, D-19-10, D-19-29) are fixed in code. D-19-11's owner-authorized production cleanup (9 orphaned Storage objects, 7 orphaned googlebooks catalog rows, plus the test-reader acceptance account and its data/queue rows) completed 2026-07-22 with both anti-joins rechecked to zero, which also resolved D-19-10's residual 'existing objects open' note. The interaction-inventory tranche (D-19-21/25/29/34) closed the remaining pending Shell/Writer/Library/Work-status/Reader control rows. D-19-6 remains partially fixed: the environment-drift repair shipped, but two live-pipeline-timing-bound tests and the legacy AnnotationsPanel/annotations.spec.ts question remain an open, documented decision rather than silently patched."
   },
   "phases": [
     {
@@ -388,9 +388,10 @@
     {
       "number": 19,
       "title": "Product-Wide Baseline, Contract Capture, and Defect Audit",
-      "state": "in_progress",
-      "summary": "Diagnose reported Render server failures, establish frontend tooling (with documented substitutes for the unreachable Stitch MCP and unavailable Uncodixify plugin), freeze the landing-page visual contract, audit every route/control, and populate the Phase 19-23 defect register. Interaction inventory is underway; signed-upload byte-accounting is repaired; exact existing Storage/catalog cleanup is awaiting owner authorization.",
-      "confirmation": "Not yet requested. Owner confirmation is required before Phase 20 production-affecting work begins per the plan's own gate.",
+      "state": "complete",
+      "tag": "phase-19-complete",
+      "summary": "Diagnosed the reported Render server failures, established frontend tooling (with documented substitutes for the unreachable Stitch MCP and unavailable Uncodixify plugin), froze the landing-page visual contract, audited every route/control, populated and closed the Phase 19-23 defect register (24 findings, 0 open, 0 P0), completed the interaction inventory and user-journey pass, and executed the owner-authorized production cleanup.",
+      "confirmation": "The owner's 2026-07-22 standing authorization (see PROJECT-LOG's Phases 19-24 Completion Program section) grants full autonomy to proceed through the program without a separate per-phase confirmation request, superseding the plan's own default per-phase gate.",
       "subphases": [
         {
           "id": "19.P",
@@ -409,30 +410,30 @@
         {
           "id": "19.I",
           "title": "Complete the per-control interaction inventory",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Close every remaining 'pending' row in docs/audits/phase-19-interaction-inventory.md: preferences effects, logout, Writer multi-document ordering + Cite/Read, Library nav-target click-throughs, work-status states, remaining Reader controls, and non-empty split-view selection."
+          "summary": "Closed every remaining 'pending' row in docs/audits/phase-19-interaction-inventory.md across 4 parallel Sonnet passes: Shell preferences (text size/reading width/focus-mode/logout), Writer (multi-document reorder, Library-source Cite/Read), Library (focused-work/chips/external-links/empty-state CTA), Work-status (metadata-confirm/processing/failed-recovery/reprocess/trashed-Undo), and Reader (highlight/bookmark/notes/analysis-toggle/footnote-modal/non-empty split-view). Found and fixed 4 real defects (D-19-21, D-19-25, D-19-29, D-19-34); every other item tested clean. Contextual Ask Library deferred to Phase 22.5's global sidebar rather than covered in isolation."
         },
         {
           "id": "19.J",
           "title": "Remaining user journeys",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Exercise the journeys from plan section 19.5 not yet covered by specs (signup/verification/onboarding, login failure + reset, duplicate-upload decision, metadata-only source-text absence, processing failure/retry, cross-account denial) and feed reproduced defects into Phases 20-22."
+          "summary": "Closed login-failure + password-reset (new auth.spec.ts suite: request confirmation, valid-token round trip with old-password invalidation, invalid-token handling), duplicate-upload decision (confirmed already covered), processing-failure + retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), and cross-account denial (extended IDOR matrix by 5 routes). Full signup-form-through-email-verification E2E remains a known residual gap (historically manually verified in Phase 1, not yet automated) — noted, not silently dropped."
         },
         {
           "id": "19.D",
           "title": "Authorized production cleanup",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Owner-authorized 2026-07-22: delete D-19-11's 8 unreferenced Storage objects and 7 orphaned Google Books rows, and the test-reader@interactive-critical-edition.test acceptance account and its data/queue rows, then recheck the anti-joins to zero."
+          "summary": "Owner-authorized 2026-07-22 cleanup completed: deleted 9 confirmed-orphaned documents-bucket Storage objects and 7 orphaned googlebooks bibliographic_record rows (full anti-join across every referencing column), and the test-reader@interactive-critical-edition.test acceptance account with its 3 works/documents, Storage objects, and queue rows. All anti-joins rechecked to zero, including a separate page-image-object check."
         },
         {
           "id": "19.X",
           "title": "Phase 19 closeout",
-          "state": "planned",
+          "state": "complete",
           "model": "haiku",
-          "summary": "Prioritized Phase 20-23 implementation order from the register, VoiceOver recorded as an explicit open agent limitation, tracker/log/mirror/checklist synchronized, tag phase-19-complete pushed."
+          "summary": "Prioritized Phase 20-24 implementation order recorded in PROJECT-LOG's Phases 19-24 Completion Program section (matches the revised plan's own section 5 priority order); manual VoiceOver recorded as an explicit open agent limitation (no macOS Accessibility API access); tracker/log/mirror/checklist synchronized; tag phase-19-complete created and pushed."
         }
       ],
       "evidence": [
@@ -458,9 +459,13 @@
         "D-19-17: ready-work action links surfaced an ambiguous accessible name: global and work-scoped Visualization both exposed exactly 'Visualization' despite different destinations. The local action now has the accessible name 'Visualization for [work title]' without changing visible copy. A new CI-safe trash/work-status journey clicks all ready-work routes and cancels a trash confirmation; full trash.spec.ts passes 4/4.",
         "D-19-18: Reader Split view opened an opaque custom chooser (no aria-expanded/controls, labelled chooser, or Escape dismissal). It now reports/control-links the chooser and Escape-restores focus. A new CI-safe Edition regression passes, and the full edition.spec.ts suite is 12/12; non-empty split selection and other unexercised Reader controls remain intentionally open.",
         "D-19-19: Workspace preferences was a focus-unsafe floating section with no dialog/trigger semantics. It is now a labelled non-modal dialog with initial close-button focus and Escape/close restoration to its trigger. A new CI-safe workspace-shell regression passes; the full workspace-shell.spec.ts suite is 4/4, while non-theme preference effects remain explicitly pending.",
-        "D-19-20: Focus mode showed a visible exit control but left focus on its hidden preferences checkbox and let Tab reach invisible header controls. A red Chromium regression failed twice with Exit focus mode inactive. AppShell now closes the preferences dialog, transfers focus only on user-initiated entry, makes the hidden header inert, and restores Workspace preferences focus on exit. The regression covers both directions; workspace-shell.spec.ts is 5/5 with web lint/typecheck passing."
+        "D-19-20: Focus mode showed a visible exit control but left focus on its hidden preferences checkbox and let Tab reach invisible header controls. A red Chromium regression failed twice with Exit focus mode inactive. AppShell now closes the preferences dialog, transfers focus only on user-initiated entry, makes the hidden header inert, and restores Workspace preferences focus on exit. The regression covers both directions; workspace-shell.spec.ts is 5/5 with web lint/typecheck passing.",
+        "2026-07-22 pre-flight gate (19.P): re-verified the whole stack before continuing the audit. Typecheck/lint/all unit tests/production build pass; CI green on the last 5 main pushes; live Render worker (instance srv-d9dgiamrnols73ccpa10-ksj74, commit b9b5bcc, pipeline v4) and latest Vercel deployment both healthy and current; Supabase migration ledger confirmed at 30 (supabase db query --linked); full 11-spec/60-test CI-safe Playwright subset passes locally. No errors found.",
+        "2026-07-22 checklist rebuild (19.C): docs/project-status.json bumped to schemaVersion 2 (program block for Phases 19-24, per-sub-phase model field, defects summary) and scripts/generate-progress-checklist.mjs rewritten to render model badges, an overall program-progress bar, the defect summary, and a collapsible Phases 0-18 Foundation section. Validated and drift-checked (pnpm check:project-status).",
+        "2026-07-22 interaction inventory and journey completion (19.I/19.J): 4 parallel Sonnet subagents closed every remaining pending row across Shell preferences, Writer, Library, Work-status, and Reader. Two of the four subagents ended their turns with false 'still waiting on a background process' claims despite having no live children (status: completed with nothing running per `jobs`/`ps aux`) — rather than trust their self-reports, every change was independently re-verified: full workspace typecheck clean, and a combined 89-test regression across every touched spec file (auth/workspace-shell/security/edition/writer/library/work-status/landing/onboarding/diagnostic/curriculum/graph/trash/upload) passed 89/89. Found and fixed 4 real defects: D-19-21 (Interactive Reader hardcoded a 72ch width, ignoring the reading-width preference entirely), D-19-25 (Writer's document-reorder 'Saved' status raced an unrelated effect keyed on a non-stable object reference — reproduced 3/12 times, 0/12 after the fix, stress-tested), D-19-29 (a failed document had zero recovery action anywhere in the UI), D-19-34 (the Reader's footnote modal lacked keyboard-dialog semantics — role, initial focus, Escape, trigger-focus restoration — the same class of gap as D-19-18/19/20). Also closed: password-reset/login-failure journey (new auth.spec.ts suite), duplicate-upload decision (confirmed already covered), processing-failure+retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), cross-account denial (IDOR matrix extended by 5 routes). Residual gaps, explicitly noted rather than silently dropped: contextual Ask Library (deferred to Phase 22.5's global sidebar) and a fully-automated signup-through-email-verification E2E (historically manually verified in Phase 1, not yet scripted). The footnote-modal and non-empty-split-view fixes are typecheck/lint-clean and match an already-proven pattern, but a live-upload confirmation of that exact path was blocked by the pre-existing, already-documented D-19-6 pipeline-timing limitation (2 of reader.spec.ts's 5 tests time out before reaching that code, unrelated to this session's changes) — recorded as open in the interaction inventory, not claimed.",
+        "2026-07-22 authorized production cleanup (19.D): under the owner's standing 2026-07-22 authorization, deleted the 9 confirmed-orphaned documents-bucket Storage objects (one more than D-19-11's original count of 8 had appeared since; re-verified as orphaned by anti-join immediately before deletion) via the Supabase Storage REST API — the `supabase storage rm --linked --experimental` CLI command silently no-oped against this project's new-format secret API key with no error, a CLI limitation now on record; deleted the 7 orphaned googlebooks bibliographic_record rows via supabase db query --linked after a full anti-join across every referencing column (annotation/citation/learning_resource/reading_record/research_resource/roadmap_override/understanding_rating/graph_edge); and deleted the test-reader@interactive-critical-edition.test acceptance account along with its 3 works/documents, Storage objects, and (zero) queued jobs. Both anti-joins, plus a separate page-image-object check, rechecked to zero afterward."
       ],
-      "nextAction": "Remaining Phase 19 first actions: extend the started per-control interaction inventory (full UI control audit, section 19.6), broader user-journey coverage beyond what existing specs exercise, manual VoiceOver recorded as an agent limitation, and owner-authorized D-19-11 cleanup/recheck; then request owner confirmation before Phase 20."
+      "nextAction": "Complete Phase 19 closeout (19.X): prioritized Phase 20-23 implementation order, VoiceOver recorded as an explicit open agent limitation, tracker/log/mirror/checklist synchronized, tag phase-19-complete pushed."
     },
     {
       "number": 20,

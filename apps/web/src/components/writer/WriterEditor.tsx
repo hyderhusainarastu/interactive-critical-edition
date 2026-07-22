@@ -35,7 +35,16 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     const frame = window.requestAnimationFrame(() => { setTitle(active.title); setText(proseMirrorToPlainText(active.content)); setStatus("Saved"); });
     fetch(`/api/writer/projects/${project.id}/documents/${active.id}/revisions`).then((response) => response.ok ? response.json() : { revisions: [] }).then((data) => setRevisions(data.revisions ?? []));
     return () => window.cancelAnimationFrame(frame);
-  }, [active, project.id]);
+    // Deliberately keyed on the stable activeDocumentId, not the `active`
+    // object itself: `active` is a fresh object literal (`documents.find(...)`)
+    // on every `documents` state update, including a pure reorder that never
+    // actually switches documents. Depending on `active` made this effect
+    // spuriously re-fire on reorder, resetting the draft's status back to
+    // "Saved" out of band with (and sometimes ahead of) the reorder's own
+    // real PATCH persistence — masking a race where a reload right after
+    // reordering could observe the pre-persisted order (D-19-25).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDocumentId, project.id]);
   useEffect(() => { fetch(`/api/writer/projects/${project.id}/sources`).then((response) => response.ok ? response.json() : { sources: [] }).then((data) => setSources(data.sources ?? [])); }, [project.id]);
   useEffect(() => {
     if (!activeDocumentId || status !== "Editing") return;
@@ -72,7 +81,14 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     const reordered = [...documents];
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
     setDocuments(reordered.map((document, sortOrder) => ({ ...document, sortOrder })));
-    await Promise.all(reordered.map((document, sortOrder) => fetch(`/api/writer/projects/${project.id}/documents/${document.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sortOrder }) })));
+    // The reorder is applied optimistically above, but with no status signal a
+    // reload or navigation immediately afterward could race the still-in-flight
+    // PATCH requests and silently discard the new order — the same "Saving…"/
+    // "Saved"/"Save failed" contract the draft autosave already gives the user
+    // makes reorder persistence observable instead of silent (D-19-25).
+    setStatus("Saving…");
+    const responses = await Promise.all(reordered.map((document, sortOrder) => fetch(`/api/writer/projects/${project.id}/documents/${document.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sortOrder }) })));
+    setStatus(responses.every((response) => response.ok) ? "Saved" : "Save failed");
   }
   async function importCitation(kind: "library" | "identifier" | "bibtex" | "ris", value: string, resourceId?: string) {
     const body = kind === "library" ? { kind, resourceId } : kind === "identifier" ? { kind, identifierType: importKind, value } : { kind, value };

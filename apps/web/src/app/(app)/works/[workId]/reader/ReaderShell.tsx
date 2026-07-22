@@ -68,6 +68,12 @@ export function ReaderShell({
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const currentPositionRef = useRef<Position | null>(null);
+  // Whatever had keyboard focus when a footnote marker was activated (the
+  // marker itself) — restored once the footnote modal closes, matching the
+  // trigger-focus-restoration pattern established for every other reader
+  // shell disclosure (WorkPicker's split-view chooser, AppShell's
+  // preferences/mobile-nav dialogs).
+  const footnoteTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -265,6 +271,11 @@ export function ReaderShell({
     } : current);
   }, [createHighlight, workId]);
 
+  const closeFootnote = useCallback(() => {
+    setActiveFootnote(null);
+    window.requestAnimationFrame(() => footnoteTriggerRef.current?.focus());
+  }, []);
+
   const approveTerm = useCallback(async (termId: string) => {
     await jsonFetch(`/api/works/${workId}/reader/terms/${termId}`, {
       method: "PATCH",
@@ -431,7 +442,10 @@ export function ReaderShell({
                   savePosition(saved);
                 }}
                 onCreateHighlight={(a) => createHighlight({ kind: "text", ...a })}
-                onOpenFootnote={setActiveFootnote}
+                onOpenFootnote={(footnote) => {
+                  footnoteTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+                  setActiveFootnote(footnote);
+                }}
                 onOpenAnnotation={openAnnotation}
               />
             ) : (
@@ -495,25 +509,7 @@ export function ReaderShell({
         />
       )}
 
-      {activeFootnote && (
-        <div
-          className="fixed inset-0 z-30 flex items-end justify-center bg-black/20 p-4 sm:items-center"
-          onClick={() => setActiveFootnote(null)}
-        >
-          <div
-            className="max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="mb-1 text-xs font-medium text-[var(--color-accent-umber)]">
-              Original note [{activeFootnote.marker}]
-            </p>
-            <p className="text-[var(--color-text)]">{activeFootnote.content}</p>
-            <button type="button" className="mt-3 text-sm underline" onClick={() => setActiveFootnote(null)}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
       {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel contextWorkId={workId} onClose={() => setShowRagChat(false)} />}
     </div>
@@ -524,3 +520,41 @@ type HighlightRecordAnchorInput =
   | { kind: "pdf"; page: number; quote: string; prefix: string; suffix: string }
   | { kind: "text"; paragraphIndex: number; quote: string; prefix: string; suffix: string }
   | { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string };
+
+/** The original-note popup, brought to the same keyboard-dialog standard as
+ * every other reader-shell disclosure (D-19-18/19/20): labelled `dialog`
+ * role, initial focus on its close control, and Escape closing it while
+ * restoring focus to the footnote marker that opened it. */
+function FootnoteModal({ footnote, onClose }: { footnote: FootnoteRecord; onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-end justify-center bg-black/20 p-4 sm:items-center" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Original note [${footnote.marker}]`}
+        className="max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            onClose();
+          }
+        }}
+      >
+        <p className="mb-1 text-xs font-medium text-[var(--color-accent-umber)]">
+          Original note [{footnote.marker}]
+        </p>
+        <p className="text-[var(--color-text)]">{footnote.content}</p>
+        <button ref={closeButtonRef} type="button" className="mt-3 text-sm underline" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}

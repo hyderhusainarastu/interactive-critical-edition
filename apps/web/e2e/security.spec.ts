@@ -44,6 +44,11 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       `/api/works/${w}/roadmap`,
       `/api/works/${w}/graph`,
       `/api/works/${w}/curriculum`,
+      // Phase 19 audit (§19.7 IDOR matrix completeness check): these three
+      // shared `getOwnedDocument()` with everything above but had never
+      // actually been hit by the matrix.
+      `/api/works/${w}/edition`,
+      `/api/works/${w}/diagnostic`,
     ];
     for (const url of reads) {
       const res = await page.request.get(url);
@@ -62,6 +67,19 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       { method: "delete", url: `/api/works/${w}/reader/highlights/${owned.highlightId}` },
       { method: "delete", url: `/api/works/${w}/reader/notes/${owned.noteId}` },
       { method: "delete", url: `/api/works/${w}/reader/bookmarks/${owned.bookmarkId}` },
+      // Phase 19 audit (§19.7 IDOR matrix completeness check): the
+      // diagnostic submission, the term-approval sub-route, and attaching
+      // a note to a highlight all share the same `getOwnedDocument()` gate
+      // as the routes above but had no direct matrix entry of their own.
+      // (`/reprocess` is deliberately NOT added here: it checks
+      // `isEditionPipeline()` before ownership, so an environment running
+      // the legacy v1 pipeline returns 409 there for ANY authenticated
+      // caller — a real config-dependent status difference, not a uniform
+      // 404, so it doesn't fit this bulk assertion. No data is disclosed
+      // either way; tracked as a note, not a defect.)
+      { method: "post", url: `/api/works/${w}/diagnostic`, body: { answers: [] } },
+      { method: "patch", url: `/api/works/${w}/reader/terms/${owned.termId}`, body: { action: "approve" } },
+      { method: "post", url: `/api/works/${w}/reader/notes/${owned.noteId}/highlights`, body: { highlightId: owned.highlightId } },
       // Phase 9.7 trash routes — must 404 the same as every other
       // resource-scoped route, not silently trash/restore/purge another
       // user's work.

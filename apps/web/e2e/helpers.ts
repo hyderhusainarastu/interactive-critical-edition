@@ -22,6 +22,7 @@ import {
   notes,
   pages,
   passageAnnotations,
+  passwordResetTokens,
   processingRuns,
   providerAttempts,
   readingRecords,
@@ -29,15 +30,37 @@ import {
   researchResourceContents,
   resourceProvenance,
   resourceRoles,
+  termOccurrences,
+  termVariants,
   textBlocks,
   users,
   workIdentities,
   works,
 } from "@ice/db";
 import { deleteDocumentFile } from "@ice/ingestion";
+import { generateToken } from "@/lib/tokens";
 import type { Page } from "@playwright/test";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
+
+/**
+ * Seeds a password-reset token exactly the way `requestPasswordReset` does
+ * (same `generateToken()` hashing), so a test can drive the real
+ * `/reset-password?token=...` UI end to end without needing the raw token
+ * from the console-logged email (by design, only the SHA-256 hash is ever
+ * stored — see `docs/PROJECT-LOG.md`'s tokens note). This is setup, not the
+ * thing under test: token verification/expiry and the reset form itself are
+ * exercised for real through the browser.
+ */
+export async function seedPasswordResetToken(email: string): Promise<string> {
+  const { raw, hash } = generateToken();
+  await db.insert(passwordResetTokens).values({
+    identifier: email.toLowerCase(),
+    token: hash,
+    expires: new Date(Date.now() + 60 * 60 * 1000),
+  });
+  return raw;
+}
 
 /**
  * E2E fixtures talk to the DB directly for setup/teardown that isn't
@@ -151,6 +174,71 @@ export async function uploadAndConfirmViaUI(page: Page, filePath: string, title:
 }
 
 /**
+ * Seeds a work + document directly in one of the four terminal/in-flight
+ * `processing_status` states (Phase 19 work-status interaction inventory),
+ * bypassing the worker entirely — the same CI-safety rationale as every
+ * other seed helper here, but specifically so needs_review/processing/failed
+ * fixtures never depend on a real (live-network-bound, potentially costly)
+ * pipeline run finishing, per D-19-6's finding. `extractedText` is
+ * deliberately citation-pattern-free (no parentheticals, reference-list
+ * heading, or numbered markers) so that if a test does trigger the real
+ * `analyze-work` queue against this fixture (e.g. via `/confirm`), the
+ * legacy classifier's `extractCitations()` finds zero candidates and the
+ * run completes with zero AI spend rather than silently costing money.
+ */
+export async function seedWorkInStatus(
+  userId: string,
+  status: "needs_review" | "processing" | "failed" | "ready",
+  opts: {
+    title?: string;
+    extractedTitle?: string;
+    extractedAuthor?: string;
+    processingError?: string;
+    processingRun?: {
+      pipelineVersion?: string;
+      stage?: string;
+      runStatus?: "pending" | "running" | "complete" | "failed";
+      structureState?: "full" | "limited";
+    };
+  } = {},
+): Promise<{ workId: string; documentId: string }> {
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: opts.title ?? "Work-status fixture", authorName: "Fixture Author" })
+    .returning({ id: works.id });
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId,
+      workId: work.id,
+      storagePath: `${userId}/${work.id}/nonexistent-fixture.txt`,
+      originalFilename: "nonexistent-fixture.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: status,
+      extractedTitle: opts.extractedTitle ?? null,
+      extractedAuthor: opts.extractedAuthor ?? null,
+      processingError: opts.processingError ?? null,
+      extractedText: "Seeded plain text for a work-status Playwright fixture, no citations here.",
+    })
+    .returning({ id: documents.id });
+
+  if (opts.processingRun) {
+    await db.insert(processingRuns).values({
+      documentId: doc.id,
+      version: 1,
+      pipelineVersion: opts.processingRun.pipelineVersion ?? "v2",
+      status: opts.processingRun.runStatus ?? "running",
+      stage: opts.processingRun.stage ?? null,
+      structureState: opts.processingRun.structureState ?? "limited",
+      isPublished: false,
+    });
+  }
+
+  return { workId: work.id, documentId: doc.id };
+}
+
+/**
  * Seeds a ready work + document plus one of every per-user reader/analysis
  * record for the given user, returning the ids — so the authorization
  * matrix (security.spec.ts) has real resources to try to reach as a
@@ -164,6 +252,7 @@ export async function seedOwnedWork(userId: string): Promise<{
   noteId: string;
   bookmarkId: string;
   annotationId: string;
+  termId: string;
 }> {
   const [work] = await db
     .insert(works)
@@ -212,6 +301,12 @@ export async function seedOwnedWork(userId: string): Promise<{
       createdBy: "system",
     })
     .returning({ id: annotations.id });
+  // Phase 19 audit (IDOR matrix completeness): the terms sub-route had no
+  // owned resource to probe against — one suggested term pair is enough.
+  const [term] = await db
+    .insert(termVariants)
+    .values({ documentId: doc.id, originalScript: "Privat", transliteration: "Private", language: "de" })
+    .returning({ id: termVariants.id });
 
   return {
     workId: work.id,
@@ -220,6 +315,7 @@ export async function seedOwnedWork(userId: string): Promise<{
     noteId: note.id,
     bookmarkId: bm.id,
     annotationId: ann.id,
+    termId: term.id,
   };
 }
 
@@ -339,6 +435,32 @@ export async function seedPublishedEdition(userId: string): Promise<{
     { runId: run.id, textBlockId: footnoteBlock.id, kind: "footnote", marker: "1", text: "Adapted from Aquinas on sin from passion, ignorance, and deliberate badness.", scope: { pageIndex: 0, blockOrder: 2 }, source: "structure" },
     { runId: run.id, textBlockId: bibliographyBlock.id, kind: "bibliography_entry", marker: null, text: "Irwin, Terence. Vice and Reason.", scope: { pageIndex: 0, blockOrder: 3 }, source: "structure" },
   ]);
+
+  // Phase 19 audit (workspace preferences interaction inventory): one
+  // verified term with a distinguishable transliteration, so the reader's
+  // "Script display" preference has a real occurrence to swap between
+  // original/transliteration for — this fixture had no such row before.
+  const bodyText = "Vicious people act on decision, yet live according to passion. Vice remains a state on which one decides.";
+  const termWord = "decision";
+  const termStart = bodyText.indexOf(termWord);
+  const [termVariant] = await db
+    .insert(termVariants)
+    .values({
+      documentId: doc.id,
+      originalScript: termWord,
+      transliteration: "DECISION-XLIT",
+      language: "en",
+      direction: "ltr",
+      verificationStatus: "verified",
+      source: "system",
+    })
+    .returning({ id: termVariants.id });
+  await db.insert(termOccurrences).values({
+    termVariantId: termVariant.id,
+    textBlockId: bodyBlock.id,
+    startOffset: termStart,
+    endOffset: termStart + termWord.length,
+  });
 
   // Three records describing ONE work, plus a genuinely different work. This is
   // the shape a real run produces and the reason work-level grouping exists.

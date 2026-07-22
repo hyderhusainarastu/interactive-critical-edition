@@ -518,7 +518,7 @@ export function EditionReader({
   }
 
   return (
-    <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[72ch]">
+    <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[var(--reading-measure,72ch)]">
       {!focusMode && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
         <strong>Interactive reader · processed text · run v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>

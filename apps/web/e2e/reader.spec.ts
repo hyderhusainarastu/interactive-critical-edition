@@ -98,9 +98,24 @@ test.describe("Reader (Phase 3)", () => {
     await expect(paragraph).toBeVisible();
 
     // Footnote marker renders and is clickable, distinct from user notes.
-    await page.locator(".reader-footnote-marker").first().click();
+    // The modal is a real keyboard dialog (Phase 19 D-19 audit, same
+    // disclosure standard as D-19-18/19/20): it names itself, moves focus to
+    // its close control, Escape dismisses it, and focus returns to the
+    // marker that opened it — checked both via Escape and via the visible
+    // Close button, since either is a real user path.
+    const firstFootnoteMarker = page.locator(".reader-footnote-marker").first();
+    await firstFootnoteMarker.click();
+    const footnoteDialog = page.getByRole("dialog", { name: "Original note [1]" });
+    await expect(footnoteDialog).toBeVisible();
+    await expect(footnoteDialog.getByRole("button", { name: "Close" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(footnoteDialog).toHaveCount(0);
+    await expect(firstFootnoteMarker).toBeFocused();
+
+    await firstFootnoteMarker.click();
     await expect(page.getByText("Original note [1]")).toBeVisible();
     await page.getByRole("button", { name: "Close" }).click();
+    await expect(firstFootnoteMarker).toBeFocused();
 
     // --- Annotation-position accuracy: select text, highlight it, and
     // confirm it survives a fresh render (reload), not just the
@@ -205,10 +220,18 @@ test.describe("Reader (Phase 3)", () => {
     const workIdB = await uploadAndConfirm(page, fileB, "Second Work");
 
     await page.goto(`/works/${workIdB}/reader`);
-    await page.getByRole("button", { name: "Split view" }).click();
-    await page.getByRole("button", { name: "First Work" }).click();
+    const splitViewTrigger = page.getByRole("button", { name: "Split view" });
+    await expect(splitViewTrigger).toHaveAttribute("aria-expanded", "false");
+    await splitViewTrigger.click();
+    await expect(splitViewTrigger).toHaveAttribute("aria-expanded", "true");
+    await page.getByRole("group", { name: "Choose a work for split view" }).getByRole("button", { name: "First Work" }).click();
 
-    // Both readers' titles are visible at once.
+    // Selecting a real work closes the chooser disclosure (D-19-18's picker
+    // is replaced by the "Exit split view" control once a pane is active)
+    // and both readers' titles are visible at once — the non-empty
+    // selection path the D-19-18 fix's own regression left pending.
+    await expect(page.getByRole("group", { name: "Choose a work for split view" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Exit split view" })).toBeVisible();
     await expect(page.getByText("Second Work").first()).toBeVisible();
     await expect(page.getByText("First Work").first()).toBeVisible();
 

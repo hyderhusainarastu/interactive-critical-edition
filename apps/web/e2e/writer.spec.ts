@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, seedWorkWithLibraryItems } from "./helpers";
 
 const EMAIL = `e2e-writer-${Date.now()}@example.com`;
 const SECOND_EMAIL = `e2e-writer-other-${Date.now()}@example.com`;
@@ -79,6 +79,73 @@ test.describe("Writer mode", () => {
     await expect(resizer).toHaveAttribute("aria-valuenow", "220");
     await page.keyboard.press("End");
     await expect(resizer).toHaveAttribute("aria-valuenow", "460");
+  });
+
+  test("reorders documents within a project, updating the displayed order, and persists after reload", async ({ page }) => {
+    const reorderEmail = `e2e-writer-reorder-${Date.now()}@example.com`;
+    await createVerifiedTestUser(reorderEmail, PASSWORD);
+    await login(page, reorderEmail);
+    await page.goto("/writer");
+    page.once("dialog", (dialog) => dialog.accept("Reorder project"));
+    await page.getByRole("button", { name: "New project" }).click();
+    await page.waitForURL("**/writer/*");
+
+    const documentSelect = page.getByLabel("Active document");
+    await expect(documentSelect.locator("option")).toHaveText(["Untitled document"]);
+
+    page.once("dialog", (dialog) => dialog.accept("Second document"));
+    await page.getByRole("button", { name: "New document" }).click();
+    await expect(documentSelect.locator("option")).toHaveText(["Untitled document", "Second document"]);
+
+    const moveEarlier = page.getByRole("button", { name: "Move earlier" });
+    await expect(moveEarlier).toBeEnabled();
+    await moveEarlier.click();
+    await expect(documentSelect.locator("option")).toHaveText(["Second document", "Untitled document"]);
+    // Wait for the reorder's own "Saving…"/"Saved" signal (D-19-25) before
+    // reloading, so this proves real DB persistence rather than racing the
+    // still-in-flight PATCH requests.
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+
+    // Persisted server-side, not just local component state — reload re-fetches
+    // initialDocuments ordered by the real sortOrder column.
+    await page.reload();
+    await expect(page.getByLabel("Active document").locator("option")).toHaveText(["Second document", "Untitled document"]);
+
+    await deleteTestUser(reorderEmail);
+  });
+
+  test("the Library-source Cite control inserts a real citation and Read navigates to the actual source", async ({ page }) => {
+    const citeEmail = `e2e-writer-cite-${Date.now()}@example.com`;
+    const citeUserId = await createVerifiedTestUser(citeEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItems(citeUserId, "Writer-cited work", [
+      { resourceTitle: "Writer-cited source", relationship: "prerequisite" },
+    ]);
+
+    await login(page, citeEmail);
+    await page.goto("/writer");
+    page.once("dialog", (dialog) => dialog.accept("Citation project"));
+    await page.getByRole("button", { name: "New project" }).click();
+    await page.waitForURL("**/writer/*");
+
+    const sourceItem = page.getByRole("listitem").filter({ hasText: "Writer-cited source" });
+    await expect(sourceItem).toBeVisible();
+    const citationsAside = page.getByRole("complementary", { name: "Citations and revision recovery" });
+    await expect(citationsAside.getByText("Writer-cited source")).not.toBeVisible();
+    await sourceItem.getByRole("button", { name: "Cite" }).click();
+    await expect(citationsAside.getByText("Writer-cited source")).toBeVisible();
+
+    const draft = page.getByLabel("Draft");
+    await expect(draft).toHaveValue("");
+    await citationsAside.getByRole("button", { name: "Insert" }).click();
+    await expect(draft).not.toHaveValue("");
+
+    const readLink = sourceItem.getByRole("link", { name: "Read" });
+    await expect(readLink).toHaveAttribute("href", `/works/${workId}/reader`);
+    await readLink.click();
+    await page.waitForURL(new RegExp(`/works/${workId}/reader$`));
+    await expect(page.getByText("Writer-cited work", { exact: true })).toBeVisible();
+
+    await deleteTestUser(citeEmail);
   });
 
   test("does not disclose another user's project through writer APIs", async ({ browser }) => {

@@ -190,6 +190,35 @@ test("the reader-view toggle plainly distinguishes immutable source from process
   await expect(page.getByRole("region", { name: /published edition.*original source text/i })).toBeVisible();
 });
 
+test("script display preference swaps a verified term's shown text between original script and transliteration (Phase 19 interaction inventory)", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  const term = edition.locator("[data-verified-term]");
+  await expect(term).toHaveCount(1);
+  await expect(term).toHaveText("decision");
+
+  await page.getByRole("button", { name: "Workspace preferences" }).click();
+  await page.getByLabel("Script display").selectOption("transliteration");
+  await expect(term).toHaveText("DECISION-XLIT");
+
+  await page.getByLabel("Script display").selectOption("original");
+  await expect(term).toHaveText("decision");
+});
+
+test("reading width preference changes the interactive reader's actual content width (Phase 19 interaction inventory, D-19-21)", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  const widthPx = () => edition.evaluate((el) => el.getBoundingClientRect().width);
+  const initial = await widthPx();
+
+  await page.getByRole("button", { name: "Workspace preferences" }).click();
+  await page.getByLabel("Reading width").selectOption("compact");
+  const compact = await widthPx();
+  expect(compact).toBeLessThan(initial);
+
+  await page.getByLabel("Reading width").selectOption("wide");
+  const wide = await widthPx();
+  expect(wide).toBeGreaterThan(compact);
+});
+
 test("the Split view work picker exposes and dismisses its disclosure state", async ({ page }) => {
   const splitView = page.getByRole("button", { name: "Split view" });
   await expect(splitView).toHaveAttribute("aria-expanded", "false");
@@ -200,4 +229,66 @@ test("the Split view work picker exposes and dismisses its disclosure state", as
   await page.keyboard.press("Escape");
   await expect(splitView).toHaveAttribute("aria-expanded", "false");
   await expect(splitView).toBeFocused();
+});
+
+test("highlight creation honors the chosen color and survives reload, in the interactive reader (Phase 19 D-19 audit)", async ({ page }) => {
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  const block = edition.locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });
+  await expect(block).toBeVisible();
+
+  // Choose a non-default color before highlighting.
+  const burgundySwatch = page.getByRole("button", { name: "burgundy highlight" });
+  await burgundySwatch.click();
+  await expect(burgundySwatch).toHaveAttribute("aria-pressed", "true");
+
+  // Bind directly to the locator's already-resolved element handle (rather
+  // than re-querying `document` inside a separate `page.evaluate`) — the
+  // latter raced the resolved locator and was intermittently empty.
+  await block.evaluate((el) => {
+    const textNode = el.childNodes[0];
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 7); // "Vicious"
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await block.dispatchEvent("mouseup");
+  await page.getByRole("toolbar", { name: "Selected text actions" }).getByRole("button", { name: "Highlight", exact: true }).click();
+
+  const mark = block.locator("mark[data-highlight-id]");
+  await expect(mark).toHaveClass(/reader-highlight-burgundy/);
+
+  await page.reload();
+  await expect(page.getByRole("region", { name: /interactive reader.*processed text/i })).toBeVisible();
+  const reloadedBlock = page.getByRole("region", { name: /interactive reader.*processed text/i }).locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });
+  await expect(reloadedBlock.locator("mark[data-highlight-id]")).toHaveClass(/reader-highlight-burgundy/);
+});
+
+test("a bookmark and a standalone note persist from the reader sidebar (Phase 19 D-19 audit)", async ({ page }) => {
+  await page.getByRole("button", { name: "+ Bookmark" }).click();
+  await expect(page.getByText(/Processed page 1/)).toBeVisible();
+
+  await page.getByPlaceholder("Write a note about this work…").fill("A standalone note, not linked to any highlight.");
+  await page.getByRole("button", { name: "Save note" }).click();
+  await expect(page.getByText("A standalone note, not linked to any highlight.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText(/Processed page 1/)).toBeVisible();
+  await expect(page.getByText("A standalone note, not linked to any highlight.")).toBeVisible();
+});
+
+test("the reader analysis toggle hides and restores the edition sidebar (Phase 19 D-19 audit)", async ({ page }) => {
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  await expect(sidebar).toBeVisible();
+  const toggle = page.getByRole("button", { name: /^Hide analysis/ });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+  await toggle.click();
+  await expect(sidebar).toHaveCount(0);
+  const reopenToggle = page.getByRole("button", { name: /^Analysis/ });
+  await expect(reopenToggle).toHaveAttribute("aria-pressed", "false");
+
+  await reopenToggle.click();
+  await expect(page.getByRole("complementary", { name: /edition sidebar/i })).toBeVisible();
 });
