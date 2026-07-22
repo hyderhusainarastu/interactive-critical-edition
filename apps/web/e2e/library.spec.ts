@@ -1,7 +1,14 @@
 import { db, learningResources, readingRecords, users, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
-import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItem, seedWorkWithLibraryItems } from "./helpers";
+import {
+  createVerifiedTestUser,
+  deleteTestUser,
+  seedOwnedWork,
+  seedSearchableLibraryItem,
+  seedWorkWithLibraryItem,
+  seedWorkWithLibraryItems,
+} from "./helpers";
 
 /**
  * Phase 9.5 E2E: the Library page. `work_identity`/`learning_resource`/
@@ -422,5 +429,253 @@ test.describe("Library (Phase 9.5)", () => {
     await expect(page.getByRole("heading", { name: /upload/i }).first()).toBeVisible();
 
     await deleteTestUser(emptyEmail);
+  });
+
+  /**
+   * Phase 20.1: Library search. Server-authoritative — the debounced
+   * client input calls `/api/library?q=...`, which re-runs the same
+   * owner-scoped `getLibrary()` loader with a search filter, rather than
+   * shipping the whole Library to the browser and filtering there.
+   */
+  test.describe("Library search (Phase 20.1)", () => {
+    async function loginAs(page: import("@playwright/test").Page, email: string) {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(email);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("**/dashboard");
+    }
+
+    test("title search narrows to the matching item", async ({ page }) => {
+      const email = `e2e-library-search-title-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "The Structure of Scientific Revolutions" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "An Essay Concerning Human Understanding" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      // These two items belong to two SEPARATE seeded works, so widen Focus
+      // to "All works" first — the Library defaults Focus to the newest
+      // upload, which would otherwise hide the other item regardless of
+      // the search term (same pattern the pre-existing Focus-selector test
+      // above uses).
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      await content.getByLabel("Search library").fill("Scientific Revolutions");
+      await expect(content.getByRole("listitem").filter({ hasText: "The Structure of Scientific Revolutions" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "An Essay Concerning Human Understanding" })).not.toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("author search narrows to the matching item", async ({ page }) => {
+      const email = `e2e-library-search-author-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "First Source", authors: ["Elizabeth Anscombe"] });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Second Source", authors: ["Philippa Foot"] });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      await content.getByLabel("Search library").fill("Anscombe");
+      await expect(content.getByRole("listitem").filter({ hasText: "First Source" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Second Source" })).not.toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("identifier search matches DOI and ISBN", async ({ page }) => {
+      const email = `e2e-library-search-id-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "DOI Item", doi: "10.1234/abcd.5678" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "ISBN Item", isbn: "978-0-14-044926-9" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+
+      await content.getByLabel("Search library").fill("10.1234/abcd.5678");
+      await expect(content.getByRole("listitem").filter({ hasText: "DOI Item" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "ISBN Item" })).not.toBeVisible();
+
+      await content.getByLabel("Search library").fill("978-0-14-044926-9");
+      await expect(content.getByRole("listitem").filter({ hasText: "ISBN Item" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "DOI Item" })).not.toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("search normalizes diacritics and case", async ({ page }) => {
+      const email = `e2e-library-search-diacritic-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Épistémologie Générale" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Unrelated Other Title" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      await content.getByLabel("Search library").fill("EPISTEMOLOGIE");
+      await expect(content.getByRole("listitem").filter({ hasText: "Épistémologie Générale" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Unrelated Other Title" })).not.toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("search combines correctly with Focus", async ({ page }) => {
+      const email = `e2e-library-search-focus-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      const first = await seedSearchableLibraryItem(userId, { workTitle: "First Focus Work", resourceTitle: "Shared Term Alpha" });
+      const second = await seedSearchableLibraryItem(userId, { workTitle: "Second Focus Work", resourceTitle: "Shared Term Beta" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      await content.getByLabel("Search library").fill("Shared Term");
+      await expect(content.getByRole("listitem").filter({ hasText: "Shared Term Alpha" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Shared Term Beta" })).toBeVisible();
+
+      await content.getByLabel("Focus work", { exact: true }).selectOption(first.workId);
+      await expect(content.getByRole("listitem").filter({ hasText: "Shared Term Alpha" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Shared Term Beta" })).not.toBeVisible();
+      void second;
+
+      await deleteTestUser(email);
+    });
+
+    test("search combines correctly with sort", async ({ page }) => {
+      const email = `e2e-library-search-sort-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Findable Zulu" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Findable Alpha" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Unrelated Item" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      await content.getByLabel("Search library").fill("Findable");
+      await expect(content.getByRole("listitem").filter({ hasText: "Findable Zulu" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Unrelated Item" })).not.toBeVisible();
+
+      await content.getByLabel("Sort").selectOption("title");
+      const titles = await content.locator("[data-library-item]").evaluateAll((rows) => rows.map((row) => row.textContent?.trim() ?? ""));
+      expect(titles[0]).toContain("Findable Alpha");
+      expect(titles[1]).toContain("Findable Zulu");
+      expect(titles.length).toBe(2);
+
+      await deleteTestUser(email);
+    });
+
+    test("shows a deliberate no-results state naming the search term", async ({ page }) => {
+      const email = `e2e-library-search-none-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Something Findable" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Search library").fill("zzz-nonexistent-term-zzz");
+      await expect(content.getByText(/No results for.*zzz-nonexistent-term-zzz/i)).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Something Findable" })).not.toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("the result count is announced to assistive technology", async ({ page }) => {
+      const email = `e2e-library-search-announce-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Announced Result Item" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      const liveRegion = content.locator("[aria-live='polite']").first();
+      await content.getByLabel("Search library").fill("Announced");
+      await expect(liveRegion).toContainText(/1/);
+
+      await deleteTestUser(email);
+    });
+
+    test("search input and clear button are keyboard-operable", async ({ page }) => {
+      const email = `e2e-library-search-keyboard-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Keyboard Findable Item" });
+      await seedSearchableLibraryItem(userId, { resourceTitle: "Other Item" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Focus work", { exact: true }).selectOption("");
+      const searchInput = content.getByLabel("Search library");
+      await searchInput.focus();
+      await page.keyboard.type("Keyboard Findable");
+      await expect(content.getByRole("listitem").filter({ hasText: "Keyboard Findable Item" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Other Item" })).not.toBeVisible();
+
+      const clearButton = content.getByRole("button", { name: "Clear search" });
+      await expect(clearButton).toBeVisible();
+      await clearButton.focus();
+      await page.keyboard.press("Enter");
+      await expect(searchInput).toHaveValue("");
+      await expect(content.getByRole("listitem").filter({ hasText: "Other Item" })).toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("preserves the search term in the URL", async ({ page }) => {
+      const email = `e2e-library-search-url-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      await seedSearchableLibraryItem(userId, { resourceTitle: "URL Preserved Item" });
+
+      await loginAs(page, email);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Search library").fill("URL Preserved");
+      await expect(page).toHaveURL(/[?&]q=URL(\+|%20)Preserved/);
+
+      // A deep link with the search term pre-applied works on first load too.
+      await page.goto("/library?q=URL+Preserved");
+      await expect(page.locator("#main-content").getByRole("listitem").filter({ hasText: "URL Preserved Item" })).toBeVisible();
+
+      await deleteTestUser(email);
+    });
+
+    test("cross-account isolation: user A's search never returns user B's items", async ({ page }) => {
+      const emailA = `e2e-library-search-isolation-a-${Date.now()}@example.com`;
+      const emailB = `e2e-library-search-isolation-b-${Date.now()}@example.com`;
+      const userIdA = await createVerifiedTestUser(emailA, PASSWORD);
+      const userIdB = await createVerifiedTestUser(emailB, PASSWORD);
+      await seedSearchableLibraryItem(userIdA, { resourceTitle: "Isolation Shared Keyword Alpha" });
+      await seedSearchableLibraryItem(userIdB, { resourceTitle: "Isolation Shared Keyword Beta" });
+
+      await loginAs(page, emailA);
+      await page.goto("/library");
+      const content = page.locator("#main-content");
+      await content.getByLabel("Search library").fill("Isolation Shared Keyword");
+      await expect(content.getByRole("listitem").filter({ hasText: "Isolation Shared Keyword Alpha" })).toBeVisible();
+      await expect(content.getByRole("listitem").filter({ hasText: "Isolation Shared Keyword Beta" })).not.toBeVisible();
+
+      await deleteTestUser(emailA);
+      await deleteTestUser(emailB);
+    });
+
+    test("does not hide the active uploaded-work anchor when a search term is present", async ({ page }) => {
+      const email = `e2e-library-search-anchor-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      const { workId } = await seedSearchableLibraryItem(userId, { workTitle: "Anchor Focus Work", resourceTitle: "Findable For Anchor Test" });
+
+      await loginAs(page, email);
+      await page.goto(`/library?focus=${workId}`);
+      const content = page.locator("#main-content");
+      await expect(content.locator(`[data-focus-work="${workId}"]`)).toContainText("Anchor Focus Work");
+      await content.getByLabel("Search library").fill("zzz-matches-nothing-zzz");
+      await expect(content.locator(`[data-focus-work="${workId}"]`)).toContainText("Anchor Focus Work");
+
+      await deleteTestUser(email);
+    });
   });
 });

@@ -12,10 +12,12 @@ import { LibraryView } from "./LibraryView";
 export default async function LibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ focus?: string | string[] }>;
+  searchParams: Promise<{ focus?: string | string[]; q?: string | string[] }>;
 }) {
   const session = await requireSession();
-  const [library, params] = await Promise.all([getLibrary(session.user.id), searchParams]);
+  const params = await searchParams;
+  const requestedSearch = typeof params.q === "string" ? params.q : undefined;
+  const library = await getLibrary(session.user.id, { search: requestedSearch });
   // Default-scope to the reader's saved global level (plan §10/§35.2, bringing
   // Library in line with Roadmap/Curriculum's established pattern); null
   // (never chosen) falls back to "all", same as Roadmap's own default.
@@ -31,6 +33,7 @@ export default async function LibraryPage({
       initialWorks={library.works}
       initialFocusWorkId={initialFocusWorkId}
       initialReaderLevel={readerLevel ?? "all"}
+      initialSearch={requestedSearch ?? ""}
       enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
     />
   );

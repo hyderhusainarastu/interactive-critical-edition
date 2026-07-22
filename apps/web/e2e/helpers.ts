@@ -976,3 +976,69 @@ export async function seedWorkWithLibraryItems(
 
   return { workId: work.id, resourceIds };
 }
+
+/**
+ * Seeds one owned work plus one `learning_resource` with every field the
+ * Library search bar (plan §20.1) is required to match against — title,
+ * authors, venue, year, DOI, ISBN, and resource type — all independently
+ * settable so a test can search on exactly one field at a time. Kept as a
+ * separate helper (append-only convention for this sub-phase) rather than
+ * widening `seedWorkWithLibraryItem`'s existing signature.
+ */
+export async function seedSearchableLibraryItem(
+  userId: string,
+  opts: {
+    workTitle?: string;
+    resourceTitle: string;
+    authors?: string[];
+    venue?: string | null;
+    year?: number | null;
+    doi?: string | null;
+    isbn?: string | null;
+    resourceType?: string;
+  },
+): Promise<{ workId: string; resourceId: string }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const [work] = await db
+    .insert(works)
+    .values({ userId, title: opts.workTitle ?? "Search Fixture Work", authorName: "Terence Irwin" })
+    .returning({ id: works.id });
+  const [identity] = await db
+    .insert(workIdentities)
+    .values({
+      workKey: `work:test:${suffix}`,
+      canonicalTitle: opts.workTitle ?? "Search Fixture Work",
+      authorSurname: "irwin",
+      authors: ["Terence Irwin"],
+      evidence: "seeded for test",
+    })
+    .returning({ id: workIdentities.id });
+  await db.update(works).set({ workIdentityId: identity.id }).where(eq(works.id, work.id));
+
+  const [resource] = await db
+    .insert(learningResources)
+    .values({
+      title: opts.resourceTitle,
+      normalizedKey: `title:${suffix}`,
+      resourceType: opts.resourceType ?? "book",
+      provider: "openalex",
+      authors: opts.authors ?? ["Aristotle"],
+      venue: opts.venue ?? null,
+      year: opts.year ?? null,
+      doi: opts.doi ?? null,
+      isbn: opts.isbn ?? null,
+      peerReviewed: null,
+    })
+    .returning({ id: learningResources.id });
+  await db.insert(resourceRoles).values({
+    learningResourceId: resource.id,
+    workIdentityId: identity.id,
+    relationship: "prerequisite",
+    readerLevel: null,
+    rationale: "Seeded rationale text for a Playwright search fixture.",
+    confidence: 0.8,
+    createdBy: "system",
+  });
+
+  return { workId: work.id, resourceId: resource.id };
+}

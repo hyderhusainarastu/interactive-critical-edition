@@ -14,6 +14,13 @@ import {
 } from "@ice/db";
 import type { ReaderLevel } from "@ice/roadmap";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { matchesLibrarySearch, normalizeForSearch, SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
+
+// Re-exported for existing/other server-side callers — the canonical
+// definitions now live in `librarySearch.ts` (client-safe: no `@ice/db`
+// import), so a "use client" component can import them directly without
+// dragging this server module's DB dependency into the browser bundle.
+export { matchesLibrarySearch, normalizeForSearch, SOURCE_TYPE_LABEL };
 
 /**
  * The Library (plan §34.4 9.5): every source the research pipeline has
@@ -37,6 +44,8 @@ export interface LibraryItem {
   year: number | null;
   authors: string[];
   venue: string | null;
+  doi: string | null;
+  isbn: string | null;
   peerReviewed: boolean | null;
   popularity: unknown;
   relationship: string;
@@ -100,7 +109,7 @@ function creatorVerification(creator: unknown): string | null {
 
 const AUTHORITY_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
-export async function getLibrary(userId: string): Promise<LibraryData> {
+export async function getLibrary(userId: string, options: { search?: string } = {}): Promise<LibraryData> {
   const ownedWorks = await db
     .select({ id: works.id, title: works.title, workIdentityId: works.workIdentityId, createdAt: works.createdAt })
     .from(works)
@@ -278,6 +287,8 @@ export async function getLibrary(userId: string): Promise<LibraryData> {
       year: resource.year,
       authors: Array.isArray(resource.authors) ? (resource.authors as string[]) : [],
       venue: resource.venue,
+      doi: resource.doi,
+      isbn: resource.isbn,
       peerReviewed: resource.peerReviewed,
       popularity: resource.popularity,
       relationship: primaryRole.relationship,
@@ -297,5 +308,15 @@ export async function getLibrary(userId: string): Promise<LibraryData> {
     });
   }
 
-  return { works: libraryWorks, items };
+  // Server-authoritative search (plan §20.1): filtered here, before the
+  // payload is ever serialized to a client, rather than shipping every
+  // item to the browser and filtering with a client useMemo the way the
+  // existing relationship/source-type/reader-level filters do. Applied
+  // last, over the fully-assembled items, so it composes with everything
+  // above (credibility, roles, recommendedFor) with no risk of excluding
+  // a resource before its search-relevant fields (doi/isbn/venue) are set.
+  const normalizedQuery = options.search ? normalizeForSearch(options.search) : "";
+  const searchedItems = normalizedQuery ? items.filter((item) => matchesLibrarySearch(item, normalizedQuery)) : items;
+
+  return { works: libraryWorks, items: searchedItems };
 }

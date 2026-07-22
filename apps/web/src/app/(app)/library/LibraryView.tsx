@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   matchesReaderLevel,
@@ -14,6 +14,11 @@ import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import type { LibraryItem, LibraryWork } from "@/lib/library";
+import { SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
+
+/** Debounce delay (ms) before a typed search term triggers the
+ *  server-authoritative `/api/library` fetch (plan §20.1). */
+const SEARCH_DEBOUNCE_MS = 300;
 
 const SUGGESTION_DISMISSED_KEY = "library-reader-level-suggestion-dismissed";
 
@@ -42,15 +47,6 @@ const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = {
   all: "Show all levels",
 } as Record<ReaderLevelFilter, string>;
 const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
-const SOURCE_TYPE_LABEL: Record<string, string> = {
-  article: "Article",
-  book: "Book",
-  webpage: "Web article",
-  video: "Lecture or video",
-  social_post: "Social post",
-  dataset: "Dataset",
-  "unresolved-citation": "Unresolved citation",
-};
 const VERIFICATION_LABEL: Record<string, string> = {
   scholarly_record: "Scholarly record verified",
   institutional: "Institution verified",
@@ -82,6 +78,7 @@ export function LibraryView({
   initialWorks,
   initialFocusWorkId,
   initialReaderLevel = "all",
+  initialSearch = "",
   enablePhase12Identity = false,
 }: {
   initialItems: LibraryItem[];
@@ -92,6 +89,10 @@ export function LibraryView({
    *  never overwrites the saved global level (plan §35.2: bringing Library
    *  in line with Roadmap/Curriculum's default-then-override pattern). */
   initialReaderLevel?: ReaderLevelFilter;
+  /** The `?q=` deep-link search term the server already applied to
+   *  `initialItems` (plan §20.1) — seeds the input so the first paint and
+   *  the input's displayed value agree. */
+  initialSearch?: string;
   enablePhase12Identity?: boolean;
 }) {
   const router = useRouter();
@@ -99,6 +100,14 @@ export function LibraryView({
   const focusRef = useScrollReveal<HTMLElement>();
   const controlsRef = useScrollReveal<HTMLDivElement>();
   const [items, setItems] = useState(initialItems);
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [search, setSearch] = useState(initialSearch);
+  const [isSearching, setIsSearching] = useState(false);
+  // The server already applied `initialSearch` when assembling
+  // `initialItems`, so the first time `search` settles back to that same
+  // value (typically immediately, before the user has typed anything) no
+  // refetch is needed — only actual changes should hit the network.
+  const searchAppliedRef = useRef<string | null>(initialSearch);
   const [tab, setTab] = useState<Tab>("all");
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
@@ -106,6 +115,53 @@ export function LibraryView({
   const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>(enablePhase12Identity ? "cumulative" : "exact");
   const [workId, setWorkId] = useState<string>(initialFocusWorkId);
   const [sort, setSort] = useState<SortKey>("relevance");
+
+  // Debounce typed input into a committed search term (plan §20.1). The
+  // setState below runs inside the timeout callback, not synchronously
+  // during the effect body, so it isn't the cascading-render pattern the
+  // set-state-in-effect rule guards against — same shape as
+  // WorkStatusPanel's existing setInterval-based polling.
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [searchInput]);
+
+  // Server-authoritative search (plan §20.1): once the debounced term
+  // settles, sync it to the URL (same `router.replace` pattern `selectFocus`
+  // already uses for Focus) and — unless it's the same term the server
+  // already applied for `initialItems` — fetch freshly search-filtered
+  // items from `/api/library` rather than filtering the already-downloaded
+  // list in the browser.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (search) params.set("q", search);
+    else params.delete("q");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+
+    if (searchAppliedRef.current === search) {
+      searchAppliedRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    setIsSearching(true);
+    fetch(`/api/library?q=${encodeURIComponent(search)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`search failed: ${res.status}`))))
+      .then((data: { items: LibraryItem[] }) => {
+        if (!cancelled) setItems(data.items);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [search, pathname, router]);
+
+  function clearSearch() {
+    setSearchInput("");
+  }
 
   // Suggested-reader-level nudge (plan §35.2): a pure inference over what the
   // reader has actually finished, never a silent write — "Switch" is the only
@@ -280,6 +336,29 @@ export function LibraryView({
 
           <div ref={controlsRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
             <label className="flex flex-col gap-1">
+              <span className="text-xs text-[var(--color-text-muted)]">Search library</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="search"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  aria-label="Search library"
+                  placeholder="Title, author, year, DOI, ISBN, source type…"
+                  className="app-control w-64 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    aria-label="Clear search"
+                    className="rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                  >
+                    Clear search
+                  </button>
+                )}
+              </div>
+            </label>
+            <label className="flex flex-col gap-1">
               <span className="text-xs text-[var(--color-text-muted)]">Focus</span>
               <select
                 value={workId}
@@ -360,13 +439,19 @@ export function LibraryView({
                 <option value="credibility">Credibility</option>
               </select>
             </label>
-            <div className="ml-auto text-xs text-[var(--color-text-muted)]">
-              {visible.length} of {items.length}
+            <div className="ml-auto text-xs text-[var(--color-text-muted)]" aria-live="polite" aria-atomic="true">
+              {isSearching
+                ? "Searching…"
+                : search
+                  ? `${visible.length} result${visible.length === 1 ? "" : "s"} for “${search}”`
+                  : `${visible.length} of ${items.length}`}
             </div>
           </div>
 
           {visible.length === 0 && (
-            <p className="text-[var(--color-text-muted)]">No items match these filters.</p>
+            <p className="text-[var(--color-text-muted)]">
+              {search ? <>No results for &ldquo;{search}&rdquo;.</> : "No items match these filters."}
+            </p>
           )}
 
           <ul className="flex flex-col gap-2">
