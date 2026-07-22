@@ -42,7 +42,16 @@ export function getQueue(): Promise<PgBoss> {
     if (!connectionString) {
       throw new Error("DATABASE_URL is not set — required for the job queue.");
     }
-    const boss = new PgBoss({ connectionString });
+    // pg-boss's internal `pg` client (unlike the postgres.js client `packages/db`
+    // uses elsewhere) now treats sslmode=require/prefer/verify-ca as verify-full
+    // (pg-connection-string >=2.7 tightened this), which fails against Supabase's
+    // Supavisor pooler cert chain with SELF_SIGNED_CERT_IN_CHAIN. Local dev's
+    // connection string has no sslmode at all, so this only applies in
+    // environments (Render/Vercel) whose Supabase connection string requests SSL.
+    const ssl = /\bsslmode=(?!disable\b)\w+/.test(connectionString)
+      ? { rejectUnauthorized: false }
+      : undefined;
+    const boss = new PgBoss({ connectionString, ssl });
     boss.on("error", (error) => console.error("[pg-boss]", error));
     // pg-boss v10 requires a queue to be explicitly created before
     // send()/work() — send() no longer auto-creates it, and silently
