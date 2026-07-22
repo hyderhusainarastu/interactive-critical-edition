@@ -1,4 +1,4 @@
-import { db, documents, processingRuns, works } from "@ice/db";
+import { db, documents, processingRuns, staleActiveExtractMs, works } from "@ice/db";
 import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
@@ -41,6 +41,31 @@ export async function GET(
     runStatus: processingRuns.status,
     published: processingRuns.isPublished,
     note: processingRuns.note,
+    updatedAt: processingRuns.updatedAt,
   }).from(processingRuns).where(eq(processingRuns.documentId, row.documentId)).orderBy(desc(processingRuns.version)).limit(1);
-  return NextResponse.json({ ...row, processingRun: run ?? null });
+  // Honest stall signal (Phase 20.5): the worker heartbeats the run row every
+  // minute while a run executes, so a `processing` document whose latest run
+  // has gone quiet past the stale-active threshold means the worker died
+  // mid-run. Computed on read (same opportunistic pattern as trash purge) so
+  // the UI can offer recovery even when no worker is alive to sweep.
+  const stalled =
+    row.status === "processing" &&
+    run !== undefined &&
+    (run.runStatus === "failed" ||
+      (run.runStatus === "running" && Date.now() - run.updatedAt.getTime() > staleActiveExtractMs()));
+  return NextResponse.json({
+    ...row,
+    processingRun: run
+      ? {
+          version: run.version,
+          pipelineVersion: run.pipelineVersion,
+          stage: run.stage,
+          structureState: run.structureState,
+          runStatus: run.runStatus,
+          published: run.published,
+          note: run.note,
+        }
+      : null,
+    stalled,
+  });
 }

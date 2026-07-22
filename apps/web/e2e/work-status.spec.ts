@@ -1,5 +1,5 @@
-import { db, documents, works } from "@ice/db";
-import { eq } from "drizzle-orm";
+import { db, documents, findPendingExtractJobs, getQueue, processingRuns, QUEUE_EXTRACT_TEXT, works } from "@ice/db";
+import { eq, sql } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedWorkInStatus, seedWorkWithLibraryItem } from "./helpers";
 
@@ -35,7 +35,14 @@ test.describe("Work status controls (Phase 19)", () => {
     userId = await createVerifiedTestUser(EMAIL, PASSWORD);
   });
   test.afterAll(async () => {
+    // deleteTestUser also cancels any still-queued extract-text jobs the
+    // real-route reprocess tests enqueued (cancelQueuedJobsForDocuments).
     await deleteTestUser(EMAIL);
+    // The stalled-recovery test starts a pg-boss instance in THIS process
+    // (to guarantee the pgboss schema exists and to park a job); stop it so
+    // its maintenance timers don't outlive the spec.
+    const boss = await getQueue();
+    await boss.stop({ graceful: false, wait: true });
   });
 
   test("needs_review renders the metadata-confirm form prefilled from extraction, and confirming readies the work", async ({ page }) => {
@@ -97,6 +104,10 @@ test.describe("Work status controls (Phase 19)", () => {
 
     await expect(page.getByText("Processing failed")).toBeVisible();
     await expect(page.getByText("No extractable text found. OCR was unavailable or produced no text.")).toBeVisible();
+    // Phase 20.5: the failed state states the recovery semantics honestly —
+    // the immutable original upload is retained and retry restarts from it,
+    // with any published edition kept until a new run succeeds.
+    await expect(page.getByText("Your original uploaded file is retained unchanged.", { exact: false })).toBeVisible();
     const retryButton = page.getByRole("button", { name: "Retry processing" });
     await expect(retryButton).toBeVisible();
 
@@ -185,6 +196,99 @@ test.describe("Work status controls (Phase 19)", () => {
 
     const [row] = await db.select({ deletedAt: works.deletedAt }).from(works).where(eq(works.id, workId));
     expect(row.deletedAt).toBeNull();
+  });
+
+  /**
+   * Phase 20.5 (D-20-50): repeated Reprocess requests must enqueue ONCE.
+   * Reproduced live before the fix: two sequential POSTs to the real route
+   * each returned 202 with a fresh jobId and left TWO pg-boss `created` rows
+   * for the same document — two duplicate paid runs. These go through the
+   * REAL /reprocess route (no mocking), which is why CI's E2E step now sets
+   * ANALYSIS_PIPELINE=v2 (the route 409s on the v1 default).
+   */
+  test("repeated reprocess requests for a ready work enqueue exactly one job (D-20-50)", async ({ page }) => {
+    const { workId, documentId } = await seedWorkInStatus(userId, "ready", { title: "Duplicate-click reprocess work" });
+
+    await login(page);
+    const first = await page.request.post(`/api/works/${workId}/reprocess`);
+    expect(first.status()).toBe(202);
+    const firstBody = (await first.json()) as { status: string; jobId?: string; deduplicated?: boolean };
+    expect(firstBody.status).toBe("queued");
+    expect(firstBody.deduplicated).toBeUndefined();
+
+    const second = await page.request.post(`/api/works/${workId}/reprocess`);
+    // Either dedup outcome is correct: reuse of the queued job (202 +
+    // deduplicated) or a conflict because the attempt already went active
+    // (409, possible locally where a live worker shares the stack). What
+    // must NEVER happen is a second fresh enqueue.
+    const secondBody = (await second.json()) as { jobId?: string; deduplicated?: boolean; error?: string };
+    if (second.status() === 202) {
+      expect(secondBody.deduplicated).toBe(true);
+      expect(secondBody.jobId).toBe(firstBody.jobId);
+    } else {
+      expect(second.status()).toBe(409);
+    }
+
+    const pending = await findPendingExtractJobs(documentId);
+    expect(pending.length).toBeLessThanOrEqual(1);
+    const [jobRows] = await db.execute(sql`
+      select count(*)::int as count from pgboss.job
+      where name = 'extract-text' and data ->> 'documentId' = ${documentId}
+    `);
+    expect((jobRows as { count: number }).count).toBe(1);
+  });
+
+  /**
+   * Phase 20.5: stale-active-job recovery through the real route + UI. A
+   * worker that dies mid-job leaves the pg-boss row `active` and the run
+   * without heartbeats; previously that was unrecoverable until the 60-minute
+   * expiration window elapsed (then retried into a duplicate run). The status
+   * endpoint now reports the stall, the panel offers Retry, and the route
+   * cancels the orphaned row and enqueues a fresh attempt.
+   */
+  test("a stalled processing work surfaces recovery, and Retry recovers the orphaned active job (real route)", async ({ page }) => {
+    const { workId, documentId } = await seedWorkInStatus(userId, "processing", {
+      title: "Stalled mid-run work",
+      processingRun: { pipelineVersion: "v2", stage: "research-discovery", runStatus: "running" },
+    });
+    // The heartbeat stopped 30 minutes ago — well past the 10-minute stale
+    // threshold the status endpoint and planReprocess share.
+    await db
+      .update(processingRuns)
+      .set({ updatedAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(processingRuns.documentId, documentId));
+    // A real pg-boss row left `active` by the "dead" worker. Parked with a
+    // far-future startAfter first so a live local worker can never fetch it
+    // before the state flip (pg-boss only ever fetches created/retry rows).
+    const boss = await getQueue();
+    const staleJobId = await boss.send(QUEUE_EXTRACT_TEXT, { documentId }, { startAfter: 3600, expireInMinutes: 60 });
+    await db.execute(sql`
+      update pgboss.job set state = 'active', started_on = now() - interval '30 minutes'
+      where id = ${staleJobId} and name = 'extract-text'
+    `);
+
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    // The server-rendered initial payload omits the stall flag; the 2-second
+    // status poll fills it in.
+    await expect(page.getByText("Processing appears to have stalled")).toBeVisible({ timeout: 15_000 });
+
+    const [recoverResponse] = await Promise.all([
+      page.waitForResponse((response) => response.url().includes("/reprocess") && response.request().method() === "POST"),
+      page.getByRole("button", { name: "Retry processing" }).click(),
+    ]);
+    expect(recoverResponse.status()).toBe(202);
+    const body = (await recoverResponse.json()) as { status: string; recovered?: boolean; jobId?: string };
+    expect(body.status).toBe("queued");
+    expect(body.recovered).toBe(true);
+    await expect(page.getByText("Queued — this page updates automatically.")).toBeVisible();
+
+    // The orphaned active row is gone — it can no longer be expire-retried
+    // into a duplicate run behind the fresh attempt's back.
+    const pendingIds = (await findPendingExtractJobs(documentId)).map((job) => job.id);
+    expect(pendingIds).not.toContain(staleJobId);
+    const [staleRow] = await db.execute(sql`select id from pgboss.job where id = ${staleJobId}`);
+    expect(staleRow).toBeUndefined();
   });
 
   /**

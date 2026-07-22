@@ -1,7 +1,7 @@
-import { db, documents, processingRuns, users, works } from "@ice/db";
+import { db, documents, processingJobs, processingRuns, users, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
-import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
+import { allocateEditionRun, publishEditionRun, sweepAbandonedRuns } from "./runLifecycle";
 
 /**
  * Integration tests for the run-lifecycle guarantees (plan §33 §1.3), run
@@ -105,5 +105,78 @@ describe.skipIf(!hasDb)("run lifecycle (integration)", () => {
     await expect(
       db.insert(processingRuns).values({ documentId, version: 2, pipelineVersion: "v2", status: "complete", isPublished: true }),
     ).rejects.toThrow();
+  });
+
+  /**
+   * Phase 20.5: the abandoned-run sweep must fail the stuck DOCUMENT (visible
+   * failure reason + retry affordance), not just the run — before this, a doc
+   * whose worker died mid-run stayed "processing" forever with an endlessly
+   * polling UI (D-20-51). It must also leave live work strictly alone.
+   */
+  it("sweepAbandonedRuns fails stale runs AND their documents/bookkeeping, and leaves fresh runs untouched", async () => {
+    const staleSeed = await seedDoc();
+    const freshSeed = await seedDoc();
+    cleanup.push(staleSeed.userId, freshSeed.userId);
+    const old = new Date(Date.now() - 120 * 60_000);
+
+    await db.update(documents).set({ processingStatus: "processing" }).where(eq(documents.id, staleSeed.documentId));
+    const [staleRun] = await db.insert(processingRuns)
+      .values({ documentId: staleSeed.documentId, version: 1, pipelineVersion: "v2", status: "running", stage: "research-discovery", startedAt: old, updatedAt: old })
+      .returning({ id: processingRuns.id });
+    const [staleJob] = await db.insert(processingJobs)
+      .values({ documentId: staleSeed.documentId, jobType: "edition-reprocess", status: "running", createdAt: old, updatedAt: old })
+      .returning({ id: processingJobs.id });
+
+    await db.update(documents).set({ processingStatus: "processing" }).where(eq(documents.id, freshSeed.documentId));
+    const [freshRun] = await db.insert(processingRuns)
+      .values({ documentId: freshSeed.documentId, version: 1, pipelineVersion: "v2", status: "running", stage: "extracting" })
+      .returning({ id: processingRuns.id });
+
+    const swept = await sweepAbandonedRuns(90);
+    expect(swept.runIds).toContain(staleRun.id);
+    expect(swept.runIds).not.toContain(freshRun.id);
+
+    const [sweptRun] = await db.select({ status: processingRuns.status, error: processingRuns.error }).from(processingRuns).where(eq(processingRuns.id, staleRun.id));
+    expect(sweptRun.status).toBe("failed");
+    expect(sweptRun.error).toContain("Abandoned mid-run");
+    const [sweptDoc] = await db.select({ status: documents.processingStatus, error: documents.processingError }).from(documents).where(eq(documents.id, staleSeed.documentId));
+    expect(sweptDoc.status).toBe("failed"); // visible failure + retry, not endless "processing"
+    expect(sweptDoc.error).toContain("Abandoned mid-run");
+    const [sweptJob] = await db.select({ status: processingJobs.status }).from(processingJobs).where(eq(processingJobs.id, staleJob.id));
+    expect(sweptJob.status).toBe("failed");
+
+    const [liveRun] = await db.select({ status: processingRuns.status }).from(processingRuns).where(eq(processingRuns.id, freshRun.id));
+    expect(liveRun.status).toBe("running");
+    const [liveDoc] = await db.select({ status: documents.processingStatus }).from(documents).where(eq(documents.id, freshSeed.documentId));
+    expect(liveDoc.status).toBe("processing");
+  });
+
+  it("sweepAbandonedRuns never touches a published run, and spares fresh bookkeeping rows for a swept document", async () => {
+    const seed = await seedDoc();
+    cleanup.push(seed.userId);
+    const old = new Date(Date.now() - 120 * 60_000);
+
+    // A published run with an old timestamp must never be swept.
+    const v1 = await allocateEditionRun(seed.documentId);
+    await publishEditionRun(publishParams(v1.id, seed.documentId, seed.workId));
+    await db.update(processingRuns).set({ updatedAt: old }).where(eq(processingRuns.id, v1.id));
+    // An abandoned second attempt...
+    const [v2] = await db.insert(processingRuns)
+      .values({ documentId: seed.documentId, version: 2, pipelineVersion: "v2", status: "running", startedAt: old, updatedAt: old })
+      .returning({ id: processingRuns.id });
+    await db.update(documents).set({ processingStatus: "processing" }).where(eq(documents.id, seed.documentId));
+    // ...and a FRESH pending bookkeeping row, as left by a retry click moments ago.
+    const [freshJob] = await db.insert(processingJobs)
+      .values({ documentId: seed.documentId, jobType: "edition-reprocess", status: "pending" })
+      .returning({ id: processingJobs.id });
+
+    await sweepAbandonedRuns(90);
+
+    const [publishedRun] = await db.select({ status: processingRuns.status, isPublished: processingRuns.isPublished }).from(processingRuns).where(eq(processingRuns.id, v1.id));
+    expect(publishedRun).toEqual({ status: "complete", isPublished: true }); // last good edition untouched
+    const [abandoned] = await db.select({ status: processingRuns.status }).from(processingRuns).where(eq(processingRuns.id, v2.id));
+    expect(abandoned.status).toBe("failed");
+    const [retryJob] = await db.select({ status: processingJobs.status }).from(processingJobs).where(eq(processingJobs.id, freshJob.id));
+    expect(retryJob.status).toBe("pending"); // the fresh retry survives the sweep
   });
 });

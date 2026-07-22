@@ -54,3 +54,94 @@ export async function cancelQueuedJobsForDocuments(documentIds: string[]): Promi
     throw err;
   }
 }
+
+/** Drizzle wraps the driver's PostgresError in DrizzleQueryError with `.code`
+ *  on the nested `.cause` (see cancelQueuedJobsForDocuments above). `42P01` =
+ *  the `pgboss` schema/tables don't exist yet, which is the same fact as
+ *  "nothing queued" — pg-boss only creates them on first `boss.start()`. */
+function isMissingPgbossSchema(err: unknown): boolean {
+  const cause = err instanceof Error ? err.cause : undefined;
+  return Boolean(cause && typeof cause === "object" && "code" in cause && cause.code === "42P01");
+}
+
+/**
+ * Non-terminal (`created`/`retry`/`active`) extract-text jobs for one
+ * document — the queue-state snapshot `planReprocess` (queue.ts) decides on.
+ * Lives here rather than queue.ts for the same reason as
+ * `cancelQueuedJobsForDocuments`: these need `db`, and queue.ts is itself
+ * re-exported by this module.
+ */
+export async function findPendingExtractJobs(documentId: string): Promise<import("./queue").PendingExtractJob[]> {
+  try {
+    const rows = await db.execute(sql`
+      select id, state, started_on
+      from pgboss.job
+      where name = 'extract-text'
+        and state in ('created', 'retry', 'active')
+        and data ->> 'documentId' = ${documentId}
+      order by created_on asc
+    `);
+    return [...rows].map((row) => {
+      const r = row as { id: string; state: string; started_on: Date | string | null };
+      return {
+        id: r.id,
+        state: r.state as import("./queue").PendingExtractJobState,
+        startedOn: r.started_on ? new Date(r.started_on) : null,
+      };
+    });
+  } catch (err) {
+    if (isMissingPgbossSchema(err)) return [];
+    throw err;
+  }
+}
+
+/**
+ * Deletes one extract-text job row if it is still non-terminal. Used by the
+ * reprocess command's stale-active-job recovery: the orphaned `active` row
+ * must be removed (not just superseded) or pg-boss would eventually treat it
+ * as expired and RETRY it into a duplicate run — the exact failure the
+ * 10-document load test observed (see EXTRACT_EXPIRE_MINUTES in queue.ts).
+ * Guarded by id+state so a job that completed in the meantime is left alone.
+ * Returns true when a row was actually removed.
+ */
+export async function cancelExtractJob(jobId: string): Promise<boolean> {
+  try {
+    const result = await db.execute(sql`
+      delete from pgboss.job
+      where name = 'extract-text'
+        and id = ${jobId}
+        and state in ('created', 'retry', 'active')
+    `);
+    return (result.count ?? 0) > 0;
+  } catch (err) {
+    if (isMissingPgbossSchema(err)) return false;
+    throw err;
+  }
+}
+
+/**
+ * Deletes `active` extract-text rows for these documents whose fetch time
+ * predates `olderThan` — the worker-boot companion to the reprocess command's
+ * recovery (an orphaned active row would otherwise be retried into a
+ * duplicate run after its expiration window). Deliberately narrower than
+ * `cancelQueuedJobsForDocuments`: `created`/`retry` rows are legitimate
+ * queued work (e.g. a retry the user just clicked) and must survive.
+ */
+export async function cancelStaleActiveExtractJobs(documentIds: string[], olderThan: Date): Promise<number> {
+  if (documentIds.length === 0) return 0;
+  try {
+    // ISO string, not the Date object: postgres.js can't bind a raw Date
+    // through drizzle's sql template here (ERR_INVALID_ARG_TYPE).
+    const result = await db.execute(sql`
+      delete from pgboss.job
+      where name = 'extract-text'
+        and state = 'active'
+        and started_on < ${olderThan.toISOString()}::timestamptz
+        and data ->> 'documentId' in ${documentIds}
+    `);
+    return result.count ?? 0;
+  } catch (err) {
+    if (isMissingPgbossSchema(err)) return 0;
+    throw err;
+  }
+}

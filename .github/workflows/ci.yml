@@ -90,6 +90,14 @@ jobs:
         run: pnpm --filter web exec playwright install --with-deps chromium
 
       - name: E2E (CI-safe specs)
+        # ANALYSIS_PIPELINE matches local dev + production (v2). Without it
+        # the web tier defaults to v1 and the real /reprocess route 409s
+        # ("not enabled") — exactly D-19-29's root cause — which would fail
+        # the Phase 20.5 work-status reprocess tests that drive the real
+        # route. Scoped to this step only; the unit-test step keeps the
+        # unset-default behavior its config tests exercise explicitly.
+        env:
+          ANALYSIS_PIPELINE: v2
         run: |
           pnpm --filter web start &
           SERVER_PID=$!

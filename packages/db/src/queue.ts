@@ -134,3 +134,97 @@ export async function enqueueGraphExpansion(expansionRequestId: string) {
     { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
   );
 }
+
+// ---- Phase 20.5: the single idempotent reprocess command's decision core ----
+
+/** pg-boss states that mean "this document already has an extraction attempt
+ *  in the queue or in progress" — everything else (`completed`/`failed`/
+ *  `cancelled`) is history, not queue state. */
+export const PENDING_EXTRACT_JOB_STATES = ["created", "retry", "active"] as const;
+export type PendingExtractJobState = (typeof PENDING_EXTRACT_JOB_STATES)[number];
+
+export interface PendingExtractJob {
+  id: string;
+  state: PendingExtractJobState;
+  /** Null until pg-boss fetches the job (i.e. while `created`/`retry`). */
+  startedOn: Date | null;
+}
+
+/**
+ * How long an `active` extract-text job may go without any progress on its
+ * document's latest processing run before it is treated as orphaned by a dead
+ * worker. The worker heartbeats `processing_run.updated_at` every minute while
+ * a run executes (see apps/worker), so a live run — even one sitting in a
+ * single long research stage — never looks stale; only a crashed/killed worker
+ * stops the heartbeat. Deliberately much shorter than the 60-minute
+ * `expireInMinutes` window: that window exists for queue backlogs, and before
+ * this existed an orphaned job was unrecoverable until it elapsed
+ * (docs/PROJECT-LOG.md Known Problems), then retried into a duplicate run.
+ */
+export const STALE_ACTIVE_EXTRACT_MINUTES_DEFAULT = 10;
+
+export function staleActiveExtractMs(): number {
+  const configured = Number(process.env.STALE_ACTIVE_EXTRACT_MINUTES ?? STALE_ACTIVE_EXTRACT_MINUTES_DEFAULT);
+  return Math.max(1, Number.isFinite(configured) ? configured : STALE_ACTIVE_EXTRACT_MINUTES_DEFAULT) * 60_000;
+}
+
+export type ReprocessPlan =
+  /** An identical attempt is already queued — return it instead of enqueueing a duplicate. */
+  | { action: "reuse"; jobId: string }
+  /** An `active` job was orphaned by a dead worker: cancel it and enqueue a fresh attempt. */
+  | { action: "recover"; staleJobId: string }
+  /** No pending attempt exists and the document's status allows one — enqueue. */
+  | { action: "enqueue" }
+  /** A live attempt is genuinely running — starting another would duplicate paid work. */
+  | { action: "conflict"; reason: string };
+
+/**
+ * Pure decision core for `POST /api/works/:id/reprocess` (plan §20.5):
+ * one idempotent command with explicit allowed source statuses,
+ * duplicate-request protection, and stale-active-job recovery. Kept pure
+ * (no DB access) so every branch is unit-testable; the route supplies the
+ * queue/run snapshots and executes the returned action.
+ *
+ * Allowed source statuses: `ready`, `needs_review`, `failed`, and `uploaded`
+ * enqueue directly when nothing is pending ("uploaded" covers a lost initial
+ * enqueue). `processing` is only ever recovered (stale) or conflicted (live) —
+ * never blindly re-enqueued.
+ */
+export function planReprocess(input: {
+  documentStatus: "uploaded" | "processing" | "needs_review" | "ready" | "failed";
+  pendingJobs: PendingExtractJob[];
+  /** The document's latest processing run, if any (highest version). */
+  latestRun: { status: string; updatedAt: Date } | null;
+  now?: Date;
+  staleAfterMs?: number;
+}): ReprocessPlan {
+  const now = input.now ?? new Date();
+  const staleAfterMs = input.staleAfterMs ?? staleActiveExtractMs();
+  const cutoff = now.getTime() - staleAfterMs;
+
+  // Duplicate-request protection: a queued (not-yet-fetched) attempt is
+  // exactly what a second click would create — reuse it.
+  const queued = input.pendingJobs.find((job) => job.state === "created" || job.state === "retry");
+  if (queued) return { action: "reuse", jobId: queued.id };
+
+  const active = input.pendingJobs.find((job) => job.state === "active");
+  if (active) {
+    const jobStale = (active.startedOn?.getTime() ?? 0) < cutoff;
+    // A live worker heartbeats the run row; "running run with a fresh
+    // updatedAt" is proof of life regardless of how old the job is.
+    const runFresh = input.latestRun !== null && input.latestRun.status === "running" && input.latestRun.updatedAt.getTime() >= cutoff;
+    if (jobStale && !runFresh) return { action: "recover", staleJobId: active.id };
+    return { action: "conflict", reason: "Processing is already running for this work." };
+  }
+
+  // No pending job at all. A `processing` document whose latest run is still
+  // fresh means a worker is mid-run in the narrow window where queue state
+  // is ambiguous — don't stack a duplicate on top of it.
+  if (input.documentStatus === "processing") {
+    const runFresh = input.latestRun !== null && input.latestRun.status === "running" && input.latestRun.updatedAt.getTime() >= cutoff;
+    if (runFresh) return { action: "conflict", reason: "Processing is already running for this work." };
+    return { action: "enqueue" };
+  }
+
+  return { action: "enqueue" };
+}

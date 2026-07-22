@@ -26,6 +26,11 @@ interface StatusPayload {
     published: boolean;
     note: string | null;
   } | null;
+  /** Phase 20.5: true when the latest run has stopped making progress (the
+   * worker heartbeats it every minute while alive), so "processing" is
+   * actually a dead run needing recovery. Optional — the server-rendered
+   * initial payload omits it and the 2-second poll fills it in. */
+  stalled?: boolean;
 }
 
 /**
@@ -143,8 +148,12 @@ export function WorkStatusPanel({
 
   async function handleReprocess() {
     setReprocessing(true);
+    setError(null);
     const response = await fetch(`/api/works/${workId}/reprocess`, { method: "POST" });
-    if (response.ok) setData((current) => ({ ...current, status: "uploaded" }));
+    // 202 covers "queued", "already queued" (deduplicated repeat click), and
+    // stale-job recovery alike — all mean an attempt is now pending, so show
+    // the polling state and let the status endpoint report real progress.
+    if (response.ok) setData((current) => ({ ...current, status: "uploaded", stalled: false }));
     else setError((await response.json().catch(() => ({}))).error ?? "Couldn’t start reprocessing.");
     setReprocessing(false);
   }
@@ -190,6 +199,25 @@ export function WorkStatusPanel({
         {data.processingRun && (
           <StageProgress pipelineVersion={data.processingRun.pipelineVersion} currentStage={data.processingRun.stage} />
         )}
+        {data.stalled && (
+          <div className="mt-3 border-t border-[var(--color-border)] pt-3">
+            <p className="text-sm font-medium text-[var(--color-accent-burgundy)]">Processing appears to have stalled</p>
+            <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+              The run has stopped reporting progress — the worker likely restarted mid-run. Your original
+              uploaded file is retained unchanged; retrying starts a fresh run from it, and any previously
+              published edition stays available until the new run succeeds.
+            </p>
+            {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
+            <button
+              type="button"
+              onClick={handleReprocess}
+              disabled={reprocessing}
+              className="mt-2 rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60"
+            >
+              {reprocessing ? "Retrying…" : "Retry processing"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -202,6 +230,10 @@ export function WorkStatusPanel({
         </p>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
           {data.processingError ?? "An unknown error occurred."}
+        </p>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          Your original uploaded file is retained unchanged. Retrying restarts processing from it, and any
+          previously published edition stays available until a new run succeeds.
         </p>
         {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
         <button
