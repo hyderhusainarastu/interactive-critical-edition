@@ -1,7 +1,7 @@
 import { conceptMastery, db, readingRecords, understandingRatings, workRelationshipJudgments } from "@ice/db";
 import { KNOWN_THRESHOLD } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
+import { edgeTypeForRelationshipCategory, isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
 
 /**
  * Builds the per-user knowledge-graph data (plan §9/§16, extended by plan
@@ -39,6 +39,18 @@ import { isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, 
  * link that is computed here and never written to `graph_edge` — there is
  * nothing to persist, since a document's own structure is already the
  * source of truth in `text_block`.
+ *
+ * **Phase 21.2 (D-21-7):** two real, DB-invariant-backed relationship
+ * sources the plan names were never read here at all — `resource_role`
+ * (plan §34.4 9.5/9.6, a durable work-to-Library-resource role that
+ * survives a run even after its `research_resource` row is superseded)
+ * and `passage_annotation` (plan §34.4 9.3, a structurally anchored note
+ * that reuses the same 10-category vocabulary as citation/classification
+ * edges). Both are projected using `edgeTypeForRelationshipCategory()`
+ * (`@/components/graph/types`), which maps `relationship_category` into
+ * the SAME `edge_type` vocabulary the citation/classification edges
+ * already use — so no new edge family, legend entry, or relation-filter
+ * case is needed for either source.
  */
 
 // The node/edge shapes are the ONE shared graph contract (plan §21.1),
@@ -118,6 +130,37 @@ interface ResourceRelationRow {
   importance: number | null;
   evidence: unknown;
   confidence: number;
+}
+interface ResourceRoleRow {
+  role_id: string;
+  relationship: string;
+  reader_level: string | null;
+  confidence: number;
+  rationale: string | null;
+  work_id: string;
+  resource_id: string;
+  bib_record_id: string | null;
+  normalized_key: string | null;
+  title: string;
+  url: string | null;
+  provider: string;
+  resource_type: string;
+  year: number | null;
+  authors: unknown;
+  peer_reviewed: boolean | null;
+}
+interface PassageAnnotationRow {
+  annotation_id: string;
+  relationship: string;
+  reader_level: string | null;
+  confidence: number;
+  annotation_type: string;
+  summary: string;
+  explanation: string;
+  is_whole_work: boolean;
+  related_resource_id: string | null;
+  run_id: string;
+  work_id: string;
 }
 
 const NORM = (c: string) => sql.raw(`regexp_replace(lower(${c}), '[^a-z0-9]', '', 'g')`);
@@ -266,6 +309,38 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     ORDER BY er.created_at ASC
   `)) as unknown as ResourceRelationRow[];
 
+  // 5c) Phase 21.2 (D-21-7): resource_role rows — a durable projection that
+  // outlives any one run's `research_resource` rows, so it is read
+  // independently of the `is_published` run scoping above and joined
+  // straight off the owned, non-deleted `work_identity` instead.
+  const resourceRoleRows = (await db.execute(sql`
+    SELECT role.id AS role_id, role.relationship, role.reader_level, role.confidence, role.rationale,
+      w.id AS work_id,
+      lr.id AS resource_id, lr.bib_record_id, lr.normalized_key, lr.title, lr.url,
+      lr.provider, lr.resource_type, lr.year, lr.authors, lr.peer_reviewed
+    FROM resource_role role
+    JOIN work w ON w.work_identity_id = role.work_identity_id
+    JOIN learning_resource lr ON lr.id = role.learning_resource_id
+    WHERE w.user_id = ${userId} AND w.deleted_at IS NULL
+    ${rootWorkId ? sql`AND w.id = ${rootWorkId}` : sql``}
+  `)) as unknown as ResourceRoleRow[];
+
+  // 5d) Phase 21.2 (D-21-7): passage_annotation rows that relate the
+  // primary text to a discovered resource — the same published-run scoping
+  // as the source/resource-relation queries above, and only rows with a
+  // real related resource (a whole-work or unrelated note has no second
+  // graph endpoint to connect).
+  const passageAnnotationRows = (await db.execute(sql`
+    SELECT pa.id AS annotation_id, pa.relationship, pa.reader_level, pa.confidence,
+      pa.annotation_type, pa.summary, pa.explanation, pa.is_whole_work, pa.related_resource_id,
+      pa.run_id, d.work_id
+    FROM passage_annotation pa
+    JOIN processing_run pr ON pr.id = pa.run_id
+    JOIN document d ON d.id = pr.document_id
+    WHERE d.user_id = ${userId} AND pr.is_published = true AND pa.related_resource_id IS NOT NULL
+    ${rootWorkId ? sql`AND d.work_id = ${rootWorkId}` : sql``}
+  `)) as unknown as PassageAnnotationRow[];
+
   // 6) Section outline nodes — work-scoped ONLY (see the module doc comment
   // for why this isn't attempted for the global graph). Pulled straight
   // from the primary work's own published run, same read-time-join pattern
@@ -321,11 +396,14 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   });
 
   const authorityRank = (authority: string | null | undefined) => AUTH_ORDER[authority ?? "E"] ?? 4;
-  const sourceTypeFor = (source: SourceRow): NodeType => {
-    if (source.peer_reviewed) return "peer_reviewed_source";
-    if (["webpage", "video", "social_post", "dataset"].includes(source.resource_type)) return "online_source";
+  // Shared by both `research_resource` rows and `resource_role`'s durable
+  // `learning_resource` rows (Phase 21.2/D-21-7) — same heuristic, one place.
+  const resourceNodeType = (peerReviewed: boolean | null, resourceType: string): NodeType => {
+    if (peerReviewed) return "peer_reviewed_source";
+    if (["webpage", "video", "social_post", "dataset"].includes(resourceType)) return "online_source";
     return "reference";
   };
+  const sourceTypeFor = (source: SourceRow): NodeType => resourceNodeType(source.peer_reviewed, source.resource_type);
   const rawExternalId = (source: SourceRow) => source.bib_record_id
     ? `external:bib:${source.bib_record_id}`
     : `external:source:${source.normalized_key ?? source.id}`;
@@ -449,6 +527,27 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     if (node) node.supplementary = publicOnly && ["D", "E"].includes(node.authority ?? "");
   }
 
+  // Phase 21.2 (D-21-7): a resource_role's `learning_resource` almost always
+  // already has a node here (via `refs`/`sourceRows` above) — attach the new
+  // edge to it. On the rarer path where this run's own research pass didn't
+  // (re)discover it, add a minimal node from the durable projection itself
+  // rather than silently dropping the relationship.
+  const roleNodeAdded = new Set<string>();
+  for (const role of resourceRoleRows) {
+    const rawId = role.bib_record_id ? `external:bib:${role.bib_record_id}` : `external:source:${role.normalized_key ?? role.resource_id}`;
+    const nodeId = canonicalNodeId(rawId);
+    if (!nodeById.has(nodeId) && !roleNodeAdded.has(nodeId)) {
+      roleNodeAdded.add(nodeId);
+      addNode({
+        id: nodeId, label: role.title, type: resourceNodeType(role.peer_reviewed, role.resource_type), state: "unread",
+        authors: displayAuthors(role.authors), year: role.year, url: role.url,
+        authority: null, credibilityScore: null, provider: role.provider, kind: role.resource_type,
+      });
+    }
+    const libraryId = (role.bib_record_id ? libraryIdByBib.get(role.bib_record_id) : undefined) ?? (role.normalized_key ? libraryIdByKey.get(role.normalized_key) : undefined);
+    if (libraryId && !libraryDestinationByNodeId.has(nodeId)) libraryDestinationByNodeId.set(nodeId, `/library/${libraryId}`);
+  }
+
   for (const c of conceptRows) {
     const score = masteryByConcept.get(c.id) ?? 0;
     addNode({
@@ -468,6 +567,27 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     if (relation.resource_id && !relation.related_resource_id && sourceIds.has(relation.resource_id) && !directRelationBySource.has(relation.resource_id)) {
       directRelationBySource.set(relation.resource_id, relation);
     }
+  }
+
+  // Phase 21.2 (D-21-7): a passage annotation's related resource is a
+  // `research_resource` id, not yet a graph node id — resolved through the
+  // same `sourceNodeIds` map the source-node loop above populated. Built as
+  // an explicit loop (not a `.map()`) so a stale/cross-run reference can be
+  // skipped rather than injecting an undefined endpoint into the payload.
+  const passageAnnotationLinks: DraftLink[] = [];
+  for (const pa of passageAnnotationRows) {
+    const target = sourceNodeIds.get(pa.related_resource_id ?? "");
+    if (!target) continue;
+    passageAnnotationLinks.push({
+      source: `work:${pa.work_id}`,
+      target,
+      edgeType: edgeTypeForRelationshipCategory(pa.relationship),
+      category: pa.relationship,
+      confidence: pa.confidence,
+      explanation: pa.explanation,
+      evidence: { source: "passage_annotation", annotationType: pa.annotation_type, summary: pa.summary, isWholeWork: pa.is_whole_work },
+      provenance: { relationId: pa.annotation_id, runId: pa.run_id, depth: 0 },
+    });
   }
 
   const links: DraftLink[] = [
@@ -519,6 +639,22 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         evidence: relation.evidence,
         provenance: { relationId: relation.id, runId: relation.run_id, depth: relation.depth },
       })),
+    // Phase 21.2 (D-21-7): resource_role rows — every target here already
+    // has a node, either from `refs`/`sourceRows` above or from the
+    // role-node-attach loop above, so no existence guard is needed.
+    ...resourceRoleRows.map((role) => {
+      const rawId = role.bib_record_id ? `external:bib:${role.bib_record_id}` : `external:source:${role.normalized_key ?? role.resource_id}`;
+      return {
+        source: `work:${role.work_id}`,
+        target: canonicalNodeId(rawId),
+        edgeType: edgeTypeForRelationshipCategory(role.relationship),
+        category: role.relationship,
+        confidence: role.confidence,
+        explanation: role.rationale,
+        evidence: { source: "resource_role", readerLevel: role.reader_level, roleId: role.role_id },
+      };
+    }),
+    ...passageAnnotationLinks,
   ];
 
   // Phase 12.5: only a durable, evidence-hashed judgement becomes a

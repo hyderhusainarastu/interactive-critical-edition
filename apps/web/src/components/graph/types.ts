@@ -1,3 +1,5 @@
+import type { RelationshipCategory } from "@ice/roadmap";
+
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
 export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
 
@@ -224,6 +226,37 @@ export function edgeFamilyFor(edgeType: string, category?: string | null): EdgeF
   if (normalized.includes("disagrees") || normalized.includes("criticizes") || normalized.includes("polemical")) return "opposition";
   if (normalized.includes("cites") || normalized.includes("quotes") || normalized.includes("reference") || normalized.includes("review") || normalized.includes("recommend")) return "reference";
   return "influence";
+}
+
+/**
+ * relationship_category → edge_type (Phase 21.2, D-21-7): mirrors
+ * `apps/worker/src/analyze.ts`'s `CATEGORY_TO_EDGE` map exactly, so
+ * `resource_role`/`passage_annotation` rows — real relation-bearing rows the
+ * plan names that `buildGraph()` never read before this fix — project into
+ * the SAME edge_type vocabulary the citation/classification `graph_edge`
+ * rows already use. That means `edgeFamilyFor()` above and the legend/relation
+ * filter need no new cases for either source: every edge_type this produces
+ * is already one of `EDGE_TYPE_FAMILY`'s existing keys. Kept in sync
+ * manually — apps/web cannot import from apps/worker.
+ */
+const RELATIONSHIP_CATEGORY_TO_EDGE_TYPE: Record<RelationshipCategory, string> = {
+  explicit_reference: "cites",
+  secondary_scholarly_recommendation: "is_recommended_by",
+  historical_context: "provides_context_for",
+  prerequisite: "is_prerequisite_for",
+  conceptual_influence: "influences",
+  disagreement_polemical_target: "disagrees_with",
+  interpretive_aid: "interprets",
+  parallel_comparison: "is_comparable_to",
+  optional_extension: "is_recommended_by",
+  ai_inferred: "provides_context_for",
+};
+
+/** Falls back to `provides_context_for` for any unrecognized category value
+ *  rather than throwing — a graph edge should degrade to a plausible
+ *  family, never disappear from the payload or crash the request. */
+export function edgeTypeForRelationshipCategory(category: string): string {
+  return RELATIONSHIP_CATEGORY_TO_EDGE_TYPE[category as RelationshipCategory] ?? "provides_context_for";
 }
 
 function linkEndpointId(end: GraphLink["source"] | GraphLink["target"]): string {

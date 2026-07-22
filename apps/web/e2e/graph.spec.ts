@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedWorkWithGraphData } from "./helpers";
+import { db, learningResources, passageAnnotations, processingRuns, resourceRoles, workIdentities, works } from "@ice/db";
+import { eq } from "drizzle-orm";
 
 /**
  * Phase 9.7/11.8/11.9 E2E: the visualization graph's node-type extension and shared
@@ -348,6 +350,107 @@ test.describe("Visualization graph", () => {
     await bibRow.click();
     const inspector = page.getByLabel("Graph inspector");
     await expect(inspector.getByRole("link", { name: "View Library entry" })).toHaveAttribute("href", `/library/${libraryResourceId}`);
+  });
+
+  test("projects resource_role and passage_annotation relationships that buildGraph previously ignored (D-21-7)", async ({ page }) => {
+    // Both are real, DB-invariant-backed relationship sources the plan
+    // names (§21.2) that `buildGraph()` never queried before this fix —
+    // seeded with relationships DISTINCT from the "cites"/"presupposes"
+    // edges `seedWorkWithGraphData` already writes, so these two
+    // assertions can only be explained by the new read paths, not the
+    // pre-existing ones.
+    const { workId, documentId, bibId, resourceId, sectionBlockId } = await seedWorkWithGraphData(userId, {
+      title: "Resource-role and passage-annotation fixture",
+    });
+
+    const [identity] = await db
+      .insert(workIdentities)
+      .values({
+        // Matches helpers.ts's `TEST_WORK_IDENTITY_KEY_PATTERN` (D-20-65) so
+        // this fixture's `work_identity` row is swept on test-user teardown
+        // like every other seeded one, instead of leaking into the shared
+        // local Postgres.
+        workKey: `work:graph-test:d-21-7-${workId}`,
+        canonicalTitle: "Resource-role and passage-annotation fixture",
+        authorSurname: "test",
+        authors: ["Test Author"],
+        evidence: "D-21-7 regression fixture",
+      })
+      .returning({ id: workIdentities.id });
+    await db.update(works).set({ workIdentityId: identity.id }).where(eq(works.id, workId));
+    const [libraryResource] = await db
+      .insert(learningResources)
+      .values({
+        title: "Physics",
+        normalizedKey: `seeded-lr-d-21-7-${workId}`,
+        resourceType: "book",
+        provider: "crossref",
+        bibRecordId: bibId,
+      })
+      .returning({ id: learningResources.id });
+    await db.insert(resourceRoles).values({
+      learningResourceId: libraryResource.id,
+      workIdentityId: identity.id,
+      relationship: "prerequisite",
+      readerLevel: null,
+      rationale: "Read this before the primary text.",
+      confidence: 0.9,
+      createdBy: "system",
+    });
+
+    const [run] = await db.select({ id: processingRuns.id }).from(processingRuns).where(eq(processingRuns.documentId, documentId));
+    await db.insert(passageAnnotations).values({
+      runId: run.id,
+      textBlockId: sectionBlockId,
+      isWholeWork: false,
+      quote: "Book II",
+      summary: "Disputes a claim in the cited source.",
+      explanation: "The source work explicitly argues against a position defended in Physics.",
+      annotationType: "critique",
+      relationship: "disagreement_polemical_target",
+      confidence: 0.75,
+      relatedResourceId: resourceId,
+      createdBy: "system",
+    });
+
+    await login(page);
+    const response = await page.request.get(`/api/works/${workId}/graph`);
+    expect(response.ok()).toBeTruthy();
+    const graph = await response.json() as {
+      links: { source: string; target: string; edgeType: string; category: string | null; explanation?: string | null; evidence?: unknown }[];
+    };
+
+    const prerequisiteLink = graph.links.find((link) => link.edgeType === "is_prerequisite_for" && link.target === `external:bib:${bibId}`);
+    expect(prerequisiteLink).toBeTruthy();
+    expect(prerequisiteLink!.source).toBe(`work:${workId}`);
+    expect(prerequisiteLink!.category).toBe("prerequisite");
+    expect(prerequisiteLink!.explanation).toBe("Read this before the primary text.");
+
+    const disagreementLink = graph.links.find((link) => link.edgeType === "disagrees_with" && link.target === `external:bib:${bibId}`);
+    expect(disagreementLink).toBeTruthy();
+    expect(disagreementLink!.source).toBe(`work:${workId}`);
+    expect(disagreementLink!.category).toBe("disagreement_polemical_target");
+
+    // Legend metadata: both new families (previously unexercised by any
+    // other graph.spec.ts test) now appear, derived automatically from
+    // `edgeFamilyFor()` — no separate legend wiring was needed.
+    await page.goto(`/works/${workId}/graph`);
+    await expect(page.getByLabel("Relationship color legend")).toContainText("Prerequisite");
+    await expect(page.getByLabel("Relationship color legend")).toContainText("Opposition");
+
+    // Owner directive C: verify the pre-existing relation filter's
+    // control -> URL/state -> filter function -> rendered output for these
+    // two NEW edge-type values specifically (D-21-1's edge-level filtering,
+    // now exercised against relation sources it was never proven against).
+    await page.goto(`/works/${workId}/graph?relation=is_prerequisite_for`);
+    await page.getByText("Accessible node browser").click();
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    await expect(bibRow).toContainText("is prerequisite for");
+    await expect(bibRow).not.toContainText("disagrees with");
+
+    await page.locator("label", { hasText: "Relation" }).locator("select").selectOption("disagrees_with");
+    await expect(bibRow).toContainText("disagrees with");
+    await expect(bibRow).not.toContainText("is prerequisite for");
   });
 
   test("state legend displays 'Uploaded work' label (plan §20.2)", async ({ page }) => {
