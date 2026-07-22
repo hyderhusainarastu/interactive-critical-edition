@@ -38,9 +38,18 @@ The in-app browser runtime is unavailable in this agent session, so the interact
 | Library | Reader-level facets and level suggestion Switch/Dismiss | working | Existing Library E2E proves cumulative/exact matching, saved-level write, and locally remembered dismissal. |
 | Library | Focused-work title, recommended-for chips, external resource links, and empty-state upload CTA | pending | Rendered/partially asserted, but their navigation targets have not yet been clicked through in this literal inventory. |
 
+## Work-status and trash controls
+
+| Surface | Control family | Classification | Evidence / disposition |
+|---|---|---|---|
+| Ready work | Roadmap, Concept check, Curriculum, work Visualization, and Open reader action links | working / fixed | New CI-safe `trash.spec.ts` journey clicks each route from a ready work and returns. The work Visualization action is fixed as D-19-17, now exposed as “Visualization for [work title]” so it does not collide with the global link. |
+| Ready work | Move-to-trash confirmation and Cancel | working | New journey opens the inline confirmation, verifies the irreversible-action message, and cancels it without mutating the work. |
+| Trash | Move, restore, permanent-delete confirmation and Delete now | working | Existing `trash.spec.ts` covers normal-list removal, route protection, 30-day messaging, restore, and actual database deletion; full suite is 4/4 after the new journey. |
+| Work status | Metadata-confirm form, reprocess action, processing progress, failed-state recovery, and trashed-work Undo/Trash link | pending | Source-mapped but needs distinct fixtures that can safely exercise each state without depending on the live analysis pipeline. |
+
 ## Control families queued for subsequent passes
 
-The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; work-status/reprocess/trash controls; remaining Library navigation/CTA links; Reader source/processed toggles, selection actions, notes, highlights, bookmarks, annotation filters, footnotes, split view, and contextual RAG sheet; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all other empty-state calls to action.
+The following are source-mapped but not yet classified by interactive evidence. They remain required Phase 19 work: landing/auth forms; upload queue, duplicate, retry, and confirmation controls; remaining work-status/reprocess states; remaining Library navigation/CTA links; Reader source/processed toggles, selection actions, notes, highlights, bookmarks, annotation filters, footnotes, split view, and contextual RAG sheet; Roadmap/Curriculum/Diagnostic controls; Visualization filters, graph/table/inspector/fullscreen/export/expansion controls; Ask Library conversation controls; and all other empty-state calls to action.
 
 ## Defects surfaced by this tranche
 
@@ -48,5 +57,6 @@ The following are source-mapped but not yet classified by interactive evidence. 
 - **D-19-14:** Command-palette dialog lacked a focus trap and trigger-focus restoration.
 - **D-19-15:** Mobile navigation overlay lacked modal semantics, initial focus, focus containment, Escape handling, and trigger-focus restoration.
 - **D-19-16:** Library’s active reading-status filter state was visual-only and unlabelled for assistive technology.
+- **D-19-17:** Global and work-specific Visualization links shared an ambiguous accessible name.
 
-All four are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.
+All five are repaired and regression-tested locally. The authoritative detailed record is `docs/audits/phase-19-product-audit.md`.

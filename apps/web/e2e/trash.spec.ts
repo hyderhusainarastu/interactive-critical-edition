@@ -1,7 +1,7 @@
 import { db, users, works } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
-import { createVerifiedTestUser, deleteTestUser, seedOwnedWork } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, seedOwnedWork, seedWorkWithLibraryItems } from "./helpers";
 
 /**
  * Phase 9.7 E2E: the 30-day work trash. Pure web CRUD with no worker/AI
@@ -96,5 +96,35 @@ test.describe("Work trash (Phase 9.7)", () => {
 
     const [remaining] = await db.select({ id: works.id }).from(works).where(eq(works.id, workId));
     expect(remaining).toBeUndefined();
+  });
+
+  test("ready-work action links navigate and a move-to-trash confirmation can be cancelled", async ({ page }) => {
+    const { workId } = await seedWorkWithLibraryItems(userId, "Ready-work controls", [
+      { resourceTitle: "Ready-work source", relationship: "prerequisite" },
+    ]);
+
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("Ready", { exact: true })).toBeVisible();
+
+    const destinations = [
+      ["Reading roadmap", `/works/${workId}/roadmap`],
+      ["Concept check", `/works/${workId}/diagnostic`],
+      ["Curriculum", `/works/${workId}/curriculum`],
+      [`Visualization for Ready-work controls`, `/works/${workId}/graph`],
+      ["Open reader", `/works/${workId}/reader`],
+    ] as const;
+    for (const [label, href] of destinations) {
+      await page.getByRole("link", { name: label }).click();
+      await expect(page).toHaveURL(new RegExp(`${href}$`));
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`/works/${workId}$`));
+    }
+
+    await page.getByRole("button", { name: "Move to trash" }).click();
+    await expect(page.getByText("Move to trash? Restorable for 30 days.")).toBeVisible();
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("button", { name: "Move to trash" })).toBeVisible();
+    await expect(page.getByText("Move to trash? Restorable for 30 days.")).not.toBeVisible();
   });
 });
