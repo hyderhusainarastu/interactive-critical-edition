@@ -9,7 +9,7 @@
     "docs/project-status.json"
   ],
   "handoff": "docs/handoffs/phase-17-to-18.md",
-  "verification": "Phase 18 production release verified: migrations 0028/0029, live web/worker deployments, enabled feature/provider/embedding gates, bounded backfill, cited live answer, and authenticated API smoke all passed.",
+  "verification": "Phase 18 production release verified: migrations 0028/0029, live web/worker deployments, enabled feature/provider/embedding gates, bounded backfill, cited live answer, authenticated API smoke, and the post-release authenticated Ask Library navigation/page correction all passed.",
   "hostAdapter": "manual-user-created-host-session",
   "closeoutStatus": "phase_18_production_release_complete",
   "contextReplaced": true,
@@ -19,5 +19,5 @@
     "automaticAdapterAction": false,
     "note": "The user explicitly supplied a fresh session for Phase 18. This records a manual host-level replacement; no automatic adapter action, compaction claim, or simulated lifecycle action occurred."
   },
-  "note": "Phase 18 began only after the user-created fresh session read the compact handoff and required records. The owner then explicitly authorized and verified the production release; migrations, the web/provider gate, and worker indexing/embedding gates are live under the documented caps. Future phase closeout remains governed by the host-adapter contract unless the user manually provides a new host context again."
+  "note": "Phase 18 began only after the user-created fresh session read the compact handoff and required records. The owner then explicitly authorized and verified the production release; migrations, the web/provider gate, worker indexing/embedding gates, and the directly discoverable authenticated Ask Library page are live under the documented caps. Future phase closeout remains governed by the host-adapter contract unless the user manually provides a new host context again."
 }

@@ -10,7 +10,7 @@
   "current": {
     "phase": 18,
     "headline": "Phase 18 production release complete — Ask Library is live",
-    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and responsive reader chat are live. Web/provider and worker/embedding gates are enabled; production migrations and bounded paid verification completed under explicit owner authorization.",
+    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and directly discoverable Ask Library workspace page plus contextual Reader chat are live. Web/provider and worker/embedding gates are enabled; production migrations and bounded paid verification completed under explicit owner authorization.",
     "nextAction": "Monitor the released Library-grounded RAG surface under its existing response, daily-spend, and automatic-embedding caps. Preserve owner scoping, citation grounding, D/E supplementary-source boundaries, and the provider licensing boundary."
   },
   "phases": [
@@ -329,13 +329,14 @@
       "title": "Library-grounded Socratic RAG chat",
       "state": "complete",
       "tag": "phase-18-complete",
-      "summary": "Owner-scoped eligible source chunks, persistent retrieval-first Socratic conversations, citation-linked reader answers, and responsive chat are production-released with bounded live provider and embedding paths enabled.",
+      "summary": "Owner-scoped eligible source chunks, persistent retrieval-first Socratic conversations, citation-linked answers, a directly discoverable Ask Library workspace page, and contextual Reader chat are production-released with bounded live provider and embedding paths enabled.",
       "confirmation": "The Phase 17 handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. The owner then explicitly authorized the Phase 18 production release, migrations, feature enablement, deployment, and paid verification.",
       "evidence": [
         "Migrations 0028 and 0029 are applied in production through Drizzle ledger 30; the new citation and RAG tables, including cascading foreign keys, were verified directly.",
         "Vercel deployment dpl_8VHHpCPBmNxcAZfvXnriJpT4Lvpa is Ready and Render deploy dep-d9g1i3sm0tmc73de53dg is live at 93e4146. Vercel enables the RAG and live-provider gates; Render enables RAG indexing and automatic embeddings.",
         "The production backfill indexed 338 eligible chunks across two published documents, including 64 bounded embeddings at $0.000259 total. A live OpenAI answer returned two reader-anchor citations in 3,147 ms at $0.00067615; its temporary conversation was removed.",
-        "The public production alias returned 200, the enabled unauthenticated RAG route returned 401 rather than 404, and a disposable verified account completed live Auth.js login plus a 201 RAG conversation creation before cleanup."
+        "The public production alias returned 200, the enabled unauthenticated RAG route returned 401 rather than 404, and a disposable verified account completed live Auth.js login plus a 201 RAG conversation creation before cleanup.",
+        "Post-release discoverability correction 03558aa is live: authenticated navigation now exposes Ask Library and /ask-library renders the inline chat while preserving the contextual Reader drawer. The full local RAG browser spec passed, and a disposable production account verified the signed-in navigation, route, and chat before deletion (zero release-navigation test users remaining)."
       ],
       "subphases": [
         {
