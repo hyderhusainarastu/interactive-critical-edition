@@ -9,6 +9,8 @@ const sourcePath = path.join(root, "docs/project-status.json");
 const outputPath = path.join(root, "progress-checklist.html");
 const validStates = new Set(["complete", "in_progress", "awaiting_confirmation", "planned"]);
 const validAuditStates = new Set(["operational", "release_gated", "incomplete"]);
+const validModels = new Set(["haiku", "sonnet", "opus"]);
+const modelBadge = { haiku: "Haiku 4.5", sonnet: "Sonnet 5", opus: "Opus 4.8" };
 
 function fail(message) {
   throw new Error(`Invalid project status: ${message}`);
@@ -19,9 +21,25 @@ function text(value, pathName) {
   return value;
 }
 
+function optionalText(value, pathName) {
+  if (value != null) text(value, pathName);
+  return value;
+}
+
+function validateSubphases(subphases, pathPrefix) {
+  if (!Array.isArray(subphases) || subphases.length === 0) fail(`${pathPrefix}.subphases must be a non-empty array`);
+  for (const subphase of subphases) {
+    text(subphase.id, `${pathPrefix} subphase.id`);
+    text(subphase.title, `${pathPrefix} subphase ${subphase.id}.title`);
+    text(subphase.summary, `${pathPrefix} subphase ${subphase.id}.summary`);
+    if (!validStates.has(subphase.state)) fail(`${pathPrefix} subphase ${subphase.id}.state is not recognized`);
+    if (subphase.model != null && !validModels.has(subphase.model)) fail(`${pathPrefix} subphase ${subphase.id}.model is not recognized`);
+  }
+}
+
 function validate(status) {
   if (!status || typeof status !== "object") fail("source must be an object");
-  if (status.schemaVersion !== 1) fail("schemaVersion must equal 1");
+  if (status.schemaVersion !== 2) fail("schemaVersion must equal 2");
   text(status.updated, "updated");
   text(status.project?.name, "project.name");
   text(status.current?.headline, "current.headline");
@@ -47,15 +65,7 @@ function validate(status) {
     if (phase.evidence != null && (!Array.isArray(phase.evidence) || phase.evidence.some((item) => typeof item !== "string"))) {
       fail(`phase ${phase.number}.evidence must be an array of strings`);
     }
-    if (phase.subphases != null) {
-      if (!Array.isArray(phase.subphases) || phase.subphases.length === 0) fail(`phase ${phase.number}.subphases must be a non-empty array`);
-      for (const subphase of phase.subphases) {
-        text(subphase.id, `phase ${phase.number} subphase.id`);
-        text(subphase.title, `phase ${phase.number} subphase.title`);
-        text(subphase.summary, `phase ${phase.number} subphase.summary`);
-        if (!validStates.has(subphase.state)) fail(`phase ${phase.number} subphase ${subphase.id}.state is not recognized`);
-      }
-    }
+    if (phase.subphases != null) validateSubphases(phase.subphases, `phase ${phase.number}`);
   }
 
   if (!status.operationalAudit || typeof status.operationalAudit !== "object") fail("operationalAudit must be an object");
@@ -68,6 +78,36 @@ function validate(status) {
     if (!validAuditStates.has(item.state)) fail(`operationalAudit item ${item.surface}.state is not recognized`);
     if (!Array.isArray(item.evidence) || item.evidence.length === 0 || item.evidence.some((entry) => typeof entry !== "string")) {
       fail(`operationalAudit item ${item.surface}.evidence must be a non-empty array of strings`);
+    }
+  }
+
+  if (status.program != null) {
+    const program = status.program;
+    text(program.name, "program.name");
+    text(program.planSource, "program.planSource");
+    text(program.note, "program.note");
+    if (!Array.isArray(program.phases) || program.phases.some((n) => !Number.isInteger(n))) fail("program.phases must be an array of integers");
+    if (program.modelLegend != null) {
+      for (const [key, value] of Object.entries(program.modelLegend)) {
+        if (!validModels.has(key)) fail(`program.modelLegend has an unrecognized key: ${key}`);
+        text(value, `program.modelLegend.${key}`);
+      }
+    }
+  }
+
+  if (status.defects != null) {
+    const defects = status.defects;
+    text(defects.register, "defects.register");
+    text(defects.asOf, "defects.asOf");
+    if (!Number.isInteger(defects.total)) fail("defects.total must be an integer");
+    text(defects.note, "defects.note");
+    if (!defects.bySeverity || typeof defects.bySeverity !== "object") fail("defects.bySeverity must be an object");
+    if (!defects.byStatus || typeof defects.byStatus !== "object") fail("defects.byStatus must be an object");
+    for (const [key, value] of Object.entries(defects.bySeverity)) {
+      if (!Number.isInteger(value)) fail(`defects.bySeverity.${key} must be an integer`);
+    }
+    for (const [key, value] of Object.entries(defects.byStatus)) {
+      if (!Number.isInteger(value)) fail(`defects.byStatus.${key} must be an integer`);
     }
   }
 }
@@ -89,16 +129,72 @@ function evidenceList(items = []) {
   return items.length ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "";
 }
 
+function renderModelBadge(model) {
+  if (!model || !modelBadge[model]) return "";
+  return `<span class="model model-${escapeHtml(model)}">${escapeHtml(modelBadge[model])}</span>`;
+}
+
+function renderSubphase(subphase) {
+  return `<li class="subphase ${subphase.state}"><div><span class="subphase-id">${escapeHtml(subphase.id)}</span><h4>${escapeHtml(subphase.title)}</h4></div><div class="subphase-tags"><span class="status ${subphase.state}">${escapeHtml(label(subphase.state))}</span>${renderModelBadge(subphase.model)}</div><p>${escapeHtml(subphase.summary)}</p></li>`;
+}
+
 function renderPhase(phase) {
   const subphases = phase.subphases?.length
-    ? `<ol class="subphases">${phase.subphases.map((subphase) => `<li class="subphase ${subphase.state}"><div><span class="subphase-id">${escapeHtml(subphase.id)}</span><h4>${escapeHtml(subphase.title)}</h4></div><span class="status ${subphase.state}">${escapeHtml(label(subphase.state))}</span><p>${escapeHtml(subphase.summary)}</p></li>`).join("")}</ol>`
+    ? `<ol class="subphases">${phase.subphases.map(renderSubphase).join("")}</ol>`
     : "";
   const tag = phase.tag ? `<p class="meta">Tag: <code>${escapeHtml(phase.tag)}</code></p>` : "";
-  return `<li class="phase ${phase.state}"><div class="phase-heading"><div><p class="eyebrow">Phase ${phase.number}</p><h3>${escapeHtml(phase.title)}</h3></div><span class="status ${phase.state}">${escapeHtml(label(phase.state))}</span></div><p>${escapeHtml(phase.summary)}</p>${tag}<p class="confirmation"><strong>Gate:</strong> ${escapeHtml(phase.confirmation)}</p>${evidenceList(phase.evidence)}${subphases}</li>`;
+  const subphaseCount = phase.subphases?.length
+    ? `<p class="meta">${phase.subphases.filter((s) => s.state === "complete").length} / ${phase.subphases.length} sub-phases complete</p>`
+    : "";
+  return `<li class="phase ${phase.state}"><div class="phase-heading"><div><p class="eyebrow">Phase ${phase.number}</p><h3>${escapeHtml(phase.title)}</h3></div><span class="status ${phase.state}">${escapeHtml(label(phase.state))}</span></div><p>${escapeHtml(phase.summary)}</p>${tag}${subphaseCount}<p class="confirmation"><strong>Gate:</strong> ${escapeHtml(phase.confirmation)}</p>${evidenceList(phase.evidence)}${subphases}</li>`;
 }
 
 function renderAudit(item) {
   return `<article class="audit ${item.state}"><div class="audit-heading"><h3>${escapeHtml(item.surface)}</h3><span class="status ${item.state}">${escapeHtml(label(item.state))}</span></div><p>${escapeHtml(item.summary)}</p>${evidenceList(item.evidence)}</article>`;
+}
+
+function renderProgram(status) {
+  if (!status.program) return "";
+  const program = status.program;
+  const programPhases = status.phases.filter((phase) => program.phases.includes(phase.number));
+  const allSubphases = programPhases.flatMap((phase) => phase.subphases ?? []);
+  const completedSubphases = allSubphases.filter((s) => s.state === "complete").length;
+  const pct = allSubphases.length ? Math.round((completedSubphases / allSubphases.length) * 100) : 0;
+  const legend = program.modelLegend
+    ? `<ul class="model-legend">${Object.entries(program.modelLegend).map(([key, value]) => `<li>${renderModelBadge(key)} ${escapeHtml(value.replace(/^[^-]+-\s*/, ""))}</li>`).join("")}</ul>`
+    : "";
+  return `<section aria-labelledby="program-title">
+      <p class="eyebrow">Completion program</p><h2 id="program-title">${escapeHtml(program.name)}</h2>
+      <p>${escapeHtml(program.note)}</p>
+      <div class="card program-progress">
+        <p class="eyebrow">Overall program progress</p>
+        <div class="progress-bar" role="img" aria-label="${pct}% of program sub-phases complete"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <p>${completedSubphases} / ${allSubphases.length} sub-phases complete across Phases ${program.phases.join(", ")} (${pct}%)</p>
+      </div>
+      <p class="meta">Plan of record: <code>${escapeHtml(program.planSource)}</code></p>
+      ${legend}
+    </section>`;
+}
+
+function renderDefects(status) {
+  if (!status.defects) return "";
+  const defects = status.defects;
+  const severityRow = Object.entries(defects.bySeverity)
+    .map(([key, value]) => `<div class="count"><strong>${value}</strong><span>${escapeHtml(key)}</span></div>`)
+    .join("");
+  const statusRow = Object.entries(defects.byStatus)
+    .map(([key, value]) => `<div class="count"><strong>${value}</strong><span>${escapeHtml(label(key))}</span></div>`)
+    .join("");
+  return `<section aria-labelledby="defects-title">
+      <p class="eyebrow">Defect register · as of ${escapeHtml(defects.asOf)}</p><h2 id="defects-title">${defects.total} findings, <code>${escapeHtml(defects.register)}</code></h2>
+      <div class="card">
+        <h3>By severity</h3>
+        <div class="counts">${severityRow}</div>
+        <h3>By status</h3>
+        <div class="counts">${statusRow}</div>
+        <p>${escapeHtml(defects.note)}</p>
+      </div>
+    </section>`;
 }
 
 function render(status) {
@@ -109,6 +205,10 @@ function render(status) {
   const audit = status.operationalAudit.items.length
     ? status.operationalAudit.items.map(renderAudit).join("")
     : "<p class=\"empty\">The audit will appear here when its evidence has been recorded.</p>";
+  const foundationPhases = status.phases.filter((phase) => !status.program || !status.program.phases.includes(phase.number));
+  const programPhaseNumbers = status.program?.phases ?? [];
+  const programSection = renderProgram(status);
+  const defectsSection = renderDefects(status);
 
   return `<!doctype html>
 <html lang="en">
@@ -117,16 +217,22 @@ function render(status) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(status.project.name)} — Project status</title>
   <style>
-    :root { --ink:#25211d; --muted:#675f56; --paper:#fcfaf5; --panel:#fffdf9; --line:#ded7cc; --accent:#7c3f20; --complete:#2f6b4d; --progress:#9a5a19; --planned:#676a78; --gated:#79527e; --incomplete:#a23d34; }
+    :root { --ink:#25211d; --muted:#675f56; --paper:#fcfaf5; --panel:#fffdf9; --line:#ded7cc; --accent:#7c3f20; --complete:#2f6b4d; --progress:#9a5a19; --planned:#676a78; --gated:#79527e; --incomplete:#a23d34; --model-haiku:#3f6b5e; --model-sonnet:#5a5488; --model-opus:#8a4a2a; }
+    @media (prefers-color-scheme: dark) { :root { --ink:#ece6da; --muted:#b4aa9a; --paper:#1c1815; --panel:#242019; --line:#3c352b; --accent:#e0a06a; --complete:#7fcaa0; --progress:#e0b060; --planned:#a8a8b4; --gated:#c9a8e0; --incomplete:#e08a80; --model-haiku:#7fcaa0; --model-sonnet:#a8a8e0; --model-opus:#e0a06a; } }
     * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.5 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    main { max-width:72rem; margin:auto; padding:clamp(1.25rem,4vw,4rem) clamp(1rem,4vw,2rem) 4rem; } h1,h2,h3,h4,p { margin-top:0; } h1 { font:700 clamp(2.2rem,6vw,4.8rem)/1.02 Georgia,serif; letter-spacing:-.04em; max-width:14ch; } h2 { font:700 clamp(1.55rem,3vw,2.35rem)/1.1 Georgia,serif; letter-spacing:-.025em; } h3 { font:700 1.22rem/1.2 Georgia,serif; } h4 { margin:0; font-size:1rem; } a { color:var(--accent); } code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88em; }
+    main { max-width:72rem; margin:auto; padding:clamp(1.25rem,4vw,4rem) clamp(1rem,4vw,2rem) 4rem; overflow-x:hidden; } h1,h2,h3,h4,p { margin-top:0; } h1 { font:700 clamp(2.2rem,6vw,4.8rem)/1.02 Georgia,serif; letter-spacing:-.04em; max-width:14ch; } h2 { font:700 clamp(1.55rem,3vw,2.35rem)/1.1 Georgia,serif; letter-spacing:-.025em; } h3 { font:700 1.22rem/1.2 Georgia,serif; } h4 { margin:0; font-size:1rem; } a { color:var(--accent); } code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.88em; word-break:break-word; }
     header { border-bottom:1px solid var(--line); padding-bottom:2rem; } .eyebrow { margin-bottom:.4rem; color:var(--accent); font-size:.78rem; font-weight:750; letter-spacing:.1em; text-transform:uppercase; } .lede { max-width:61ch; color:var(--muted); font-size:1.1rem; }
     section { margin-top:3.5rem; } .overview { display:grid; grid-template-columns:minmax(0,2fr) minmax(13rem,1fr); gap:1.5rem; align-items:stretch; } .card,.metric,.phase,.audit { border:1px solid var(--line); background:var(--panel); border-radius:.75rem; box-shadow:0 .3rem 1.2rem rgba(69,50,27,.045); } .card { padding:1.4rem; } .metric { display:grid; place-content:center; padding:1.4rem; text-align:center; } .metric strong { font:700 2.45rem/1 Georgia,serif; } .metric span { color:var(--muted); margin-top:.5rem; }
     .counts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.7rem; margin-top:1.3rem; } .count { padding:.75rem; border:1px solid var(--line); border-radius:.5rem; } .count strong,.count span { display:block; } .count strong { font-size:1.35rem; } .count span { color:var(--muted); font-size:.8rem; }
     .phases { list-style:none; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:0; padding:0; } .phase { padding:1.2rem; } .phase-heading,.audit-heading,.subphase>div { display:flex; gap:.75rem; justify-content:space-between; align-items:flex-start; } .phase h3 { margin-bottom:.55rem; } .phase .eyebrow { margin:.1rem 0 .25rem; } .phase>p:not(.eyebrow) { color:var(--muted); } .meta,.confirmation { color:var(--muted); font-size:.88rem; } .confirmation strong { color:var(--ink); }
     .status { display:inline-flex; flex:none; align-items:center; border-radius:999px; padding:.18rem .55rem; font-size:.72rem; font-weight:750; line-height:1.2; white-space:nowrap; } .status.complete { background:#e5f2e9; color:var(--complete); } .status.in_progress { background:#fff0d9; color:var(--progress); } .status.awaiting_confirmation { background:#eee7f4; color:var(--gated); } .status.planned { background:#ececf0; color:var(--planned); } .status.operational { background:#e5f2e9; color:var(--complete); } .status.release_gated { background:#eee7f4; color:var(--gated); } .status.incomplete { background:#f9e4e1; color:var(--incomplete); }
-    ul { padding-left:1.2rem; } li+li { margin-top:.4rem; } .phase ul,.audit ul { color:var(--muted); font-size:.88rem; } .subphases { list-style:none; margin:1rem 0 0; padding:0; border-top:1px solid var(--line); } .subphase { padding:1rem 0 0; } .subphase+li { margin-top:0; border-top:1px solid var(--line); } .subphase h4 { margin:.15rem 0 .35rem; } .subphase p { margin:.5rem 0 0; color:var(--muted); font-size:.9rem; } .subphase-id { color:var(--accent); font-size:.78rem; font-weight:750; }
+    @media (prefers-color-scheme: dark) { .status.complete { background:#193024; } .status.in_progress { background:#332208; } .status.awaiting_confirmation { background:#2a2033; } .status.planned { background:#28262c; } .status.operational { background:#193024; } .status.release_gated { background:#2a2033; } .status.incomplete { background:#331e1c; } }
+    .model { display:inline-flex; flex:none; align-items:center; border-radius:999px; padding:.18rem .55rem; font-size:.68rem; font-weight:750; line-height:1.2; white-space:nowrap; border:1px solid currentColor; } .model-haiku { color:var(--model-haiku); } .model-sonnet { color:var(--model-sonnet); } .model-opus { color:var(--model-opus); }
+    ul { padding-left:1.2rem; } li+li { margin-top:.4rem; } .phase ul,.audit ul { color:var(--muted); font-size:.88rem; } .subphases { list-style:none; margin:1rem 0 0; padding:0; border-top:1px solid var(--line); } .subphase { padding:1rem 0 0; } .subphase+li { margin-top:0; border-top:1px solid var(--line); } .subphase h4 { margin:.15rem 0 .35rem; } .subphase p { margin:.5rem 0 0; color:var(--muted); font-size:.9rem; } .subphase-id { color:var(--accent); font-size:.78rem; font-weight:750; } .subphase-tags { display:flex; gap:.4rem; flex-wrap:wrap; flex:none; }
     .audit-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1rem; } .audit { padding:1.2rem; } .audit p { color:var(--muted); } .empty { color:var(--muted); font-style:italic; } footer { margin-top:4rem; border-top:1px solid var(--line); padding-top:1rem; color:var(--muted); font-size:.88rem; }
+    .progress-bar { height:.85rem; border-radius:999px; background:var(--line); overflow:hidden; margin:.75rem 0; } .progress-fill { height:100%; background:var(--accent); border-radius:999px; }
+    .model-legend { list-style:none; padding:0; display:flex; flex-wrap:wrap; gap:.6rem 1.2rem; color:var(--muted); font-size:.88rem; } .model-legend li { display:flex; align-items:center; gap:.4rem; }
+    details.foundation { margin-top:1.5rem; } details.foundation summary { cursor:pointer; font-weight:700; color:var(--accent); }
     @media (max-width:44rem) { .overview,.phases { grid-template-columns:1fr; } .counts { grid-template-columns:repeat(2,minmax(0,1fr)); } } @media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition:none!important; } }
   </style>
 </head>
@@ -135,7 +241,7 @@ function render(status) {
     <header>
       <p class="eyebrow">${escapeHtml(status.project.name)} · Generated project record</p>
       <h1>Progress, evidence, and the next gate.</h1>
-      <p class="lede">This standalone checklist is generated from <code>docs/project-status.json</code>. The canonical narrative is <code>${escapeHtml(status.project.canonicalRecord)}</code>; the approved delivery plan is <code>${escapeHtml(status.project.architecturePlan)}</code>.</p>
+      <p class="lede">This standalone checklist is generated from <code>docs/project-status.json</code>. The canonical narrative is <code>${escapeHtml(status.project.canonicalRecord)}</code>; the approved delivery plan is <code>${escapeHtml(status.project.architecturePlan)}</code>.${status.project.completionPlan ? ` The active completion plan is <code>${escapeHtml(status.project.completionPlan)}</code>.` : ""}</p>
     </header>
     <section class="overview" aria-labelledby="current-title">
       <div class="card">
@@ -152,9 +258,15 @@ function render(status) {
       </div>
       <div class="metric"><strong>${completedSubphases} / ${currentSubphases.length}</strong><span>current-phase subphases complete</span></div>
     </section>
+    ${programSection}
+    ${defectsSection}
     <section aria-labelledby="roadmap-title">
-      <p class="eyebrow">Roadmap</p><h2 id="roadmap-title">Phases 0–${status.phases.at(-1)?.number ?? 0}</h2>
-      <ol class="phases">${status.phases.map(renderPhase).join("")}</ol>
+      <p class="eyebrow">Roadmap</p><h2 id="roadmap-title">Phases ${programPhaseNumbers.length ? programPhaseNumbers[0] : 0}–${status.phases.at(-1)?.number ?? 0}</h2>
+      <ol class="phases">${status.phases.filter((phase) => programPhaseNumbers.includes(phase.number)).map(renderPhase).join("")}</ol>
+      <details class="foundation">
+        <summary>Foundation (Phases 0–${programPhaseNumbers.length ? programPhaseNumbers[0] - 1 : status.phases.at(-1)?.number ?? 0}): complete</summary>
+        <ol class="phases">${foundationPhases.map(renderPhase).join("")}</ol>
+      </details>
     </section>
     <section aria-labelledby="audit-title">
       <p class="eyebrow">Operational audit · ${escapeHtml(status.operationalAudit.performed)}</p><h2 id="audit-title">Released-surface evidence</h2>
