@@ -1661,6 +1661,30 @@ export async function analyzeEditionRun(input: {
       await db.update(generatedNotes).set({ noteType: conservativeCategory, confidence: classification!.confidence }).where(eq(generatedNotes.id, note.id));
     }
     if (bibId) {
+      // D-21-6: idempotent-safe on reprocess, same concern as the concept
+      // edge above — graph_edge carries no runId of its own. Unlike the
+      // concept edge, though, a reclassification can change the edgeType
+      // itself (e.g. Phase 11.7's prerequisite fix), so a plain
+      // existence-check-and-skip keyed on (source, target, edgeType) would
+      // leave a stale category's edge sitting alongside the new one instead
+      // of being superseded. Clear any prior SYSTEM classification edge for
+      // this exact (work, target) pair — regardless of its edgeType —
+      // immediately before writing the fresh one, so only the latest run's
+      // classification survives for that pair, matching the legacy
+      // `analyzeWork` path's "clear prior system output, then reinsert"
+      // semantics (see its full-work clear above `resolveCitationMetadata`).
+      await db
+        .delete(graphEdges)
+        .where(
+          and(
+            eq(graphEdges.userId, doc.userId),
+            eq(graphEdges.sourceType, "work"),
+            eq(graphEdges.sourceId, doc.workId),
+            eq(graphEdges.targetType, "bibliographic_record"),
+            eq(graphEdges.targetId, bibId),
+            eq(graphEdges.createdBy, "system"),
+          ),
+        );
       await db.insert(graphEdges).values({
         userId: doc.userId,
         sourceType: "work",
