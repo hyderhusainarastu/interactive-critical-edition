@@ -43,12 +43,12 @@
       "P3": 13
     },
     "byStatus": {
-      "fixed": 51,
+      "fixed": 56,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 20
+      "open": 15
     },
-    "note": "Zero P0. 51 fixed incl. all wave-3 targets (D-21-1/6/10, D-22-8/9). 1 partial (D-19-6). 20 open: 15 dossier rows scheduled to Phases 21/22, and 5 P3 hygiene items (D-20-65 E2E identity leakage, D-19-35 token-table FKs, D-20-80 year-backfill repair-ready, D-21-11 filter accessible names -> 21.3, D-22-20 dual-dialog naming -> 22.6). Production verification of Phase 20 behavioral fixes remains gated on the 20.8 canary."
+    "note": "Zero P0. 56 fixed incl. D-21-7/D-22-5/D-22-6 (reader/graph parity, Phase 21.2 + 22.2) and D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 15 open: 11 dossier rows scheduled to Phases 21/22, and 4 P3 hygiene items (D-19-35 token-table FKs analysis-complete implementation-pending, D-21-11 filter accessible names -> 21.3, D-22-20 dual-dialog naming -> 22.6, D-22-21 CI landing-contract AA-jitter auto-resolved). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
   },
   "phases": [
     {
@@ -577,9 +577,9 @@
         {
           "id": "21.2",
           "title": "Relation completeness and integrity",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Connect every persisted relation source (citations, annotation relationships, resource roles, concepts, people, topics, sections); dedupe equivalent edges and merge evidence."
+          "summary": "Connected resource_role and passage_annotation relation sources that buildGraph() never queried before (Phase 21.2, D-21-7 fixed). Both sources project through existing edge_type vocabulary via edgeTypeForRelationshipCategory() (mirroring worker's CATEGORY_TO_EDGE), so legend/filters/edge families work with zero new cases. resource_role joins via work_identity (durable, run-independent); passage_annotation via published run. New pure unit test covers all 10 relationship_category→edge_type mappings (24 assertions); new e2e test seeds both sources and asserts edges/legend/relation-filter isolation. Commit 9306129. Graph.spec.ts 19/19; red-then-green proven."
         },
         {
           "id": "21.3",
@@ -632,9 +632,9 @@
         {
           "id": "22.2",
           "title": "Reader parity and usability",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Typography/spacing/marker parity with the landing contract, persistent settings/position, no overflow at 200% zoom, restrained motion with a reduced-motion fallback."
+          "summary": "Typography (serif font-family on body paragraphs, D-22-5) and unified reading-measure token (D-22-6) complete. Both EditionReader and TextReader paragraphs now carry font-serif, matching the landing Reader/Annotations showcase (font-family only — fixed READING_PROSE_CLASS deliberately omitted to preserve app-wide Text-size preference). ReaderShell's independently-computed 56/66/82ch --reader-line-width removed; TextReader now consumes global --reading-measure token (58/72/88ch) EditionReader already used. New edition.spec.ts tests assert computed font-family includes 'Iowan Old Style' for both readers; wide/compact width ratio identical (~1.517) proving unified token. Commit fcc3441. Edition.spec.ts 19/19; red-then-green proven."
         },
         {
           "id": "22.3",
