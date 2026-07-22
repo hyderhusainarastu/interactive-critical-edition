@@ -636,7 +636,17 @@ export function EditionReader({
           return (
             <div key={block.id} className="relative" data-page-index={block.pageIndex}>
               {pageStart && <p className="mb-2 text-xs text-[var(--color-text-muted)]">Source page {block.pageIndex + 1}</p>}
-              {block.kind === "title" ? <h1 {...common} className="font-serif text-3xl font-semibold">{text}</h1> : block.kind === "header" ? <h2 {...common} className="mt-4 font-serif text-xl font-semibold">{text}</h2> : block.kind === "caption" ? <figcaption {...common} className="border-l-2 border-[var(--color-border)] pl-3 text-sm italic text-[var(--color-text-muted)]">{text}</figcaption> : <p {...common} className="whitespace-pre-wrap">{text}</p>}
+              {block.kind === "title" ? <h1 {...common} className="font-serif text-3xl font-semibold">{text}</h1> : block.kind === "header" ? <h2 {...common} className="mt-4 font-serif text-xl font-semibold">{text}</h2> : block.kind === "caption" ? <figcaption {...common} className="border-l-2 border-[var(--color-border)] pl-3 text-sm italic text-[var(--color-text-muted)]">{text}</figcaption> : (
+                /* D-22-5 (plan §22.2): the landing depiction's reading
+                 * passage is serif; only heading kinds carried `font-serif`
+                 * here before, so plain body prose — the actual reading
+                 * text — silently fell back to the sans body font. Adding
+                 * only `font-serif` (not the landing's full fixed-size
+                 * `READING_PROSE_CLASS`) keeps this paragraph's font-size
+                 * inheriting the app-wide Text-size preference exactly as
+                 * before, rather than freezing it at a literal rem value. */
+                <p {...common} className="whitespace-pre-wrap font-serif">{text}</p>
+              )}
               {margins}
               {inlineNotes}
             </div>

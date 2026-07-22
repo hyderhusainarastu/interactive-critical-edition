@@ -236,6 +236,85 @@ test("reading width preference changes the interactive reader's actual content w
   await expect.poll(computedMaxWidthPx, { message: "the section's computed max-width should grow once 'wide' is selected" }).toBeGreaterThan(compactMaxWidth);
 });
 
+test("reading passage body text uses the serif reading typeface, matching the landing depiction, in both the interactive reader and the original-text view (Phase 22.2, D-22-5)", async ({ page }) => {
+  // The landing Reader/Annotations showcase (`page.tsx`'s ReaderShowcase, via
+  // `READING_PROSE_CLASS` in `components/shared/typography.ts`) depicts body
+  // prose in a serif stack headed by "Iowan Old Style" — that name only
+  // ever appears in `--font-serif`, never in body's own sans-first stack
+  // (`--font-sans, Georgia, serif`), so asserting on it (not a bare
+  // "serif" substring) actually distinguishes the two font stacks rather
+  // than passing on the generic fallback every element already inherits.
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  const editionParagraph = edition.locator("p", { hasText: "Vicious people act on decision" }).first();
+  await expect(editionParagraph).toHaveCSS("font-family", /Iowan Old Style/);
+
+  await page.getByRole("button", { name: "Published edition" }).click();
+  const original = page.getByRole("region", { name: /published edition.*original source text/i });
+  const originalParagraph = original.locator("p", { hasText: "Vicious people act on decision" }).first();
+  await expect(originalParagraph).toHaveCSS("font-family", /Iowan Old Style/);
+});
+
+test("reading width preference scales the original-text view by the identical compact->wide ratio as the interactive reader, proving both derive from the same --reading-measure token (Phase 22.2, D-22-6)", async ({ page }) => {
+  // D-22-6: EditionReader consumes the global --reading-measure token
+  // (58/72/88ch, the same one Workspace preferences writes to
+  // :root[data-reading-width]), but TextReader (rendered here via the
+  // "Published edition" original-text view for a text/plain source) used a
+  // second, independently-computed --reader-line-width (56/66/82ch) — a
+  // different NUMBER of ch for the exact same labelled preference. Fixed
+  // by having TextReader consume --reading-measure directly.
+  //
+  // This asserts the wide/compact RATIO rather than raw pixel equality
+  // deliberately: TextReader's wrapper also carries its own independent
+  // --reader-font-size (a *separate*, pre-existing per-reader font-SIZE
+  // preference EditionReader has no equivalent of at all, out of scope for
+  // D-22-5/D-22-6, which are about the serif font family and the reading
+  // WIDTH token specifically). That mismatched font-size baseline scales
+  // ch's absolute pixel size and would make a raw-pixel equality assertion
+  // fail even after this fix for a reason unrelated to the reading-width
+  // token itself. The ratio is immune to that constant per-element
+  // scaling factor: 88ch/58ch and 82ch/56ch are different ratios
+  // (~1.517 vs ~1.464), so it still fails on the un-unified code and only
+  // passes once both readers are driven by the same 58/72/88ch scale.
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  const editionMaxWidthPx = () => edition.evaluate((el) => parseFloat(getComputedStyle(el).maxWidth));
+
+  const originalMaxWidthPx = async () => {
+    await page.getByRole("button", { name: "Published edition" }).click();
+    const original = page.getByRole("region", { name: /published edition.*original source text/i });
+    const width = await original.locator(".reader-content").evaluate((el) => parseFloat(getComputedStyle(el).maxWidth));
+    await page.getByRole("button", { name: "Interactive reader" }).click();
+    await expect(edition).toBeVisible();
+    return width;
+  };
+
+  async function setReadingWidth(option: "compact" | "wide") {
+    await page.getByRole("button", { name: "Workspace preferences" }).click();
+    await Promise.all([
+      page.waitForResponse((res) => res.url().includes("/api/preferences") && res.ok()),
+      page.getByLabel("Reading width").selectOption(option),
+    ]);
+    await expect(page.locator("html")).toHaveAttribute("data-reading-width", option);
+    // Close the (non-modal) preferences dialog via Escape — the established
+    // D-19-19 pattern — rather than re-clicking its own trigger, which would
+    // just toggle it closed a second time and desync this test's assumption
+    // about its open/closed state.
+    await page.keyboard.press("Escape");
+  }
+
+  await setReadingWidth("compact");
+  const editionCompact = await editionMaxWidthPx();
+  const originalCompact = await originalMaxWidthPx();
+
+  await setReadingWidth("wide");
+  const editionWide = await editionMaxWidthPx();
+  const originalWide = await originalMaxWidthPx();
+
+  expect(originalWide).toBeGreaterThan(originalCompact);
+  const editionRatio = editionWide / editionCompact;
+  const originalRatio = originalWide / originalCompact;
+  expect(originalRatio).toBeCloseTo(editionRatio, 2);
+});
+
 test("the Split view work picker exposes and dismisses its disclosure state", async ({ page }) => {
   const splitView = page.getByRole("button", { name: "Split view" });
   await expect(splitView).toHaveAttribute("aria-expanded", "false");

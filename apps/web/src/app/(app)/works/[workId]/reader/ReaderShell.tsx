@@ -333,7 +333,11 @@ export function ReaderShell({
   const effectiveShowInteractive = showInteractive || (enablePhase12Reader && preferences.focusMode && edition !== null);
   const readerFocus = enablePhase12Reader && preferences.focusMode && effectiveShowInteractive && visibleEdition !== null;
   const readerFontSize = preferences.fontSize === "small" ? 0.95 : preferences.fontSize === "large" ? 1.18 : 1.05;
-  const readerLineWidth = preferences.readingWidth === "compact" ? 56 : preferences.readingWidth === "wide" ? 82 : 66;
+  // D-22-6 (plan §22.2): reading width is no longer recomputed here — both
+  // TextReader and EditionReader now consume the single global
+  // --reading-measure token (globals.css, driven by
+  // :root[data-reading-width]) instead of a second, disagreeing
+  // --reader-line-width scale that used to live only in this component.
 
   return (
     <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen">
@@ -430,7 +434,6 @@ export function ReaderShell({
             className="px-6 py-8"
             style={{
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
-              ["--reader-line-width" as string]: `${readerLineWidth}ch`,
             }}
           >
             {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} isPhase12Reader={enablePhase12Reader} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (

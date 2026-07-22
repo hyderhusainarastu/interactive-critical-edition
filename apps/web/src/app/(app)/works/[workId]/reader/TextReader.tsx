@@ -172,7 +172,14 @@ export function TextReader({
       <div
         className="reader-content mx-auto flex flex-col gap-[1.1em]"
         style={{
-          maxWidth: "var(--reader-line-width, 66ch)",
+          // D-22-6 (plan §22.2): consume the same global --reading-measure
+          // token EditionReader uses (58/72/88ch, driven by Workspace
+          // preferences' `data-reading-width`) instead of a second,
+          // independently-computed --reader-line-width (formerly
+          // 56/66/82ch, set in ReaderShell.tsx) — the two disagreed on the
+          // actual pixel width produced by the exact same labelled
+          // preference. See ReaderShell.tsx for the removed computation.
+          maxWidth: "var(--reading-measure, 72ch)",
           fontSize: "var(--reader-font-size, 1.05rem)",
         }}
         onClick={(e) => {
@@ -188,7 +195,7 @@ export function TextReader({
               }}
               data-paragraph-index={i}
               onMouseUp={(e) => handleMouseUp(i, e.currentTarget)}
-              className="leading-[1.7] text-[var(--color-text)] whitespace-pre-wrap"
+              className="leading-[1.7] text-[var(--color-text)] whitespace-pre-wrap font-serif"
             >
               {renderParagraph(p, footnotes, onOpenFootnote)}
             </p>
