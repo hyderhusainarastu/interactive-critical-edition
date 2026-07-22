@@ -1,17 +1,23 @@
 {
   "schemaVersion": 1,
   "updated": "2026-07-21",
-  "activePhase": 17,
-  "nextPhase": 18,
+  "activePhase": 18,
+  "nextPhase": null,
   "taskStartRecords": [
     "CLAUDE.md",
     "docs/PROJECT-LOG.md",
     "docs/project-status.json"
   ],
   "handoff": "docs/handoffs/phase-17-to-18.md",
-  "verification": "local acceptance complete",
-  "hostAdapter": "unavailable-host-session-adapter",
-  "closeoutStatus": "awaiting_host_context_replacement",
-  "contextReplaced": false,
-  "note": "No model context was cleared and no Phase 18 context was dispatched. A real host/session adapter must perform one atomic replacement using only the compact handoff."
+  "verification": "Phase 17 local acceptance complete; manual host-level Phase 18 context replacement recorded.",
+  "hostAdapter": "manual-user-created-host-session",
+  "closeoutStatus": "phase_17_closed_manual_host_replacement",
+  "contextReplaced": true,
+  "manualReplacement": {
+    "authority": "user-created new session",
+    "source": "docs/handoffs/phase-17-to-18.md",
+    "automaticAdapterAction": false,
+    "note": "The user explicitly supplied a fresh session for Phase 18. This records a manual host-level replacement; no automatic adapter action, compaction claim, or simulated lifecycle action occurred."
+  },
+  "note": "Phase 18 began only after the user-created fresh session read the compact handoff and required records. Future phase closeout remains governed by the host-adapter contract unless the user manually provides a new host context again."
 }

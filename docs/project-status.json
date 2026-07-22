@@ -8,10 +8,10 @@
   },
   "updated": "2026-07-21",
   "current": {
-    "phase": 17,
-    "headline": "Phase 17 local acceptance complete — host handoff required",
-    "summary": "Phase 16 is reconciled as complete. Phase 17's citation, Library, public-source, and canonical Visualization changes pass local acceptance; governed progression remains blocked until a host can create a fresh Phase 18 context.",
-    "nextAction": "Configure or invoke a real host/session adapter to atomically replace this context from docs/handoffs/phase-17-to-18.md. Do not perform the separately approved production migration, deployment, or paid canary without authorization."
+    "phase": 18,
+    "headline": "Phase 18 in progress — Library-grounded Socratic RAG chat",
+    "summary": "Phase 17 is closed after a user-created fresh session manually replaced the host context from its compact handoff. This is recorded as a manual host-level replacement, not an automatic lifecycle-adapter action. Phase 18 now implements owner-scoped eligible chunks, retrieval-first cited dialogue, and local acceptance only.",
+    "nextAction": "Build and locally verify eligible-chunk indexing, authenticated streamed conversations, citation-linked retrieval-first answers, and injection/isolation/deletion/cost/latency controls. Do not run a production migration, deployment, or paid canary without explicit approval."
   },
   "phases": [
     {
@@ -282,9 +282,10 @@
     {
       "number": 17,
       "title": "Citation Completeness, Library Integrity, and Research-Web Repair",
-      "state": "in_progress",
-      "summary": "Local acceptance is complete: structurally anchored citations reach Library before asynchronous resolution; public sources remain supplementary D/E; and Visualization uses canonical entities, topics, a focal inspector, graph-stage fullscreen, and visible theme controls. Host-context handoff remains required for phase advancement.",
-      "confirmation": "The controller preflight correctly fails closed without a real host context-replacement adapter. Production migration, deployment, and paid canary remain separately approval-gated.",
+      "state": "complete",
+      "summary": "Structurally anchored citations reach Library before asynchronous resolution; public sources remain supplementary D/E; and Visualization uses canonical entities, topics, a focal inspector, graph-stage fullscreen, and visible theme controls.",
+      "tag": "phase-17-complete",
+      "confirmation": "Local acceptance was complete and the user explicitly created this fresh Phase 18 session from the compact handoff. This is a manual host-level replacement, not an automatic lifecycle-adapter action. Production migration, deployment, and paid canary remain separately approval-gated.",
       "evidence": [
         "Local additive migration 0028 adds citation source/anchor/resolution fields and citation-to-Library provenance; it was applied only to the local development database.",
         "The fixture-backed Vice and Reason worker test resolves 22 distinct targets, persists 23 anchored Library items including an unresolved citation, and writes 22 graph targets without live search.",
@@ -318,17 +319,43 @@
         {
           "id": "17.5",
           "title": "Local acceptance and governed handoff",
-          "state": "in_progress",
-          "summary": "Local verification and compact handoff are complete. The required host-context replacement is unavailable in this session, so the controller intentionally leaves Phase 18 undispatched."
+          "state": "complete",
+          "summary": "Local verification and compact handoff were complete. The user then manually created a fresh Phase 18 session from that handoff; no automatic adapter action was claimed."
         }
       ]
     },
     {
       "number": 18,
       "title": "Library-grounded Socratic RAG chat",
-      "state": "planned",
-      "summary": "Index owner-scoped sources and add citation-grounded, Socratic conversations across the workspace.",
-      "confirmation": "Phase 17 closeout must create a fresh host context from its compact handoff before Phase 18 local work begins."
+      "state": "in_progress",
+      "summary": "Index eligible owner-scoped uploaded and open-access content, then add persistent retrieval-first Socratic conversations with citations that link back to reader anchors.",
+      "confirmation": "Phase 17's compact handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. Phase 18 remains local-only until separately authorized for any production action.",
+      "subphases": [
+        {
+          "id": "18.1",
+          "title": "Eligible source chunks and index lifecycle",
+          "state": "in_progress",
+          "summary": "Index owner-scoped eligible upload and explicitly licensed open-access chunks with stable anchors, content hashes, embeddings, and deletion propagation."
+        },
+        {
+          "id": "18.2",
+          "title": "Persistent retrieval-first conversations",
+          "state": "planned",
+          "summary": "Add authenticated persistent streamed conversations that retrieve Library evidence before generating every substantive response."
+        },
+        {
+          "id": "18.3",
+          "title": "Cited Socratic workspace",
+          "state": "planned",
+          "summary": "Add a desktop sidebar and mobile sheet with reader-anchor citations, explicit not-found responses, and the provider licensing boundary preserved."
+        },
+        {
+          "id": "18.4",
+          "title": "Local acceptance and governed closeout",
+          "state": "planned",
+          "summary": "Verify retrieval grounding, prompt-injection resistance, owner isolation, deletion, latency, and cost caps before any separately approved production action."
+        }
+      ]
     }
   ],
   "operationalAudit": {
