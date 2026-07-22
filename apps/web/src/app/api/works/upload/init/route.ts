@@ -1,5 +1,5 @@
 import { phase12FeatureEnabled } from "@ice/config";
-import { db, documents, works } from "@ice/db";
+import { db, documents, learningResources, works } from "@ice/db";
 import { createSignedUploadUrl } from "@ice/ingestion";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -15,6 +15,16 @@ const schema = z.object({
   size: z.number().int().positive().max(50 * 1024 * 1024),
   contentHash: z.string().regex(/^[a-f0-9]{64}$/i).optional(),
   duplicateResolution: z.enum(["add_edition"]).optional(),
+  /**
+   * Phase 20.4: set when this upload is attaching source text to an
+   * existing Library entry (a `learning_resource` discovered/recommended
+   * but never uploaded) rather than starting a brand-new work from
+   * scratch. The resource itself is shared/unowned, so only its
+   * existence — not ownership — is validated here; the Library detail
+   * page already scopes which resources a given user may see this
+   * control for.
+   */
+  learningResourceId: z.string().uuid().optional(),
 });
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 
@@ -25,6 +35,20 @@ export async function POST(request: Request) {
   if (!rate.allowed) return rateLimitResponse(rate);
   const input = schema.safeParse(await request.json().catch(() => null));
   if (!input.success) return NextResponse.json({ error: "Unsupported file or invalid upload metadata." }, { status: 400 });
+  // Resolve the Library entry this upload is attaching to, if any (plan
+  // §20.4). Read-only and existence-only — `learning_resource` is a shared
+  // catalog row, not a per-user secret, so there is nothing to authorize
+  // beyond "does this id exist."
+  let attachResource: { workIdentityId: string | null; title: string } | null = null;
+  if (input.data.learningResourceId) {
+    const [resource] = await db
+      .select({ workIdentityId: learningResources.workIdentityId, title: learningResources.title })
+      .from(learningResources)
+      .where(eq(learningResources.id, input.data.learningResourceId))
+      .limit(1);
+    if (!resource) return NextResponse.json({ error: "That Library entry could not be found." }, { status: 404 });
+    attachResource = resource;
+  }
   // The browser's hash is a duplicate lookup hint, not a trust boundary. The
   // worker recomputes and stores the SHA-256 from the verified Storage bytes.
   if (phase12FeatureEnabled("libraryIdentity") && input.data.contentHash && input.data.duplicateResolution !== "add_edition") {
@@ -55,8 +79,19 @@ export async function POST(request: Request) {
   // concatenate and falsely exceed the quota after the first upload).
   const usedBytes = Number(used);
   if (!Number.isFinite(usedBytes) || usedBytes + input.data.size > USER_STORAGE_QUOTA_BYTES) return NextResponse.json({ error: "You've reached your storage quota (500MB)." }, { status: 413 });
-  const title = input.data.name.replace(/\.[^./]+$/, "").replace(/[_-]+/g, " ");
-  let duplicateWorkIdentityId: string | null = null;
+  // A resource-driven title (the canonical title already known from
+  // discovery) beats a filename-derived guess when this upload is
+  // attaching to a specific Library entry — the reader recognizes the
+  // work by its real title immediately, not by whatever the uploaded
+  // file happened to be named.
+  const title = attachResource ? attachResource.title : input.data.name.replace(/\.[^./]+$/, "").replace(/[_-]+/g, " ");
+  // Canonical-identity association (plan §20.4/§9.5). Two independent
+  // sources, deliberately not merged into one `??` chain: an explicit
+  // "add another edition" of a byte-identical file the user already owns
+  // is a stronger, more specific signal than the Library entry's own
+  // recorded identity, so it must win outright rather than only being
+  // preferred when non-null.
+  let workIdentityIdForNewWork: string | null = null;
   if (phase12FeatureEnabled("libraryIdentity") && input.data.contentHash && input.data.duplicateResolution === "add_edition") {
     const [duplicate] = await db
       .select({ workIdentityId: works.workIdentityId })
@@ -64,11 +99,13 @@ export async function POST(request: Request) {
       .innerJoin(works, eq(works.id, documents.workId))
       .where(and(eq(documents.userId, userId), eq(documents.contentHash, input.data.contentHash.toLowerCase()), isNull(works.deletedAt)))
       .limit(1);
-    duplicateWorkIdentityId = duplicate?.workIdentityId ?? null;
+    workIdentityIdForNewWork = duplicate?.workIdentityId ?? null;
+  } else if (attachResource) {
+    workIdentityIdForNewWork = phase12FeatureEnabled("libraryIdentity") ? attachResource.workIdentityId : null;
   }
   const [work] = await db
     .insert(works)
-    .values({ userId, title, workType: "primary", workIdentityId: duplicateWorkIdentityId })
+    .values({ userId, title, workType: "primary", workIdentityId: workIdentityIdForNewWork })
     .returning({ id: works.id });
   const filename = input.data.name.replace(/[^\w.\-]+/g, "_").slice(0, 200);
   const storagePath = `${userId}/${work.id}/${filename}`;

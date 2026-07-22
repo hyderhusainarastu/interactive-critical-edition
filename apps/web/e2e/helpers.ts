@@ -1042,3 +1042,90 @@ export async function seedSearchableLibraryItem(
 
   return { workId: work.id, resourceId: resource.id };
 }
+
+/**
+ * Phase 20.4: a Library entry (`learning_resource`) recommended for one of
+ * the user's own uploads, with its OWN `work_identity` set — the identity
+ * "Upload source text" should attach a newly-uploaded document to. Two
+ * DISTINCT identities are seeded deliberately: `recommendingWork`'s own
+ * identity (what `resource_role.work_identity_id` targets — "recommended
+ * FOR this owned work") is not the same thing as the resource's own
+ * canonical identity (what `learning_resource.work_identity_id` records —
+ * "this resource, if uploaded, IS this canonical work"). Conflating the two
+ * would make every recommended-for chip look like "the user already owns
+ * this," which is exactly the bug this seeding shape exists to avoid.
+ */
+export async function seedLibraryItemForSourceAttach(
+  userId: string,
+  opts: {
+    resourceTitle?: string;
+    recommendingWorkTitle?: string;
+    /** When true, also creates an owned work + document sharing the
+     *  resource's own identity — simulating "the user already has the full
+     *  text," so the attach affordance must not be offered. */
+    alreadyOwned?: boolean;
+  } = {},
+): Promise<{ resourceId: string; recommendingWorkId: string; resourceWorkIdentityId: string; ownedWorkId: string | null }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const resourceTitle = opts.resourceTitle ?? "Nicomachean Ethics";
+
+  const [recommendingWork] = await db
+    .insert(works)
+    .values({ userId, title: opts.recommendingWorkTitle ?? "Recommending Upload", authorName: "Test Author" })
+    .returning({ id: works.id });
+  const [recommendingIdentity] = await db
+    .insert(workIdentities)
+    .values({ workKey: `work:test:recommending:${suffix}`, canonicalTitle: opts.recommendingWorkTitle ?? "Recommending Upload", evidence: "seeded for test" })
+    .returning({ id: workIdentities.id });
+  await db.update(works).set({ workIdentityId: recommendingIdentity.id }).where(eq(works.id, recommendingWork.id));
+
+  const [resourceIdentity] = await db
+    .insert(workIdentities)
+    .values({ workKey: `work:test:resource:${suffix}`, canonicalTitle: resourceTitle, evidence: "seeded for test" })
+    .returning({ id: workIdentities.id });
+
+  const [resource] = await db
+    .insert(learningResources)
+    .values({
+      workIdentityId: resourceIdentity.id,
+      title: resourceTitle,
+      normalizedKey: `title:resource:${suffix}`,
+      resourceType: "book",
+      provider: "openalex",
+      authors: ["Aristotle"],
+      year: -340,
+      peerReviewed: null,
+    })
+    .returning({ id: learningResources.id });
+
+  await db.insert(resourceRoles).values({
+    learningResourceId: resource.id,
+    workIdentityId: recommendingIdentity.id,
+    relationship: "prerequisite",
+    readerLevel: null,
+    rationale: "Seeded rationale for a source-attach Playwright fixture.",
+    confidence: 0.8,
+    createdBy: "system",
+  });
+
+  let ownedWorkId: string | null = null;
+  if (opts.alreadyOwned) {
+    const [ownedWork] = await db
+      .insert(works)
+      .values({ userId, title: resourceTitle, workIdentityId: resourceIdentity.id })
+      .returning({ id: works.id });
+    await db.insert(documents).values({
+      userId,
+      workId: ownedWork.id,
+      storagePath: `${userId}/${ownedWork.id}/already-owned.txt`,
+      originalFilename: "already-owned.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: "ready",
+      extractedText: "Already-owned full text for a source-attach eligibility fixture.",
+    });
+    ownedWorkId = ownedWork.id;
+  }
+
+  return { resourceId: resource.id, recommendingWorkId: recommendingWork.id, resourceWorkIdentityId: resourceIdentity.id, ownedWorkId };
+}
