@@ -207,12 +207,20 @@ test("script display preference swaps a verified term's shown text between origi
 test("reading width preference changes the interactive reader's actual content width (Phase 19 interaction inventory, D-19-21)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
   const widthPx = () => edition.evaluate((el) => el.getBoundingClientRect().width);
-  const initial = await widthPx();
 
+  // Establish a known baseline first rather than trusting whatever this
+  // shared seeded user's reading-width preference happens to already be
+  // (this spec's earlier tests share the same user/session, so a prior
+  // test's preference change would otherwise leak in here) — reproduced in
+  // CI: "initial" measured 624px (already compact-width) before this fix,
+  // making the subsequent explicit "compact" selection a no-op.
   await page.getByRole("button", { name: "Workspace preferences" }).click();
+  await page.getByLabel("Reading width").selectOption("comfortable");
+  const comfortable = await widthPx();
+
   await page.getByLabel("Reading width").selectOption("compact");
   const compact = await widthPx();
-  expect(compact).toBeLessThan(initial);
+  expect(compact).toBeLessThan(comfortable);
 
   await page.getByLabel("Reading width").selectOption("wide");
   const wide = await widthPx();
