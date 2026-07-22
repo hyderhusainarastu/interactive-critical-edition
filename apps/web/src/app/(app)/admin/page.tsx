@@ -1,5 +1,5 @@
-import { aiUsageLogs, bibliographicRecords, db, processingJobs, processingRuns, providerAttempts, researchCache, researchCandidates } from "@ice/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { aiUsageLogs, bibliographicRecords, db, deletionCleanups, processingJobs, processingRuns, providerAttempts, researchCache, researchCandidates } from "@ice/db";
+import { desc, eq, ne, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
 import { getV4BackfillForecast } from "@/lib/v4Backfill";
 
@@ -143,6 +143,32 @@ export default async function AdminPage() {
   const providerRows = [...providerPivot.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const PROVIDER_STATUSES = ["queried", "rate_limited", "unavailable", "failed", "disabled"] as const;
   const v4BackfillForecast = await getV4BackfillForecast();
+
+  // ---- Deletion cleanup queue (Phase 20.3) ----
+  // Unfinished permanent deletions: the state machine persisted a retryable
+  // record (Storage object(s) it could not remove, or a run that crashed
+  // mid-flight). Retries happen opportunistically on the owner's next trash
+  // visit; this queue makes the honest state admin-visible either way.
+  const pendingCleanups = await db
+    .select({
+      id: deletionCleanups.id,
+      workTitle: deletionCleanups.workTitle,
+      status: deletionCleanups.status,
+      pendingStoragePaths: deletionCleanups.pendingStoragePaths,
+      attempts: deletionCleanups.attempts,
+      lastError: deletionCleanups.lastError,
+      updatedAt: deletionCleanups.updatedAt,
+    })
+    .from(deletionCleanups)
+    .where(ne(deletionCleanups.status, "completed"))
+    .orderBy(desc(deletionCleanups.updatedAt))
+    .limit(50);
+  const [cleanupAgg] = await db
+    .select({
+      completed: sql<number>`count(*) filter (where ${deletionCleanups.status} = 'completed')`,
+      pending: sql<number>`count(*) filter (where ${deletionCleanups.status} != 'completed')`,
+    })
+    .from(deletionCleanups);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -308,6 +334,49 @@ export default async function AdminPage() {
         <p className="mt-1 text-xs text-[var(--color-text-muted)]">
           Expired cache rows are swept on worker startup. Orphan catalogue = bibliographic records no analysis references (eventual cleanup).
         </p>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Deletion cleanup queue
+        </h2>
+        <p className="mb-3 text-xs text-[var(--color-text-muted)]">
+          Permanent deletions that could not finish (Phase 20.3). Each row is a persisted, retryable state — a
+          Storage object the deletion could not remove, or a run interrupted mid-flight. Retries run automatically
+          on the owner&apos;s next Trash visit; nothing here is reported to the owner as a completed deletion.
+        </p>
+        <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <Stat label="Pending cleanup" value={Number(cleanupAgg?.pending ?? 0)} />
+          <Stat label="Completed deletions" value={Number(cleanupAgg?.completed ?? 0)} />
+        </div>
+        {pendingCleanups.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)]">No pending cleanup — every permanent deletion completed.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
+                  <th className="py-1 pr-4 font-medium">Work</th>
+                  <th className="py-1 pr-4 font-medium">Status</th>
+                  <th className="py-1 pr-4 font-medium">Pending objects</th>
+                  <th className="py-1 pr-4 font-medium">Attempts</th>
+                  <th className="py-1 pr-4 font-medium">Last error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingCleanups.map((c) => (
+                  <tr key={c.id} className="border-b border-[var(--color-border)] align-top">
+                    <td className="max-w-[18rem] py-1 pr-4 text-[var(--color-text)]"><span className="line-clamp-2">{c.workTitle}</span></td>
+                    <td className="py-1 pr-4 text-[var(--color-text-muted)]">{c.status.replace(/_/g, " ")}</td>
+                    <td className="py-1 pr-4 tabular-nums text-[var(--color-text-muted)]">{Array.isArray(c.pendingStoragePaths) ? c.pendingStoragePaths.length : 0}</td>
+                    <td className="py-1 pr-4 tabular-nums text-[var(--color-text-muted)]">{c.attempts}</td>
+                    <td className="max-w-[20rem] py-1 pr-4 text-xs text-[var(--color-text-muted)]"><span className="line-clamp-2">{c.lastError ?? "—"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="mt-8">

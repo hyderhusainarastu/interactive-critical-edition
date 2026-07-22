@@ -281,7 +281,7 @@ export type RetrievedRagChunk = {
 
 /** Owner scope is part of the SQL predicate, not a post-query filter. */
 export async function retrieveOwnerRagChunks(userId: string, query: string, limit = RAG_RETRIEVAL_LIMIT): Promise<RetrievedRagChunk[]> {
-  const [{ db, ragChunks, works }, { eq }] = await Promise.all([
+  const [{ db, ragChunks, works }, { and, eq, isNull }] = await Promise.all([
     import("@ice/db"),
     import("drizzle-orm"),
   ]);
@@ -298,7 +298,9 @@ export async function retrieveOwnerRagChunks(userId: string, query: string, limi
     })
     .from(ragChunks)
     .innerJoin(works, eq(ragChunks.workId, works.id))
-    .where(eq(ragChunks.userId, userId));
+    // A trashed work is hidden from RAG retrieval (Phase 20.3): its chunks
+    // stay in place for restore, but Ask Library must not answer from them.
+    .where(and(eq(ragChunks.userId, userId), isNull(works.deletedAt)));
   return rankLexically(query, rows.map((row) => ({
     ...row,
     anchor: row.anchor as RagAnchor,

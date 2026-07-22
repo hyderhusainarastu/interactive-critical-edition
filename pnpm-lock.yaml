@@ -28,6 +28,9 @@ importers:
       '@ice/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@ice/deletion':
+        specifier: workspace:*
+        version: link:../../packages/deletion
       '@ice/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion
@@ -236,6 +239,18 @@ importers:
       typescript:
         specifier: ^5
         version: 5.9.3
+
+  packages/deletion:
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)(terser@5.49.0)
 
   packages/ingestion:
     dependencies:

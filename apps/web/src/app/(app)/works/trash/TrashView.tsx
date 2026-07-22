@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
+import { PermanentDeleteDialog } from "./PermanentDeleteDialog";
 
 interface TrashedWork {
   workId: string;
@@ -10,19 +11,28 @@ interface TrashedWork {
   authorName: string | null;
   deletedAt: string;
   daysRemaining: number;
+  requiresTypedConfirmation: boolean;
+  cleanupStatus: "in_progress" | "storage_failed" | null;
 }
 
 /**
- * The 30-day work trash (plan §34.4 9.7): trashed works with days-until-
- * purge, Restore, and "Delete permanently now". Purging expired entries
- * happens opportunistically server-side on every load of this page
+ * The 30-day work trash (plan §34.4 9.7, permanent delete hardened in Phase
+ * 20.3): trashed works with days-until-purge, Restore, and "Delete
+ * permanently now" behind a named, typed-title-confirming dialog. Purging
+ * expired entries — and retrying any unfinished deletion — happens
+ * opportunistically server-side on every load of this page
  * (`GET /api/works/trash`, see `apps/web/src/lib/trash.ts`) — no scheduled
- * job, retry-safe by construction.
+ * job, retry-safe by construction. A permanent delete's response is honest:
+ * anything short of "every byte confirmed gone" keeps the work listed with
+ * its retryable cleanup state instead of pretending success.
  */
 export function TrashView() {
   const [items, setItems] = useState<TrashedWork[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingPurge, setConfirmingPurge] = useState<string | null>(null);
+  const [confirmingPurge, setConfirmingPurge] = useState<TrashedWork | null>(null);
+  const [purging, setPurging] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const purgeTriggerRef = useRef<HTMLElement | null>(null);
 
   // `load` is used by `restore`/`purgeNow` to refetch after a mutation; the
   // initial load below is inlined with the `.then` pattern instead of
@@ -63,10 +73,39 @@ export function TrashView() {
     await load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load trash"));
   }
 
-  async function purgeNow(workId: string) {
-    await fetch(`/api/works/${workId}/purge`, { method: "POST" });
+  function openPurgeDialog(item: TrashedWork, trigger: HTMLElement | null) {
+    purgeTriggerRef.current = trigger;
+    setStatusMessage(null);
+    setConfirmingPurge(item);
+  }
+
+  function closePurgeDialog() {
     setConfirmingPurge(null);
-    await load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load trash"));
+    const trigger = purgeTriggerRef.current;
+    purgeTriggerRef.current = null;
+    window.requestAnimationFrame(() => trigger?.focus());
+  }
+
+  async function purgeNow(workId: string) {
+    setPurging(true);
+    try {
+      const res = await fetch(`/api/works/${workId}/purge`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.ok) {
+        setStatusMessage(null);
+      } else {
+        // Honest partial-failure status (Phase 20.3): never claim the
+        // deletion finished when Storage cleanup did not.
+        setStatusMessage(body.message ?? body.error ?? "Deletion could not finish. It is recorded and will be retried.");
+      }
+    } catch {
+      setStatusMessage("Deletion could not finish. It is recorded and will be retried.");
+    } finally {
+      setPurging(false);
+      setConfirmingPurge(null);
+      purgeTriggerRef.current = null;
+      await load().catch((e) => setError(e instanceof Error ? e.message : "Failed to load trash"));
+    }
   }
 
   return (
@@ -76,6 +115,11 @@ export function TrashView() {
         </Link>} />
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
+      {statusMessage && (
+        <p role="status" className="rounded-md border border-[var(--color-credibility-warning)] px-4 py-3 text-sm text-[var(--color-text)]">
+          {statusMessage}
+        </p>
+      )}
       {!items && !error && <p className="text-[var(--color-text-muted)]">Loading…</p>}
 
       {items && items.length === 0 && <p className="text-[var(--color-text-muted)]">Nothing in the trash.</p>}
@@ -94,6 +138,11 @@ export function TrashView() {
                     ? `Permanently deleted in ${item.daysRemaining} day${item.daysRemaining === 1 ? "" : "s"}`
                     : "Eligible for permanent deletion"}
                 </p>
+                {item.cleanupStatus && (
+                  <p className="text-xs text-[var(--color-credibility-warning)]">
+                    Deletion incomplete — file cleanup pending. It will be retried automatically.
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -103,25 +152,27 @@ export function TrashView() {
                 >
                   Restore
                 </button>
-                {confirmingPurge === item.workId ? (
-                  <span className="flex items-center gap-2 text-sm">
-                    <span className="text-[var(--color-accent-burgundy)]">Permanent deletion cannot be undone.</span>
-                    <button type="button" onClick={() => purgeNow(item.workId)} className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-[var(--color-accent-burgundy)]">Delete now</button>
-                    <button type="button" onClick={() => setConfirmingPurge(null)} className="underline">Cancel</button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingPurge(item.workId)}
-                    className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
-                  >
-                    Delete permanently now
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={(event) => openPurgeDialog(item, event.currentTarget)}
+                  className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
+                >
+                  Delete permanently now
+                </button>
               </div>
             </li>
           ))}
         </ul>
+      )}
+
+      {confirmingPurge && (
+        <PermanentDeleteDialog
+          title={confirmingPurge.title}
+          requiresTypedConfirmation={confirmingPurge.requiresTypedConfirmation}
+          busy={purging}
+          onCancel={closePurgeDialog}
+          onConfirm={() => purgeNow(confirmingPurge.workId)}
+        />
       )}
     </div>
   );

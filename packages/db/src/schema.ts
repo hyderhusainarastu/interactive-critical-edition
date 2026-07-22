@@ -1950,3 +1950,48 @@ export const apiRateLimits = pgTable(
     check("api_rate_limit_count_valid", sql`${t.count} >= 0`),
   ],
 );
+
+export const deletionCleanupStatusEnum = pgEnum("deletion_cleanup_status", [
+  "in_progress",
+  "storage_failed",
+  "completed",
+]);
+
+/**
+ * Phase 20.3: the durable record behind `@ice/deletion`'s permanent-deletion
+ * state machine (real effects in `apps/web/src/lib/trash.ts`). One row per
+ * permanently-deleted work; created BEFORE any destructive step so pending
+ * Storage paths survive a crash, kept after completion as the deletion's
+ * audit trail, and surfaced on the admin dashboard as the cleanup queue
+ * whenever `status != completed`. `work_id` is deliberately NOT a foreign
+ * key — the work row is hard-deleted mid-flow and this record must outlive
+ * it (same "Postgres can't know about this" reasoning as the Storage and
+ * pg-boss cleanup entries in the project log, made durable this time).
+ */
+export const deletionCleanups = pgTable(
+  "deletion_cleanup",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workId: uuid("work_id").notNull(),
+    /** Retained so the admin queue can still name the work after its row is gone. */
+    workTitle: text("work_title").notNull(),
+    status: deletionCleanupStatusEnum("status").notNull().default("in_progress"),
+    /** Private Storage object paths not yet confirmed deleted. */
+    pendingStoragePaths: jsonb("pending_storage_paths").notNull().default(sql`'[]'::jsonb`),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    /** Bounded per-stage log (`@ice/deletion`'s STAGE_LOG_LIMIT). */
+    stageLog: jsonb("stage_log").notNull().default(sql`'[]'::jsonb`),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    completedAt: timestamp("completed_at"),
+  },
+  (t) => [
+    uniqueIndex("deletion_cleanup_work_unique").on(t.workId),
+    index("deletion_cleanup_user_idx").on(t.userId),
+    index("deletion_cleanup_status_idx").on(t.status),
+  ],
+);
