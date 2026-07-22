@@ -10,9 +10,9 @@
   "updated": "2026-07-22",
   "current": {
     "phase": 20,
-    "headline": "Phase 19 complete and tagged; Phase 20 (Library integrity, file lifecycle, processing reliability, backend repair) begins",
-    "summary": "Phase 19 closed 2026-07-22 (tag phase-19-complete): pre-flight verification, the rebuilt generated checklist, a complete interaction inventory and user-journey pass (4 new defects found and fixed: D-19-21/25/29/34), and the owner-authorized production cleanup (9 orphaned Storage objects, 7 orphaned catalog rows, the test-reader account) are all done, with 24 total register findings, zero open, zero P0. Two residual gaps are recorded rather than silently dropped: contextual Ask Library (deferred to Phase 22.5) and a fully-scripted signup-through-email-verification E2E (historically manually verified, not yet automated). Phase 20 begins under the owner's standing 2026-07-22 authorization to proceed autonomously through the Phases 19-24 program.",
-    "nextAction": "Begin Phase 20.1 (Library search) per the prioritized order, following the same audit-before-edit discipline: reproduce the reported reprocess/duplicate/permanent-delete gaps first, then implement in dependency order (search -> terminology/filter-visibility -> permanent delete -> source-text attach -> reprocess reliability -> canonical identity/duplicate collapse -> cross-surface consistency -> Phase 20 gate)."
+    "headline": "Phase 20 wave 1 complete locally (20.1 Library search, 20.3 permanent-delete lifecycle, 20.5 reprocess reliability); wave 2 (20.2/20.4/20.6) next",
+    "summary": "Wave 1 ran as three parallel model-assigned subagents (Sonnet for 20.1, Opus for 20.3/20.5) under coordinator review, each following audit-before-edit with red-first regressions. Eleven register findings (D-20-10, D-20-30..34, D-20-50..54) were found and fixed, including two would-be P1s self-caught pre-commit. Independent verification over the combined tree: workspace typecheck/lint clean, 392 unit tests green (incl. 63 worker + 8 new @ice/deletion), production build clean, 47 focused E2E green. Additive migration 0030 (deletion_cleanup) is applied LOCALLY only; production stays at ledger 30 pending the 20.8 gate, alongside the deferred reprocess production canary. Commits c728aa2 / 527979f / 967db68.",
+    "nextAction": "Launch wave 2: 20.2 terminology/filter-visibility (Haiku), 20.4 source-text attach for metadata-only works (Sonnet), 20.6 canonical identity and duplicate collapse with mandatory dry-run report (Opus); then 20.7 cross-surface consistency; then the 20.8 gate (full suites + owner-authorized production migration 0030 + canary within cost caps)."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -28,10 +28,10 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-22",
-    "total": 24,
-    "bySeverity": { "P0": 0, "P1": 6, "P2": 16, "P3": 2 },
-    "byStatus": { "fixed": 23, "partially_fixed": 1, "fixed_pending_cleanup": 0, "open": 0 },
-    "note": "No P0 defects found; zero open. All 6 P1s (D-19-1, D-19-3, D-19-4, D-19-7, D-19-10, D-19-29) are fixed in code. D-19-11's owner-authorized production cleanup (9 orphaned Storage objects, 7 orphaned googlebooks catalog rows, plus the test-reader acceptance account and its data/queue rows) completed 2026-07-22 with both anti-joins rechecked to zero, which also resolved D-19-10's residual 'existing objects open' note. The interaction-inventory tranche (D-19-21/25/29/34) closed the remaining pending Shell/Writer/Library/Work-status/Reader control rows. D-19-6 remains partially fixed: the environment-drift repair shipped, but two live-pipeline-timing-bound tests and the legacy AnnotationsPanel/annotations.spec.ts question remain an open, documented decision rather than silently patched."
+    "total": 35,
+    "bySeverity": { "P0": 0, "P1": 13, "P2": 20, "P3": 2 },
+    "byStatus": { "fixed": 34, "partially_fixed": 1, "fixed_pending_cleanup": 0, "open": 0 },
+    "note": "No P0 defects found; zero open. All Phase 19 P1s fixed; D-19-6 remains the one partially-fixed item (documented live-pipeline-timing decision). Phase 20 wave 1 added 11 fixed findings (D-20-10, D-20-30..34, D-20-50..54): 7 P1s incl. two self-caught pre-commit (the client-bundle DB import and the restore-vs-retry data-loss design flaw) and real shipped defects — RAG answering from trashed works, purge claiming success on Storage failure, duplicate paid reprocess runs, permanently stuck processing after worker death, and hour-long unrecoverable-then-double-running crashed jobs. Production verification of the D-20-3x/5x fixes is pending the 20.8 gate (migration 0030 + canary)."
   },
   "phases": [
     {
@@ -470,21 +470,25 @@
     {
       "number": 20,
       "title": "Library Integrity, File Lifecycle, Processing Reliability, and Backend Repair",
-      "state": "planned",
-      "summary": "Library search, uploaded-work terminology/filter-visibility repair, full trash/restore/permanent-delete lifecycle, metadata-only source-text attachment, reprocess reliability, and canonical duplicate collapse.",
-      "confirmation": "Not started.",
-      "evidence": [],
+      "state": "in_progress",
+      "summary": "Wave 1 (20.1 Library search, 20.3 permanent-delete lifecycle, 20.5 reprocess reliability) complete locally via parallel model-assigned subagents under coordinator review; waves 2 (20.2/20.4/20.6), 20.7, and the 20.8 gate remain.",
+      "confirmation": "In progress under the owner's standing 2026-07-22 program authorization; production migration/canary reserved for the 20.8 gate.",
+      "evidence": [
+        "Wave 1 independent verification over the combined tree: pnpm -r typecheck clean, web lint clean, 392 workspace unit tests green (63 worker incl. 25 new reprocess/recovery/budget tests; 8 new @ice/deletion), production build clean, focused E2E 47/47 (library 26, trash 9, work-status 8, security 2, rag 2).",
+        "11 register findings fixed (D-20-10, D-20-30..34, D-20-50..54); details in docs/audits/phase-19-product-audit.md. Commits c728aa2 (20.1), 527979f (20.3), 967db68 (20.5).",
+        "Additive migration 0030_silky_mandarin (deletion_cleanup) applied to LOCAL Postgres only (local ledger 31); production remains at ledger 30 pending the 20.8 gate."
+      ],
       "subphases": [
-        { "id": "20.1", "title": "Library search", "state": "planned", "model": "sonnet", "summary": "Server-authoritative search across title/author/year/DOI/ISBN/source type, URL-synced, combined with Focus/sort/filters, with accessible no-results and cross-account isolation coverage." },
+        { "id": "20.1", "title": "Library search", "state": "complete", "model": "sonnet", "summary": "Server-authoritative, URL-synced (?q=), debounced accessible search over title/authors/venue/year/DOI/ISBN/source type with diacritic/case normalization via new GET /api/library; composes with Focus/sort/filters; aria-live result count; 12 new CI-safe E2E tests incl. cross-account isolation. Client-safe helpers extracted to librarySearch.ts after self-catching a would-be site-down server-module import (D-20-10). Translator/editor/alias search documented as a schema gap (no such columns exist), not silently claimed." },
         { "id": "20.2", "title": "Terminology and filter-visibility repair", "state": "planned", "model": "haiku", "summary": "Audit and replace any remaining 'Your work' label; verify uploaded works stay visible under every non-work-exclusion Library/Visualization filter." },
-        { "id": "20.3", "title": "Permanent delete lifecycle", "state": "planned", "model": "opus", "summary": "Trash to restore to permanent-delete state machine with a full cascade (DB, RAG, graph, Storage, queue rows), idempotent honest partial-failure handling, and an admin-visible cleanup queue." },
+        { "id": "20.3", "title": "Permanent delete lifecycle", "state": "complete", "model": "opus", "summary": "New pure @ice/deletion state machine + deletion_cleanup table (migration 0030, local-only): Storage-first ordering, retryable storage_failed state, honest outcomes, idempotent repeats, opportunistic retry, read-only admin cleanup queue, typed-title confirmation dialog. Fixed D-20-30 (RAG answered from trashed works), D-20-31 (orphaned graph edges), D-20-32 (success reported on Storage failure), D-20-33 (nameless confirmation), D-20-34 (retry would delete a restored work; self-caught). trash.spec.ts 4->9 green." },
         { "id": "20.4", "title": "Source-text attach for metadata-only works", "state": "planned", "model": "sonnet", "summary": "Add 'Upload source text' to eligible Library detail pages, reusing the secure upload pipeline and attaching to the canonical work without creating a duplicate." },
-        { "id": "20.5", "title": "Reprocess reliability", "state": "planned", "model": "opus", "summary": "Reproduce the reported reprocess failure, then implement a single idempotent reprocess command with stale-job recovery, last-known-good retention, and atomic publication." },
+        { "id": "20.5", "title": "Reprocess reliability", "state": "complete", "model": "opus", "summary": "Reported 409 root-caused to D-19-29's env gap (no longer reproduces); live repro exposed duplicate paid runs (D-20-50). Single idempotent reprocess command via pure planReprocess core; 60s worker heartbeat + stalled status + recovery UI + orphan cancellation (D-20-53); sweep now fails stuck documents visibly (D-20-51); ready-evidence survives failed retries (D-20-52); CI E2E gains ANALYSIS_PIPELINE=v2 (D-20-54). 25 new worker tests green; production canary deferred to the 20.8 gate; durable confirmed_at column recorded as gate-adjacent remaining work." },
         { "id": "20.6", "title": "Canonical identity and duplicate collapse", "state": "planned", "model": "opus", "summary": "Identity precedence chain (DOI to ISBN+edition to provider ID to normalized title/author/year to content hash to bounded fuzzy-as-suggestion), with a mandatory dry-run report before any data merge." },
         { "id": "20.7", "title": "Cross-surface reference consistency", "state": "planned", "model": "sonnet", "summary": "Deterministic consistency checks across citation/Library/graph/annotation/roadmap/RAG references with transactional repair and no guessed facts." },
-        { "id": "20.8", "title": "Phase 20 gate", "state": "planned", "model": "sonnet", "summary": "Full relevant test suites plus an owner-authorized production migration/canary within existing cost caps; tag phase-20-complete." }
+        { "id": "20.8", "title": "Phase 20 gate", "state": "planned", "model": "sonnet", "summary": "Full relevant test suites plus an owner-authorized production migration/canary within existing cost caps (now incl. migration 0030 and the reprocess-path canary); tag phase-20-complete." }
       ],
-      "nextAction": "Begins after Phase 19's audit and owner confirmation."
+      "nextAction": "Wave 2: 20.2 (haiku) + 20.4 (sonnet) + 20.6 (opus, mandatory dry-run before any merge), then 20.7, then the 20.8 gate."
     },
     {
       "number": 21,
