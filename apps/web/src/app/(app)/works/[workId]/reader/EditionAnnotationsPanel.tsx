@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
+import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META } from "./annotationMeta";
 import {
   AGREEMENT_LABEL,
@@ -426,13 +427,7 @@ function PassageAnnotationCard({
       style={{ borderColor: active ? `var(${category.colorVar})` : "var(--color-border)" }}
     >
       <div className="flex flex-wrap items-center gap-1.5">
-        <span
-          aria-hidden
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-bold text-[var(--color-background)]"
-          style={{ background: `var(${category.colorVar})` }}
-        >
-          {category.glyph}
-        </span>
+        <CategoryGlyph colorVar={category.colorVar} glyph={category.glyph} className="shrink-0" />
         <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[0.68rem] font-medium">
           {PASSAGE_TYPE_LABEL[note.annotationType]}
         </span>
@@ -463,9 +458,12 @@ function PassageAnnotationCard({
               )}
             </p>
           )}
-          <p className="mt-1.5 text-[0.72rem] text-[var(--color-text-muted)]">
-            Source: {relatedResource?.title ?? (note.textBlockId ? "Anchored document passage" : "Whole work")} · confidence {Math.round(note.confidence * 100)}% · provenance: {note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
-          </p>
+          <EvidenceLine
+            className="mt-1.5 text-[0.72rem]"
+            source={relatedResource?.title ?? (note.textBlockId ? "Anchored document passage" : "Whole work")}
+            confidencePercent={Math.round(note.confidence * 100)}
+            provenance={note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
+          />
         </div>
       )}
     </li>

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   TIER_LABEL,
   TIER_ORDER,
-  type PriorityTier,
   type ReaderLevel,
   type ReaderLevelFilter,
   type ReaderLevelMatchMode,
@@ -13,6 +12,7 @@ import {
   type RoadmapItem,
   type RoadmapMode,
 } from "@ice/roadmap";
+import { TIER_COLOR, TierDot } from "@/components/shared/roadmapPrimitives";
 
 interface RoadmapResponse {
   title: string;
@@ -32,16 +32,8 @@ const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = {
 };
 const READER_LEVEL_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
 
-// Tier → palette accent (shared with the reader's visual language).
-const TIER_COLOR: Record<PriorityTier, string> = {
-  essential: "--color-accent-burgundy",
-  high: "--color-accent-ink",
-  strongly_recommended: "--color-accent-green",
-  contextual: "--color-accent-umber",
-  interpretive_aid: "--color-accent-ink",
-  comparative: "--color-accent-umber",
-  optional: "--color-text-muted",
-};
+// Tier → palette accent lives in the shared roadmap primitives module
+// (Phase 22.1), so the landing showcase and this view use one mapping.
 
 const READING_STATUSES: ReadingStatus[] = ["planned", "reading", "completed", "abandoned"];
 
@@ -220,7 +212,7 @@ export function RoadmapView({
       {byTier.map(({ tier, items }) => (
         <section key={tier} className="mb-6">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide" style={{ color: `var(${TIER_COLOR[tier]})` }}>
-            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `var(${TIER_COLOR[tier]})` }} />
+            <TierDot colorVar={TIER_COLOR[tier]} className="inline-block" />
             {TIER_LABEL[tier]}
           </h2>
           <ol className="flex flex-col gap-2">

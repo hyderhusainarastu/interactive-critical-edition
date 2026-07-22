@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { CATEGORY_META, confidenceLabel } from "@/components/shared/annotationMeta";
+import { AnnotationMarker, AnnotationSummaryCard } from "@/components/shared/annotationPrimitives";
+import { RoadmapStageRow, TIER_COLOR } from "@/components/shared/roadmapPrimitives";
+import { READING_PROSE_CLASS } from "@/components/shared/typography";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SITE_NAME } from "@/lib/brand";
@@ -91,6 +95,11 @@ function Showcase({
 }
 
 function ReaderShowcase() {
+  // The depicted annotation is a `conceptual_influence` — its glyph, label
+  // and color come from the same CATEGORY_META the real Reader uses, and
+  // the band label from the same confidenceLabel(), so the depiction can
+  // never drift from the product's actual category vocabulary (plan §22.2).
+  const meta = CATEGORY_META.conceptual_influence;
   return (
     <Showcase
       eyebrow="The reader"
@@ -98,47 +107,35 @@ function ReaderShowcase() {
       lead="Hover any marker and see what a passage references, why, and how sure the system is — with the exact source text that triggered it. Approve, edit, or dismiss anything. Original footnotes, AI annotations, and your own notes stay visually distinct."
     >
       <figure className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
-        <p className="font-serif text-[1.05rem] leading-[1.7] text-[var(--color-text)]">
+        <p className={READING_PROSE_CLASS}>
           The question of the meaning of Being must be raised anew. Here the inquiry builds directly on
           Kant&rsquo;s transcendental method
-          <span
-            className="reader-annotation-marker"
-            style={{ "--reader-annotation-color": "var(--color-accent-green)" } as React.CSSProperties}
-            aria-hidden
-          >
-            ❋
-          </span>
+          <AnnotationMarker colorVar={meta.colorVar}>{meta.glyph}</AnnotationMarker>
           , which first cleared the ground for the question.
         </p>
-        <div className="mt-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3">
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              aria-hidden
-              className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[0.7rem] font-bold text-[var(--color-background)]"
-              style={{ background: "var(--color-accent-green)" }}
-            >
-              ❋
-            </span>
-            <span className="font-semibold text-[var(--color-accent-green)]">Conceptual influence</span>
-            <span className="ml-auto text-[var(--color-text-muted)]">High · 82%</span>
-          </div>
-          <p className="mt-2 text-sm font-medium text-[var(--color-text)]">
-            Critique of Pure Reason — Immanuel Kant
-          </p>
-          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-            Shaped the ideas of the primary text. Resolved to a bibliographic record via Crossref.
-          </p>
-        </div>
+        <AnnotationSummaryCard
+          className="mt-4"
+          colorVar={meta.colorVar}
+          glyph={meta.glyph}
+          label={meta.label}
+          confidence={`${confidenceLabel(0.82)} · 82%`}
+          title="Critique of Pure Reason — Immanuel Kant"
+          note="Shaped the ideas of the primary text. Resolved to a bibliographic record via Crossref."
+        />
       </figure>
     </Showcase>
   );
 }
 
 function RoadmapShowcase() {
+  // Colors come from the real Roadmap's shared TIER_COLOR mapping; the tier
+  // display labels stay the showcase's own copy ("Comparative" is the
+  // depiction's shorthand — the product's full label for that tier is
+  // "Parallel / comparison").
   const items: { tier: string; color: string; title: string; why: string }[] = [
-    { tier: "Essential", color: "--color-accent-burgundy", title: "Critique of Pure Reason", why: "A prerequisite — read first." },
-    { tier: "High priority", color: "--color-accent-ink", title: "Logical Investigations", why: "Shaped the text’s method." },
-    { tier: "Comparative", color: "--color-accent-umber", title: "The Myth of Sisyphus", why: "A parallel, not a prerequisite." },
+    { tier: "Essential", color: TIER_COLOR.essential, title: "Critique of Pure Reason", why: "A prerequisite — read first." },
+    { tier: "High priority", color: TIER_COLOR.high, title: "Logical Investigations", why: "Shaped the text’s method." },
+    { tier: "Comparative", color: TIER_COLOR.comparative, title: "The Myth of Sisyphus", why: "A parallel, not a prerequisite." },
   ];
   return (
     <Showcase
@@ -149,20 +146,7 @@ function RoadmapShowcase() {
     >
       <div className="flex flex-col gap-2">
         {items.map((it, i) => (
-          <div
-            key={it.title}
-            className="flex items-start gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-          >
-            <span className="mt-0.5 font-mono text-sm text-[var(--color-text-muted)]">{i + 1}</span>
-            <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: `var(${it.color})` }} />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: `var(${it.color})` }}>
-                {it.tier}
-              </p>
-              <p className="font-medium text-[var(--color-text)]">{it.title}</p>
-              <p className="text-xs text-[var(--color-text-muted)]">{it.why}</p>
-            </div>
-          </div>
+          <RoadmapStageRow key={it.title} index={i + 1} colorVar={it.color} tierLabel={it.tier} title={it.title} reason={it.why} />
         ))}
       </div>
     </Showcase>

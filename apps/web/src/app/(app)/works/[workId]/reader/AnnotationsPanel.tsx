@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CategoryGlyph } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, confidenceLabel, VERIFICATION_LABELS } from "./annotationMeta";
 import type { AnalysisStatus, AnnotationRecord, RelationshipCategory, VerificationStatus } from "./types";
 
@@ -242,13 +243,7 @@ function AnnotationCard({
       }}
     >
       <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-bold text-[var(--color-background)]"
-          style={{ background: `var(${meta.colorVar})` }}
-        >
-          {meta.glyph}
-        </span>
+        <CategoryGlyph colorVar={meta.colorVar} glyph={meta.glyph} className="shrink-0" />
         <span className="text-[0.72rem] font-semibold" style={{ color: `var(${meta.colorVar})` }}>
           {meta.label}
         </span>
