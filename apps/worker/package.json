@@ -13,6 +13,7 @@
     "@ice/ai-adapters": "workspace:*",
     "@ice/bibliographic": "workspace:*",
     "@ice/config": "workspace:*",
+    "@ice/consistency": "workspace:*",
     "@ice/db": "workspace:*",
     "@ice/ingestion": "workspace:*",
     "@ice/observability": "workspace:*",
