@@ -515,7 +515,7 @@ export function ReaderShell({
         </div>
       )}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel workId={workId} onClose={() => setShowRagChat(false)} />}
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel contextWorkId={workId} onClose={() => setShowRagChat(false)} />}
     </div>
   );
 }

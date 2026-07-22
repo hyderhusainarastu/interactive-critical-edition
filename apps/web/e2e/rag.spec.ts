@@ -46,6 +46,15 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await expect(page.getByRole("button", { name: "Ask Library" })).toBeVisible();
   });
 
+  test("is discoverable from the authenticated workspace navigation", async ({ page }) => {
+    await expect(page.getByRole("link", { name: "Ask Library" })).toBeVisible();
+    await page.getByRole("link", { name: "Ask Library" }).click();
+    await expect(page).toHaveURL("/ask-library");
+    await expect(page.getByRole("heading", { name: "Ask your Library", level: 1 })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Library-grounded Socratic chat" })).toBeVisible();
+    await expect(page.getByLabel("Ask a question about your Library")).toBeEnabled();
+  });
+
   test("streams a source-linked answer and says not found when the Library lacks evidence", async ({ page }) => {
     await page.getByRole("button", { name: "Ask Library" }).click();
     const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });

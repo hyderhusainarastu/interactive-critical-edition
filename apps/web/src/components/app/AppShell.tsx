@@ -15,25 +15,27 @@ export function AppShell({
   email,
   admin,
   writerEnabled,
+  ragEnabled,
   initialPreferences,
   children,
 }: {
   email: string | null | undefined;
   admin: boolean;
   writerEnabled: boolean;
+  ragEnabled: boolean;
   initialPreferences: WorkspacePreferences;
   children: React.ReactNode;
 }) {
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled}>{children}</AppShellContents>
+        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, writerEnabled, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; children: React.ReactNode }) {
+function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -43,6 +45,7 @@ function AppShellContents({ email, admin, writerEnabled, children }: { email: st
     { href: "/graph", label: "Visualization" },
     { href: "/works", label: "Works" },
     { href: "/library", label: "Library" },
+    ...(ragEnabled ? [{ href: "/ask-library", label: "Ask Library" }] : []),
     ...(writerEnabled ? [{ href: "/writer", label: "Writer" }] : []),
     { href: "/upload", label: "Upload" },
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),

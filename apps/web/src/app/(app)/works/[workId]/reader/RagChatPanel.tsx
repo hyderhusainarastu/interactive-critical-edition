@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
 type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null };
 
-function conversationStorageKey(workId: string) {
-  return `palimnote:rag-conversation:${workId}`;
+function conversationStorageKey(contextWorkId?: string | null) {
+  return `palimnote:rag-conversation:${contextWorkId ?? "library"}`;
 }
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -15,7 +15,15 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () => void }) {
+export function RagChatPanel({
+  contextWorkId = null,
+  onClose,
+  presentation = "drawer",
+}: {
+  contextWorkId?: string | null;
+  onClose?: () => void;
+  presentation?: "drawer" | "page";
+}) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
@@ -28,7 +36,7 @@ export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () 
     let cancelled = false;
     async function load() {
       try {
-        const stored = window.localStorage.getItem(conversationStorageKey(workId));
+        const stored = window.localStorage.getItem(conversationStorageKey(contextWorkId));
         if (stored) {
           const view = await jsonFetch<{ conversation: { id: string }; messages: Message[] }>(`/api/rag/conversations/${stored}`);
           if (!cancelled) {
@@ -40,9 +48,9 @@ export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () 
         const created = await jsonFetch<{ conversation: { id: string } }>("/api/rag/conversations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contextWorkId: workId }),
+          body: JSON.stringify({ contextWorkId }),
         });
-        window.localStorage.setItem(conversationStorageKey(workId), created.conversation.id);
+        window.localStorage.setItem(conversationStorageKey(contextWorkId), created.conversation.id);
         if (!cancelled) setConversationId(created.conversation.id);
       } catch (loadError) {
         if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Could not open conversation.");
@@ -50,7 +58,7 @@ export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () 
     }
     void load();
     return () => { cancelled = true; };
-  }, [workId]);
+  }, [contextWorkId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -60,9 +68,9 @@ export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () 
     const created = await jsonFetch<{ conversation: { id: string } }>("/api/rag/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contextWorkId: workId }),
+      body: JSON.stringify({ contextWorkId }),
     });
-    window.localStorage.setItem(conversationStorageKey(workId), created.conversation.id);
+    window.localStorage.setItem(conversationStorageKey(contextWorkId), created.conversation.id);
     setConversationId(created.conversation.id);
     setMessages([]);
     setPending("");
@@ -117,11 +125,20 @@ export function RagChatPanel({ workId, onClose }: { workId: string; onClose: () 
     }
   }
 
+  const isDrawer = presentation === "drawer";
+
   return (
-    <section className="fixed inset-y-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl" aria-label="Library-grounded Socratic chat" role="dialog" aria-modal="true">
+    <section
+      className={isDrawer
+        ? "fixed inset-y-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl"
+        : "flex min-h-[min(46rem,calc(100vh-12rem))] w-full flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] shadow-sm"}
+      aria-label="Library-grounded Socratic chat"
+      role={isDrawer ? "dialog" : "region"}
+      aria-modal={isDrawer ? true : undefined}
+    >
       <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] p-4">
         <div><h2 className="font-serif text-lg font-semibold">Ask your Library</h2><p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p></div>
-        <div className="flex gap-1"><button type="button" className="app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button><button type="button" className="app-icon-button" aria-label="Close chat" onClick={onClose}>×</button></div>
+        <div className="flex gap-1"><button type="button" className="app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button type="button" className="app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
       </header>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
