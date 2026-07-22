@@ -9,9 +9,9 @@
   "updated": "2026-07-21",
   "current": {
     "phase": 18,
-    "headline": "Phase 18 local acceptance complete — production action gated",
-    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and responsive reader chat pass local acceptance. The feature, provider-answer path, and automatic embedding path all fail closed by default; no production migration, deployment, or paid canary has been performed.",
-    "nextAction": "Await explicit owner direction before any production migration, feature enablement, deployment, or paid provider verification. Keep Phase 18's local implementation and licensing boundary intact."
+    "headline": "Phase 18 production release complete — Ask Library is live",
+    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and responsive reader chat are live. Web/provider and worker/embedding gates are enabled; production migrations and bounded paid verification completed under explicit owner authorization.",
+    "nextAction": "Monitor the released Library-grounded RAG surface under its existing response, daily-spend, and automatic-embedding caps. Preserve owner scoping, citation grounding, D/E supplementary-source boundaries, and the provider licensing boundary."
   },
   "phases": [
     {
@@ -285,9 +285,9 @@
       "state": "complete",
       "summary": "Structurally anchored citations reach Library before asynchronous resolution; public sources remain supplementary D/E; and Visualization uses canonical entities, topics, a focal inspector, graph-stage fullscreen, and visible theme controls.",
       "tag": "phase-17-complete",
-      "confirmation": "Local acceptance was complete and the user explicitly created this fresh Phase 18 session from the compact handoff. This is a manual host-level replacement, not an automatic lifecycle-adapter action. Production migration, deployment, and paid canary remain separately approval-gated.",
+      "confirmation": "The user explicitly created the fresh Phase 18 session from the compact handoff, a manual host-level replacement rather than an automatic lifecycle-adapter action. The separately authorized production release then applied migration 0028 and deployed the Phase 17 repair with Phase 18.",
       "evidence": [
-        "Local additive migration 0028 adds citation source/anchor/resolution fields and citation-to-Library provenance; it was applied only to the local development database.",
+        "Additive migration 0028 adds citation source/anchor/resolution fields and citation-to-Library provenance; it is applied locally and in production as Drizzle ledger 29.",
         "The fixture-backed Vice and Reason worker test resolves 22 distinct targets, persists 23 anchored Library items including an unresolved citation, and writes 22 graph targets without live search.",
         "Mocked worker public-source projection verifies relevant YouTube, Mastodon, and Bluesky results remain Library/graph-visible as D/E non-scholarly supplementary material; 13 focused Chromium graph checks pass."
       ],
@@ -327,13 +327,15 @@
     {
       "number": 18,
       "title": "Library-grounded Socratic RAG chat",
-      "state": "awaiting_confirmation",
-      "summary": "Owner-scoped eligible source chunks, persistent retrieval-first Socratic conversations, citation-linked reader answers, and responsive chat are locally accepted; production remains deliberately disabled and approval-gated.",
-      "confirmation": "Phase 17's compact handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. Phase 18 local acceptance is complete, but any production migration, enablement, deployment, or paid provider verification requires explicit owner approval.",
+      "state": "complete",
+      "tag": "phase-18-complete",
+      "summary": "Owner-scoped eligible source chunks, persistent retrieval-first Socratic conversations, citation-linked reader answers, and responsive chat are production-released with bounded live provider and embedding paths enabled.",
+      "confirmation": "The Phase 17 handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. The owner then explicitly authorized the Phase 18 production release, migrations, feature enablement, deployment, and paid verification.",
       "evidence": [
-        "Additive local migration 0029 creates owner-scoped chunks, persistent conversations/messages, and cascading answer-citation links; it was applied only to the local development database.",
-        "Config (16), RAG primitives (7), and local worker index integration (3) tests pass; integration coverage proves explicit-license eligibility, owner isolation, and deletion propagation.",
-        "A locally flag-enabled Chromium flow passed for streamed cited answers, reader-anchor links, and explicit not-found behavior; live-answer and automatic-embedding provider paths remained disabled."
+        "Migrations 0028 and 0029 are applied in production through Drizzle ledger 30; the new citation and RAG tables, including cascading foreign keys, were verified directly.",
+        "Vercel deployment dpl_8VHHpCPBmNxcAZfvXnriJpT4Lvpa is Ready and Render deploy dep-d9g1i3sm0tmc73de53dg is live at 93e4146. Vercel enables the RAG and live-provider gates; Render enables RAG indexing and automatic embeddings.",
+        "The production backfill indexed 338 eligible chunks across two published documents, including 64 bounded embeddings at $0.000259 total. A live OpenAI answer returned two reader-anchor citations in 3,147 ms at $0.00067615; its temporary conversation was removed.",
+        "The public production alias returned 200, the enabled unauthenticated RAG route returned 401 rather than 404, and a disposable verified account completed live Auth.js login plus a 201 RAG conversation creation before cleanup."
       ],
       "subphases": [
         {
@@ -358,7 +360,7 @@
           "id": "18.4",
           "title": "Local acceptance and governed closeout",
           "state": "complete",
-          "summary": "Local tests cover retrieval grounding, injection handling, owner isolation, deletion cascades, latency/cost caps, streamed UI behavior, and a production-disabled build."
+          "summary": "Local acceptance passed, then the owner-authorized production release applied migrations, enabled all RAG/provider/embedding gates, backfilled eligible chunks, and verified live cited answers, public routing, and authenticated API persistence within caps."
         }
       ]
     }
