@@ -6,12 +6,12 @@
     "architecturePlan": "docs/architecture/plan.md",
     "generatedChecklist": "progress-checklist.html"
   },
-  "updated": "2026-07-21",
+  "updated": "2026-07-22",
   "current": {
-    "phase": 18,
-    "headline": "Phase 18 production release complete — Ask Library is live",
-    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and directly discoverable Ask Library workspace page plus contextual Reader chat are live. Web/provider and worker/embedding gates are enabled; production migrations and bounded paid verification completed under explicit owner authorization.",
-    "nextAction": "Monitor the released Library-grounded RAG surface under its existing response, daily-spend, and automatic-embedding caps. Preserve owner scoping, citation grounding, D/E supplementary-source boundaries, and the provider licensing boundary."
+    "phase": 19,
+    "headline": "Phase 19 in progress — Render incident diagnosed and repaired, frontend tooling substitutions documented, audit underway",
+    "summary": "Phase 18 (Ask Library) remains production-complete. Phase 19 has diagnosed the reported Render worker failures (one confirmed crash, root-caused, repaired, and regression-tested; no unresolved deploy-time failure found), and documented working substitutes for the non-functional Stitch MCP and unavailable Uncodixify plugin. The landing-page contract capture, full route/control inventory, and defect register are still open.",
+    "nextAction": "Capture the protected landing-page Reader/Annotations/Roadmap baselines, complete the system inventory and user-journey audit, populate the Phase 19 defect register, then request owner confirmation before Phase 20 production-affecting work begins."
   },
   "phases": [
     {
@@ -364,6 +364,55 @@
           "summary": "Local acceptance passed, then the owner-authorized production release applied migrations, enabled all RAG/provider/embedding gates, backfilled eligible chunks, and verified live cited answers, public routing, and authenticated API persistence within caps."
         }
       ]
+    },
+    {
+      "number": 19,
+      "title": "Product-Wide Baseline, Contract Capture, and Defect Audit",
+      "state": "in_progress",
+      "summary": "Diagnose reported Render server failures, establish frontend tooling (with documented substitutes for the unreachable Stitch MCP and unavailable Uncodixify plugin), freeze the landing-page visual contract, audit every route/control, and populate the Phase 19-23 defect register.",
+      "confirmation": "Not yet requested. Owner confirmation is required before Phase 20 production-affecting work begins per the plan's own gate.",
+      "evidence": [
+        "Render deploy history (last 20 deploys, srv-d9dgiamrnols73ccpa10) shows no build_failed/update_failed/canceled deploy; no unresolved deploy-time failure exists.",
+        "One confirmed runtime crash (R-19-1, 2026-07-20T04:57:20Z, 'unsupported Unicode escape sequence' in pg-pool via pg-boss) diagnosed, repaired (packages/ingestion/src/sanitizeText.ts sanitizes text at the parseDocument boundary; apps/worker/src/index.ts adds uncaughtException/unhandledRejection observability), and regression-tested (5 new Vitest cases, 43/43 @ice/ingestion tests pass). See docs/incidents/render-server-failures-phase-19.md and docs/runbooks/render-worker-failure-response.md.",
+        "Stitch MCP checked live (list_projects/list_design_systems) and found non-functional ('Incompatible auth server: does not support dynamic client registration'); Uncodixify is not a resolvable plugin in this environment. Both substitutions documented in docs/audits/phase-19-frontend-tooling.md rather than silently skipped."
+      ],
+      "nextAction": "Complete the remaining Phase 19 first actions: landing-page contract capture (screenshots + docs/baselines), system/route/control inventory, user-journey audit, and the defect register, then request owner confirmation before Phase 20."
+    },
+    {
+      "number": 20,
+      "title": "Library Integrity, File Lifecycle, Processing Reliability, and Backend Repair",
+      "state": "planned",
+      "summary": "Library search, uploaded-work terminology/filter-visibility repair, full trash/restore/permanent-delete lifecycle, metadata-only source-text attachment, reprocess reliability, and canonical duplicate collapse.",
+      "confirmation": "Not started.",
+      "evidence": [],
+      "nextAction": "Begins after Phase 19's audit and owner confirmation."
+    },
+    {
+      "number": 21,
+      "title": "Visualization Repair: Scaling, Relation Semantics, Focus, Navigation, and Graph Integrity",
+      "state": "planned",
+      "summary": "Shared typed graph payload, complete relation-bearing data connection, working relation filters, camera-aware label/node scaling, edge relation labels, one-hop selection focus, and navigation controls.",
+      "confirmation": "Not started.",
+      "evidence": [],
+      "nextAction": "Begins after Phase 20."
+    },
+    {
+      "number": 22,
+      "title": "Reader, Annotations, Roadmap, Global RAG Sidebar, and Site-Wide Experience Completion",
+      "state": "planned",
+      "summary": "Bring authenticated Reader/Annotations/Roadmap to visual parity with the protected landing depictions, ship an expandable global Ask Library sidebar, and apply a coherent site-wide motion/visual system.",
+      "confirmation": "Not started.",
+      "evidence": [],
+      "nextAction": "Begins after Phase 21."
+    },
+    {
+      "number": 23,
+      "title": "Comprehensive Hardening, Accessibility, Performance, Production Verification, and Final Closeout",
+      "state": "planned",
+      "summary": "Final control/route matrix, WCAG 2.2 AA completion, responsive hardening, backend/security hardening, referential-integrity suite, performance budgets, owner-authorized production rollout, and program closeout.",
+      "confirmation": "Not started.",
+      "evidence": [],
+      "nextAction": "Begins after Phase 22; closes the Phases 19-23 program."
     }
   ],
   "operationalAudit": {

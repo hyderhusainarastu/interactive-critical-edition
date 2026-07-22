@@ -461,6 +461,24 @@ async function main() {
   );
 }
 
+/** A crash outside any job handler's own try/catch (e.g. a driver-level
+ * exception thrown mid-query, as in the 2026-07-20 "unsupported Unicode
+ * escape sequence" incident) previously reached Node's default handler with
+ * no structured/Sentry-visible record — the only trace was a raw stack in
+ * Render's log stream. Render still restarts the instance either way; this
+ * only makes the restart's cause diagnosable instead of silent. */
+function installCrashObservability() {
+  const onFatal = (scope: string) => (err: unknown) => {
+    reportError(err, { scope: `worker.${scope}`, pipeline: activePipelineVersion(), commit: process.env.RENDER_GIT_COMMIT ?? null });
+    console.error(`[worker] fatal ${scope}, exiting for Render to restart:`, err);
+    process.exit(1);
+  };
+  process.on("uncaughtException", onFatal("uncaughtException"));
+  process.on("unhandledRejection", onFatal("unhandledRejection"));
+}
+
+installCrashObservability();
+
 main().catch((err) => {
   console.error("[worker] fatal error during startup:", err);
   process.exit(1);

@@ -1,9 +1,11 @@
 import { parsePdf, type ParsedDocument } from "./parsers/pdf";
 import { parseEpub } from "./parsers/epub";
 import { parseText } from "./parsers/text";
+import { sanitizeExtractedText } from "./sanitizeText";
 
 export type { ParsedDocument, ParsedPage, ParsedBlock } from "./parsers/pdf";
 export { mergePageTexts, processedTextFromPages } from "./parsers/pdf";
+export { sanitizeExtractedText } from "./sanitizeText";
 export { parseTei, type GrobidResult, type GrobidBlock, type GrobidBbox } from "./parsers/grobid";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export {
@@ -28,15 +30,35 @@ export async function parseDocument(
   buffer: Buffer,
   mimeType: string,
 ): Promise<ParsedDocument> {
-  switch (mimeType) {
-    case "application/pdf":
-      return parsePdf(buffer);
-    case "text/plain":
-    case "text/markdown":
-      return parseText(buffer, mimeType);
-    case "application/epub+zip":
-      return parseEpub(buffer);
-    default:
-      throw new Error(`Unsupported MIME type for parsing: ${mimeType}`);
-  }
+  const parsed = await (() => {
+    switch (mimeType) {
+      case "application/pdf":
+        return parsePdf(buffer);
+      case "text/plain":
+      case "text/markdown":
+        return parseText(buffer, mimeType);
+      case "application/epub+zip":
+        return parseEpub(buffer);
+      default:
+        throw new Error(`Unsupported MIME type for parsing: ${mimeType}`);
+    }
+  })();
+  return sanitizeParsedDocument(parsed);
+}
+
+function sanitizeParsedDocument(doc: ParsedDocument): ParsedDocument {
+  return {
+    ...doc,
+    text: sanitizeExtractedText(doc.text),
+    detectedTitle: doc.detectedTitle === null ? null : sanitizeExtractedText(doc.detectedTitle),
+    detectedAuthor: doc.detectedAuthor === null ? null : sanitizeExtractedText(doc.detectedAuthor),
+    pages: doc.pages.map((page) => ({
+      ...page,
+      text: sanitizeExtractedText(page.text),
+      blocks: page.blocks.map((block) => ({
+        ...block,
+        text: sanitizeExtractedText(block.text),
+      })),
+    })),
+  };
 }

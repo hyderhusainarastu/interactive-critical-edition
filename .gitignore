@@ -52,3 +52,9 @@ external-reference/
 
 # Personal reference material unrelated to this project — never committed.
 /Rollout Plan/
+
+# Local-only research material and its archive — never committed, never
+# uploaded to GitHub.
+/research/
+/research.zip
+/palimnote_phases_19_23_plan_revised.md
