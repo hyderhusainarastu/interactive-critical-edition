@@ -21,6 +21,14 @@ test.describe("Phase 12 hardening", () => {
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
     await login(page);
     await page.goto("/writer");
+    // Found during the Phase 19 accessibility audit (D-19-7): every
+    // assertion below this point is shell-level (header/preferences/RTL
+    // layout), so with PHASE_12_WRITER_ENABLED off this test previously
+    // passed against Next.js's own "not found" page instead of real Writer
+    // content — a false positive that told nobody the feature was
+    // disabled. Assert on Writer's own content first so a disabled or
+    // broken Writer fails loudly here instead.
+    await expect(page.getByRole("button", { name: "New project" })).toBeVisible();
     await page.getByRole("button", { name: "Workspace preferences" }).click();
     await page.getByLabel("Theme").selectOption("dark");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
