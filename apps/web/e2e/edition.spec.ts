@@ -208,23 +208,30 @@ test("reading width preference changes the interactive reader's actual content w
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
   const widthPx = () => edition.evaluate((el) => el.getBoundingClientRect().width);
 
-  // Establish a known baseline first rather than trusting whatever this
-  // shared seeded user's reading-width preference happens to already be
-  // (this spec's earlier tests share the same user/session, so a prior
-  // test's preference change would otherwise leak in here) — reproduced in
-  // CI: "initial" measured 624px (already compact-width) before this fix,
-  // making the subsequent explicit "compact" selection a no-op.
+  // globals.css maps data-reading-width to --reading-measure in ch units
+  // (compact 58ch < comfortable 72ch < wide 88ch), and EditionReader's
+  // section consumes it via max-w-[var(--reading-measure,72ch)] (D-19-21's
+  // fix). Waits for the same /api/preferences round trip the
+  // workspace-shell.spec.ts preference tests already wait on before
+  // measuring — a bare selectOption()-then-measure raced the attribute/
+  // style update in CI (observed twice: "compact" and "comfortable" both
+  // read the same 624px on the first attempt), even though
+  // data-reading-width itself was already correct by the time of the read.
   await page.getByRole("button", { name: "Workspace preferences" }).click();
-  await page.getByLabel("Reading width").selectOption("comfortable");
-  const comfortable = await widthPx();
 
-  await page.getByLabel("Reading width").selectOption("compact");
-  const compact = await widthPx();
-  expect(compact).toBeLessThan(comfortable);
+  await Promise.all([
+    page.waitForResponse((res) => res.url().includes("/api/preferences") && res.ok()),
+    page.getByLabel("Reading width").selectOption("compact"),
+  ]);
+  await expect(page.locator("html")).toHaveAttribute("data-reading-width", "compact");
+  const compactPx = await widthPx();
 
-  await page.getByLabel("Reading width").selectOption("wide");
-  const wide = await widthPx();
-  expect(wide).toBeGreaterThan(compact);
+  await Promise.all([
+    page.waitForResponse((res) => res.url().includes("/api/preferences") && res.ok()),
+    page.getByLabel("Reading width").selectOption("wide"),
+  ]);
+  await expect(page.locator("html")).toHaveAttribute("data-reading-width", "wide");
+  await expect.poll(widthPx, { message: "reader content width should grow once 'wide' is selected" }).toBeGreaterThan(compactPx);
 });
 
 test("the Split view work picker exposes and dismisses its disclosure state", async ({ page }) => {
