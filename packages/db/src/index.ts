@@ -31,11 +31,26 @@ export * from "./queue";
  */
 export async function cancelQueuedJobsForDocuments(documentIds: string[]): Promise<number> {
   if (documentIds.length === 0) return 0;
-  const result = await db.execute(sql`
-    delete from pgboss.job
-    where name in ('extract-text', 'analyze-work')
-      and state in ('created', 'retry', 'active')
-      and data ->> 'documentId' in ${documentIds}
-  `);
-  return result.count ?? 0;
+  try {
+    const result = await db.execute(sql`
+      delete from pgboss.job
+      where name in ('extract-text', 'analyze-work')
+        and state in ('created', 'retry', 'active')
+        and data ->> 'documentId' in ${documentIds}
+    `);
+    return result.count ?? 0;
+  } catch (err) {
+    // pg-boss lazily creates its own `pgboss` schema/tables the first time
+    // getQueue() runs (boss.start()) — Drizzle's migrations never touch it.
+    // An environment where no job has ever been enqueued yet (a fresh CI
+    // Postgres container, or a test user whose documents were seeded
+    // directly rather than uploaded) genuinely has nothing queued, so
+    // "the schema doesn't exist" and "nothing to cancel" are the same fact.
+    // Drizzle wraps the driver error in its own DrizzleQueryError, with the
+    // real PostgresError (and its .code) nested on .cause — not on err
+    // itself.
+    const cause = err instanceof Error ? err.cause : undefined;
+    if (cause && typeof cause === "object" && "code" in cause && cause.code === "42P01") return 0;
+    throw err;
+  }
 }
