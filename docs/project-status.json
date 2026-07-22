@@ -10,9 +10,9 @@
   "updated": "2026-07-22",
   "current": {
     "phase": 20,
-    "headline": "Phases 20/21/22 running in parallel: 20.2/20.4/20.6 complete and committed, wave 3 (20.7, 21.1, D-21-6, 22.1, 22.5) in flight",
-    "summary": "Wave 2 landed and was independently verified over the combined tree (typecheck clean, 473 unit/integration tests, build clean, 81/82 focused E2E — the one deterministic failure was a stale Phase 19.J assertion now that 20.4 correctly added the affordance it expected absent; fix in flight). Committed per task: CI trash-spec determinism split (ea8ffd1), 20.2 terminology (4ec20e5), 20.4 source-attach (5fc9fa6), 20.6 canonical identity incl. migration 0031 applied local+production ledger 32 BEFORE commit (839aa6c), signup-verification E2E closing the Phase 19.J residual gap (e66d01e), the Phase 23.1 link-checker tool pulled forward (9db12eb), and the Phase 21+22 audit dossiers (8740317). Register now 69 findings: 46 fixed, 1 partially fixed, 22 open (2 hygiene P3s + 20 dossier rows scheduled to their phases, 5 of them already in repair). Per owner direction, phases now run concurrently wherever conflict-free: wave 3 spans 20.7 consistency (sonnet), 21.1 typed graph contract (opus), D-21-6 duplicate-edge fix (sonnet), 22.1 shared primitives with pixel-stability proof (opus), and 22.5 global RAG sidebar (sonnet).",
-    "nextAction": "On wave-3 completion: verify, commit per task, push (after the stale work-status test fix), confirm CI green. Then 20.8 gate (full suites + reprocess canary within $1/$5 caps + confirmed_at DDL + D-20-65/D-19-35 triage + local owner-test sweep; tag phase-20-complete), and continue Phase 21 (21.2-21.6) / Phase 22 (22.2-22.4, 22.6) waves per their dossiers."
+    "headline": "Wind-down complete: Phase 20 at 7/8 (only the 20.8 gate remains), Phase 21 contract + D-21-6 landed, Phase 22 primitives + global RAG sidebar landed; handoff to a fresh coordinator next",
+    "summary": "Wave 3 (20.7 consistency, 21.1 typed graph contract, D-21-6 supersession fix, 22.1 shared primitives with 3x Docker pixel-proof + landing-contract wired into CI, 22.5 global Ask Library sidebar) is complete, independently verified over the combined tree (15-project typecheck, 400+ package tests, worker 76/76, consistency 62/62, build clean, 104/104 focused E2E across 11 specs with zero reruns), committed per task (3ba321e/3b8374d/74f4aa2/7b34c57/546820e), and pushed. Register: 72 findings — 51 fixed, 1 partial, 20 open (15 dossier rows scheduled to Phases 21/22 plus 5 hygiene P3s: D-20-65, D-19-35, D-20-80 repair-ready, D-21-11, D-22-20). Owner directives recorded 2026-07-22 for the continuing program: no user-facing 'AI' language anywhere (explain each inference's basis instead — a display-language change, not a provenance rollback), progressive disclosure across the site (expanding boxes; no text flooding), all filters verified control->state->output site-wide, phases amended where these aren't yet covered; and the incoming coordinator (Fable 5) is a moderator ONLY — every task including git/checklist/log updates is delegated to sub-agents on the cheapest fitting model. A local-only baseline-test/ gold fixture (Roochnik ARISTOTLE-ROOCHNIK-VICIOUS-001, gitignored — copyrighted PDF) is the next acceptance test: a minimum correctness floor, not an exhaustive ceiling.",
+    "nextAction": "New-coordinator handoff: run the 20.8 gate (full suites; reprocess production canary within $1/$5 caps; confirmed_at DDL decision; D-20-65/D-19-35/D-20-80 triage; tag phase-20-complete), continue Phases 21 (21.2-21.6) and 22 (22.2-22.4, 22.6) per their dossiers, fold in the owner's no-AI-language/progressive-disclosure/filters directives (amending phases where needed), incorporate baseline-test/ as a phase or gate test, then Phases 23-24."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-22",
-    "total": 69,
+    "total": 72,
     "bySeverity": {
       "P0": 0,
       "P1": 22,
       "P2": 37,
-      "P3": 10
+      "P3": 13
     },
     "byStatus": {
-      "fixed": 46,
+      "fixed": 51,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 22
+      "open": 20
     },
-    "note": "Zero P0. 46 fixed (all Phase 19 P1s; all Phase 20 wave-1/wave-2 finds incl. 7 P1s in wave 1 and 4 P1s in wave 2). 1 partially fixed (D-19-6, documented decision). 22 open: 2 hygiene P3s (D-20-65 E2E identity-row leakage, D-19-35 token tables lack a user FK — both triaged at the 20.8 gate) and the 20 dossier-transcribed rows (D-21-1..10, D-22-1..10) scheduled to Phases 21/22, of which D-21-1, D-21-6, D-21-10, D-22-8, D-22-9 are already in repair by the current cross-phase wave."
+    "note": "Zero P0. 51 fixed incl. all wave-3 targets (D-21-1/6/10, D-22-8/9). 1 partial (D-19-6). 20 open: 15 dossier rows scheduled to Phases 21/22, and 5 P3 hygiene items (D-20-65 E2E identity leakage, D-19-35 token-table FKs, D-20-80 year-backfill repair-ready, D-21-11 filter accessible names -> 21.3, D-22-20 dual-dialog naming -> 22.6). Production verification of Phase 20 behavioral fixes remains gated on the 20.8 canary."
   },
   "phases": [
     {
@@ -488,7 +488,7 @@
       "number": 20,
       "title": "Library Integrity, File Lifecycle, Processing Reliability, and Backend Repair",
       "state": "in_progress",
-      "summary": "Waves 1-2 complete (20.1-20.6 all delivered and committed); 20.7 in flight; 20.8 gate remains.",
+      "summary": "20.1-20.7 all complete and committed; only the 20.8 gate remains (production canary, confirmed_at DDL, hygiene triage, tag).",
       "confirmation": "In progress under the owner's standing 2026-07-22 program authorization; production migration/canary reserved for the 20.8 gate.",
       "evidence": [
         "Wave 1 independent verification over the combined tree: pnpm -r typecheck clean, web lint clean, 392 workspace unit tests green (63 worker incl. 25 new reprocess/recovery/budget tests; 8 new @ice/deletion), production build clean, focused E2E 47/47 (library 26, trash 9, work-status 8, security 2, rag 2).",
@@ -542,9 +542,9 @@
         {
           "id": "20.7",
           "title": "Cross-surface reference consistency",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "In flight (sonnet): packages/consistency deterministic checks + transactional repair across citation/Library/graph/annotation/roadmap/RAG references, report mode vs repair mode, red-first DB-integration tests."
+          "summary": "@ice/consistency: 9 deterministic checks (62 pure tests) + worker snapshot/transactional-idempotent applier/report-or-repair script (7 integration tests incl. rollback + never-guess proofs). Local report run: 0 critical/0 warning; 55 info-level year backfills repair-ready (D-20-80, gate work). Commit 3ba321e."
         },
         {
           "id": "20.8",
@@ -560,7 +560,7 @@
       "number": 21,
       "title": "Visualization Repair: Scaling, Relation Semantics, Focus, Navigation, and Graph Integrity",
       "state": "in_progress",
-      "summary": "Shared typed graph payload, complete relation-bearing data connection, working relation filters, camera-aware label/node scaling, edge relation labels, one-hop selection focus, and navigation controls.",
+      "summary": "21.1 complete (typed contract, D-21-1/10 fixed) and D-21-6 fixed; 21.2-21.6 remain per the dossier.",
       "confirmation": "Started early under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-21-visualization-audit.md.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-21-1..10 with file:line evidence; confirms the 3D scene and accessible table already share one filterGraphData() output.",
@@ -570,9 +570,9 @@
         {
           "id": "21.1",
           "title": "Typed graph data contract",
-          "state": "in_progress",
+          "state": "complete",
           "model": "opus",
-          "summary": "In flight (opus): formalize the shared typed GraphNode/GraphLink contract (associatedWorkIds, directed, navigable destination, complete edgeFamilyFor vocabulary), all four consumers on it; fixes D-21-1 (edge-level relation filtering) and D-21-10 (uploaded-work anchor visibility) red-first."
+          "summary": "Shared typed GraphNode/GraphLink contract (associatedWorkIds, directed, navigable destinations, complete edgeFamilyFor) consumed by all four surfaces; D-21-1 (edge-level relation filtering) and D-21-10 (uploaded-anchor default visibility) fixed red-first; graph.spec.ts 14->18. Commit 3b8374d. D-21-6 fixed separately (74f4aa2)."
         },
         {
           "id": "21.2",
@@ -616,7 +616,7 @@
       "number": 22,
       "title": "Reader, Annotations, Roadmap, Global RAG Sidebar, and Site-Wide Experience Completion",
       "state": "in_progress",
-      "summary": "Bring authenticated Reader/Annotations/Roadmap to visual parity with the protected landing depictions, ship an expandable global Ask Library sidebar, and apply a coherent site-wide motion/visual system.",
+      "summary": "22.1 and 22.5 complete; 22.2-22.4 (parity via the shared primitives) and 22.6 (motion/consistency incl. the owner's progressive-disclosure and no-AI-language directives) remain.",
       "confirmation": "Started early under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-22-parity-audit.md.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-22-1..10; Heidegger/Vico acceptance cases confirmed still passing 26/26; RagChatPanel confirmed presentation-agnostic (the global-sidebar hard part already exists)."
@@ -625,9 +625,9 @@
         {
           "id": "22.1",
           "title": "Shared primitives without landing drift",
-          "state": "in_progress",
+          "state": "complete",
           "model": "opus",
-          "summary": "In flight (opus): extract reader/annotation/roadmap presentation primitives with landing pixel-stability proven via the documented Docker Playwright baseline run before any CI wiring."
+          "summary": "Shared annotation/roadmap/typography primitives extracted with landing pixel-stability proven 3x via the official Playwright Docker image (4/4 baselines unchanged); landing-contract.spec.ts now a running CI gate. Commit 7b34c57."
         },
         {
           "id": "22.2",
@@ -653,9 +653,9 @@
         {
           "id": "22.5",
           "title": "Global RAG sidebar",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "In flight (sonnet): expandable desktop sidebar + mobile sheet on all authenticated routes reusing RagChatPanel/services; fixes D-22-8 (no global entry point) and D-22-9 (drawer Escape/focus lifecycle) red-first; /ask-library and the Reader drawer stay."
+          "summary": "Global Ask Library sidebar (desktop + mobile sheet) on every authenticated route reusing RagChatPanel/services; D-22-8 and D-22-9 fixed to the established dialog standard; /ask-library and Reader drawer retained; D-22-20 recorded open P3. Commit 546820e."
         },
         {
           "id": "22.6",
