@@ -83,7 +83,7 @@ export default async function DashboardPage() {
 
       <div className="flex flex-wrap gap-2">
         <Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
-          Your works
+          Uploaded works
         </Link>
         <Link href="/library" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Library

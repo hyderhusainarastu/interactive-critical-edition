@@ -289,7 +289,7 @@ export default function UploadPage() {
             ))}
           </ol>
           {!submitting && completedCount === batchItems.length && (
-            <p className="mt-3 text-sm text-[var(--color-text-muted)]"><Link href="/works" className="underline">View your works</Link> to follow processing progress.</p>
+            <p className="mt-3 text-sm text-[var(--color-text-muted)]"><Link href="/works" className="underline">View uploaded works</Link> to follow processing progress.</p>
           )}
         </section>
       )}

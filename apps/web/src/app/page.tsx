@@ -179,7 +179,7 @@ function GraphShowcase() {
       <figure className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
         <GraphSketch />
         <figcaption className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-muted)]">
-          <Legend color="--color-accent-ink" label="Your work" />
+          <Legend color="--color-accent-ink" label="Uploaded work" />
           <Legend color="--color-accent-green" label="Read" />
           <Legend color="--color-accent-umber" label="Unread" />
           <Legend color="--color-accent-burgundy" label="Missing" />

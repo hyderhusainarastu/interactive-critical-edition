@@ -677,5 +677,27 @@ test.describe("Library (Phase 9.5)", () => {
 
       await deleteTestUser(email);
     });
+
+    test("uploaded works page uses consistent 'Uploaded works' terminology (plan §20.2)", async ({ page }) => {
+      const email = `e2e-library-terminology-${Date.now()}@example.com`;
+      const userId = await createVerifiedTestUser(email, PASSWORD);
+      const { workId } = await seedWorkWithLibraryItem(userId, { resourceTitle: "Terminology Test Item" });
+      // Mark user as onboarded so /works doesn't redirect to /welcome
+      await db.update(users).set({ preferences: { onboardedAt: new Date().toISOString() } }).where(eq(users.id, userId));
+
+      await loginAs(page, email);
+
+      // The Works page should have "Uploaded works" as the title
+      await page.goto("/works");
+      await expect(page.getByRole("heading")).toContainText("Uploaded works");
+
+      // Check Library page focuses on uploaded works with consistent terminology
+      await page.goto(`/library?focus=${workId}`);
+      const content = page.locator("#main-content");
+      // The focus message should reference consistent terminology
+      await expect(content).toContainText(/uploaded work|Uploaded work/i);
+
+      await deleteTestUser(email);
+    });
   });
 });

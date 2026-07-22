@@ -111,7 +111,7 @@ export function TrashView() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
       <PageHeader title="Trash" description="Restore a work within 30 days before its reader data, analysis, and uploaded file are permanently deleted." actions={<Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
-          Your works
+          Uploaded works
         </Link>} />
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}

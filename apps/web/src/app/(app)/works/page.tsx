@@ -35,7 +35,7 @@ export default async function WorksPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
       <PageHeader
-        title="Your works"
+        title="Uploaded works"
         description="Your uploaded source files and their current processing state."
         actions={<>
           <Link

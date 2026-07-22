@@ -250,4 +250,15 @@ test.describe("Visualization graph", () => {
     await expect(pinned.getByLabel("Pinned first work")).toBeChecked();
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
   });
+
+  test("state legend displays 'Uploaded work' label (plan §20.2)", async ({ page }) => {
+    const { workId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+
+    // The state legend on the graph page should include "Uploaded work" as a label
+    // for the primary state (uploaded works). Use first() to avoid strict mode issues.
+    await expect(page.getByText("Uploaded work").first()).toBeVisible();
+  });
 });

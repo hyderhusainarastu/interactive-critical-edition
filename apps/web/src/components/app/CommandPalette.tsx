@@ -105,14 +105,14 @@ export function CommandPalette({ items }: { items: NavigationItem[] }) {
           ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search pages and your works…"
+          placeholder="Search pages and uploaded works…"
           className="w-full border-b border-[var(--color-border)] bg-transparent px-4 py-3 text-base outline-none"
         />
         <div className="max-h-[min(65vh,34rem)] overflow-y-auto p-2">
           {visibleNavigation.length > 0 && <PaletteGroup label="Navigate">
             {visibleNavigation.map((item) => <PaletteLink key={item.href} href={item.href} onSelect={() => close(false)}>{item.label}{item.shortcut && <kbd>{item.shortcut}</kbd>}</PaletteLink>)}
           </PaletteGroup>}
-          {visibleWorks.length > 0 && <PaletteGroup label="Your works">
+          {visibleWorks.length > 0 && <PaletteGroup label="Uploaded works">
             {visibleWorks.map((work) => <PaletteLink key={work.id} href={`/works/${work.id}`} onSelect={() => close(false)}><span>{work.title}</span>{work.authorName && <span className="text-xs text-[var(--color-text-muted)]">{work.authorName}</span>}</PaletteLink>)}
           </PaletteGroup>}
           {visibleNavigation.length === 0 && visibleWorks.length === 0 && <p className="px-3 py-6 text-sm text-[var(--color-text-muted)]">No matching page or work.</p>}

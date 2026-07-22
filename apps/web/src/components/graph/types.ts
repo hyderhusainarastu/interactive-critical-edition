@@ -55,7 +55,7 @@ export interface GraphData {
 // State → palette token + human label. Color is never the only signal —
 // the table fallback and the node labels carry the same meaning (plan §20).
 export const STATE_META: Record<NodeState, { label: string; colorVar: string }> = {
-  primary: { label: "Your work", colorVar: "--color-accent-ink" },
+  primary: { label: "Uploaded work", colorVar: "--color-accent-ink" },
   read: { label: "Read", colorVar: "--color-accent-green" },
   reading: { label: "Reading", colorVar: "--color-highlight" },
   // Was "In library, unread" — accurate for reference nodes, but concept
