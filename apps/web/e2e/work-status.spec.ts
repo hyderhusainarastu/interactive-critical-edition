@@ -292,22 +292,17 @@ test.describe("Work status controls (Phase 19)", () => {
   });
 
   /**
-   * Phase 19.5 user-journey item: "metadata-only work open + absence of
-   * source-text attach." A Library item recommended for one of the reader's
-   * own uploads (a `learning_resource`, seeded the same way `library.spec.ts`
-   * does) has no `document`/`work` of its own — there is no per-resource
-   * detail route at all today (only the `/library` list row itself), and
-   * `LibraryRow` in `apps/web/src/app/(app)/library/LibraryView.tsx` renders
-   * only a plain title (or an external link when `item.url` is set),
-   * metadata, recommended-for chips back to the OWNING work, and a
-   * reading-status control — no "Upload source text"/attach affordance
-   * anywhere. This is expected and correct for the current phase (that
-   * feature is planned for Phase 20.4); this test documents the
-   * reproduction as evidence rather than treating the absence as a defect.
+   * Phase 20.4: metadata-only Library item detail page with source-text
+   * upload. A Library item recommended for one of the reader's own uploads
+   * (a `learning_resource`, seeded the same way `library.spec.ts` does) has
+   * no `document`/`work` of its own. The item's title in the Library list
+   * is a link to `/library/[resourceId]`, where the detail page offers
+   * "Upload source text" for exactly this case. This test verifies the
+   * affordance is both reachable and present.
    */
-  test("a metadata-only Library item has no source-text-upload affordance (evidence for Phase 20.4, not a defect)", async ({ page }) => {
-    await seedWorkWithLibraryItem(userId, {
-      title: "Owning work for metadata-only evidence",
+  test("a metadata-only Library item title links to its detail page offering source-text upload (Phase 20.4)", async ({ page }) => {
+    const { resourceId } = await seedWorkWithLibraryItem(userId, {
+      title: "Owning work for metadata-only affordance",
       resourceTitle: "Metadata-only companion text",
     });
     // Sanity: the recommended resource has no document/owned work of its own —
@@ -325,10 +320,13 @@ test.describe("Work status controls (Phase 19)", () => {
 
     const row = page.locator("[data-library-item]").filter({ hasText: "Metadata-only companion text" }).first();
     await expect(row).toBeVisible();
-    // Title renders as plain text, not a link, since no url/detail route exists.
-    await expect(row.getByRole("link", { name: "Metadata-only companion text" })).toHaveCount(0);
-    await expect(row.getByRole("button", { name: /upload/i })).toHaveCount(0);
-    await expect(row.getByRole("link", { name: /upload/i })).toHaveCount(0);
-    await expect(page.getByText(/upload source text/i)).toHaveCount(0);
+    // Title renders as a link to the detail page (not an external URL).
+    const titleLink = row.getByRole("link", { name: "Metadata-only companion text" });
+    await expect(titleLink).toHaveCount(1);
+    await expect(titleLink).toHaveAttribute("href", `/library/${resourceId}`);
+
+    // Follow the link to the detail page and verify "Upload source text" is present.
+    await titleLink.click();
+    await expect(page.getByRole("heading", { name: "Upload source text" })).toBeVisible();
   });
 });
