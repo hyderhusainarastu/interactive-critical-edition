@@ -96,8 +96,23 @@ jobs:
         # the Phase 20.5 work-status reprocess tests that drive the real
         # route. Scoped to this step only; the unit-test step keeps the
         # unset-default behavior its config tests exercise explicitly.
+        #
+        # PHASE_18_RAG_ENABLED (D-20-55): trash.spec.ts's Phase 20.3 "trashing
+        # a work removes its chunks from RAG retrieval" test drives the real
+        # /api/rag/conversations HTTP surface directly. Without this flag
+        # phase18RagEnabled() defaults false (see packages/config/src/
+        # phase18.ts) and that route 404s before the test's own assertions
+        # ever run. No AI key is configured in CI, so the deterministic
+        # zero-cost fallback answers every question — this stays fully
+        # deterministic, it just needed the gate open. This does not enable
+        # any Phase 12 flag (writer/library-identity/interactive-reader/
+        # cross-library-graph): rag.spec.ts and writer.spec.ts remain
+        # excluded from the CI-safe spec list below and continue to
+        # self-skip via their own `test.skip(process.env.PHASE_..._ENABLED
+        # !== "true", ...)` guards.
         env:
           ANALYSIS_PIPELINE: v2
+          PHASE_18_RAG_ENABLED: "true"
         run: |
           pnpm --filter web start &
           SERVER_PID=$!
