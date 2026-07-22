@@ -18,6 +18,7 @@ import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
 import { EditionReader, type EditionPayload } from "./EditionReader";
 import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
+import { RagChatPanel } from "./RagChatPanel";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -38,12 +39,14 @@ export function ReaderShell({
   initialReaderLevel = "all",
   enablePhase12Identity = false,
   enablePhase12Reader = false,
+  enablePhase18Rag = false,
 }: {
   workId: string;
   embedded?: boolean;
   initialReaderLevel?: ReaderLevelFilter;
   enablePhase12Identity?: boolean;
   enablePhase12Reader?: boolean;
+  enablePhase18Rag?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -61,6 +64,7 @@ export function ReaderShell({
   const [editionFilters, setEditionFilters] = useState<EditionReaderFilters>({ annotationType: "all", relationship: "all", provenance: "all", apparatusKind: "all" });
   const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
   const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(null);
+  const [showRagChat, setShowRagChat] = useState(false);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const currentPositionRef = useRef<Position | null>(null);
@@ -387,6 +391,7 @@ export function ReaderShell({
             <button type="button" onClick={() => setShowNotes((v) => !v)}>
               {showNotes ? "Hide notes" : "Notes"}
             </button>
+            {enablePhase18Rag && !embedded && <button type="button" onClick={() => setShowRagChat(true)}>Ask Library</button>}
           </div>}
 
           <div
@@ -442,7 +447,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} />
           </div>
         )}
       </div>
@@ -509,6 +514,8 @@ export function ReaderShell({
           </div>
         </div>
       )}
+
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel workId={workId} onClose={() => setShowRagChat(false)} />}
     </div>
   );
 }

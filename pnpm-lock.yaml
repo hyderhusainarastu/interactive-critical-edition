@@ -34,6 +34,9 @@ importers:
       '@ice/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@ice/rag':
+        specifier: workspace:*
+        version: link:../../packages/rag
       '@ice/research':
         specifier: workspace:*
         version: link:../../packages/research
@@ -134,6 +137,9 @@ importers:
       '@ice/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+      '@ice/rag':
+        specifier: workspace:*
+        version: link:../../packages/rag
       '@ice/research':
         specifier: workspace:*
         version: link:../../packages/research
@@ -272,6 +278,28 @@ importers:
         version: 5.9.3
 
   packages/phase-lifecycle:
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.13.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)(terser@5.49.0)
+
+  packages/rag:
+    dependencies:
+      '@ice/ai-adapters':
+        specifier: workspace:*
+        version: link:../ai-adapters
+      '@ice/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.44.0
+        version: 0.44.7(@opentelemetry/api@1.9.1)(pg@8.22.0)(postgres@3.4.9)
     devDependencies:
       '@types/node':
         specifier: ^24

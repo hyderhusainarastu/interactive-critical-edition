@@ -165,6 +165,7 @@ export async function seedPublishedEdition(userId: string): Promise<{
   workId: string;
   documentId: string;
   runId: string;
+  bodyBlockId: string;
 }> {
   const [work] = await db
     .insert(works)
@@ -353,7 +354,7 @@ export async function seedPublishedEdition(userId: string): Promise<{
     { runId: run.id, provider: "mastodon", status: "disabled" as const, queries: [], resultCount: 0, inspectionDepth: 0, latencyMs: 0 },
   ]);
 
-  return { workId: work.id, documentId: doc.id, runId: run.id };
+  return { workId: work.id, documentId: doc.id, runId: run.id, bodyBlockId: bodyBlock.id };
 }
 
 /**

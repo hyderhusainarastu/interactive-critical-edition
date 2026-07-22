@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { phase12FeatureEnabled } from "@ice/config";
+import { phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
 import { getUserReaderLevel } from "@/lib/readerLevel";
 import { getOwnedDocument } from "@/lib/works";
@@ -29,6 +29,7 @@ export default async function ReaderPage({
       // it no longer hides source/processed labels or author apparatus behind
       // the retired Phase 12 rollout switch.
       enablePhase12Reader
+      enablePhase18Rag={phase18RagEnabled()}
     />
   );
 }

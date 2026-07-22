@@ -1,7 +1,10 @@
-import { isEditionPipeline, phase12FeatureEnabled, pipelineAtLeast, pipelineVersion, type PipelineVersion } from "@ice/config";
+import { isEditionPipeline, phase12FeatureEnabled, phase18RagEnabled, pipelineAtLeast, pipelineVersion, type PipelineVersion } from "@ice/config";
 import { createHash } from "node:crypto";
+import { OpenAIEmbeddingsClient, estimateEmbeddingCostUsd } from "@ice/ai-adapters";
+import { indexEligibleRagSources } from "@ice/rag";
 import {
   type AnalyzeWorkJob,
+  aiUsageLogs,
   type ResolveCitationMetadataJob,
   db,
   documents,
@@ -33,6 +36,10 @@ import "./sentry";
 
 function sha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
+}
+
+function phase18EmbeddingsEnabled(): boolean {
+  return ["1", "true", "yes", "on"].includes((process.env.PHASE_18_RAG_EMBEDDINGS_ENABLED ?? "").trim().toLowerCase());
 }
 
 /** v4 cannot reach a deployment until its independently controlled flag is on. */
@@ -299,6 +306,45 @@ async function handleEditionExtraction(documentId: string) {
       detectedAuthor: parsed.detectedAuthor,
       autoReady,
     });
+    // Phase 18's index is deliberately post-publication and independently
+    // flag-gated. A failed or unavailable embedding provider cannot alter the
+    // reader pipeline: durable lexical chunks remain valid, and the flag is
+    // off outside explicitly configured local acceptance environments.
+    if (phase18RagEnabled()) {
+      const embeddingClient = new OpenAIEmbeddingsClient();
+      const embeddingModel = process.env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
+      const embeddingCapUsd = 0.01;
+      let reservedEmbeddingUsd = 0;
+      const indexed = await indexEligibleRagSources({
+        userId: doc.userId,
+        workId: doc.workId,
+        documentId,
+        processingRunId: run.id,
+        embed: phase18EmbeddingsEnabled() && embeddingClient.available
+          ? async (text) => {
+              const estimate = estimateEmbeddingCostUsd(embeddingModel, Math.ceil(text.length / 4));
+              if (reservedEmbeddingUsd + estimate > embeddingCapUsd) throw new Error("Phase 18 automatic embedding cap reached");
+              const embedded = await embeddingClient.embed(text, embeddingModel);
+              reservedEmbeddingUsd += estimateEmbeddingCostUsd(embedded.model, embedded.inputTokens);
+              return embedded;
+            }
+          : undefined,
+      });
+      if (indexed.embeddingUsage.length) {
+        await db.insert(aiUsageLogs).values(indexed.embeddingUsage.map((usage) => ({
+          documentId,
+          runId: run.id,
+          task: "rag_chunk_embedding",
+          stage: "socratic-rag-index",
+          provider: "openai",
+          model: usage.model,
+          promptTokens: usage.inputTokens,
+          completionTokens: 0,
+          estimatedCostUsd: usage.estimatedCostUsd,
+        })));
+      }
+      console.log(`[worker] Phase 18 indexed ${indexed.chunks} eligible RAG chunk(s) for document ${documentId}${indexed.truncated ? " (automatic cap reached)" : ""}`);
+    }
     // Cross-library work is an independent, release-gated post-publication
     // step. A v4 run creates at most one automatic request; its own worker
     // enforces 20 candidates and $0.25, so uploading never silently fans out

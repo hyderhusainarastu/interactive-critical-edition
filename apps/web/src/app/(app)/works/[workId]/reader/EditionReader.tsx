@@ -631,7 +631,7 @@ export function EditionReader({
             </details>
           ));
           const margins = noteForBlock.slice(0, 2).map((note) => <MarginNote key={`margin-${note.id}`} note={note} resource={note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined} />);
-          const common = { ref: register, onMouseUp: (event: React.MouseEvent<HTMLElement>) => showSelectionToolbar(block.id, event.currentTarget) };
+          const common = { id: `block-${block.id}`, ref: register, onMouseUp: (event: React.MouseEvent<HTMLElement>) => showSelectionToolbar(block.id, event.currentTarget) };
           const pageStart = index === 0 || orderedBlocks.filter((candidate) => !["footnote", "endnote", "bibliography", "reference"].includes(candidate.kind))[index - 1]?.pageIndex !== block.pageIndex;
           return (
             <div key={block.id} className="relative" data-page-index={block.pageIndex}>

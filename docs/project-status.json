@@ -9,9 +9,9 @@
   "updated": "2026-07-21",
   "current": {
     "phase": 18,
-    "headline": "Phase 18 in progress — Library-grounded Socratic RAG chat",
-    "summary": "Phase 17 is closed after a user-created fresh session manually replaced the host context from its compact handoff. This is recorded as a manual host-level replacement, not an automatic lifecycle-adapter action. Phase 18 now implements owner-scoped eligible chunks, retrieval-first cited dialogue, and local acceptance only.",
-    "nextAction": "Build and locally verify eligible-chunk indexing, authenticated streamed conversations, citation-linked retrieval-first answers, and injection/isolation/deletion/cost/latency controls. Do not run a production migration, deployment, or paid canary without explicit approval."
+    "headline": "Phase 18 local acceptance complete — production action gated",
+    "summary": "The owner-scoped RAG index, persistent streamed conversations, retrieval-first cited answers, and responsive reader chat pass local acceptance. The feature, provider-answer path, and automatic embedding path all fail closed by default; no production migration, deployment, or paid canary has been performed.",
+    "nextAction": "Await explicit owner direction before any production migration, feature enablement, deployment, or paid provider verification. Keep Phase 18's local implementation and licensing boundary intact."
   },
   "phases": [
     {
@@ -327,33 +327,38 @@
     {
       "number": 18,
       "title": "Library-grounded Socratic RAG chat",
-      "state": "in_progress",
-      "summary": "Index eligible owner-scoped uploaded and open-access content, then add persistent retrieval-first Socratic conversations with citations that link back to reader anchors.",
-      "confirmation": "Phase 17's compact handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. Phase 18 remains local-only until separately authorized for any production action.",
+      "state": "awaiting_confirmation",
+      "summary": "Owner-scoped eligible source chunks, persistent retrieval-first Socratic conversations, citation-linked reader answers, and responsive chat are locally accepted; production remains deliberately disabled and approval-gated.",
+      "confirmation": "Phase 17's compact handoff was read in a user-created fresh session and recorded as a manual host-level replacement, not as an automatic adapter action. Phase 18 local acceptance is complete, but any production migration, enablement, deployment, or paid provider verification requires explicit owner approval.",
+      "evidence": [
+        "Additive local migration 0029 creates owner-scoped chunks, persistent conversations/messages, and cascading answer-citation links; it was applied only to the local development database.",
+        "Config (16), RAG primitives (7), and local worker index integration (3) tests pass; integration coverage proves explicit-license eligibility, owner isolation, and deletion propagation.",
+        "A locally flag-enabled Chromium flow passed for streamed cited answers, reader-anchor links, and explicit not-found behavior; live-answer and automatic-embedding provider paths remained disabled."
+      ],
       "subphases": [
         {
           "id": "18.1",
           "title": "Eligible source chunks and index lifecycle",
-          "state": "in_progress",
-          "summary": "Index owner-scoped eligible upload and explicitly licensed open-access chunks with stable anchors, content hashes, embeddings, and deletion propagation."
+          "state": "complete",
+          "summary": "Added owner-scoped uploaded and explicitly licensed open-access chunks with stable anchors, SHA-256 hashes, optional bounded embeddings, and database deletion propagation."
         },
         {
           "id": "18.2",
           "title": "Persistent retrieval-first conversations",
-          "state": "planned",
-          "summary": "Add authenticated persistent streamed conversations that retrieve Library evidence before generating every substantive response."
+          "state": "complete",
+          "summary": "Added authenticated persistent conversations and server-sent response events that retrieve owner-scoped evidence before every substantive answer."
         },
         {
           "id": "18.3",
           "title": "Cited Socratic workspace",
-          "state": "planned",
-          "summary": "Add a desktop sidebar and mobile sheet with reader-anchor citations, explicit not-found responses, and the provider licensing boundary preserved."
+          "state": "complete",
+          "summary": "Added a desktop side panel/mobile sheet with reader-anchor citations and explicit not-found responses; locally authored Socratic prompting uses no restricted SocraticLM data or weights."
         },
         {
           "id": "18.4",
           "title": "Local acceptance and governed closeout",
-          "state": "planned",
-          "summary": "Verify retrieval grounding, prompt-injection resistance, owner isolation, deletion, latency, and cost caps before any separately approved production action."
+          "state": "complete",
+          "summary": "Local tests cover retrieval grounding, injection handling, owner isolation, deletion cascades, latency/cost caps, streamed UI behavior, and a production-disabled build."
         }
       ]
     }

@@ -9,9 +9,9 @@
     "docs/project-status.json"
   ],
   "handoff": "docs/handoffs/phase-17-to-18.md",
-  "verification": "Phase 17 local acceptance complete; manual host-level Phase 18 context replacement recorded.",
+  "verification": "Phase 18 local acceptance complete: owner-scoped chunk indexing, persistent cited chat, and local acceptance checks passed.",
   "hostAdapter": "manual-user-created-host-session",
-  "closeoutStatus": "phase_17_closed_manual_host_replacement",
+  "closeoutStatus": "phase_18_local_acceptance_complete_production_gated",
   "contextReplaced": true,
   "manualReplacement": {
     "authority": "user-created new session",
@@ -19,5 +19,5 @@
     "automaticAdapterAction": false,
     "note": "The user explicitly supplied a fresh session for Phase 18. This records a manual host-level replacement; no automatic adapter action, compaction claim, or simulated lifecycle action occurred."
   },
-  "note": "Phase 18 began only after the user-created fresh session read the compact handoff and required records. Future phase closeout remains governed by the host-adapter contract unless the user manually provides a new host context again."
+  "note": "Phase 18 began only after the user-created fresh session read the compact handoff and required records. Local acceptance is complete; the schema, feature gate, provider-answer path, and automatic embeddings remain production-disabled until separately approved. Future phase closeout remains governed by the host-adapter contract unless the user manually provides a new host context again."
 }

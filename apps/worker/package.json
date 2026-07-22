@@ -17,6 +17,7 @@
     "@ice/ingestion": "workspace:*",
     "@ice/observability": "workspace:*",
     "@ice/research": "workspace:*",
+    "@ice/rag": "workspace:*",
     "@sentry/node": "^10.67.0",
     "drizzle-orm": "^0.44.0"
   },

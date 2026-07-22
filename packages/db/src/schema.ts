@@ -883,6 +883,126 @@ export const textBlocks = pgTable(
 );
 
 /**
+ * Phase 18: owner-scoped retrieval chunks. Uploaded source blocks and
+ * explicitly licensed open-access research content are deliberately kept in
+ * one narrow index with a durable owner id, a stable source key, and a
+ * source-location anchor. Neither provider metadata nor unlicensed text is
+ * eligible for this table.
+ */
+export const ragChunkSourceEnum = pgEnum("rag_chunk_source", ["uploaded", "open_access"]);
+
+export const ragChunks = pgTable(
+  "rag_chunk",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workId: uuid("work_id")
+      .notNull()
+      .references(() => works.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    processingRunId: uuid("processing_run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "set null" }),
+    researchResourceContentId: uuid("research_resource_content_id").references((): AnyPgColumn => researchResourceContents.id, { onDelete: "cascade" }),
+    sourceType: ragChunkSourceEnum("source_type").notNull(),
+    /** Stable per-block/content key; makes reindexing and stale-row deletion deterministic. */
+    sourceKey: text("source_key").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    /** Reader/source URL and page/block offsets; never a fabricated locator. */
+    anchor: jsonb("anchor").notNull(),
+    sourceUrl: text("source_url"),
+    license: text("license"),
+    embedding: jsonb("embedding"),
+    embeddingModel: text("embedding_model"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("rag_chunk_user_idx").on(t.userId),
+    index("rag_chunk_document_idx").on(t.documentId),
+    index("rag_chunk_run_idx").on(t.processingRunId),
+    index("rag_chunk_resource_content_idx").on(t.researchResourceContentId),
+    uniqueIndex("rag_chunk_owner_source_hash_index_unique").on(t.userId, t.sourceKey, t.contentHash, t.chunkIndex),
+    check(
+      "rag_chunk_exactly_one_eligible_source",
+      sql`(${t.sourceType} = 'uploaded' and ${t.textBlockId} is not null and ${t.researchResourceContentId} is null) or (${t.sourceType} = 'open_access' and ${t.researchResourceContentId} is not null and ${t.textBlockId} is null)`,
+    ),
+  ],
+);
+
+export const ragConversationStatusEnum = pgEnum("rag_conversation_status", ["active", "archived"]);
+export const ragMessageRoleEnum = pgEnum("rag_message_role", ["user", "assistant"]);
+
+/** Persistent, owner-scoped conversations. Context work is optional guidance
+ * for the UI only; retrieval remains explicitly scoped to the whole owner's
+ * eligible Library rather than silently inventing a cross-user corpus. */
+export const ragConversations = pgTable(
+  "rag_conversation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    contextWorkId: uuid("context_work_id").references(() => works.id, { onDelete: "set null" }),
+    title: text("title").notNull().default("New conversation"),
+    status: ragConversationStatusEnum("status").notNull().default("active"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("rag_conversation_user_updated_idx").on(t.userId, t.updatedAt)],
+);
+
+export const ragMessages = pgTable(
+  "rag_message",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => ragConversations.id, { onDelete: "cascade" }),
+    role: ragMessageRoleEnum("role").notNull(),
+    content: text("content").notNull(),
+    model: text("model"),
+    provider: text("provider"),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    latencyMs: integer("latency_ms"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("rag_message_conversation_created_idx").on(t.conversationId, t.createdAt)],
+);
+
+/** Each answer link is a foreign key to the exact retrieved chunk. If a work,
+ * run, or licensed source is deleted, its chunks and answer citations are
+ * deleted by the same cascade rather than leaving an orphaned location. */
+export const ragMessageCitations = pgTable(
+  "rag_message_citation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => ragMessages.id, { onDelete: "cascade" }),
+    chunkId: uuid("chunk_id")
+      .notNull()
+      .references(() => ragChunks.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("rag_message_citation_message_chunk_unique").on(t.messageId, t.chunkId),
+    uniqueIndex("rag_message_citation_message_ordinal_unique").on(t.messageId, t.ordinal),
+    index("rag_message_citation_chunk_idx").on(t.chunkId),
+  ],
+);
+
+/**
  * Authorial footnotes/endnotes, extracted structurally and page-anchored.
  * `kind` distinguishes authorial (from the source document — NEVER to be
  * replaced by generated notes) from any future editorial kind. `source`
