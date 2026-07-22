@@ -9,9 +9,9 @@
   "updated": "2026-07-22",
   "current": {
     "phase": 19,
-    "headline": "Phase 19 in progress — incident closure, baseline capture, accessibility sweep, and signed-upload integrity repair documented",
-    "summary": "Phase 18 (Ask Library) remains production-complete. Phase 19 has correlated and repaired the known worker failures, captured the landing contract, catalogued routes, added authenticated-route axe coverage, and closed a signed-upload quota-bypass/data-integrity flaw. Read-only production data checks found a small, explicit owner-authorized cleanup hold: eight unreferenced Storage objects and seven catalog rows. The literal control inventory, broader journey pass, VoiceOver, cleanup recheck, and owner confirmation remain open.",
-    "nextAction": "Complete the per-control interaction inventory and broader journeys, keep manual VoiceOver recorded as an agent limitation, obtain authorization to delete and recheck D-19-11's exact orphan set, then request owner confirmation before Phase 20 production-affecting work begins."
+    "headline": "Phase 19 in progress — interaction inventory started; accessibility, incident, and signed-upload repairs documented",
+    "summary": "Phase 18 (Ask Library) remains production-complete. Phase 19 has correlated and repaired the known worker failures, captured the landing contract, catalogued routes, added authenticated-route axe coverage, closed a signed-upload quota-bypass/data-integrity flaw, and begun evidence-backed control interaction testing. Read-only production data checks found a small, explicit owner-authorized cleanup hold: eight unreferenced Storage objects and seven catalog rows. The remaining control/journey pass, VoiceOver, cleanup recheck, and owner confirmation remain open.",
+    "nextAction": "Extend the started per-control interaction inventory and broader journeys, keep manual VoiceOver recorded as an agent limitation, obtain authorization to delete and recheck D-19-11's exact orphan set, then request owner confirmation before Phase 20 production-affecting work begins."
   },
   "phases": [
     {
@@ -369,7 +369,7 @@
       "number": 19,
       "title": "Product-Wide Baseline, Contract Capture, and Defect Audit",
       "state": "in_progress",
-      "summary": "Diagnose reported Render server failures, establish frontend tooling (with documented substitutes for the unreachable Stitch MCP and unavailable Uncodixify plugin), freeze the landing-page visual contract, audit every route/control, and populate the Phase 19-23 defect register. Signed-upload byte-accounting is repaired; exact existing Storage/catalog cleanup is awaiting owner authorization.",
+      "summary": "Diagnose reported Render server failures, establish frontend tooling (with documented substitutes for the unreachable Stitch MCP and unavailable Uncodixify plugin), freeze the landing-page visual contract, audit every route/control, and populate the Phase 19-23 defect register. Interaction inventory is underway; signed-upload byte-accounting is repaired; exact existing Storage/catalog cleanup is awaiting owner authorization.",
       "confirmation": "Not yet requested. Owner confirmation is required before Phase 20 production-affecting work begins per the plan's own gate.",
       "evidence": [
         "Render deploy history (last 20 deploys, srv-d9dgiamrnols73ccpa10) shows no build_failed/update_failed/canceled deploy; no unresolved deploy-time failure exists.",
@@ -388,9 +388,10 @@
         "D-19-9: the documented local E2E command failed in a fresh shell because Playwright imported @ice/db before Next.js loaded gitignored env files. apps/web/package.json now uses Node 24 --env-file-if-exists for the local DB/web files, preserving CI's injected environment; the normal command now discovers/runs the local suites.",
         "D-19-10: direct signed uploads trusted the browser-declared size and excluded active staging rows from quota totals, so a caller could store mismatched bytes under an understated 500 MB reservation. Init now reserves every document row; completion reads Storage metadata, rejects/removes a mismatch before enqueueing, and releases an objectless reservation on attempted completion. The new manual-only upload-integrity.spec.ts passes all three real-Storage regressions; CI keeps deterministic dummy-Storage upload.spec.ts.",
         "D-19-11: read-only production checks found exact ledger parity (30 migrations), zero dangling graph endpoints, duplicate document paths, missing document/page-image objects, or stale jobs; they also found eight unreferenced documents-bucket objects (3,104,281 B) and seven unreferenced Google Books catalog rows. No production write was authorized; cleanup and anti-join recheck remain explicit owner action/Phase 20 work.",
-        "D-19-12: repeated Curriculum CI-safe E2E runs exposed a flaky global Route locator during Next streaming hydration: the visible selector and a transient hidden server segment both matched. Trace evidence showed no user-facing duplicate; scoping all five lookups to #main-content fixed the test. Post-fix, 20 runs pass with retries disabled."
+        "D-19-12: repeated Curriculum CI-safe E2E runs exposed a flaky global Route locator during Next streaming hydration: the visible selector and a transient hidden server segment both matched. Trace evidence showed no user-facing duplicate; scoping all five lookups to #main-content fixed the test. Post-fix, 20 runs pass with retries disabled.",
+        "D-19-13 through D-19-15: the first literal control-inventory tranche, documented in docs/audits/phase-19-interaction-inventory.md, reproduced and repaired three keyboard interaction failures: Writer's pointer-only sidebar resizer, command-palette focus escape/no restoration, and the non-modal mobile navigation overlay. New focused Writer/workspace-shell regressions pass 6/6 with web lint/typecheck; the inventory and broader journeys remain deliberately incomplete, and manual VoiceOver remains an explicit agent limitation."
       ],
-      "nextAction": "Remaining Phase 19 first actions: the per-control interaction inventory (full UI control audit, section 19.6), broader user-journey coverage beyond what existing specs exercise, manual VoiceOver recorded as an agent limitation, and owner-authorized D-19-11 cleanup/recheck; then request owner confirmation before Phase 20."
+      "nextAction": "Remaining Phase 19 first actions: extend the started per-control interaction inventory (full UI control audit, section 19.6), broader user-journey coverage beyond what existing specs exercise, manual VoiceOver recorded as an agent limitation, and owner-authorized D-19-11 cleanup/recheck; then request owner confirmation before Phase 20."
     },
     {
       "number": 20,

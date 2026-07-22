@@ -9,6 +9,10 @@ type Citation = { id: string; cslJson: unknown; source: string };
 type Source = { id: string; title: string; workId: string; workTitle: string; url: string | null; doi: string | null };
 type Revision = { id: string; revision: number; reason: string; createdAt: string };
 
+const MIN_SIDEBAR_WIDTH = 220;
+const MAX_SIDEBAR_WIDTH = 460;
+const SIDEBAR_WIDTH_STEP = 20;
+
 export function WriterEditor({ project, initialDocuments, initialCitations }: { project: { id: string; title: string }; initialDocuments: Document[]; initialCitations: Citation[] }) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [projectTitle, setProjectTitle] = useState(project.title);
@@ -83,11 +87,24 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     setText(proseMirrorToPlainText(document.content)); setStatus("Saved");
   }
   function insertCitation(citation: CslJson) { updateDraft(`${text}${text && !text.endsWith(" ") ? " " : ""}${mlaParenthetical(citation)} `); }
-  function startResize(event: React.MouseEvent) {
+  function boundedSidebarWidth(width: number) { return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)); }
+  function startResize(event: React.PointerEvent<HTMLDivElement>) {
     const startX = event.clientX; const initial = sidebarWidth;
-    const move = (moveEvent: MouseEvent) => setSidebarWidth(Math.min(460, Math.max(220, initial + moveEvent.clientX - startX)));
-    const stop = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", stop); };
-    window.addEventListener("mousemove", move); window.addEventListener("mouseup", stop);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => setSidebarWidth(boundedSidebarWidth(initial + moveEvent.clientX - startX));
+    const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", stop);
+  }
+  function resizeWithKeyboard(event: React.KeyboardEvent<HTMLDivElement>) {
+    let next: number | null = null;
+    if (event.key === "ArrowLeft") next = sidebarWidth - SIDEBAR_WIDTH_STEP;
+    if (event.key === "ArrowRight") next = sidebarWidth + SIDEBAR_WIDTH_STEP;
+    if (event.key === "Home") next = MIN_SIDEBAR_WIDTH;
+    if (event.key === "End") next = MAX_SIDEBAR_WIDTH;
+    if (next !== null) {
+      event.preventDefault();
+      setSidebarWidth(boundedSidebarWidth(next));
+    }
   }
   if (!active) return <p className="p-6">This project has no active documents.</p>;
   return (
@@ -98,7 +115,19 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
           <h2 className="font-medium">Library sources</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
           <ul className="mt-3 max-h-52 space-y-2 overflow-auto">{sources.map((source) => <li key={source.id} className="rounded border border-[var(--color-border)] p-2 text-sm"><strong className="block">{source.title}</strong><span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span><div className="mt-1 flex gap-2"><button type="button" className="underline" onClick={() => importCitation("library", "", source.id)}>Cite</button><Link className="underline" href={`/works/${source.workId}/reader`}>Read</Link></div></li>)}</ul>
           <div className="mt-5 border-t border-[var(--color-border)] pt-3"><h3 className="text-sm font-medium">Add citation</h3><div className="mt-2 flex gap-1"><select aria-label="Citation import format" value={importKind} onChange={(event) => setImportKind(event.target.value as typeof importKind)}><option value="doi">DOI</option><option value="isbn">ISBN</option><option value="title">Title</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select><button type="button" className="rounded border px-2 text-sm" onClick={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}>Add</button></div><textarea aria-label="Citation metadata" value={importValue} onChange={(event) => setImportValue(event.target.value)} className="mt-2 min-h-20 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm" placeholder="DOI, ISBN, title, BibTeX, or RIS" /></div>
-          <button type="button" aria-label="Resize Library source sidebar" onMouseDown={startResize} className="absolute right-0 top-0 hidden h-full w-2 cursor-col-resize lg:block" />
+          <div
+            role="separator"
+            aria-label="Resize Library source sidebar"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_SIDEBAR_WIDTH}
+            aria-valuemax={MAX_SIDEBAR_WIDTH}
+            aria-valuenow={sidebarWidth}
+            aria-valuetext={`${sidebarWidth} pixels wide`}
+            tabIndex={0}
+            onPointerDown={startResize}
+            onKeyDown={resizeWithKeyboard}
+            className="absolute right-0 top-0 hidden h-full w-2 cursor-col-resize lg:block focus-visible:bg-[var(--color-accent-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]"
+          />
         </aside>
         <main className="min-w-0 flex-1 p-4 sm:p-6"><div className="mx-auto max-w-3xl"><div className="mb-4 flex items-center gap-2"><select aria-label="Active document" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select><button type="button" className="text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button><button type="button" className="text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button><button type="button" className="text-sm underline" onClick={newDocument}>New document</button></div><input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" /><p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p><textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8" /></div></main>
         <aside className="w-full border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:w-80 lg:border-l lg:border-t-0" aria-label="Citations and revision recovery"><h2 className="font-medium">Citations</h2><ul className="mt-2 space-y-3">{sortMlaCitations(citationList).map((citation, index) => <li key={`${citationKey(citation)}-${index}`} className="text-sm"><button type="button" className="mr-1 underline" onClick={() => insertCitation(citation)}>Insert</button>{mlaWorksCited(citation)}</li>)}</ul><h2 className="mt-6 font-medium">Revision recovery</h2><ul className="mt-2 space-y-2 text-sm">{revisions.slice(0, 8).map((revision) => <li key={revision.id} className="flex items-center justify-between gap-2"><span>v{revision.revision} · {revision.reason}</span><button type="button" className="underline" onClick={() => restore(revision.id)}>Restore</button></li>)}</ul></aside>

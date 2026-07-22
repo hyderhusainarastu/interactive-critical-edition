@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface CommandWork { id: string; title: string; authorName: string | null }
 interface NavigationItem { href: string; label: string; shortcut?: string }
@@ -11,18 +11,38 @@ export function CommandPalette({ items }: { items: NavigationItem[] }) {
   const [query, setQuery] = useState("");
   const [works, setWorks] = useState<CommandWork[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  const close = useCallback((restoreFocus = true) => {
+    setOpen(false);
+    if (restoreFocus) window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
+        triggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setOpen(true);
       }
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape" && open) {
+        event.preventDefault();
+        close();
+      }
+    };
+    const onOpen = (event: Event) => {
+      const trigger = (event as CustomEvent<HTMLElement | undefined>).detail;
+      triggerRef.current = trigger instanceof HTMLElement ? trigger : document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setOpen(true);
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+    window.addEventListener("palimnote:open-command-palette", onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("palimnote:open-command-palette", onOpen);
+    };
+  }, [close, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -44,15 +64,40 @@ export function CommandPalette({ items }: { items: NavigationItem[] }) {
     [works, normalized],
   );
 
+  function trapFocus(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const focusable = [...dialog.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")]
+      .filter((element) => !element.hidden && element.getClientRects().length > 0);
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-black/35 p-4 sm:p-12" role="presentation" onMouseDown={() => setOpen(false)}>
+    <div className="fixed inset-0 z-50 bg-black/35 p-4 sm:p-12" role="presentation" onMouseDown={() => close()}>
       <section
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        tabIndex={-1}
         className="mx-auto max-w-xl overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={trapFocus}
       >
         <label className="sr-only" htmlFor="command-search">Search Palimnote</label>
         <input
@@ -65,10 +110,10 @@ export function CommandPalette({ items }: { items: NavigationItem[] }) {
         />
         <div className="max-h-[min(65vh,34rem)] overflow-y-auto p-2">
           {visibleNavigation.length > 0 && <PaletteGroup label="Navigate">
-            {visibleNavigation.map((item) => <PaletteLink key={item.href} href={item.href} onSelect={() => setOpen(false)}>{item.label}{item.shortcut && <kbd>{item.shortcut}</kbd>}</PaletteLink>)}
+            {visibleNavigation.map((item) => <PaletteLink key={item.href} href={item.href} onSelect={() => close(false)}>{item.label}{item.shortcut && <kbd>{item.shortcut}</kbd>}</PaletteLink>)}
           </PaletteGroup>}
           {visibleWorks.length > 0 && <PaletteGroup label="Your works">
-            {visibleWorks.map((work) => <PaletteLink key={work.id} href={`/works/${work.id}`} onSelect={() => setOpen(false)}><span>{work.title}</span>{work.authorName && <span className="text-xs text-[var(--color-text-muted)]">{work.authorName}</span>}</PaletteLink>)}
+            {visibleWorks.map((work) => <PaletteLink key={work.id} href={`/works/${work.id}`} onSelect={() => close(false)}><span>{work.title}</span>{work.authorName && <span className="text-xs text-[var(--color-text-muted)]">{work.authorName}</span>}</PaletteLink>)}
           </PaletteGroup>}
           {visibleNavigation.length === 0 && visibleWorks.length === 0 && <p className="px-3 py-6 text-sm text-[var(--color-text-muted)]">No matching page or work.</p>}
         </div>

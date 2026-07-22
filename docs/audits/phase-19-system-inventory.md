@@ -49,6 +49,6 @@ Full raw list captured via `find apps/web/src/app -iname route.ts`; grouped by o
 
 CI's "E2E (CI-safe specs)" step name and `docs/PROJECT-LOG.md`'s prose both describe an 11-spec CI-safe list; the actual `ci.yml` command matches that count exactly (verified above), so no drift found here — recorded as a confirmation, not a defect.
 
-## Deferred to a later Phase 19 pass
+## Interaction-inventory status
 
-A literal per-control interaction inventory (every button/link/tab/filter classified working/disabled/redundant/broken per §19.6) was not attempted in this pass — it requires exercising each authenticated surface interactively (user-journey audit, §19.5), which is the next piece of Phase 19 work, not a static-analysis task like this route inventory was. Recorded here rather than silently claiming §19.6 is done.
+The first literal per-control interaction tranche is now recorded in `docs/audits/phase-19-interaction-inventory.md`: shared shell/modal controls and Writer controls were exercised through the local Playwright harness, surfacing and repairing D-19-13 through D-19-15. It intentionally does **not** claim the required §19.6 inventory complete: the remaining authenticated surfaces and broader §19.5 journeys remain pending, with every unexercised family explicitly labelled there rather than implied green.

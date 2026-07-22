@@ -49,4 +49,46 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
   });
+
+  test("traps focus in the command palette and returns focus to its trigger", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const trigger = page.getByRole("button", { name: "Search pages and works" });
+    await trigger.focus();
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Command palette" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Search Palimnote")).toBeFocused();
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.locator(":focus")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
+
+  test("treats mobile navigation as a modal drawer and restores its trigger", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 844 });
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const trigger = page.getByRole("button", { name: "Open navigation" });
+    await trigger.focus();
+    await trigger.click();
+    const drawer = page.getByRole("dialog", { name: "Mobile navigation" });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("button", { name: "Close navigation" })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(drawer.locator(":focus")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+    await expect(trigger).toBeFocused();
+  });
 });

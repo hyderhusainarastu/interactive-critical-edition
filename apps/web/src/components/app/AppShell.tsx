@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { CommandPalette } from "./CommandPalette";
@@ -39,6 +39,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const navItems: NavItem[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -51,6 +52,10 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
   const focusMode = preferences.focusMode;
+  function closeDrawer() {
+    setDrawerOpen(false);
+    window.requestAnimationFrame(() => drawerTriggerRef.current?.focus());
+  }
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
@@ -62,7 +67,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
             {navItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
           </nav>
           <div className="flex items-center gap-1.5">
-            <button type="button" className="app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}>⌕</button>
+            <button type="button" className="app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={(event) => window.dispatchEvent(new CustomEvent("palimnote:open-command-palette", { detail: event.currentTarget }))}>⌕</button>
             <div className="hidden items-center rounded-md border border-[var(--color-border)] p-0.5 sm:flex" aria-label="Quick light or dark switch">
               <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "light" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "light"} onClick={() => updatePreferences({ theme: "light" })}>Light</button>
               <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
@@ -74,11 +79,11 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
             <form action={logoutAction} className="hidden lg:block">
               <button type="submit" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
             </form>
-            <button type="button" className="app-icon-button md:hidden" data-tooltip="Open navigation" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>☰</button>
+            <button ref={drawerTriggerRef} type="button" className="app-icon-button md:hidden" data-tooltip="Open navigation" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>☰</button>
           </div>
         </div>
       </header>
-      {drawerOpen && <MobileDrawer items={navItems} pathname={pathname} email={email} onClose={() => setDrawerOpen(false)} />}
+      {drawerOpen && <MobileDrawer items={navItems} pathname={pathname} email={email} onClose={closeDrawer} />}
       <main id="main-content" className="app-shell-main flex-1">{children}</main>
       <CommandPalette items={navItems.map((item) => ({ ...item, shortcut: item.href === "/upload" ? "U" : undefined }))} />
     </div>
@@ -91,10 +96,44 @@ function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string;
 }
 
 function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; pathname: string; email: string | null | undefined; onClose: () => void }) {
+  const drawerRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  function keepFocusInDrawer(event: React.KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+    const focusable = [...drawer.querySelectorAll<HTMLElement>("a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])")]
+      .filter((element) => !element.hidden && element.getClientRects().length > 0);
+    if (focusable.length === 0) {
+      event.preventDefault();
+      drawer.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 bg-black/35 md:hidden" role="presentation" onMouseDown={onClose}>
-      <aside className="ms-auto flex h-full w-[min(20rem,86vw)] flex-col bg-[var(--color-background)] p-5 shadow-2xl" aria-label="Mobile navigation" onMouseDown={(event) => event.stopPropagation()}>
-        <div className="flex items-center justify-between"><strong className="font-serif text-lg">Palimnote</strong><button type="button" className="app-icon-button" aria-label="Close navigation" onClick={onClose}>×</button></div>
+      <aside ref={drawerRef} role="dialog" aria-modal="true" tabIndex={-1} className="ms-auto flex h-full w-[min(20rem,86vw)] flex-col bg-[var(--color-background)] p-5 shadow-2xl" aria-label="Mobile navigation" onMouseDown={(event) => event.stopPropagation()} onKeyDown={keepFocusInDrawer}>
+        <div className="flex items-center justify-between"><strong className="font-serif text-lg">Palimnote</strong><button ref={closeButtonRef} type="button" className="app-icon-button" aria-label="Close navigation" onClick={onClose}>×</button></div>
         <nav className="mt-6 flex flex-col gap-1">{items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} onClick={onClose} />)}</nav>
         <div className="mt-auto border-t border-[var(--color-border)] pt-4 text-sm text-[var(--color-text-muted)]"><p className="truncate">{email}</p><form action={logoutAction} className="mt-3"><button type="submit" className="underline">Log out</button></form></div>
       </aside>

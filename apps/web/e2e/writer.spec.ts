@@ -58,6 +58,29 @@ test.describe("Writer mode", () => {
     expect((await readFile(pdfPath!)).subarray(0, 4).toString()).toBe("%PDF");
   });
 
+  test("makes the desktop Library-source sidebar resizer keyboard-operable", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await login(page);
+    await page.goto("/writer");
+    page.once("dialog", (dialog) => dialog.accept("Keyboard-resizable project"));
+    await page.getByRole("button", { name: "New project" }).click();
+    await page.waitForURL("**/writer/*");
+
+    const sidebar = page.getByRole("complementary", { name: "Library source sidebar" });
+    const resizer = page.getByRole("separator", { name: "Resize Library source sidebar" });
+    await expect(resizer).toHaveAttribute("aria-orientation", "vertical");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "280");
+
+    await resizer.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "300");
+    await expect(sidebar).toHaveCSS("width", "300px");
+    await page.keyboard.press("Home");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "220");
+    await page.keyboard.press("End");
+    await expect(resizer).toHaveAttribute("aria-valuenow", "460");
+  });
+
   test("does not disclose another user's project through writer APIs", async ({ browser }) => {
     const owner = await browser.newPage();
     await login(owner);
