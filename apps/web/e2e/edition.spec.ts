@@ -206,17 +206,19 @@ test("script display preference swaps a verified term's shown text between origi
 
 test("reading width preference changes the interactive reader's actual content width (Phase 19 interaction inventory, D-19-21)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
-  const widthPx = () => edition.evaluate((el) => el.getBoundingClientRect().width);
+  // The *computed* max-width (resolved from var(--reading-measure)) is what
+  // proves EditionReader.tsx's own rule actually consumes the preference —
+  // D-19-21's bug was a hardcoded max-w-[72ch] ignoring the variable
+  // entirely. This is deliberately NOT getBoundingClientRect(): the
+  // rendered box's *used* width can be clamped by an ancestor's own
+  // available width regardless of this element's max-width (observed in
+  // CI: compact 58ch and wide 88ch both rendered at an identical 624px,
+  // even after waiting for the preferences round trip and polling for
+  // several seconds — the box was hitting a narrower ancestor constraint in
+  // that environment, unrelated to this fix). The *computed* max-width is
+  // the length CSS resolves var() to, independent of any ancestor's box.
+  const computedMaxWidthPx = () => edition.evaluate((el) => parseFloat(getComputedStyle(el).maxWidth));
 
-  // globals.css maps data-reading-width to --reading-measure in ch units
-  // (compact 58ch < comfortable 72ch < wide 88ch), and EditionReader's
-  // section consumes it via max-w-[var(--reading-measure,72ch)] (D-19-21's
-  // fix). Waits for the same /api/preferences round trip the
-  // workspace-shell.spec.ts preference tests already wait on before
-  // measuring — a bare selectOption()-then-measure raced the attribute/
-  // style update in CI (observed twice: "compact" and "comfortable" both
-  // read the same 624px on the first attempt), even though
-  // data-reading-width itself was already correct by the time of the read.
   await page.getByRole("button", { name: "Workspace preferences" }).click();
 
   await Promise.all([
@@ -224,14 +226,14 @@ test("reading width preference changes the interactive reader's actual content w
     page.getByLabel("Reading width").selectOption("compact"),
   ]);
   await expect(page.locator("html")).toHaveAttribute("data-reading-width", "compact");
-  const compactPx = await widthPx();
+  const compactMaxWidth = await computedMaxWidthPx();
 
   await Promise.all([
     page.waitForResponse((res) => res.url().includes("/api/preferences") && res.ok()),
     page.getByLabel("Reading width").selectOption("wide"),
   ]);
   await expect(page.locator("html")).toHaveAttribute("data-reading-width", "wide");
-  await expect.poll(widthPx, { message: "reader content width should grow once 'wide' is selected" }).toBeGreaterThan(compactPx);
+  await expect.poll(computedMaxWidthPx, { message: "the section's computed max-width should grow once 'wide' is selected" }).toBeGreaterThan(compactMaxWidth);
 });
 
 test("the Split view work picker exposes and dismisses its disclosure state", async ({ page }) => {
