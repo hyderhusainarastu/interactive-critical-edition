@@ -80,9 +80,14 @@ test.describe("Roadmap & knowledge graph (Phase 5)", () => {
     await slider.dispatchEvent("mouseup");
     await expect(page.getByText("review only").first()).toBeVisible({ timeout: 10000 });
 
-    // --- Knowledge graph: accessible table (default) ---
+    // --- Visualization: accessible table (default) ---
+    // Phase 11.8 renamed this surface from "Knowledge graph" to
+    // "Visualization" everywhere (found stale during the Phase 19
+    // accessibility sweep, D-19-8 — this assertion had never actually run
+    // because the test failed earlier for the unrelated D-19-6 timing
+    // reason every time).
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Knowledge graph" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
     // The root work appears as its own node row in the table (exact, to
     // avoid matching the "← cites from On the Question…" connection cells).
     await expect(page.getByRole("cell", { name: "On the Question of Being", exact: true })).toBeVisible({
