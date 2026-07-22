@@ -3,7 +3,7 @@ import { db, documents, works } from "@ice/db";
 import { writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, uploadAndConfirmViaUI, uploadOneFileViaUI } from "./helpers";
 
 const EMAIL = `e2e-reader-${Date.now()}@example.com`;
 const PASSWORD = "password123";
@@ -58,18 +58,14 @@ async function login(page: import("@playwright/test").Page) {
 }
 
 async function uploadAndConfirm(page: import("@playwright/test").Page, filePath: string, title: string) {
-  await page.goto("/upload");
-  await page.locator('input[type="file"]').setInputFiles(filePath);
-  await page.waitForURL(/\/works\/[a-f0-9-]+$/);
   // Generous timeout: since Phase 4, confirming a work also enqueues an
   // analysis job, so the single local worker can be busy with live
   // bibliographic lookups and the extract-text job may queue behind them.
-  await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 45000 });
-  const titleInput = page.locator('input[name="title"]');
-  await titleInput.fill(title);
-  await page.getByRole("button", { name: "Confirm and add to library" }).click();
-  await expect(page.getByRole("link", { name: "Open reader" })).toBeVisible({ timeout: 5000 });
-  const workId = page.url().split("/works/")[1];
+  // uploadAndConfirmViaUI also tolerates pipeline v2's auto-ready bypass
+  // (high-confidence title detection skips the manual confirm form
+  // entirely — see D-19-6), which a fixture with a clean title-first-line
+  // like these routinely triggers.
+  const workId = await uploadAndConfirmViaUI(page, filePath, title);
   return workId;
 }
 
@@ -83,6 +79,9 @@ test.describe("Reader (Phase 3)", () => {
   });
 
   test("upload, highlight, note, and resume reading position", async ({ page }) => {
+    // Generous: pipeline v2+ runs its whole research/classification pass
+    // before this document is even confirmable (D-19-6).
+    test.setTimeout(240_000);
     const filePath = join(tmpdir(), `e2e-reader-${Date.now()}.txt`);
     writeFileSync(filePath, TEXT_FIXTURE);
 
@@ -90,6 +89,13 @@ test.describe("Reader (Phase 3)", () => {
     const workId = await uploadAndConfirm(page, filePath, "Being and Time");
 
     await page.goto(`/works/${workId}/reader`);
+    // Phase 11.5 made "Published edition" the default view whenever an
+    // edition exists (pipeline v2+); this test exercises the processed
+    // paragraph view, so switch to it if the toggle is present. No toggle
+    // at all means no edition was published (e.g. pipeline v1), in which
+    // case the processed view is already what's shown.
+    const interactiveToggle = page.getByRole("button", { name: "Interactive reader" });
+    if (await interactiveToggle.isVisible().catch(() => false)) await interactiveToggle.click();
     const paragraph = page.locator('[data-paragraph-index="0"]');
     await expect(paragraph).toBeVisible();
 
@@ -159,9 +165,7 @@ test.describe("Reader (Phase 3)", () => {
     writeFileSync(filePath, createPdf("Direct upload PDF verification"));
 
     await login(page);
-    await page.goto("/upload");
-    await page.locator('input[type="file"]').setInputFiles(filePath);
-    await page.waitForURL(/\/works\/[a-f0-9-]+$/);
+    await uploadOneFileViaUI(page, filePath);
     await expect(page.getByText(/Confirm or correct the detected metadata before this work is added to your library\.|Ready/)).toBeVisible({ timeout: 45000 });
     await expect(page.getByText("Processing failed")).toHaveCount(0);
   });
@@ -194,9 +198,7 @@ test.describe("Reader (Phase 3)", () => {
     });
 
     await login(page);
-    await page.goto("/upload");
-    await page.locator('input[type="file"]').setInputFiles(filePath);
-    await page.waitForURL(/\/works\/[a-f0-9-]+$/);
+    await uploadOneFileViaUI(page, filePath);
     await expect(page.getByText(/Confirm or correct|Ready/)).toBeVisible({ timeout: 45_000 });
     expect(blockedDirect).toBe(true);
     expect(blockedRawProxy).toBe(true);
@@ -204,6 +206,9 @@ test.describe("Reader (Phase 3)", () => {
   });
 
   test("split view opens a second work alongside the first", async ({ page }) => {
+    // Generous: two sequential real uploads, each subject to D-19-6's
+    // pipeline-v2 timing.
+    test.setTimeout(360_000);
     const fileA = join(tmpdir(), `e2e-split-a-${Date.now()}.txt`);
     const fileB = join(tmpdir(), `e2e-split-b-${Date.now()}.txt`);
     writeFileSync(fileA, "First Work\n\nSome opening text for the first work.");
@@ -226,16 +231,25 @@ test.describe("Reader (Phase 3)", () => {
   });
 
   test("published edition is available without replacing the interactive reader", async ({ page }) => {
+    // Generous: pipeline v2+ runs its whole research/classification pass
+    // before this document is even confirmable (D-19-6). This fixture
+    // explicitly cites Kant, so the research pass has real work to do.
+    test.setTimeout(240_000);
     const filePath = join(tmpdir(), `e2e-edition-${Date.now()}.txt`);
     writeFileSync(filePath, "Edition Test\n\nA source text that cites Kant, Critique of Pure Reason, 1781.");
     await login(page);
     const workId = await uploadAndConfirm(page, filePath, "Edition Test");
     await page.goto(`/works/${workId}/reader`);
-    await expect(page.locator('[data-paragraph-index="0"]')).toBeVisible();
-    await page.getByRole("button", { name: "Published edition" }).click();
-    await expect(page.getByRole("region", { name: "Published critical edition" })).toBeVisible();
+    // Phase 11.5 made "Published edition" (the immutable original source)
+    // the default view whenever an edition exists — the reverse of this
+    // test's original assumption that the processed/paragraph view came
+    // first. Assert the real default, then round-trip the toggle both ways
+    // to confirm neither view destroys the other.
+    await expect(page.getByRole("region", { name: "Published edition — original source text" })).toBeVisible();
     await page.getByRole("button", { name: "Interactive reader" }).click();
     await expect(page.locator('[data-paragraph-index="0"]')).toBeVisible();
+    await page.getByRole("button", { name: "Published edition" }).click();
+    await expect(page.getByRole("region", { name: "Published edition — original source text" })).toBeVisible();
   });
 
 });

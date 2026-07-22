@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { createVerifiedTestUser, deleteTestUser, uploadAndConfirmViaUI } from "./helpers";
 
 /**
  * Phase 5 E2E: after analysis, a work's reading roadmap ranks its
@@ -48,20 +48,20 @@ test.describe("Roadmap & knowledge graph (Phase 5)", () => {
   });
 
   test("roadmap ranks references and reflects a 'known' rating; graph renders as table and 3D", async ({ page }) => {
+    // Generous: pipeline v2+ runs its whole research/classification pass
+    // before this document is even confirmable (D-19-6), and this fixture
+    // explicitly cites Kant and Husserl, giving the research pass real work.
+    test.setTimeout(240_000);
     const filePath = join(tmpdir(), `e2e-roadmap-${Date.now()}.txt`);
     writeFileSync(filePath, FIXTURE);
 
     await login(page);
 
-    // Upload + confirm (enqueues analysis).
-    await page.goto("/upload");
-    await page.locator('input[type="file"]').setInputFiles(filePath);
-    await page.waitForURL(/\/works\/[a-f0-9-]+$/);
-    await expect(page.getByText("Confirm or correct")).toBeVisible({ timeout: 45000 });
-    await page.locator('input[name="title"]').fill("On the Question of Being");
-    await page.getByRole("button", { name: "Confirm and add to library" }).click();
-    await expect(page.getByRole("link", { name: "Open reader" })).toBeVisible({ timeout: 5000 });
-    const workId = page.url().split("/works/")[1];
+    // Upload + confirm (enqueues analysis). uploadAndConfirmViaUI tolerates
+    // pipeline v2's auto-ready bypass (high-confidence title detection
+    // skips the manual confirm form entirely — see D-19-6), which this
+    // fixture's clean title-first-line routinely triggers.
+    const workId = await uploadAndConfirmViaUI(page, filePath, "On the Question of Being");
 
     // Wait for analysis to finish (reader badge polls to "Complete").
     await page.goto(`/works/${workId}/reader`);

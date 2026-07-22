@@ -58,3 +58,7 @@ external-reference/
 /research/
 /research.zip
 /palimnote_phases_19_23_plan_revised.md
+
+# tesseract.js downloads its OCR language model into the worker's CWD at
+# runtime the first time OCR is exercised — a cache artifact, not source.
+apps/worker/eng.traineddata
