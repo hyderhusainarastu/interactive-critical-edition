@@ -99,7 +99,14 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
       <header inert={focusMode} className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Primary navigation">
+          {/* D-23-15: the middle `minmax(0,1fr)` grid track can be narrower than
+              the nav's no-wrap content at tablet widths (768–~1000px), making the
+              links overflow under the controls column (theme toggle over
+              Writer/Upload). `flex-wrap` (+ `min-w-0` and a small vertical pad
+              for the wrapped state) lets the nav break onto extra lines inside
+              its own track instead — the row's `min-h-14` grows with it, so no
+              two header controls can ever share the same pixels. */}
+          <nav className="hidden min-w-0 flex-wrap items-center gap-1 py-1.5 md:flex" aria-label="Primary navigation">
             {navItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
           </nav>
           <div className="flex items-center gap-1.5">
