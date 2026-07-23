@@ -60,6 +60,23 @@ const hasDb = Boolean(process.env.DATABASE_URL);
 // `extraction.integration.test.ts`.
 const cleanup = { userIds: [] as string[], identityIds: [] as string[] };
 
+// D-23-7: the shared, append-only `bibliographic_record` catalogue is
+// exactly where earlier measurement/canary runs can leave behind rows
+// sharing these titles (this suite's own "Annas 1977 case" test included,
+// if it fails before its own trailing cleanup line runs) — the defect this
+// purge supports was explicitly reproduced from that catalogue pollution.
+// Deleting rows matching ONLY these literal, test-owned titles (never a
+// broader sweep) before a test that's about to insert one of them keeps
+// `bestOverlapMatch`'s tie-break deterministic without touching any row
+// this suite didn't create.
+const FIXTURE_TITLES = [
+  "Plato and Aristotle on Friendship and Altruism",
+  "Love and Friendship in Plato and Aristotle",
+];
+async function purgeFixtureTitles() {
+  await db.delete(bibliographicRecords).where(inArray(bibliographicRecords.title, FIXTURE_TITLES));
+}
+
 describe.skipIf(!hasDb)("D-20-68 — citation-to-candidate linking", () => {
   afterEach(async () => {
     resolver.resolveCitation.mockReset();
@@ -176,6 +193,13 @@ describe.skipIf(!hasDb)("D-20-68 — citation-to-candidate linking", () => {
   });
 
   it("reuses an existing catalogue record when the live lookup fails on identical input (Annas 1977 case)", async () => {
+    // D-23-7 determinism fix: this test's own catalogue insert below can
+    // collide with a leftover row of the SAME title from an earlier failed
+    // run (or from the sibling D-23-7 tests, which use the same real-world
+    // title) — see `purgeFixtureTitles`'s doc comment. Purging first makes
+    // this test's own two-attempt comparison depend only on the row it just
+    // created, not on whatever the catalogue happened to already contain.
+    await purgeFixtureTitles();
     const { document: documentA, run: runA } = await seedDocument();
     const { document: documentB, run: runB } = await seedDocument();
 
@@ -234,6 +258,309 @@ describe.skipIf(!hasDb)("D-20-68 — citation-to-candidate linking", () => {
     expect(resolvedB.resolutionSource).toContain("catalog:");
 
     await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, resolvedA.resolvedBibId!));
+  });
+
+  /**
+   * D-23-7 — floors attempt 4 (2026-07-23, local v3 run): the garbled OCR
+   * citation "J Annas ... Mind 86 1977" resolved to A. W. Price's unrelated
+   * 1990 book "Love and Friendship in Plato and Aristotle", not the true
+   * Annas 1977 record, even though the true record existed as a candidate.
+   * Root cause: `titleOverlap` scores Price's title HIGHER (4/7 = 0.5714)
+   * than the true Annas title (3/7 = 0.4286) against this exact garbled
+   * query — both clear `CATALOG_MATCH_THRESHOLD` (0.34), and the old
+   * `bestOverlapMatch` picked the higher score with no regard for whether
+   * the candidate's own year actually agrees with the citation. (An author-
+   * surname veto was tried and reverted — see `analyze.ts`'s doc comment on
+   * `yearConflictsWithQuery` — because it false-positived on citation queries
+   * with no author name in them at all, e.g. the catalogue-reuse test in
+   * `citationBridge.integration.test.ts`. Year alone disambiguates this case.)
+   */
+  describe("D-23-7 — wrong-work link vetoed by year disagreement", () => {
+    const rawText = "Plato and Aristotle on Love and Friendship J Annas Mind 86 1977";
+    const query = rawText;
+    // FIXTURE_TITLES/purgeFixtureTitles are defined once at file scope (used
+    // by both this block and the pre-existing "Annas 1977 case" test above).
+
+    async function seedWrongPriceRecord() {
+      const [wrong] = await db
+        .insert(bibliographicRecords)
+        .values({
+          source: "crossref",
+          title: "Love and Friendship in Plato and Aristotle",
+          authors: "A. W. Price",
+          year: 1990,
+          accessStatus: "subscription",
+        })
+        .returning({ id: bibliographicRecords.id });
+      return wrong;
+    }
+
+    async function seedTrueAnnasRecord() {
+      const [truth] = await db
+        .insert(bibliographicRecords)
+        .values({
+          source: "crossref",
+          title: "Plato and Aristotle on Friendship and Altruism",
+          authors: "JULIA ANNAS",
+          year: 1977,
+          doi: "10.1093/mind/lxxxvi.344.532",
+          accessStatus: "subscription",
+        })
+        .returning({ id: bibliographicRecords.id });
+      return truth;
+    }
+
+    it("REPRODUCES the mismatch on the old score-only ranking (documents the defect, does not exercise fixed code)", () => {
+      // This is the exact computation `bestOverlapMatch` used to perform with
+      // no corroboration guard — kept as a plain arithmetic assertion (no DB,
+      // no imports from the fixed module) so it stays true to what the OLD
+      // code actually did, rather than re-deriving it through code that has
+      // since been patched.
+      const sig = (s: string) =>
+        new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 3));
+      const overlap = (q: string, title: string) => {
+        const qs = sig(q);
+        const ts = sig(title);
+        let hits = 0;
+        for (const w of qs) if (ts.has(w)) hits++;
+        return hits / qs.size;
+      };
+      const trueScore = overlap(query, "Plato and Aristotle on Friendship and Altruism");
+      const wrongScore = overlap(query, "Love and Friendship in Plato and Aristotle");
+      expect(trueScore).toBeCloseTo(3 / 7, 5);
+      expect(wrongScore).toBeCloseTo(4 / 7, 5);
+      // The defect: the WRONG candidate scores higher, so a score-only
+      // "highest wins" ranking picks it over the true record.
+      expect(wrongScore).toBeGreaterThan(trueScore);
+    });
+
+    it("links to the TRUE Annas record via the catalogue fallback, not the higher-scoring wrong Price record", async () => {
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      const wrong = await seedWrongPriceRecord();
+      const truth = await seedTrueAnnasRecord();
+
+      resolver.resolveCitation.mockResolvedValueOnce(null); // forces the catalogue fallback
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText,
+          normalizedQuery: query,
+          sourceType: "footnote",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBe(truth.id);
+      expect(resolved.resolvedBibId).not.toBe(wrong.id);
+
+      await db.delete(bibliographicRecords).where(inArray(bibliographicRecords.id, [wrong.id, truth.id]));
+    });
+
+    it("stays UNRESOLVED when only the wrong-year candidate exists in the catalogue", async () => {
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      const wrong = await seedWrongPriceRecord();
+
+      resolver.resolveCitation.mockResolvedValueOnce(null);
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText,
+          normalizedQuery: query,
+          sourceType: "footnote",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      // Wrong-work is worse than unresolved: with no true candidate available,
+      // the year-disagreeing Price record must be vetoed outright, not
+      // accepted as "the best we've got".
+      expect(resolved.resolutionState).toBe("unresolved");
+      expect(resolved.resolvedBibId).toBeNull();
+
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, wrong.id));
+    });
+
+    it("same-run discovery variant: links to the TRUE same-run research_resource, not a co-candidate wrong-year record", async () => {
+      await purgeFixtureTitles();
+      const { document, run, work, user } = await seedDocument();
+      const wrong = await seedWrongPriceRecord();
+      const truth = await seedTrueAnnasRecord();
+
+      // Both candidates were independently discovered in THIS SAME run —
+      // exactly the shape the floors-attempt-4 defect described.
+      await db.insert(researchResources).values([
+        {
+          runId: run.id,
+          title: "Love and Friendship in Plato and Aristotle",
+          provider: "openalex",
+          resourceType: "book",
+          year: 1990,
+          authors: ["A. W. Price"],
+          bibRecordId: wrong.id,
+        },
+        {
+          runId: run.id,
+          title: "Plato and Aristotle on Friendship and Altruism",
+          provider: "crossref",
+          resourceType: "article",
+          year: 1977,
+          authors: ["Julia Annas"],
+          bibRecordId: truth.id,
+        },
+      ]);
+
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText,
+          normalizedQuery: query,
+          sourceType: "footnote",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+
+      await linkCitationsToRunDiscoveries(document.id, run.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBe(truth.id);
+      expect(resolved.resolvedBibId).not.toBe(wrong.id);
+
+      const edges = await db.select().from(graphEdges).where(eq(graphEdges.sourceId, work.id));
+      expect(edges).toHaveLength(1);
+      expect(edges[0].targetId).toBe(truth.id);
+      void user;
+
+      await db.delete(bibliographicRecords).where(inArray(bibliographicRecords.id, [wrong.id, truth.id]));
+    });
+
+    // These two use `linkCitationsToRunDiscoveries` rather than the catalogue
+    // fallback: `findCatalogMatchForQuery`'s coarse SQL pre-filter picks its
+    // top-3 "significant words" from the whole query including the author
+    // surname (e.g. "bostock", "bywater" — both 7+ chars, easily outranking a
+    // 6-char title word like "ethics"), then ANDs all three against the
+    // `title` column alone — a surname pre-filter word that never appears in
+    // a title always empties the SQL result before `bestOverlapMatch` (my
+    // fix's own site) is ever reached. That is a real, separate, PRE-EXISTING
+    // gap in the prefilter (not something this fix introduces or repairs —
+    // see the reported root-cause writeup), so exercising it here would
+    // conflate "the prefilter found nothing" with "the new guard rejected a
+    // true positive". `linkCitationsToRunDiscoveries` has no such SQL
+    // prefilter — its candidates are the run's own already-fetched
+    // `research_resource` rows — so it cleanly isolates exactly the
+    // `bestOverlapMatch`/`disagreesWithQuery` logic this fix changed.
+    it("regression: true-positive Bostock 2000 same-run link still resolves (year agrees)", async () => {
+      const { document, run, work } = await seedDocument();
+      const [bostock] = await db
+        .insert(bibliographicRecords)
+        .values({
+          source: "openlibrary",
+          title: "Aristotle's Ethics",
+          authors: "David Bostock",
+          year: 2000,
+          accessStatus: "metadata_only",
+        })
+        .returning({ id: bibliographicRecords.id });
+      await db.insert(researchResources).values({
+        runId: run.id,
+        title: "Aristotle's Ethics",
+        provider: "openlibrary",
+        resourceType: "book",
+        year: 2000,
+        authors: ["David Bostock"],
+        bibRecordId: bostock.id,
+      });
+
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText: "Bostock, David. Aristotle's Ethics. Oxford: Oxford University Press, 2000.",
+          normalizedQuery: "Bostock, David, Aristotle's Ethics 2000",
+          sourceType: "bibliography",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+
+      await linkCitationsToRunDiscoveries(document.id, run.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBe(bostock.id);
+      const edges = await db.select().from(graphEdges).where(eq(graphEdges.sourceId, work.id));
+      expect(edges).toHaveLength(1);
+
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, bostock.id));
+    });
+
+    it("regression: true-positive Bywater 1894 same-run link still resolves (year agrees)", async () => {
+      const { document, run, work } = await seedDocument();
+      const [bywater] = await db
+        .insert(bibliographicRecords)
+        .values({
+          source: "googlebooks",
+          title: "Aristotelis Ethica Nicomachea",
+          authors: "Ingram Bywater",
+          year: 1894,
+          accessStatus: "metadata_only",
+        })
+        .returning({ id: bibliographicRecords.id });
+      await db.insert(researchResources).values({
+        runId: run.id,
+        title: "Aristotelis Ethica Nicomachea",
+        provider: "googlebooks",
+        resourceType: "book",
+        year: 1894,
+        authors: ["Ingram Bywater"],
+        bibRecordId: bywater.id,
+      });
+
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText: "Bywater, Ingram, ed., Aristotelis Ethica Nicomachea, Clarendon Press, 1894",
+          normalizedQuery: "Bywater, Ingram, ed., Aristotelis Ethica Nicomachea 1894",
+          sourceType: "bibliography",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+
+      await linkCitationsToRunDiscoveries(document.id, run.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBe(bywater.id);
+      const edges = await db.select().from(graphEdges).where(eq(graphEdges.sourceId, work.id));
+      expect(edges).toHaveLength(1);
+
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, bywater.id));
+    });
   });
 
   it("never re-runs a live lookup or downgrades an already-resolved citation (idempotency guard)", async () => {

@@ -550,10 +550,61 @@ function resolvedCitationLibraryFields(record: CitationMatch) {
  */
 const CATALOG_MATCH_THRESHOLD = 0.34;
 
-function bestOverlapMatch<T extends { title: string }>(query: string, candidates: readonly T[]): T | null {
+/**
+ * D-23-7 (Annas 1977 -> A. W. Price 1990 wrong-work link, floors
+ * attempt 4): `titleOverlap` counts what fraction of the QUERY's own
+ * significant words appear in a candidate's title — it says nothing about
+ * whether the candidate is a MORE COMPLETE, unrelated title that happens to
+ * absorb more of a garbled query's words. Reproduced deterministically: for
+ * the query "Plato and Aristotle on Love and Friendship J Annas Mind 86
+ * 1977", the true Annas record ("Plato and Aristotle on Friendship and
+ * Altruism") scores 3/7 = 0.4286, while A. W. Price's unrelated 1990 book
+ * ("Love and Friendship in Plato and Aristotle") scores 4/7 = 0.5714 — BOTH
+ * clear `CATALOG_MATCH_THRESHOLD`, and `bestOverlapMatch` picked the higher
+ * score, i.e. the wrong work, even in a run where the true record was also a
+ * candidate. A wrong-work link is worse than unresolved (this project's
+ * anti-hallucination rule): a candidate carrying a KNOWN year that
+ * CONTRADICTS the citation query's own year is vetoed outright, regardless
+ * of title score — an active mis-match is strictly worse than staying
+ * unresolved, so it is worth rejecting a same-title-family candidate even at
+ * the cost of a rarer false negative. This never makes a match MORE
+ * permissive (an unknown year on either side is not evidence either way, so
+ * it never disqualifies), only strictly harder to accept a wrong one. (An
+ * earlier version of this guard also vetoed on author-surname disagreement;
+ * that branch was removed — it false-positived on the common case of a
+ * citation query carrying no author name at all, e.g. "A Catalogue-Reused
+ * Work Mind 86 1988", incorrectly rejecting a same-year, correct-title
+ * catalogue reuse. Year alone, which is what actually disambiguated the
+ * Annas/Price case, carries the fix without that regression.)
+ */
+const QUERY_YEAR = /\b(1[5-9]\d{2}|20[0-2]\d)\b/g;
+
+/** The LAST year-shaped token in a citation query — citation text is
+ *  conventionally "Author, Title, Venue Year[, pages]", so the trailing year
+ *  is the citation's own publication year rather than an incidental figure
+ *  (a page number, a volume number) earlier in the string. */
+function queryYear(query: string): number | null {
+  const matches = [...query.matchAll(QUERY_YEAR)];
+  return matches.length ? Number(matches[matches.length - 1][1]) : null;
+}
+
+interface OverlapCandidate {
+  title: string;
+  year?: number | null;
+}
+
+/** True only on a CONCRETE year conflict — never on missing data either
+ *  side, and never on anything but year (see the doc comment above). */
+function yearConflictsWithQuery(query: string, candidate: OverlapCandidate): boolean {
+  const qYear = queryYear(query);
+  return qYear != null && candidate.year != null && qYear !== candidate.year;
+}
+
+function bestOverlapMatch<T extends OverlapCandidate>(query: string, candidates: readonly T[]): T | null {
   let best: T | null = null;
   let bestScore = 0;
   for (const candidate of candidates) {
+    if (yearConflictsWithQuery(query, candidate)) continue;
     const score = titleOverlap(query, candidate.title);
     if (score > bestScore) {
       bestScore = score;
@@ -858,7 +909,12 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
  */
 export async function linkCitationsToRunDiscoveries(documentId: string, runId: string): Promise<void> {
   const candidates = await db
-    .select({ title: researchResources.title, bibRecordId: researchResources.bibRecordId, provider: researchResources.provider })
+    .select({
+      title: researchResources.title,
+      bibRecordId: researchResources.bibRecordId,
+      provider: researchResources.provider,
+      year: researchResources.year,
+    })
     .from(researchResources)
     .where(and(eq(researchResources.runId, runId), isNotNull(researchResources.bibRecordId)));
   if (!candidates.length) return;
