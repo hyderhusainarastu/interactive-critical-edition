@@ -1,10 +1,11 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
-import { CATEGORY_META } from "./annotationMeta";
+import { CATEGORY_META, VERIFICATION_LABELS } from "./annotationMeta";
 import {
   AGREEMENT_LABEL,
   AuthorityBadge,
@@ -18,9 +19,23 @@ import {
   type PassageAnnotationType,
 } from "./EditionReader";
 import { matchNoteToBlock } from "./matchNoteToBlock";
-import type { RelationshipCategory } from "./types";
+import type { RelationshipCategory, VerificationStatus } from "./types";
 
 type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources";
+
+/**
+ * Passage annotations carry a reader-correction state (D-22-1) at parity with
+ * the legacy `annotation` table. The base `EditionPassageAnnotation` type
+ * (defined in the wave-4-owned `EditionReader.tsx`) predates these columns;
+ * the server payload (`lib/edition.ts`) always populates them, so the sidebar
+ * reads them through this narrow augmentation rather than editing that type.
+ */
+type ReviewablePassage = EditionPassageAnnotation & {
+  verificationStatus: VerificationStatus;
+  hidden: boolean;
+};
+type EditionWithReview = EditionPayload & { hiddenPassageAnnotations?: EditionPassageAnnotation[] };
+type PassageOverride = Partial<Pick<ReviewablePassage, "verificationStatus" | "hidden" | "explanation" | "createdBy">>;
 const READER_LEVEL_FILTER_OPTIONS: ReaderLevelFilter[] = ["beginner", "undergraduate", "advanced", "research", "all"];
 const READER_LEVEL_FILTER_LABEL: Record<ReaderLevelFilter, string> = { ...READER_LEVEL_LABEL, all: "Show all levels" };
 
@@ -60,7 +75,7 @@ export function EditionAnnotationsPanel({
   onApproveTerm,
   onSelectAnnotation,
 }: {
-  edition: EditionPayload;
+  edition: EditionWithReview;
   activeId: string | null;
   readerLevel: ReaderLevelFilter;
   levelMode: ReaderLevelMatchMode;
@@ -356,44 +371,132 @@ function AnnotationsTab({
   resourceById,
   onSelectAnnotation,
 }: {
-  edition: EditionPayload;
+  edition: EditionWithReview;
   activeId: string | null;
   anchoredNotes: EditionPassageAnnotation[];
   resourceById: Map<string, EditionResource>;
   onSelectAnnotation?: (id: string) => void;
 }) {
-  const allNotes = [...edition.wholeWorkGuidance, ...anchoredNotes];
+  const params = useParams();
+  const workId = String((params as Record<string, unknown>)?.workId ?? "");
+  const [overrides, setOverrides] = useState<Record<string, PassageOverride>>({});
+  const [showHidden, setShowHidden] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = allNotes.find((note) => note.id === activeId) ?? allNotes.find((note) => note.id === selectedId) ?? allNotes[0];
-  if (edition.wholeWorkGuidance.length === 0 && anchoredNotes.length === 0) {
+
+  // Server payload keeps hidden annotations out of the anchored/whole-work
+  // arrays (so their in-text markers disappear) and surfaces them separately;
+  // the sidebar recombines all three for its own review index.
+  const basePassages = useMemo<ReviewablePassage[]>(
+    () => [
+      ...(edition.wholeWorkGuidance as ReviewablePassage[]),
+      ...(anchoredNotes as ReviewablePassage[]),
+      ...((edition.hiddenPassageAnnotations ?? []) as ReviewablePassage[]),
+    ],
+    [edition.wholeWorkGuidance, edition.hiddenPassageAnnotations, anchoredNotes],
+  );
+
+  // Optimistic local overrides layered on the server rows so a correction is
+  // reflected immediately; persistence and reload come from the PATCH below.
+  const allNotes = useMemo(
+    () => basePassages.map((note): ReviewablePassage => ({ ...note, ...overrides[note.id] })),
+    [basePassages, overrides],
+  );
+  const hiddenCount = allNotes.filter((note) => note.hidden).length;
+  const visibleNotes = allNotes.filter((note) => showHidden || !note.hidden);
+  const selected =
+    visibleNotes.find((note) => note.id === activeId) ??
+    visibleNotes.find((note) => note.id === selectedId) ??
+    visibleNotes[0];
+
+  async function onMutate(id: string, patch: PassageOverride) {
+    const previous = overrides[id];
+    setOverrides((current) => ({
+      ...current,
+      [id]: { ...current[id], ...patch, ...(patch.explanation ? { createdBy: "user" as const } : {}) },
+    }));
+    try {
+      const res = await fetch(`/api/works/${workId}/reader/passage-annotations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error(`PATCH failed (${res.status})`);
+    } catch {
+      // Roll the optimistic change back so the card never shows a state the
+      // server rejected.
+      setOverrides((current) => ({ ...current, [id]: previous ?? {} }));
+    }
+  }
+
+  if (basePassages.length === 0) {
     return <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">No passage annotations for this edition.</p>;
   }
+
   return (
     <div className="flex flex-col gap-3 px-3 py-3">
       <section aria-label="Annotation index">
-        <h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation index</h3>
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation index</h3>
+          {hiddenCount > 0 && (
+            <button type="button" className="text-[0.68rem] underline" onClick={() => setShowHidden((v) => !v)}>
+              {showHidden ? "Hide dismissed" : `Show dismissed (${hiddenCount})`}
+            </button>
+          )}
+        </div>
         <p className="px-1 text-[0.68rem] text-[var(--color-text-muted)]">Choose an item for its evidence detail. Full notes remain beside their passage on desktop and inline on narrow screens.</p>
-        <ul className="mt-1.5 flex flex-col gap-1">
-          {allNotes.map((note) => (
-            (() => {
+        {visibleNotes.length === 0 ? (
+          <p className="px-1 py-3 text-[0.72rem] text-[var(--color-text-muted)]">All annotations are dismissed. Use “Show dismissed” to review them.</p>
+        ) : (
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {visibleNotes.map((note) => {
               const pageIndex = note.textBlockId ? edition.blocks.find((block) => block.id === note.textBlockId)?.pageIndex : null;
-              return <li key={note.id}>
-              <button
-                type="button"
-                onClick={() => { setSelectedId(note.id); onSelectAnnotation?.(note.id); }}
-                className="w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-left text-xs"
-                aria-current={selected?.id === note.id ? "true" : undefined}
-              >
-                <span className="font-medium">{note.isWholeWork ? "Whole work" : pageIndex === undefined || pageIndex === null ? "Anchored passage" : `Page ${pageIndex + 1}`}</span>
-                {" · "}{note.summary}
-              </button>
-            </li>;
-            })()
-          ))}
-        </ul>
+              return (
+                <li key={note.id}>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedId(note.id); onSelectAnnotation?.(note.id); }}
+                    className="w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1.5 text-left text-xs"
+                    aria-current={selected?.id === note.id ? "true" : undefined}
+                    style={{ opacity: note.verificationStatus === "rejected" ? 0.6 : 1 }}
+                  >
+                    <span className="font-medium">{note.isWholeWork ? "Whole work" : pageIndex === undefined || pageIndex === null ? "Anchored passage" : `Page ${pageIndex + 1}`}</span>
+                    {note.hidden ? " · Dismissed" : note.verificationStatus !== "unreviewed" ? ` · ${VERIFICATION_LABELS[note.verificationStatus]}` : ""}
+                    {" · "}{note.summary}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
-      {selected && <section aria-label="Annotation detail"><h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Detail</h3><ul className="mt-1.5"><PassageAnnotationCard note={selected} active resourceById={resourceById} /></ul></section>}
+      {selected && <section aria-label="Annotation detail"><h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Detail</h3><ul className="mt-1.5"><PassageAnnotationCard note={selected} active resourceById={resourceById} onMutate={onMutate} /></ul></section>}
     </div>
+  );
+}
+
+function PassageStatusButton({
+  current,
+  value,
+  label,
+  onSet,
+}: {
+  current: VerificationStatus;
+  value: VerificationStatus;
+  label: string;
+  onSet: (v: VerificationStatus) => void;
+}) {
+  const isActive = current === value;
+  return (
+    <button
+      type="button"
+      aria-pressed={isActive}
+      className="underline"
+      style={{ fontWeight: isActive ? 700 : 400 }}
+      // Toggling an active status back to unreviewed lets a misclick be undone.
+      onClick={() => onSet(isActive ? "unreviewed" : value)}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -401,12 +504,16 @@ function PassageAnnotationCard({
   note,
   active,
   resourceById,
+  onMutate,
 }: {
-  note: EditionPassageAnnotation;
+  note: ReviewablePassage;
   active: boolean;
   resourceById: Map<string, EditionResource>;
+  onMutate?: (id: string, patch: PassageOverride) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note.explanation);
   const ref = useRef<HTMLLIElement | null>(null);
   const relatedResource = note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined;
   const category = CATEGORY_META[note.relationship];
@@ -414,17 +521,23 @@ function PassageAnnotationCard({
   // explanation (no separate setState needed), and the reader can still
   // manually collapse it afterward via `open`.
   const expanded = open || active;
+  const rejected = note.verificationStatus === "rejected";
 
   useEffect(() => {
     if (active) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [active]);
+  // Keep the edit draft in step with the server value when it changes under us.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!editing) setDraft(note.explanation);
+  }, [note.explanation, editing]);
 
   return (
     <li
       ref={ref}
       data-annotation-card={note.id}
       className="rounded-lg border bg-[var(--color-background)] p-2.5 text-sm"
-      style={{ borderColor: active ? `var(${category.colorVar})` : "var(--color-border)" }}
+      style={{ borderColor: active ? `var(${category.colorVar})` : "var(--color-border)", opacity: rejected ? 0.6 : 1 }}
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <CategoryGlyph colorVar={category.colorVar} glyph={category.glyph} className="shrink-0" />
@@ -432,6 +545,15 @@ function PassageAnnotationCard({
           {PASSAGE_TYPE_LABEL[note.annotationType]}
         </span>
         {note.readerLevel && <span className="text-[0.68rem] text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
+        {note.verificationStatus !== "unreviewed" && (
+          <span
+            className="rounded border px-1.5 py-0.5 text-[0.64rem] font-medium"
+            style={{ borderColor: `var(${category.colorVar})` }}
+            data-review-status={note.verificationStatus}
+          >
+            {VERIFICATION_LABELS[note.verificationStatus]}
+          </span>
+        )}
         <span className="ml-auto text-[0.68rem] text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}%</span>
       </div>
       <p className="mt-1.5 text-[0.82rem] leading-snug">{note.summary}</p>
@@ -440,7 +562,35 @@ function PassageAnnotationCard({
       </button>
       {expanded && (
         <div className="mt-1.5 border-t border-[var(--color-border)] pt-1.5 text-[0.78rem]">
-          <p>{note.explanation}</p>
+          {editing ? (
+            <div>
+              <textarea
+                aria-label="Edit explanation"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[0.78rem]"
+                rows={4}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <div className="mt-1 flex gap-3 text-[0.72rem]">
+                <button
+                  type="button"
+                  className="underline"
+                  onClick={() => {
+                    const next = draft.trim();
+                    if (next && next !== note.explanation) onMutate?.(note.id, { explanation: next });
+                    setEditing(false);
+                  }}
+                >
+                  Save
+                </button>
+                <button type="button" className="underline" onClick={() => { setDraft(note.explanation); setEditing(false); }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p>{note.explanation}</p>
+          )}
           {note.quote && (
             <p className="mt-1.5 border-l-2 border-[var(--color-border)] pl-2 text-[0.72rem] italic text-[var(--color-text-muted)]">
               “{note.quote}”
@@ -462,8 +612,21 @@ function PassageAnnotationCard({
             className="mt-1.5 text-[0.72rem]"
             source={relatedResource?.title ?? (note.textBlockId ? "Anchored document passage" : "Whole work")}
             confidencePercent={Math.round(note.confidence * 100)}
-            provenance={note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
+            provenance={note.createdBy === "user" ? "Edited by you" : note.createdBy === "editor" ? "Editor" : "Evidence-grounded, corroborated against sources"}
           />
+          {onMutate && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[var(--color-border)] pt-2 text-[0.72rem]">
+              <PassageStatusButton current={note.verificationStatus} value="user_verified" label="Verify" onSet={(v) => onMutate(note.id, { verificationStatus: v })} />
+              <PassageStatusButton current={note.verificationStatus} value="disputed" label="Dispute" onSet={(v) => onMutate(note.id, { verificationStatus: v })} />
+              <PassageStatusButton current={note.verificationStatus} value="rejected" label="Reject" onSet={(v) => onMutate(note.id, { verificationStatus: v })} />
+              <button type="button" className="underline" onClick={() => setEditing((v) => !v)}>
+                {editing ? "Editing…" : "Edit"}
+              </button>
+              <button type="button" className="ml-auto underline" onClick={() => onMutate(note.id, { hidden: !note.hidden })}>
+                {note.hidden ? "Unhide" : "Hide"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </li>

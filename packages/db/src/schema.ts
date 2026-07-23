@@ -1740,6 +1740,17 @@ export const passageAnnotations = pgTable(
     /** Set when this note draws on a resource this run already discovered. */
     relatedResourceId: uuid("related_resource_id").references(() => researchResources.id, { onDelete: "set null" }),
     createdBy: provenanceEnum("created_by").notNull().default("system"),
+    /**
+     * Reader correction workflow, at parity with the legacy `annotation` table
+     * (Phase 4). Reuses the SAME `verification_status` enum and `hidden`
+     * boolean rather than inventing a second vocabulary. A system-written
+     * annotation starts `unreviewed`/not hidden; a reader edit to the
+     * explanation flips `createdBy` to "user" (edit-in-place, mirroring the
+     * legacy route), and `updatedAt` tracks the correction.
+     */
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => [

@@ -225,6 +225,13 @@
       "when": 1784750973209,
       "tag": "0031_yellow_albert_cleary",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784760008126,
+      "tag": "0032_sleepy_jack_power",
+      "breakpoints": true
     }
   ]
 }

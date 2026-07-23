@@ -194,6 +194,11 @@ export async function getPublishedEdition(documentId: string) {
     readerLevel: p.readerLevel,
     confidence: p.confidence,
     createdBy: p.createdBy,
+    // Reader-correction state (D-22-1) — at parity with the legacy annotation
+    // table. Present on every element so the sidebar can render verify/hide/
+    // edit affordances and persist them.
+    verificationStatus: "verificationStatus" in p ? p.verificationStatus : "unreviewed",
+    hidden: "hidden" in p ? p.hidden : false,
   }));
 
   const pageIndexById = new Map(editionPages.map((page) => [page.id, page.pageIndex]));
@@ -261,8 +266,13 @@ export async function getPublishedEdition(documentId: string) {
         endOffset: occurrence.endOffset,
       })),
     })),
-    passageAnnotations: passageAnnotationsOut.filter((p) => !p.isWholeWork),
-    wholeWorkGuidance: passageAnnotationsOut.filter((p) => p.isWholeWork),
+    // Hidden (reader-dismissed) annotations are withheld from the default
+    // anchored/whole-work arrays the reader renders markers and margin cards
+    // from — so dismissing one removes its in-text marker on the next load —
+    // and surfaced separately for the sidebar's "Show dismissed" view.
+    passageAnnotations: passageAnnotationsOut.filter((p) => !p.isWholeWork && !p.hidden),
+    wholeWorkGuidance: passageAnnotationsOut.filter((p) => p.isWholeWork && !p.hidden),
+    hiddenPassageAnnotations: passageAnnotationsOut.filter((p) => p.hidden),
     generatedNotes: generated,
     resources: resourceOut,
     works,

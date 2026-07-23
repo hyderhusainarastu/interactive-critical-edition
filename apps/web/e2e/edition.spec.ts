@@ -1,4 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, request as pwRequest, test } from "@playwright/test";
+import { db, documents, passageAnnotations, processingRuns } from "@ice/db";
+import { eq } from "drizzle-orm";
 import { createVerifiedTestUser, deleteTestUser, seedPublishedEdition } from "./helpers";
 
 /**
@@ -387,4 +389,112 @@ test("the reader analysis toggle hides and restores the edition sidebar (Phase 1
 
   await reopenToggle.click();
   await expect(page.getByRole("complementary", { name: /edition sidebar/i })).toBeVisible();
+});
+
+/**
+ * Phase 22.3 / D-22-1: passage annotations (the default kind under the v2+
+ * edition pipeline) must have the same reader-correction workflow as the
+ * legacy `annotation` table — verify / dispute / reject, hide / unhide, and
+ * edit the explanation — persisted through a new owner-scoped route and the
+ * `passage_annotation.verification_status`/`hidden` columns. Before this
+ * change the sidebar detail card was entirely read-only, so the landing
+ * page's "Approve, edit, or dismiss anything" promise was false for every
+ * document the shipped pipeline produces.
+ */
+async function anchoredPassageAnnotationId(): Promise<string> {
+  const rows = await db
+    .select({ id: passageAnnotations.id, isWholeWork: passageAnnotations.isWholeWork })
+    .from(passageAnnotations)
+    .innerJoin(processingRuns, eq(processingRuns.id, passageAnnotations.runId))
+    .innerJoin(documents, eq(documents.id, processingRuns.documentId))
+    .where(eq(documents.workId, workId));
+  const anchored = rows.find((row) => !row.isWholeWork);
+  if (!anchored) throw new Error("no anchored passage annotation seeded");
+  return anchored.id;
+}
+
+test("passage annotations expose the verify/dispute/reject/hide/edit correction controls (D-22-1)", async ({ page }) => {
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  const detail = sidebar.getByRole("region", { name: /annotation detail/i });
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Verify" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Dispute" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Reject" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Edit" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: /^(Hide|Unhide)$/ })).toBeVisible();
+});
+
+test("verifying a passage annotation shows a review badge that persists across reload (D-22-1)", async ({ page }) => {
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  const detail = sidebar.getByRole("region", { name: /annotation detail/i });
+  await detail.getByRole("button", { name: "Verify" }).click();
+  await expect(detail.getByText("Verified by you")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("region", { name: /interactive reader.*processed text/i })).toBeVisible();
+  const detailAfter = page.getByRole("complementary", { name: /edition sidebar/i }).getByRole("region", { name: /annotation detail/i });
+  await expect(detailAfter.getByText("Verified by you")).toBeVisible();
+});
+
+test("hiding a passage annotation removes its in-text marker and files it under Show dismissed, across reload (D-22-1)", async ({ page }) => {
+  const anchoredId = await anchoredPassageAnnotationId();
+  const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  await expect(edition.locator(`button[data-annotation-id="${anchoredId}"]`)).toHaveCount(1);
+
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  await sidebar.getByRole("button", { name: /page 1.*flags the gap/i }).click();
+  const detail = sidebar.getByRole("region", { name: /annotation detail/i });
+  await detail.getByRole("button", { name: "Hide", exact: true }).click();
+  await expect(sidebar.getByRole("button", { name: /show dismissed/i })).toBeVisible();
+
+  await page.reload();
+  const editionAfter = page.getByRole("region", { name: /interactive reader.*processed text/i });
+  await expect(editionAfter).toBeVisible();
+  // The dismissed annotation's in-text marker is gone after reload.
+  await expect(editionAfter.locator(`button[data-annotation-id="${anchoredId}"]`)).toHaveCount(0);
+  // …but it remains reviewable under "Show dismissed".
+  const sidebarAfter = page.getByRole("complementary", { name: /edition sidebar/i });
+  await sidebarAfter.getByRole("button", { name: /show dismissed/i }).click();
+  await expect(sidebarAfter.getByRole("button", { name: /dismissed.*flags the gap/i })).toBeVisible();
+});
+
+test("editing a passage annotation explanation persists and is attributed to the reader (D-22-1)", async ({ page }) => {
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+  const detail = sidebar.getByRole("region", { name: /annotation detail/i });
+  await detail.getByRole("button", { name: "Edit" }).click();
+  const editText = `Reader-authored explanation ${Date.now()}`;
+  await detail.getByRole("textbox", { name: /edit explanation/i }).fill(editText);
+  await detail.getByRole("button", { name: "Save" }).click();
+  await expect(detail.getByText(editText)).toBeVisible();
+  await expect(detail.getByText("Edited by you")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("region", { name: /interactive reader.*processed text/i })).toBeVisible();
+  const detailAfter = page.getByRole("complementary", { name: /edition sidebar/i }).getByRole("region", { name: /annotation detail/i });
+  await expect(detailAfter.getByText(editText)).toBeVisible();
+  await expect(detailAfter.getByText("Edited by you")).toBeVisible();
+});
+
+test("the passage-annotation correction route is owner-scoped: 401 anonymous, 404 cross-user (D-22-1 IDOR)", async ({ page, baseURL }) => {
+  const anchoredId = await anchoredPassageAnnotationId();
+  const url = `/api/works/${workId}/reader/passage-annotations/${anchoredId}`;
+
+  const anon = await pwRequest.newContext({ baseURL: baseURL ?? "http://localhost:3000" });
+  const anonRes = await anon.patch(url, { data: { verificationStatus: "rejected" } });
+  expect(anonRes.status(), "anonymous PATCH").toBe(401);
+  await anon.dispose();
+
+  const attacker = `edition-idor-${Date.now()}@example.com`;
+  await createVerifiedTestUser(attacker, PASSWORD);
+  try {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(attacker);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL(/\/(dashboard|welcome)/);
+    const res = await page.request.patch(url, { data: { verificationStatus: "rejected" } });
+    expect(res.status(), "cross-user PATCH").toBe(404);
+  } finally {
+    await deleteTestUser(attacker);
+  }
 });
