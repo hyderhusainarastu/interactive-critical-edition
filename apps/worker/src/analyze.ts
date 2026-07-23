@@ -377,30 +377,95 @@ function citationRoleRationale(citation: RawCitation): string {
   return `${citationSourceLabel(citation.sourceType ?? "inline")}${page}${marker}: ${citation.text}`.slice(0, 2_000);
 }
 
-async function ensureCitationRole(input: {
+export async function ensureCitationRole(input: {
   learningResourceId: string;
   workIdentityId: string;
   citation: RawCitation;
+  /**
+   * The citation this role belongs to. Set on the concurrency-prone
+   * resolution paths (`applyResolvedCitation`, `createCitationLibraryProjection`)
+   * so a role whose target learning_resource was concurrently MERGED AWAY
+   * can be re-pointed to the citation's CURRENT surviving row instead of
+   * crashing the whole edition run on a phantom FK. See the 23503 handling
+   * below for the full rationale. Omit only when the caller provably holds a
+   * freshly-created, non-mergeable target.
+   */
+  citationId?: string;
 }): Promise<void> {
-  await db
-    .insert(resourceRoles)
-    .values({
-      learningResourceId: input.learningResourceId,
-      workIdentityId: input.workIdentityId,
-      relationship: "explicit_reference",
-      readerLevel: null,
-      rationale: citationRoleRationale(input.citation),
-      confidence: input.citation.parserConfidence ?? 0,
-      createdBy: "system",
-    })
-    .onConflictDoUpdate({
-      target: [resourceRoles.learningResourceId, resourceRoles.workIdentityId, resourceRoles.readerLevel],
-      set: {
+  const insertRole = (learningResourceId: string) =>
+    db
+      .insert(resourceRoles)
+      .values({
+        learningResourceId,
+        workIdentityId: input.workIdentityId,
         relationship: "explicit_reference",
+        readerLevel: null,
         rationale: citationRoleRationale(input.citation),
         confidence: input.citation.parserConfidence ?? 0,
-      },
+        createdBy: "system",
+      })
+      .onConflictDoUpdate({
+        target: [resourceRoles.learningResourceId, resourceRoles.workIdentityId, resourceRoles.readerLevel],
+        set: {
+          relationship: "explicit_reference",
+          rationale: citationRoleRationale(input.citation),
+          confidence: input.citation.parserConfidence ?? 0,
+        },
+      });
+
+  try {
+    await insertRole(input.learningResourceId);
+  } catch (error) {
+    // Phantom-FK guard (2026-07-23 resource_role FK-violation incident,
+    // run b2750c63): `applyResolvedCitation` and `resolveCitationMetadata`
+    // run CONCURRENTLY on separate pg-boss queues within one document's
+    // pipeline, and both call this via a read-modify-write that is not atomic
+    // across the two paths. One path can read a citation's target
+    // learning_resource id, and — before this insert fires — a parallel path's
+    // `applyResolvedCitation` merge (its stub delete, analyze.ts ~L631) can
+    // delete exactly that row, having first repointed every citationLibraryLink
+    // off it onto the surviving canonical row. The insert then violates the
+    // learning_resource FK (Postgres 23503) with a genuinely-gone id. e48cb1a
+    // unmasked this: before it, the research_resource duplicate-key crash
+    // killed the run long before `linkCitationsToRunDiscoveries` ever ran, so
+    // this pre-existing race was unreachable. This is a benign race, not
+    // corruption, so recover rather than crash the whole edition. Drizzle
+    // nests the driver error under `.cause` (documented pg/Drizzle gotcha).
+    const cause = (error as { cause?: { code?: string; constraint_name?: string } }).cause;
+    const isLearningResourceFk =
+      cause?.code === "23503" && (!cause.constraint_name || cause.constraint_name.includes("learning_resource"));
+    if (!isLearningResourceFk || !input.citationId) throw error;
+
+    // Re-resolve to the citation's CURRENT link: the concurrent merge repoints
+    // every citationLibraryLink off the deleted stub onto the surviving
+    // canonical row BEFORE deleting the stub, so this is the live, non-phantom
+    // target — exactly "re-resolve the existing row's id, not the phantom id".
+    const [link] = await db
+      .select({ id: citationLibraryLinks.learningResourceId })
+      .from(citationLibraryLinks)
+      .where(eq(citationLibraryLinks.citationId, input.citationId))
+      .limit(1);
+    if (link && link.id !== input.learningResourceId) {
+      try {
+        await insertRole(link.id);
+        return;
+      } catch (retryError) {
+        const rc = (retryError as { cause?: { code?: string } }).cause;
+        if (rc?.code !== "23503") throw retryError;
+      }
+    }
+    // Even the re-resolved target is gone (or unchanged): the surviving row the
+    // merge kept already carries this (resource, work) role — it is keyed on
+    // exactly (learning_resource, work_identity, reader_level) — so dropping
+    // this now-redundant one is correct. Stay visible without crashing,
+    // mirroring e48cb1a's research_resource duplicate-skip pattern.
+    reportEvent("citation_role_target_merged_away", {
+      scope: "worker.ensureCitationRole",
+      citationId: input.citationId,
+      workIdentityId: input.workIdentityId,
+      deletedLearningResourceId: input.learningResourceId,
     });
+  }
 }
 
 /**
@@ -434,7 +499,7 @@ export async function createCitationLibraryProjection(input: {
     })
     .returning({ id: learningResources.id });
 
-  await ensureCitationRole({ learningResourceId: resource.id, workIdentityId: input.workIdentityId, citation: input.citation });
+  await ensureCitationRole({ learningResourceId: resource.id, workIdentityId: input.workIdentityId, citation: input.citation, citationId: input.citationId });
   await db
     .insert(citationLibraryLinks)
     .values({ citationId: input.citationId, learningResourceId: resource.id })
@@ -622,7 +687,7 @@ async function applyResolvedCitation(input: {
       .where(eq(learningResources.normalizedKey, canonicalKey))
       .limit(1);
     const targetId = existing?.id ?? link.learningResourceId;
-    if (workIdentityId) await ensureCitationRole({ learningResourceId: targetId, workIdentityId, citation: citationMention });
+    if (workIdentityId) await ensureCitationRole({ learningResourceId: targetId, workIdentityId, citation: citationMention, citationId });
     if (existing && existing.id !== link.learningResourceId) {
       // Merge every provenance link before removing the temporary stub. This
       // makes DOI/ISBN/URL/title identity canonical without duplicate rows.
