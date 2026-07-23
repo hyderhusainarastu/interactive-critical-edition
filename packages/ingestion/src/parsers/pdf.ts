@@ -1,4 +1,5 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
+import { stripBoilerplateLines } from "./boilerplate";
 import { recoverTruncatedEndnotes } from "./endnoteRecovery";
 import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
@@ -113,7 +114,14 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     page.extractionConfidence = result.confidence === null ? null : result.confidence / 100;
   }
 
-  let text = mergePageTexts(pages.map((p) => p.text)) || mergedText.trim();
+  // D-23-8: strip repeated running headers/footers (JSTOR-style download
+  // stamps) from the text-layer body-assembly path before this becomes the
+  // citation-extraction-facing document text. Only affects `text` here — the
+  // per-page `page.text` array stays raw/unchanged, since it also feeds
+  // endnote recovery below and the persisted page record. When GROBID
+  // supplies its own body blocks further down, `text` is recomputed from
+  // those blocks instead and this stripped value is superseded.
+  let text = mergePageTexts(stripBoilerplateLines(pages.map((p) => p.text))) || mergedText.trim();
 
   if (!detectedTitle) {
     detectedTitle = text

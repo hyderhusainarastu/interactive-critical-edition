@@ -16,7 +16,7 @@ import {
   pages,
   textBlocks,
 } from "@ice/db";
-import { detectFootnotes, downloadDocumentFile, extractAuthorApparatus, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
+import { collectBoilerplateLines, detectFootnotes, downloadDocumentFile, extractAuthorApparatus, isEntirelyBoilerplate, parseDocument, scanWithOptionalClamAv, validateUploadContent } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
 import { analyzeEditionRun } from "./analyze";
@@ -321,7 +321,23 @@ export async function handleEditionExtraction(documentId: string) {
         updatedAt: new Date(),
       }).where(eq(processingRuns.id, run.id));
     }
-    const apparatus = pipelineAtLeast(pipeline, "v3") ? extractAuthorApparatus({ blocks: apparatusBlocks, text: parsed.text }) : [];
+    let apparatus = pipelineAtLeast(pipeline, "v3") ? extractAuthorApparatus({ blocks: apparatusBlocks, text: parsed.text }) : [];
+    // D-23-8: GROBID can mis-segment a JSTOR-style running footer ("This
+    // content downloaded from … All use subject to …") as its own `note`
+    // block. That block never passes through the text-layer boilerplate strip
+    // in `parsers/pdf.ts` (which only touches the PDF.js fallback text, not
+    // GROBID's own apparatus), so the footer otherwise survives into citation
+    // extraction as a bogus reference query. Drop apparatus entries that are
+    // ENTIRELY such repeated furniture, learned from the raw per-page text
+    // layers. Citation-extraction scope ONLY (this `apparatus` array feeds
+    // `analyzeEditionRun` alone) — the reader-facing `docFootnotes` above are
+    // built from `parsedPage.blocks` independently and are untouched, matching
+    // the D-20-91 "exclude only from the paid, dedup-fragile pipeline"
+    // precedent. Whole-block only: a footer merged into a real note is kept.
+    const boilerplateKeys = collectBoilerplateLines(parsed.pages.map((page) => page.text));
+    if (boilerplateKeys.size > 0) {
+      apparatus = apparatus.filter((entry) => !isEntirelyBoilerplate(entry.text, boilerplateKeys));
+    }
     await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks, apparatus });
 
     // Reprocessing a work the reader already confirmed must not send it back

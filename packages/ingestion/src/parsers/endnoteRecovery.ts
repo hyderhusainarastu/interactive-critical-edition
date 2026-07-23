@@ -37,6 +37,8 @@
  * where GROBID's structural output has no trace of the section at all).
  */
 
+import { collectBoilerplateLines, normalizeBoilerplateCandidate } from "./boilerplate";
+
 export interface RecoveredEndnote {
   /** 0-based page index where this entry's own numbered line begins. */
   pageIndex: number;
@@ -48,45 +50,10 @@ const NOTES_HEADING_LINE = /^\s*(?:end)?notes\s*:?\s*$/i;
 const MIN_ENTRIES_TO_TRUST = 3;
 const MAX_ENTRIES = 200;
 
-/** Strip a leading/trailing 1-4 digit run (a running page number) before
- *  comparing two header/footer candidate lines for equality. */
-function normalizeRepeatCandidate(line: string): string {
-  return line
-    .trim()
-    .replace(/^\d{1,4}\s+/, "")
-    .replace(/\s+\d{1,4}$/, "")
-    .toLowerCase();
-}
-
-/**
- * Lines that repeat verbatim (once page numbers are stripped) across several
- * pages of the SAME document are running headers/footers (JSTOR-style
- * download stamps, journal running heads), not prose — a standard,
- * document-agnostic signal, not specific to any one publisher's boilerplate
- * text. Threshold is deliberately a document-relative fraction (not a fixed
- * count) so it scales with document length; a genuinely repeated short prose
- * sentence would need to occur on a third of the whole document's pages to
- * be caught by mistake, and even then the cost is a few stray words dropped
- * from one entry, never fabricated or duplicated content.
- */
-function collectBoilerplateLines(pageTexts: readonly string[]): Set<string> {
-  const counts = new Map<string, number>();
-  for (const text of pageTexts) {
-    for (const rawLine of text.split("\n")) {
-      const line = rawLine.trim();
-      if (!line || line.length > 120) continue;
-      const key = normalizeRepeatCandidate(line);
-      if (!key) continue;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-  }
-  const threshold = Math.max(3, Math.ceil(pageTexts.length * 0.3));
-  const boilerplate = new Set<string>();
-  for (const [key, count] of counts) {
-    if (count >= threshold) boilerplate.add(key);
-  }
-  return boilerplate;
-}
+// Cross-page repeated-line (running header/footer) detection now lives in
+// `./boilerplate` — extracted so `parsers/pdf.ts`'s body-text path can reuse
+// the same signal (D-23-8). See that module's doc comment for the repeat
+// threshold and normalization rules; behavior here is unchanged.
 
 /** If `line` begins with exactly "`expected`. " (only that integer — "20. "
  *  never matches when `expected` is 2), returns the remainder after the
@@ -140,7 +107,7 @@ export function recoverTruncatedEndnotes(params: {
     for (let i = startIdx; i < lines.length; i++) {
       const trimmed = lines[i].trim();
       if (!trimmed) continue;
-      if (boilerplate.has(normalizeRepeatCandidate(trimmed))) continue;
+      if (boilerplate.has(normalizeBoilerplateCandidate(trimmed))) continue;
 
       const matched = matchExpectedMarker(trimmed, expected);
       if (matched !== null) {
