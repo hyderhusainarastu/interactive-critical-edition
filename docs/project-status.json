@@ -10,9 +10,9 @@
   "updated": "2026-07-23",
   "current": {
     "phase": 23,
-    "headline": "Phase 23 waves 1-2 complete locally. 23.1 (link audit, Phase 21 pull-forward) + 23.2 (a11y: 200% zoom, touch targets, live-region, dialogs, zero WCAG 2A/2AA violations) complete. Floors capability work (selection/bridge/citation-cap-raise) landed 0f3b044 (23.5c implementation). Register: 98 findings (95 fixed, 1 partial, 2 open-scheduled). D-20-84/85 updated (parts 1+2 substantially fixed, concept cap 16); D-20-88/89/90 added (citation-shape gap, endnote-truncation, selection/bridge implementation). Ready for Phase 23.3-23.8 parallel lanes per owner continuous-parallelism directive.",
-    "summary": "Phase 23 gates: 23.1/23.2 complete (9 defects fixed: D-19-1..7,12,13..20 + D-20-87). Selection/bridge/concept-cap work landed (0f3b044) for 23.5 re-floors (local Roochnik cost $0.10 within budget). Phase 23 now in_progress; 23.3-23.8 remain planned. Register frozen at 98 findings (95 fixed\u219296 with D-20-84 parts 1+2; 1 partial D-19-6; 2 open D-22-22/23). Next: Phase 23.3-23.8 parallel work per owner directive.",
-    "nextAction": "Phase 23 continues on parallel lanes: 23.3 (responsive), 23.4 (backend/security), 23.5 (numeric floors), 23.6 (performance), 23.7 (production rollout), 23.8 (closeout) per revised plan \u00a75.2. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
+    "headline": "Phase 23.5 floors2 postmortem \u2014 P1 crash (conflict-guard ranked inserts + episode-scoped cost-ledger) and P2 specific-group cap, both fixed locally and committed (e48cb1a / 624b9ae). Production canary pending full 23.5 numeric-floors gate. Register: 100 findings (97 fixed, 1 partial, 2 open-scheduled). Ready for Phase 23.5 production rollout.",
+    "summary": "Phase 23.5 floors2 postmortem complete: D-23-1 (P1 crash fix: onConflictDoNothing guard on ranked-loop, per-run cost-ledger with episode-scoped seeding), D-23-2 (P2 specific-group cap: 2x maxFullInspections bound). Two integration tests + four unit tests all green locally. Roochnik verification: both fixes proven working. Register updated: 100 total (97 fixed + D-23-1/2), 1 partial (D-19-6), 2 open (D-22-22/23). Production canary pending full 23.5 numeric-floors re-measure gate (existing $1/$5 caps).",
+    "nextAction": "Phase 23.5 production canary (cost verification + full numeric-floors re-measure on Roochnik) then Phase 23.3-23.8 parallel lanes. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-23",
-    "total": 98,
+    "total": 100,
     "bySeverity": {
       "P0": 0,
-      "P1": 27,
-      "P2": 48,
-      "P3": 20
+      "P1": 28,
+      "P2": 50,
+      "P3": 22
     },
     "byStatus": {
-      "fixed": 96,
+      "fixed": 97,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
       "open": 2
     },
-    "note": "Zero P0. 96 fixed (Waves 1-2: Phase 20/21/22 complete + Phase 23.1/23.2 complete + Phase 23.5c implementation landed; D-20-84 parts 1+2 substantially fixed, D-20-85 note on concept-cap-raise). 1 partial (D-19-6). 2 open-scheduled (rescheduled per D-20-83 owner directive): D-22-22 (roadmap.spec.ts pipeline-timing, E2E gate), D-22-23 (Parmenides quote-match). 3 new register entries: D-20-88 (chapter-in-edited-volume shape gap, P3), D-20-89 (endnotes truncation upstream, P2), D-20-90 (selection/bridge/cap implementation, fixed). Defect counts: P1 27 (0 P0), P2 49, P3 22. Phase 23.2 gate findings: D-22-29 WCAG AA (fixed), D-22-30/31 test/animation (fixed), 11-route sweep (zero real violations). Phase 23.5 gates Phase 24 on numeric-floors re-confirmation per owner directive."
+    "note": "Zero P0. 97 fixed (Phases 19-23.5 complete; D-23-1/2 floors2 postmortem P1/P2 both fixed locally e48cb1a/624b9ae). 1 partial (D-19-6 live-pipeline-timing documented open limitation). 2 open-scheduled: D-22-22 (roadmap.spec.ts pipeline-timing E2E), D-22-23 (Parmenides quote-match). 2 new Phase 23.5 entries: D-23-1 (P1 crash fix: onConflictDoNothing ranked-loop insert + episode-scoped cost-ledger seeding), D-23-2 (P2 specific-group cap: 2x maxFullInspections). Defect counts: P1 28, P2 50, P3 22. Phase 23.5 production canary pending full numeric-floors re-measure gate (existing $1/$5 caps honored)."
   },
   "phases": [
     {
