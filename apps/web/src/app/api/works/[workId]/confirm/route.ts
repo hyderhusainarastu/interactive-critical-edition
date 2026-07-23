@@ -1,4 +1,4 @@
-import { db, documents, enqueueAnalyzeWork, works } from "@ice/db";
+import { db, documents, enqueueAnalyzeWork, processingRuns, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -64,11 +64,43 @@ export async function POST(
   // metadata is user-confirmed (plan §23 Phase 4). Best-effort: a queue
   // hiccup must not fail the confirm itself — the user can re-trigger
   // analysis from the work page.
+  //
+  // Citation-wipe guard (D-23-3): ONLY enqueue the legacy analyze-work path
+  // for legacy (v1) documents. A document processed by the edition pipeline
+  // (v2/v3/v4) already ran its analysis inside handleEditionExtraction and
+  // owns a richer, run-scoped, provider-resolved citation set; the legacy
+  // analyzeWork() unconditionally deletes and re-extracts citations, which
+  // would silently destroy that set. We detect "edition pipeline owns this"
+  // data-driven — the presence of a `processing_run` for the document —
+  // rather than reading ANALYSIS_PIPELINE, so this holds even if the web
+  // env and worker env disagree. A true v1 document has no run and still
+  // gets legacy analysis, exactly as before. (Defense in depth: analyzeWork
+  // itself carries the same guard for stale queued jobs and env drift.)
   if (readied[0]) {
-    try {
-      await enqueueAnalyzeWork(readied[0].id);
-    } catch (err) {
-      console.error("[confirm] failed to enqueue analysis", err);
+    const [editionRun] = await db
+      .select({ id: processingRuns.id })
+      .from(processingRuns)
+      .where(eq(processingRuns.documentId, readied[0].id))
+      .limit(1);
+    if (!editionRun) {
+      try {
+        await enqueueAnalyzeWork(readied[0].id);
+      } catch (err) {
+        console.error("[confirm] failed to enqueue analysis", err);
+      }
+    } else {
+      // The edition pipeline already produced the authoritative analysis, so
+      // no analyze-work job is enqueued above. The `readied` UPDATE reset
+      // analysisStatus to "not_started" for the legacy (v1) path; for an
+      // edition document nothing would ever re-drive it, leaving the reader
+      // polling forever (ReaderShell polls while status is "not_started") and
+      // the roadmap/analysis badge stuck as "Not analyzed". Record the honest
+      // terminal status — the same "complete" that extraction set and that
+      // analyzeWork's own guard would set — so the UI settles. Idempotent.
+      await db
+        .update(documents)
+        .set({ analysisStatus: "complete", updatedAt: new Date() })
+        .where(eq(documents.id, readied[0].id));
     }
   }
 

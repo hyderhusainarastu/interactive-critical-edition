@@ -55,6 +55,14 @@ async function main() {
     for (const job of batch) {
       // analyzeWork records its own failure state on the document; it
       // rethrows so pg-boss also marks the job failed for retry/visibility.
+      //
+      // Deliberately NOT gated on isEditionPipeline() here: a stale job
+      // enqueued before the D-23-3 fix, or one enqueued under a web env that
+      // disagrees with this worker's pipeline version, must still be handled
+      // safely. analyzeWork's own data-driven guard (it no-ops when a
+      // processing_run exists for the document) is what makes dequeuing such
+      // a job safe — it must not be moved out of analyzeWork into a version
+      // check here, or that stale-job protection is lost.
       await analyzeWork(job.data.documentId);
     }
   });

@@ -938,6 +938,35 @@ export async function analyzeWork(documentId: string): Promise<void> {
   if (!doc) throw new Error(`Document ${documentId} not found for analysis`);
   if (!doc.extractedText?.trim()) throw new Error("No extracted text to analyze");
 
+  // Citation-wipe guard (D-23-3). The block below deletes this document's
+  // citations and re-extracts them with the OLD heuristic. That is correct
+  // ONLY for legacy (v1) documents, which never create a `processing_run`.
+  // Any document processed by the edition pipeline (v2/v3/v4) owns a
+  // `processing_run` whose own citation-writing pass produced a richer,
+  // run-scoped, provider-resolved citation set (apps/worker/src/analyze.ts's
+  // analyzeEditionRun) — running legacy analysis on it silently destroys that
+  // set. This guard is DATA-DRIVEN and version-independent: it never reads
+  // ANALYSIS_PIPELINE, so it holds even when the web and worker env disagree,
+  // and it correctly lets a true v1 document (no run) fall through to legacy
+  // analysis. It also neutralises any stale analyze-work job already sitting
+  // in the queue from before this fix, and any manual /analyze retrigger on
+  // an edition document (whose real recovery path is /reprocess).
+  const [editionRun] = await db
+    .select({ id: processingRuns.id })
+    .from(processingRuns)
+    .where(eq(processingRuns.documentId, documentId))
+    .limit(1);
+  if (editionRun) {
+    // The edition pipeline is the authoritative analysis for this document.
+    // Record a terminal, honest status and leave its output untouched.
+    // Idempotent: safe to run repeatedly on a retried/duplicate job.
+    await db
+      .update(documents)
+      .set({ analysisStatus: "complete", analysisError: null, updatedAt: new Date() })
+      .where(eq(documents.id, documentId));
+    return;
+  }
+
   await db
     .update(documents)
     .set({ analysisStatus: "analyzing", analysisError: null, updatedAt: new Date() })
