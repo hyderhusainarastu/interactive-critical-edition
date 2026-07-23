@@ -24,6 +24,13 @@ export interface GrobidResult {
   authors: string[];
   blocks: GrobidBlock[];
   tei: string;
+  /** "header" when GROBID's own header-segmentation title is trusted
+   *  verbatim; "body-heading" when that title was rejected (see
+   *  `headerAuthorsMissing`) and recovered instead from a body `<head>`;
+   *  null when no usable title was found either way. Callers use this to
+   *  scale down confidence for a recovered title rather than treating it as
+   *  equally certain as a normal header hit (see `parsers/pdf.ts`). */
+  titleSource: "header" | "body-heading" | null;
 }
 
 // fast-xml-parser preserveOrder node: `{ tagName: [children], ":@": {attrs} }`
@@ -210,6 +217,48 @@ function extractAuthors(header: PoNode): string[] {
   return [...new Set(authors)];
 }
 
+/**
+ * D-20-67: GROBID's header-segmentation model occasionally locks onto the
+ * wrong region of a document — e.g. a hosting service's cover/terms page
+ * prefixed to the real article — and reports a publisher/copublisher line as
+ * the title (observed on a real fixture: title extracted as "North American
+ * Philosophical Publications", the journal's copublisher printed on the PDF
+ * cover, with the article's real title never touched). There is no reliable
+ * way to blocklist every publisher/imprint string this could ever produce,
+ * but a correctly segmented scholarly header virtually always yields at
+ * least one `<persName>` for the author — the same header pass that
+ * mis-produced the title in the real failure also produced zero person
+ * names (only an institutional `<affiliation>`). Zero person names is
+ * therefore treated as structural evidence the whole header region was
+ * mis-anchored, not a name-specific rule, and the title it also produced is
+ * distrusted rather than trusted at face value.
+ */
+function headerAuthorsMissing(header: PoNode): boolean {
+  const names: PoNode[] = [];
+  collect(header, "persName", names);
+  return names.length === 0;
+}
+
+/**
+ * Recovery for a distrusted header title: GROBID's body-segmentation pass
+ * (a different model from the header pass above) marks the article's own
+ * structural headings as `<head>` elements, each carrying font-size-bearing
+ * coordinates. On the earliest page that carries any such heading, the
+ * article's actual title is reliably the largest one — a running
+ * venue/journal line prints smaller on the same page, and later section
+ * headings ("Part Two", "Conclusion", ...) fall on later pages, not the
+ * earliest heading page. This reuses GROBID's own structural output rather
+ * than guessing from raw text.
+ */
+function recoverTitleFromHeadings(blocks: GrobidBlock[]): string | null {
+  const headings = blocks.filter((b) => b.kind === "header" && b.bbox && b.text.trim().length > 0);
+  if (!headings.length) return null;
+  const earliestPage = Math.min(...headings.map((b) => b.bbox!.page));
+  const onEarliestPage = headings.filter((b) => b.bbox!.page === earliestPage);
+  const largest = onEarliestPage.reduce((best, b) => (b.bbox!.h > best.bbox!.h ? b : best));
+  return clean(largest.text) || null;
+}
+
 /** Parse a GROBID TEI string into structured, page-attributed blocks.
  *  Returns null for input that isn't a usable TEI document. */
 export function parseTei(tei: string): GrobidResult | null {
@@ -227,14 +276,37 @@ export function parseTei(tei: string): GrobidResult | null {
   const header = childrenOf(teiRoot).find((n) => tagName(n) === "teiHeader") ?? null;
   const textEl = childrenOf(teiRoot).find((n) => tagName(n) === "text") ?? null;
 
-  const title = header ? extractTitle(header) : null;
-  const authors = header ? extractAuthors(header) : [];
-
   const ctx: WalkCtx = { currentPage: 0, blocks: [] };
-  if (title) ctx.blocks.push({ kind: "title", text: title });
   if (textEl) walkBody(textEl, ctx);
 
-  return { title, authors, blocks: ctx.blocks, tei };
+  let title = header ? extractTitle(header) : null;
+  const authors = header ? extractAuthors(header) : [];
+  let titleSource: GrobidResult["titleSource"] = title ? "header" : null;
+
+  if (title && header && headerAuthorsMissing(header)) {
+    const recovered = recoverTitleFromHeadings(ctx.blocks);
+    title = recovered;
+    titleSource = recovered ? "body-heading" : null;
+  }
+
+  // D-20-67 (duplicate-title regression, this fix): a header-trusted title
+  // comes from `teiHeader` metadata that `walkBody` never emits into
+  // `ctx.blocks`, so unshifting it as a leading synthetic "title" block adds
+  // information, not a copy — safe to prepend. A body-heading *recovery*, in
+  // contrast, IS already one of the blocks `walkBody` emitted (the largest
+  // heading on the earliest heading page, taken verbatim in
+  // `recoverTitleFromHeadings` above) — unshifting it too would render that
+  // exact text twice once `parsers/pdf.ts`'s `processedTextFromPages` renders
+  // both the synthetic leading block and the heading at its natural position.
+  // Leaving the heading where `walkBody` put it (still a "header" block, not
+  // promoted to "title") keeps the processed text in the document's true
+  // reading order and keeps the recovered title appearing exactly once;
+  // `title`/`titleSource` above already carry it to every caller — such as
+  // `parsePdf`'s `detectedTitle` — that needs it as metadata rather than as
+  // reader-facing prose.
+  if (title && titleSource === "header") ctx.blocks.unshift({ kind: "title", text: title });
+
+  return { title, authors, blocks: ctx.blocks, tei, titleSource };
 }
 
 /**

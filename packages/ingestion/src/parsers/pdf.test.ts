@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergePageTexts, processedTextFromPages } from "./pdf";
+import { mergePageTexts, metadataConfidenceFor, processedTextFromPages } from "./pdf";
 
 describe("mergePageTexts (OCR reconstruction)", () => {
   it("joins non-empty page texts into one document string", () => {
@@ -44,5 +44,26 @@ describe("mergePageTexts (OCR reconstruction)", () => {
     expect(text).toContain("Figure 1. A supporting diagram.");
     expect(text).not.toContain("This is authorial apparatus.");
     expect(text).not.toContain("Author, Work.");
+  });
+});
+
+describe("metadataConfidenceFor (D-20-67)", () => {
+  it("trusts a genuine GROBID header title at the pre-existing high confidence", () => {
+    expect(metadataConfidenceFor("header", true)).toBe(0.95);
+  });
+
+  it("keeps a recovered body-heading title below the 0.9 autoReady threshold, so it still routes to needs_review", () => {
+    const confidence = metadataConfidenceFor("body-heading", true);
+    expect(confidence).toBe(0.7);
+    expect(confidence).toBeLessThan(0.9);
+  });
+
+  it("falls back to the plain-fallback confidence when GROBID produced no usable title at all", () => {
+    expect(metadataConfidenceFor(undefined, true)).toBe(0.65);
+    expect(metadataConfidenceFor(null, true)).toBe(0.65);
+  });
+
+  it("returns 0 when there is no title from any source", () => {
+    expect(metadataConfidenceFor(undefined, false)).toBe(0);
   });
 });

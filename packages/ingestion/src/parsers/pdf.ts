@@ -1,5 +1,5 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
-import { type GrobidBbox, processWithGrobid } from "./grobid";
+import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
 
 export interface ParsedBlock {
@@ -43,6 +43,23 @@ export function processedTextFromPages(pages: readonly ParsedPage[]): string {
  *  empty still produce non-empty document text (plan 1.4). */
 export function mergePageTexts(pageTexts: string[]): string {
   return pageTexts.map((t) => t.trim()).filter(Boolean).join("\n\n");
+}
+
+/**
+ * D-20-67: a title recovered from a body heading (GROBID's header-author
+ * guard rejected the header's own title — see `parsers/grobid.ts`) is real
+ * structural evidence, but it is a heuristic fallback rather than GROBID's
+ * own header judgment, so it is deliberately kept below the `autoReady`
+ * confidence threshold (0.9, see `apps/worker/src/extraction.ts`) — the
+ * document still goes to `needs_review` for a human to confirm, rather than
+ * asserting a second guess with the same false certainty as the first one
+ * that caused this defect. A plain PDF-metadata/first-line fallback (no
+ * GROBID title at all) stays at its prior, already-sub-threshold value.
+ */
+export function metadataConfidenceFor(titleSource: GrobidResult["titleSource"] | undefined, hasFallbackTitle: boolean): number {
+  if (titleSource === "header") return 0.95;
+  if (titleSource === "body-heading") return 0.7;
+  return hasFallbackTitle ? 0.65 : 0;
 }
 
 /**
@@ -129,6 +146,6 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     // A syntactically valid TEI response without prose blocks is not enough
     // to claim structural fidelity; retain the transparent PDF.js fallback.
     structureState: grobid && processedTextFromPages(pages).length > 0 && grobid.blocks.some((block) => block.kind === "body") ? "full" : "limited",
-    metadataConfidence: grobid?.title ? 0.95 : detectedTitle ? 0.65 : 0,
+    metadataConfidence: metadataConfidenceFor(grobid?.title ? grobid.titleSource : undefined, Boolean(detectedTitle)),
   };
 }
