@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { STAGE_ORDER } from "@ice/curriculum";
-import { assignStagePositions, nextUp, progressByStage } from "./roadmapLayout";
+import { assignStagePositions, nextUp, progressByStage, stageHeaderPositions } from "./roadmapLayout";
 import type { GraphNode, RoadmapAnnotation } from "./types";
 
 /**
@@ -103,6 +103,24 @@ const nodes: GraphNode[] = [
 }
 {
   assert.equal(nextUp([node({ id: "work:1", type: "work", uploaded: true })]), null, "next up is null when nothing is annotated");
+}
+
+// --- stageHeaderPositions: one header per STAGE_ORDER stage, sharing the
+//     node column's x, always clear of the tallest column ---
+{
+  const headers = stageHeaderPositions(nodes);
+  assert.deepEqual(headers.map((h) => h.stage), STAGE_ORDER, "one header per stage, in STAGE_ORDER");
+  const nodePositions = assignStagePositions(nodes);
+  for (const header of headers) {
+    const stageNodeFx = STAGE_ORDER.indexOf(header.stage) * 260;
+    assert.equal(header.fx, stageNodeFx, "header shares its stage's column x");
+  }
+  const maxAbsFy = Math.max(...[...nodePositions.values()].map((p) => Math.abs(p.fy)));
+  for (const header of headers) {
+    assert.ok(Math.abs(header.fy) > maxAbsFy, "every header sits clear of the tallest column's rows");
+  }
+  // Deterministic across calls, like assignStagePositions.
+  assert.deepEqual(stageHeaderPositions(nodes), stageHeaderPositions(nodes));
 }
 
 console.log("roadmapLayout.test.ts: all assertions passed");

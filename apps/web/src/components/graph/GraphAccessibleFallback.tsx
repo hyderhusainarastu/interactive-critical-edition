@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { STAGE_LABEL } from "@ice/curriculum";
+import { TIER_LABEL } from "@ice/roadmap";
 import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode } from "./types";
 import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type NodeEmphasisState } from "./graphFocus";
 
@@ -25,8 +27,16 @@ import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type No
  * matching the same key bindings `GraphView`'s own document-level listener
  * uses, so the behavior is identical whether focus starts inside this table
  * or anywhere else on the page.
+ *
+ * Phase 22.8 (feature plan §2.3): when ANY node in `data` carries a
+ * `roadmap` annotation, the table gains Stage/Priority/Order/Known columns
+ * plus a short "Why" summary, and its default sort switches to reading
+ * sequence — a display-shape decision, not a data one (still the exact same
+ * shared `data` prop, sorted differently). Detected from the data itself
+ * (never a separate prop) so this table and `GraphView`'s own `layoutMode`
+ * state can never disagree about which shape to render.
  */
-type SortKey = "label" | "state" | "type" | "connections";
+type SortKey = "label" | "state" | "type" | "connections" | "sequence";
 
 export function GraphAccessibleFallback({
   data,
@@ -60,8 +70,23 @@ export function GraphAccessibleFallback({
     if (!isRowButtonFocused) return;
     rowButtonRefs.current.get(selectedNodeId)?.focus();
   }, [selectedNodeId]);
-  const [sortKey, setSortKey] = useState<SortKey>("state");
+  // Phase 22.8: "sequence" is the default sort in roadmap mode, "state" the
+  // pre-existing explore-mode default — detected from the data itself (see
+  // the module doc comment above) so it can never disagree with `GraphView`.
+  const hasRoadmap = useMemo(() => data.nodes.some((n) => n.roadmap != null), [data.nodes]);
+  const [sortKey, setSortKey] = useState<SortKey>(() => (hasRoadmap ? "sequence" : "state"));
   const [asc, setAsc] = useState(true);
+  // Resets the DEFAULT sort only when the roadmap/explore MODE itself
+  // changes (an external layout switch this table has no other way to
+  // observe from its own props) — not on every within-mode data refresh,
+  // matching the sidebar tab-sync precedent (plan's Design Decisions:
+  // "the sidebar's tab-switch-on-marker-click is the one place... that
+  // genuinely needs an effect-driven external-prop sync").
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSortKey(hasRoadmap ? "sequence" : "state");
+    setAsc(true);
+  }, [hasRoadmap]);
 
   // Connections per node (degree) and a readable "connected to" summary.
   const connections = useMemo(() => {
@@ -90,6 +115,17 @@ export function GraphAccessibleFallback({
       if (sortKey === "connections") {
         return dir * ((connections.get(a.id)?.length ?? 0) - (connections.get(b.id)?.length ?? 0));
       }
+      if (sortKey === "sequence") {
+        // Un-annotated nodes (uploaded-work anchors in roadmap mode) sort
+        // after every annotated one, then by label — there is no reading
+        // order for a node the roadmap pipeline never reached.
+        const av = a.roadmap?.sequence;
+        const bv = b.roadmap?.sequence;
+        if (av == null && bv == null) return dir * a.label.localeCompare(b.label);
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return dir * (av - bv);
+      }
       return dir * String(a[sortKey]).localeCompare(String(b[sortKey]));
     });
   }, [data.nodes, sortKey, asc, connections]);
@@ -113,18 +149,26 @@ export function GraphAccessibleFallback({
             <SortHeader label="Title" active={sortKey === "label"} asc={asc} onClick={() => toggleSort("label")} />
             <SortHeader label="Kind" active={sortKey === "type"} asc={asc} onClick={() => toggleSort("type")} />
             <SortHeader label="Status" active={sortKey === "state"} asc={asc} onClick={() => toggleSort("state")} />
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Stage</th>}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Priority</th>}
+            {hasRoadmap && (
+              <SortHeader label="Order" active={sortKey === "sequence"} asc={asc} onClick={() => toggleSort("sequence")} />
+            )}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Known</th>}
             <SortHeader
               label="Connections"
               active={sortKey === "connections"}
               asc={asc}
               onClick={() => toggleSort("connections")}
             />
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Why</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((n) => (
             <NodeRow
               key={n.id}
+              hasRoadmap={hasRoadmap}
               node={n}
               connections={connections.get(n.id) ?? []}
               selected={selectedNodeId === n.id}
@@ -178,6 +222,7 @@ function NodeRow({
   onPreviousConnected,
   onClearFocus,
   buttonRef,
+  hasRoadmap = false,
 }: {
   node: GraphData["nodes"][number];
   connections: string[];
@@ -188,6 +233,10 @@ function NodeRow({
   onPreviousConnected?: () => void;
   onClearFocus?: () => void;
   buttonRef?: (element: HTMLButtonElement | null) => void;
+  /** Whether the TABLE (not just this row) is showing roadmap columns —
+   *  every row must agree, so a node without its own `.roadmap` still
+   *  renders the (empty) cells rather than shifting columns out of line. */
+  hasRoadmap?: boolean;
 }) {
   const meta = STATE_META[node.state];
   // Phase 21.6 keyboard parity: ArrowRight/ArrowDown step to the next
@@ -252,9 +301,18 @@ function NodeRow({
           {meta.label}
         </span>
       </td>
+      {hasRoadmap && <td className="py-2 pr-4 text-[var(--color-text-muted)]">{node.roadmap ? STAGE_LABEL[node.roadmap.stage] : "—"}</td>}
+      {hasRoadmap && <td className="py-2 pr-4 text-[var(--color-text-muted)]">{node.roadmap ? TIER_LABEL[node.roadmap.tier] : "—"}</td>}
+      {hasRoadmap && <td className="py-2 pr-4 text-[var(--color-text-muted)]">{node.roadmap?.sequence ?? "—"}</td>}
+      {hasRoadmap && (
+        <td className="py-2 pr-4 text-[var(--color-text-muted)]">
+          {node.roadmap ? (node.roadmap.known ? "✓ Yes" : "No") : "—"}
+        </td>
+      )}
       <td className="py-2 pr-4 text-xs text-[var(--color-text-muted)]">
         {connections.length === 0 ? "—" : <ul className="flex flex-col gap-0.5">{connections.map((c, i) => <li key={i}>{c}</li>)}</ul>}
       </td>
+      {hasRoadmap && <td className="py-2 pr-4 text-xs text-[var(--color-text-muted)]">{node.roadmap?.reason ?? "—"}</td>}
     </tr>
   );
 }

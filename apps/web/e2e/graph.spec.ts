@@ -43,7 +43,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, resourceId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
 
     await page.getByText("Accessible node browser").click();
@@ -67,7 +67,7 @@ test.describe("Visualization graph", () => {
     expect(navLabels).toEqual(expect.arrayContaining(["Visualization", "Works", "Library"]));
     expect(navLabels.indexOf("Visualization")).toBeLessThan(navLabels.indexOf("Works"));
 
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await expect(page.getByLabel("Edge color legend")).toContainText("Citation / reference");
     await expect(page.getByLabel("Edge color legend")).toContainText("Prerequisite");
     await expect(page.getByLabel("Edge color legend")).toContainText("Structure");
@@ -77,7 +77,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
 
@@ -102,7 +102,7 @@ test.describe("Visualization graph", () => {
     const { workId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph?type=concept`);
+    await page.goto(`/works/${workId}/graph?type=concept&layout=explore`);
     // 2 = the matching concept + the uploaded-work anchor (D-21-10).
     await expect(page.getByText("2 of 4 shown")).toBeVisible();
     await expect(page.getByLabel("Accessible graph browser")).toBeVisible();
@@ -117,7 +117,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
 
     await page.getByLabel("Credibility").selectOption("high");
     await expect(page).toHaveURL(/[?&]credibilityBand=high/);
@@ -138,7 +138,7 @@ test.describe("Visualization graph", () => {
     const second = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto("/graph");
+    await page.goto("/graph?layout=explore");
     await page.getByText("Accessible node browser").click();
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toBeVisible();
@@ -163,7 +163,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
 
@@ -187,7 +187,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     // The seeded bib record is not itself an owned work, so it renders as
@@ -210,7 +210,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     await page.getByLabel("Authority").selectOption("A");
@@ -231,7 +231,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     await page.getByLabel("Provider").selectOption("crossref");
@@ -251,7 +251,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
 
     const clearButton = page.getByRole("button", { name: "Clear all filters" });
     // Nothing to clear yet — the control is honestly disabled at the
@@ -303,7 +303,7 @@ test.describe("Visualization graph", () => {
   test("a table row and a graph selection share the bounded provenance inspector", async ({ page }) => {
     const { workId, bibId } = await seedWorkWithGraphData(userId);
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
 
     await page.getByText("Accessible node browser").click();
     await page.locator(`[data-graph-node="external:bib:${bibId}"]`).click();
@@ -321,7 +321,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId } = await seedWorkWithGraphData(userId);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
     const row = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
     await row.getByRole("button", { name: /Physics/ }).focus();
@@ -380,7 +380,7 @@ test.describe("Visualization graph", () => {
   test("fullscreen applies to the graph stage and Escape restores the control", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(userId);
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByRole("button", { name: "Fullscreen" }).click();
     await expect(page.getByRole("button", { name: "Exit fullscreen" })).toBeVisible();
     await page.keyboard.press("Escape");
@@ -396,7 +396,7 @@ test.describe("Visualization graph", () => {
     const first = await seedWorkWithGraphData(userId, { title: "Pinned first work" });
     const second = await seedWorkWithGraphData(userId, { title: "Pinned second work" });
     await login(page);
-    await page.goto(`/graph?associatedWork=${encodeURIComponent(`work:${first.workId}`)}`);
+    await page.goto(`/graph?associatedWork=${encodeURIComponent(`work:${first.workId}`)}&layout=explore`);
 
     await page.getByText("Accessible node browser").click();
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
@@ -422,7 +422,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId } = await seedWorkWithGraphData(userId, { withSecondEdgeType: true });
 
     await login(page);
-    await page.goto(`/works/${workId}/graph?relation=cites`);
+    await page.goto(`/works/${workId}/graph?relation=cites&layout=explore`);
 
     // D-21-11 regression: this used to be a 4-way substring collision
     // ("Relation" matched the select's own label plus the "Relationship
@@ -447,7 +447,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph?type=concept`);
+    await page.goto(`/works/${workId}/graph?type=concept&layout=explore`);
     await page.getByText("Accessible node browser").click();
     // The concept filter still honestly narrows the surrounding research web…
     await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
@@ -499,7 +499,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, libraryResourceId } = await seedWorkWithGraphData(userId, { withLibraryResource: true });
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
     await expect(bibRow.getByRole("link", { name: "Library entry" })).toHaveAttribute("href", `/library/${libraryResourceId}`);
@@ -590,7 +590,7 @@ test.describe("Visualization graph", () => {
     // Legend metadata: both new families (previously unexercised by any
     // other graph.spec.ts test) now appear, derived automatically from
     // `edgeFamilyFor()` — no separate legend wiring was needed.
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await expect(page.getByLabel("Edge color legend")).toContainText("Prerequisite");
     await expect(page.getByLabel("Edge color legend")).toContainText("Opposition");
 
@@ -598,7 +598,7 @@ test.describe("Visualization graph", () => {
     // control -> URL/state -> filter function -> rendered output for these
     // two NEW edge-type values specifically (D-21-1's edge-level filtering,
     // now exercised against relation sources it was never proven against).
-    await page.goto(`/works/${workId}/graph?relation=is_prerequisite_for`);
+    await page.goto(`/works/${workId}/graph?relation=is_prerequisite_for&layout=explore`);
     await page.getByText("Accessible node browser").click();
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
     await expect(bibRow).toContainText("is prerequisite for");
@@ -613,7 +613,7 @@ test.describe("Visualization graph", () => {
     const { workId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
 
     // The state legend on the graph page should include "Uploaded work" as a label
     // for the primary state (uploaded works). Use first() to avoid strict mode issues.
@@ -632,7 +632,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
@@ -665,7 +665,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
@@ -706,7 +706,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
@@ -742,7 +742,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
@@ -765,7 +765,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
     await page.getByText("Accessible node browser").click();
 
     const workRow = page.locator(`[data-graph-node="work:${workId}"]`);
@@ -807,7 +807,7 @@ test.describe("Visualization graph", () => {
     const { workId, bibId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    await page.goto(`/works/${workId}/graph`);
+    await page.goto(`/works/${workId}/graph?layout=explore`);
 
     await page.getByLabel("Kind").selectOption("reference");
     await expect(page).toHaveURL(/type=reference/);

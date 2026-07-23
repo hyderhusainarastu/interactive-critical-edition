@@ -5,7 +5,10 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { STAGE_LABEL, STAGE_ORDER, type CurriculumStage } from "@ice/curriculum";
+import { READER_LEVELS, TIER_LABEL, type ReaderLevelFilter } from "@ice/roadmap";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
+import { CATEGORY_META } from "../shared/annotationMeta";
 import {
   CREDIBILITY_BAND_META,
   DEFAULT_GRAPH_FILTERS,
@@ -18,11 +21,13 @@ import {
   edgeFamilyFor,
   filterGraphData,
   isDefaultFilters,
+  roadmapSubset,
   type GraphData,
   type GraphFilters,
   type GraphLink,
   type GraphNode,
   type NodeType,
+  type RoadmapAnnotation,
 } from "./types";
 import {
   computeFocusEmphasis,
@@ -33,6 +38,7 @@ import {
   FOCUS_MODES,
   type FocusMode,
 } from "./graphFocus";
+import { nextUp, progressByStage } from "./roadmapLayout";
 
 // WebGL + three.js — client only, so pull it in dynamically with SSR off.
 const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => m.KnowledgeGraph3D), {
@@ -40,8 +46,70 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
   loading: () => <p className="py-10 text-center text-[var(--color-text-muted)]">Loading 3D view…</p>,
 });
 
-const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
+const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork", "stage"] as const;
 const PINNED_WORK_PARAM = "pinnedWork";
+// Phase 22.8 (feature plan §2.3): the Roadmap layout mode is the DEFAULT for
+// every Visualization page — its absence from the URL (like every other
+// FILTER_KEYS default) IS "roadmap", and `?layout=explore` is the one
+// non-default value ever written, matching `filtersFromParams`'s own
+// "all" idiom rather than inventing a second convention.
+const LAYOUT_PARAM = "layout";
+const ROADMAP_ROOT_PARAM = "roadmapRoot";
+const READER_LEVEL_PARAM = "readerLevel";
+// 22.8 verifier finding: `KnowledgeGraph3D`'s `showReadingThread` prop (the
+// static, reduced-motion-safe polyline through the reading sequence) was
+// implemented but never wired to any control — permanently `false`. URL-synced
+// the same way as `layout`/`roadmapRoot` above: off by default (absent from
+// the URL), `?readingThread=1` is the one non-default value ever written.
+const READING_THREAD_PARAM = "readingThread";
+const WORK_PREFIX = "work:";
+type LayoutMode = "roadmap" | "explore";
+
+function layoutModeFromParams(params: URLSearchParams): LayoutMode {
+  return params.get(LAYOUT_PARAM) === "explore" ? "explore" : "roadmap";
+}
+
+function readerLevelFromParams(params: URLSearchParams): ReaderLevelFilter {
+  const raw = params.get(READER_LEVEL_PARAM);
+  return raw && ((READER_LEVELS as readonly string[]).includes(raw) || raw === "all") ? (raw as ReaderLevelFilter) : "all";
+}
+
+const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
+  all: "Show all levels",
+};
+
+/**
+ * Display-language override for the inspector's roadmap disclosure (feature
+ * plan §2.4): the stored `relationship_category` enum value never changes —
+ * `ai_inferred` keeps meaning exactly what it always has everywhere else in
+ * the app (annotations, roadmap list) — only the STRING shown here, in this
+ * one disclosure, is friendlier and carries no "AI" wording (owner
+ * directive). Every other category reuses the shared `CATEGORY_META` label
+ * so the two surfaces can't drift on wording for the other nine values.
+ */
+function roadmapCategoryDisplay(category: RoadmapAnnotation["category"]): string {
+  if (category === "ai_inferred") return "Inferred connection — uncertain until you verify it by reading";
+  return CATEGORY_META[category]?.label ?? category.replace(/_/g, " ");
+}
+
+/**
+ * Mechanically assembles the inspector's "why this, here" basis line from
+ * fields the contract actually carries (feature plan §2.4) — category,
+ * confidence, and which selected root(s) reached this node — never a model
+ * call and never a fabricated field (no run/date is recorded on
+ * `RoadmapAnnotation`, so none is invented here; see `remainingWork`).
+ */
+function roadmapBasisLine(annotation: RoadmapAnnotation, allNodes: readonly GraphNode[]): string {
+  const rootLabels = annotation.rootWorkIds
+    .map((id) => allNodes.find((node) => node.id === id)?.label)
+    .filter((label): label is string => Boolean(label));
+  const rootPart = rootLabels.length > 0 ? ` — found via ${rootLabels.join(", ")}` : "";
+  return `Basis: ${roadmapCategoryDisplay(annotation.category)}${rootPart} · confidence ${Math.round(annotation.confidence * 100)}%`;
+}
 // Phase 21.6 (D-21-2): selection and focus-mode round-trip through the URL
 // like the filters above, but are deliberately NOT part of `FILTER_KEYS` —
 // "Clear all filters" narrows/widens which nodes exist, selection/focus-mode
@@ -98,12 +166,38 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     const raw = searchParams.get(FOCUS_MODE_PARAM);
     return raw && (FOCUS_MODES as readonly string[]).includes(raw) ? (raw as FocusMode) : DEFAULT_FOCUS_MODE;
   });
+  // Phase 22.8: layout mode, the "Roadmap for" root-work selection, and the
+  // reader-level narrowing all URL-sync exactly like the state above —
+  // initialized synchronously from the URL, never restored via an effect.
+  const [layoutMode, setLayoutModeState] = useState<LayoutMode>(() => layoutModeFromParams(searchParams));
+  const [roadmapRootIds, setRoadmapRootIds] = useState<string[]>(() =>
+    searchParams.getAll(ROADMAP_ROOT_PARAM).filter((id) => id.startsWith(WORK_PREFIX)),
+  );
+  const [readerLevel, setReaderLevelState] = useState<ReaderLevelFilter>(() => readerLevelFromParams(searchParams));
+  const [showReadingThread, setShowReadingThreadState] = useState<boolean>(
+    () => searchParams.get(READING_THREAD_PARAM) === "1",
+  );
   const graphWorkspaceRef = useRef<HTMLDivElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
 
+  // The internal fetch URL is the one place `layout`/`roadmapRoot`/
+  // `readerLevel` actually reach the server — the browser's own address bar
+  // only ever shows the non-default values (see `setLayoutMode` etc. below),
+  // matching how `filters`'s "all" defaults are never written to the URL
+  // either. Explore mode sends no roadmap params at all, so its request is
+  // byte-identical to every pre-existing caller of this endpoint.
+  const fetchUrl = useMemo(() => {
+    if (layoutMode !== "roadmap") return endpoint;
+    const params = new URLSearchParams();
+    params.set(LAYOUT_PARAM, "roadmap");
+    for (const id of roadmapRootIds) params.append(ROADMAP_ROOT_PARAM, id.startsWith(WORK_PREFIX) ? id.slice(WORK_PREFIX.length) : id);
+    if (readerLevel !== "all") params.set(READER_LEVEL_PARAM, readerLevel);
+    return `${endpoint}?${params.toString()}`;
+  }, [endpoint, layoutMode, roadmapRootIds, readerLevel]);
+
   useEffect(() => {
     let ignore = false;
-    fetch(endpoint)
+    fetch(fetchUrl)
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Failed to load graph");
         return res.json();
@@ -117,7 +211,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     return () => {
       ignore = true;
     };
-  }, [endpoint]);
+  }, [fetchUrl]);
 
   const updateFilter = useCallback(
     (key: keyof GraphFilters, value: string) => {
@@ -209,6 +303,86 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, pinnedWorkIds, router, searchParams]);
 
+  // Phase 22.8: the layout-mode toggle. Roadmap is the default (never
+  // written to the URL); `?layout=explore` is the one non-default value.
+  // Switching AWAY from roadmap also clears the `stage` filter — it has no
+  // meaning against an explore-mode payload (no node ever carries a
+  // `roadmap` annotation there), and leaving it set would silently hide
+  // every non-anchor node the instant explore mode loaded.
+  const setLayoutMode = useCallback(
+    (mode: LayoutMode) => {
+      setLayoutModeState(mode);
+      const params = new URLSearchParams(searchParams.toString());
+      if (mode === "roadmap") params.delete(LAYOUT_PARAM);
+      else params.set(LAYOUT_PARAM, mode);
+      if (mode === "explore") {
+        params.delete("stage");
+        setFilters((prev) => (prev.stage === "all" ? prev : { ...prev, stage: "all" }));
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  // Phase 22.8: "Roadmap for" root-work selection (feature plan §2.3/§2.4).
+  // An EMPTY array is the honest "no override" state — the server already
+  // supplies the correct default (work-scoped: that work; global: every
+  // uploaded work) when no `roadmapRoot` param is sent at all, so the empty
+  // state is never written back as an explicit list of every work id.
+  const defaultRoadmapRootIds = useMemo(
+    () => (data ? data.nodes.filter((n) => n.type === "work").map((n) => n.id) : []),
+    [data],
+  );
+  const checkedRoadmapRootIds = roadmapRootIds.length > 0 ? roadmapRootIds : defaultRoadmapRootIds;
+  const toggleRoadmapRoot = useCallback(
+    (workId: string, checked: boolean) => {
+      const base = roadmapRootIds.length > 0 ? roadmapRootIds : defaultRoadmapRootIds;
+      const next = checked ? [...new Set([...base, workId])] : base.filter((id) => id !== workId);
+      setRoadmapRootIds(next);
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete(ROADMAP_ROOT_PARAM);
+      for (const id of next) params.append(ROADMAP_ROOT_PARAM, id);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [defaultRoadmapRootIds, pathname, roadmapRootIds, router, searchParams],
+  );
+  const selectWholeLibrary = useCallback(() => {
+    setRoadmapRootIds([]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete(ROADMAP_ROOT_PARAM);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const setReaderLevel = useCallback(
+    (level: ReaderLevelFilter) => {
+      setReaderLevelState(level);
+      const params = new URLSearchParams(searchParams.toString());
+      if (level === "all") params.delete(READER_LEVEL_PARAM);
+      else params.set(READER_LEVEL_PARAM, level);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  // Off-by-default reading-thread toggle (22.8 verifier finding): same
+  // URL-sync pattern as `setReaderLevel`/`setLayoutMode` above — only the
+  // non-default (`true`) state is ever written to the URL.
+  const setShowReadingThread = useCallback(
+    (value: boolean) => {
+      setShowReadingThreadState(value);
+      const params = new URLSearchParams(searchParams.toString());
+      if (value) params.set(READING_THREAD_PARAM, "1");
+      else params.delete(READING_THREAD_PARAM);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
   function toggleFullscreen() {
     const target = graphWorkspaceRef.current;
     if (!target) return;
@@ -227,24 +401,32 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
 
   const filtered = useMemo(() => (data ? filterGraphData(data, filters, pinnedWorkIds) : null), [data, filters, pinnedWorkIds]);
 
+  // Phase 22.8: the ONE shared derivation both views actually render from.
+  // In explore mode this is byte-identical to `filtered` (no subsetting) —
+  // in roadmap mode it further narrows to annotated nodes plus uploaded-work
+  // anchors (feature plan §2.2's `roadmapSubset`), so the 3D scene and the
+  // accessible table can never disagree about the roadmap-mode node set
+  // either, the same guarantee `filterGraphData` already gives for filters.
+  const displayed = useMemo(() => (filtered && layoutMode === "roadmap" ? roadmapSubset(filtered) : filtered), [filtered, layoutMode]);
+
   // Derived, not stored — `selectedId` (a plain string, URL-synced above) is
-  // the real state; `selected` just looks it up in the CURRENTLY filtered
-  // set each render, so a filter that scopes the selected node out of view
-  // makes `selected` naturally become `null` with no extra bookkeeping.
+  // the real state; `selected` just looks it up in the CURRENTLY displayed
+  // set each render, so a filter/mode that scopes the selected node out of
+  // view makes `selected` naturally become `null` with no extra bookkeeping.
   const selected = useMemo(
-    () => (filtered && selectedId ? filtered.nodes.find((node) => node.id === selectedId) ?? null : null),
-    [filtered, selectedId],
+    () => (displayed && selectedId ? displayed.nodes.find((node) => node.id === selectedId) ?? null : null),
+    [displayed, selectedId],
   );
 
-  // Phase 21.6 (D-21-2): computed ONCE here, from the shared filtered
+  // Phase 21.6 (D-21-2): computed ONCE here, from the shared displayed
   // `GraphData` + `selectedId` + `focusMode` — never inside either child —
   // so the 3D scene and the accessible table can never disagree about which
   // nodes are in focus (`KnowledgeGraph3D` additionally unions this with its
   // own local hover state before rendering; the table has no hover concept
   // and uses this value directly for its `data-emphasis` attribute).
   const focusEmphasis = useMemo(
-    () => (filtered ? computeFocusEmphasis(filtered, selectedId, focusMode) : EMPTY_FOCUS_EMPHASIS),
-    [filtered, selectedId, focusMode],
+    () => (displayed ? computeFocusEmphasis(displayed, selectedId, focusMode) : EMPTY_FOCUS_EMPHASIS),
+    [displayed, selectedId, focusMode],
   );
 
   // Prev/next-connected-node keyboard walk: steps through `navAnchorId`'s
@@ -256,12 +438,12 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   // reason about. A no-op when the anchor has no connections at all.
   const stepConnectedNode = useCallback(
     (direction: 1 | -1) => {
-      if (!filtered || !navAnchorId) return;
-      const neighbors = connectedNodeIds(filtered, navAnchorId);
+      if (!displayed || !navAnchorId) return;
+      const neighbors = connectedNodeIds(displayed, navAnchorId);
       if (neighbors.length === 0) return;
       const nextIndex = navIndex === -1 ? (direction === 1 ? 0 : neighbors.length - 1) : (navIndex + direction + neighbors.length) % neighbors.length;
       const nextId = neighbors[nextIndex];
-      const node = filtered.nodes.find((n) => n.id === nextId);
+      const node = displayed.nodes.find((n) => n.id === nextId);
       if (!node) return;
       setNavIndex(nextIndex);
       setSelectedId(node.id);
@@ -271,7 +453,39 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
       const qs = params.toString();
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     },
-    [filtered, navAnchorId, navIndex, pathname, router, searchParams],
+    [displayed, navAnchorId, navIndex, pathname, router, searchParams],
+  );
+
+  // Phase 22.8 (feature plan §2.3/§2.4): reading-sequence stepping, progress
+  // strip, and next-up — pure over the same `displayed` dataset the scene
+  // and table already share, so these can never disagree with what's
+  // actually rendered either. Only meaningful in roadmap mode; all three are
+  // simply empty/null in explore mode (no node ever carries `.roadmap`).
+  const sequenceOrderedNodes = useMemo(
+    () => (displayed ? [...displayed.nodes].filter((n) => n.roadmap != null).sort((a, b) => a.roadmap!.sequence - b.roadmap!.sequence) : []),
+    [displayed],
+  );
+  const stageProgress = useMemo(() => (displayed ? progressByStage(displayed.nodes) : []), [displayed]);
+  const nextUpNode = useMemo(() => (displayed ? nextUp(displayed.nodes) : null), [displayed]);
+  const currentStage = stageProgress.find((s) => s.total > s.known)?.stage ?? null;
+  // "Essential" is a priority TIER (`@ice/roadmap`'s `CATEGORY_TIER`), not a
+  // curriculum stage — a prerequisite reader-level chip like "X of Y
+  // essential works read" has to count by tier, not by stage column.
+  const essentialNodes = useMemo(() => displayed?.nodes.filter((n) => n.roadmap?.tier === "essential") ?? [], [displayed]);
+  const essentialTotal = essentialNodes.length;
+  const essentialKnown = essentialNodes.filter((n) => n.roadmap!.known).length;
+
+  const stepSequence = useCallback(
+    (direction: 1 | -1) => {
+      if (sequenceOrderedNodes.length === 0) return;
+      const currentIndex = selectedId ? sequenceOrderedNodes.findIndex((n) => n.id === selectedId) : -1;
+      const nextIndex =
+        currentIndex === -1
+          ? (direction === 1 ? 0 : sequenceOrderedNodes.length - 1)
+          : (currentIndex + direction + sequenceOrderedNodes.length) % sequenceOrderedNodes.length;
+      selectNode(sequenceOrderedNodes[nextIndex]);
+    },
+    [sequenceOrderedNodes, selectedId, selectNode],
   );
 
   // Escape clears focus (requirement 1's "clear reset") from anywhere on
@@ -321,16 +535,16 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     [data],
   );
   const directConnections = useMemo(() => {
-    if (!filtered || !selected) return [] as { node: GraphNode; link: GraphLink }[];
-    const nodesById = new Map(filtered.nodes.map((node) => [node.id, node]));
-    return filtered.links.flatMap((link) => {
+    if (!displayed || !selected) return [] as { node: GraphNode; link: GraphLink }[];
+    const nodesById = new Map(displayed.nodes.map((node) => [node.id, node]));
+    return displayed.links.flatMap((link) => {
       const source = typeof link.source === "string" ? link.source : (link.source as { id: string }).id;
       const target = typeof link.target === "string" ? link.target : (link.target as { id: string }).id;
       const otherId = source === selected.id ? target : target === selected.id ? source : null;
       const node = otherId ? nodesById.get(otherId) : null;
       return node ? [{ node, link }] : [];
     });
-  }, [filtered, selected]);
+  }, [displayed, selected]);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -350,8 +564,80 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
         </p>
       )}
 
-      {data && filtered && data.nodes.length > 0 && (
+      {data && displayed && data.nodes.length > 0 && (
         <>
+          {/* Phase 22.8: layout mode toggle — Roadmap is the default view on
+              every Visualization page; `?layout=explore` returns to the
+              force-directed map (feature plan §2.1/§2.3). */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <div role="group" aria-label="Layout" className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => setLayoutMode("roadmap")}
+                aria-pressed={layoutMode === "roadmap"}
+                className={`rounded border border-[var(--color-border)] px-2 py-1 ${layoutMode === "roadmap" ? "bg-[var(--color-surface)] font-medium" : ""}`}
+              >
+                Roadmap
+              </button>
+              <button
+                type="button"
+                onClick={() => setLayoutMode("explore")}
+                aria-pressed={layoutMode === "explore"}
+                className={`rounded border border-[var(--color-border)] px-2 py-1 ${layoutMode === "explore" ? "bg-[var(--color-surface)] font-medium" : ""}`}
+              >
+                Explore
+              </button>
+            </div>
+            {layoutMode === "roadmap" && workNodes.length > 0 && (
+              <RoadmapForPopover
+                workNodes={workNodes}
+                checkedIds={checkedRoadmapRootIds}
+                onToggle={toggleRoadmapRoot}
+                onWholeLibrary={selectWholeLibrary}
+                isWholeLibrary={roadmapRootIds.length === 0}
+              />
+            )}
+            {layoutMode === "roadmap" && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Reader level</span>
+                <select
+                  value={readerLevel}
+                  onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
+                    <option key={level} value={level}>
+                      {READER_LEVEL_LABEL[level]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {layoutMode === "roadmap" && (
+              <button
+                type="button"
+                onClick={() => setShowReadingThread(!showReadingThread)}
+                aria-pressed={showReadingThread}
+                className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${showReadingThread ? "bg-[var(--color-surface)] font-medium" : ""}`}
+              >
+                Reading thread
+              </button>
+            )}
+          </div>
+
+          {layoutMode === "roadmap" && stageProgress.some((s) => s.total > 0) && (
+            <RoadmapProgressStrip
+              stageProgress={stageProgress}
+              currentStage={currentStage}
+              essentialTotal={essentialTotal}
+              essentialKnown={essentialKnown}
+              nextUpNode={nextUpNode}
+              activeStage={filters.stage}
+              onSelectStage={(stage) => updateFilter("stage", stage)}
+              onFocusNextUp={() => nextUpNode && selectNode(nextUpNode)}
+            />
+          )}
+
           {/* Legend + stats */}
           <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
             {STATE_ORDER.map((s) => (
@@ -509,6 +795,24 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               </label>
             )}
 
+            {layoutMode === "roadmap" && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Stage</span>
+                <select
+                  value={filters.stage}
+                  onChange={(e) => updateFilter("stage", e.target.value)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {STAGE_ORDER.map((stage) => (
+                    <option key={stage} value={stage}>
+                      {STAGE_LABEL[stage]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             {workNodes.length > 1 && (
               <label className="flex items-center gap-1">
                 <span className="text-[var(--color-text-muted)]">Associated work</span>
@@ -538,7 +842,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
             </button>
 
             <span className="ml-auto text-xs text-[var(--color-text-muted)]">
-              {filtered.nodes.length} of {data.nodes.length} shown
+              {displayed.nodes.length} of {data.nodes.length} shown
             </span>
           </div>
 
@@ -559,7 +863,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
 
           {enableExpansion && <GraphExpansionControls workNodes={workNodes} />}
 
-          {filtered.nodes.length === 0 ? (
+          {displayed.nodes.length === 0 ? (
             <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
           ) : (
             <div className="space-y-4">
@@ -568,6 +872,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
                 aria-label="3D graph canvas"
                 data-graph-stage
+                data-reading-thread={showReadingThread ? "on" : "off"}
               >
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <p className="text-[var(--color-text-muted)]">Select a labeled node to focus it; drag to orbit and scroll to zoom.</p>
@@ -605,9 +910,33 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                     <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
                   </div>
                 </div>
+                {layoutMode === "roadmap" && sequenceOrderedNodes.length > 0 && (
+                  <div className="mb-2 flex items-center gap-2 text-xs" role="group" aria-label="Reading sequence">
+                    <span className="text-[var(--color-text-muted)]">Reading order</span>
+                    <button type="button" onClick={() => stepSequence(-1)} className="rounded border border-[var(--color-border)] px-2 py-1">
+                      ← Previous
+                    </button>
+                    <button type="button" onClick={() => stepSequence(1)} className="rounded border border-[var(--color-border)] px-2 py-1">
+                      Next →
+                    </button>
+                  </div>
+                )}
                 <div className={`${isFullscreen ? "grid h-[calc(100vh-4.5rem)] min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]"}`}>
-                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} emphasis={focusEmphasis} resetSignal={resetSignal} isFullscreen={isFullscreen} />
-                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} />
+                  <KnowledgeGraph3D
+                    data={displayed}
+                    onNodeClick={onNodeClick}
+                    onLinkClick={setSelectedLink}
+                    pinnedWorkIds={pinnedWorkIds}
+                    selectedNodeId={selected?.id}
+                    emphasis={focusEmphasis}
+                    resetSignal={resetSignal}
+                    isFullscreen={isFullscreen}
+                    layoutMode={layoutMode}
+                    nextUpNodeId={nextUpNode?.id ?? null}
+                    onStageHeaderClick={(stage) => updateFilter("stage", filters.stage === stage ? "all" : stage)}
+                    showReadingThread={showReadingThread}
+                  />
+                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} allNodes={data.nodes} />
                 </div>
               </section>
               <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
@@ -615,7 +944,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace. Use the arrow keys on a focused row to move to its previous/next connected node; Escape clears the current focus.</p>
                 <div className="mt-2 overflow-x-auto">
                   <GraphAccessibleFallback
-                    data={filtered}
+                    data={displayed}
                     selectedNodeId={selected?.id}
                     onNodeClick={onNodeClick}
                     emphasis={focusEmphasis}
@@ -650,6 +979,7 @@ function GraphInspector({
   onSelectNode,
   onCloseNode,
   onCloseLink,
+  allNodes = [],
 }: {
   selected: GraphNode | null;
   selectedLink: GraphLink | null;
@@ -657,6 +987,11 @@ function GraphInspector({
   onSelectNode: (node: GraphNode) => void;
   onCloseNode: () => void;
   onCloseLink: () => void;
+  /** The FULL, unfiltered node set — used only to resolve a roadmap
+   *  annotation's `rootWorkIds` back to human-readable work titles for the
+   *  "why this, here" basis line (feature plan §2.4); never used to change
+   *  which node is selected. */
+  allNodes?: readonly GraphNode[];
 }) {
   return (
     <aside className="max-h-[520px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3" aria-label="Graph inspector" data-graph-inspector>
@@ -693,6 +1028,19 @@ function GraphInspector({
             </p>
           )}
           {selected.url && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">open source record ↗</a>}
+          {selected.roadmap && (
+            <details className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs" data-graph-roadmap-disclosure>
+              <summary className="cursor-pointer font-medium text-[var(--color-text)]">Why this, here</summary>
+              <p className="mt-2 text-[var(--color-text-muted)]">
+                {selected.roadmap.reason} <span className="text-[var(--color-text-muted)]">({TIER_LABEL[selected.roadmap.tier]})</span>
+              </p>
+              <p className="mt-2 text-[var(--color-text-muted)]">{roadmapBasisLine(selected.roadmap, allNodes)}</p>
+              <p className="mt-2 italic text-[var(--color-text-muted)]">{selected.roadmap.checkpoint}</p>
+              {selected.roadmap.estimatedMinutes > 0 && (
+                <p className="mt-2 text-[var(--color-text-muted)]">Estimated reading time: {Math.round(selected.roadmap.estimatedMinutes / 60) || 1}h</p>
+              )}
+            </details>
+          )}
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <p className="text-xs font-medium text-[var(--color-text)]">Direct connections</p>
             {connections.length === 0 ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">No visible direct connections under the current filters.</p> : <ul className="mt-2 space-y-1.5">{connections.map(({ node, link }) => <li key={`${node.id}:${link.edgeType}`}><button type="button" onClick={() => onSelectNode(node)} className="text-left text-xs underline underline-offset-2"><span className="font-medium">{node.label}</span> · {link.edgeType.replace(/_/g, " ")}</button></li>)}</ul>}
@@ -712,6 +1060,127 @@ function GraphInspector({
         </div>
       )}
     </aside>
+  );
+}
+
+/**
+ * "Roadmap for" root-work selection (feature plan §2.3/§2.4): a checkbox
+ * popover following the same `.app-control` style and progressive-disclosure
+ * precedent as the "Pinned uploaded works" fieldset above, plus a "Whole
+ * library" shortcut that clears the explicit selection back to the server's
+ * own default (every uploaded work).
+ */
+function RoadmapForPopover({
+  workNodes,
+  checkedIds,
+  onToggle,
+  onWholeLibrary,
+  isWholeLibrary,
+}: {
+  workNodes: GraphNode[];
+  checkedIds: readonly string[];
+  onToggle: (workId: string, checked: boolean) => void;
+  onWholeLibrary: () => void;
+  isWholeLibrary: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls="roadmap-for-popover"
+        className="rounded border border-[var(--color-border)] px-2 py-1 text-sm"
+      >
+        Roadmap for {isWholeLibrary ? "whole library" : `${checkedIds.length} work${checkedIds.length === 1 ? "" : "s"}`}
+      </button>
+      {open && (
+        <fieldset
+          id="roadmap-for-popover"
+          aria-label="Roadmap for"
+          className="absolute z-10 mt-1 w-64 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm shadow-md"
+        >
+          <legend className="px-1 text-xs font-medium text-[var(--color-text-muted)]">Roadmap for</legend>
+          <button type="button" onClick={onWholeLibrary} disabled={isWholeLibrary} className="mb-2 text-xs underline disabled:cursor-not-allowed disabled:opacity-50">
+            Whole library
+          </button>
+          <div className="flex flex-col gap-1.5">
+            {workNodes.map((work) => (
+              <label key={work.id} className="flex items-center gap-1.5">
+                <input type="checkbox" checked={checkedIds.includes(work.id)} onChange={(event) => onToggle(work.id, event.target.checked)} />
+                <span>{work.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The progress strip (feature plan §2.4): per-stage read counts, "X of Y
+ * essential works read", "You're in: <stage>", and a "Next up" chip that
+ * selects/frames the first not-yet-known item in reading sequence. Pure
+ * presentation over values `GraphView` already computed from the one shared
+ * displayed dataset — this component derives nothing of its own.
+ */
+function RoadmapProgressStrip({
+  stageProgress,
+  currentStage,
+  essentialTotal,
+  essentialKnown,
+  nextUpNode,
+  activeStage,
+  onSelectStage,
+  onFocusNextUp,
+}: {
+  stageProgress: { stage: CurriculumStage; total: number; known: number }[];
+  currentStage: CurriculumStage | null;
+  essentialTotal: number;
+  essentialKnown: number;
+  nextUpNode: GraphNode | null;
+  activeStage: CurriculumStage | "all";
+  onSelectStage: (stage: CurriculumStage | "all") => void;
+  onFocusNextUp: () => void;
+}) {
+  return (
+    <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs" data-graph-roadmap-progress>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span className="font-medium text-[var(--color-text)]">
+          {essentialKnown} of {essentialTotal} essential works read
+        </span>
+        {currentStage && <span className="text-[var(--color-text-muted)]">You&rsquo;re in: {STAGE_LABEL[currentStage]}</span>}
+        {nextUpNode && (
+          <button type="button" onClick={onFocusNextUp} className="rounded border border-[var(--color-accent-ink)] px-2 py-1 text-[var(--color-accent-ink)]">
+            Next up: {nextUpNode.label}
+          </button>
+        )}
+      </div>
+      {/* Clickable stage headers (feature plan §2.4): the DOM-accessible
+          equivalent of the 3D scene's own floating column headers — both
+          drive the SAME `stage` filter, so clicking a header narrows the
+          scene, the table, and this strip identically. Clicking the
+          already-active stage clears the filter back to "all". */}
+      {/* D-21-11 precedent: named without the "Stage" substring so it never
+          collides with `getByLabel("Stage")`, which must resolve uniquely
+          to the Stage select above. */}
+      <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Column progress">
+        {stageProgress.map(({ stage, total, known }) => (
+          <button
+            key={stage}
+            type="button"
+            onClick={() => onSelectStage(activeStage === stage ? "all" : stage)}
+            aria-pressed={activeStage === stage}
+            disabled={total === 0}
+            className={`rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40 ${activeStage === stage ? "bg-[var(--color-background)] font-medium" : ""}`}
+          >
+            {STAGE_LABEL[stage]} {known}/{total}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

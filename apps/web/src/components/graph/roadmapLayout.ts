@@ -81,6 +81,32 @@ export function assignStagePositions(nodes: GraphNode[]): Map<string, FixedPosit
   return positions;
 }
 
+export interface StageHeaderPosition {
+  stage: CurriculumStage;
+  fx: number;
+  fy: number;
+}
+
+/**
+ * Fixed world-space positions for the 3D scene's per-stage column header
+ * labels (feature plan §2.3/§2.4's "3D-anchored stage column headers") — one
+ * per `STAGE_ORDER` stage, sharing the exact same column x-coordinate
+ * `assignStagePositions` gives that stage's nodes, with a y one row-gap
+ * above the tallest column in the CURRENT node set so a header never
+ * overlaps a node regardless of how many items land in any one stage.
+ * Headers are positioned even for a stage with zero current nodes (a
+ * consistent five-column reading, matching `progressByStage`'s own
+ * always-five-stages guarantee) — `assignStagePositions` still reserves that
+ * stage's column x even when nothing occupies it.
+ */
+export function stageHeaderPositions(nodes: GraphNode[]): StageHeaderPosition[] {
+  const positions = assignStagePositions(nodes);
+  let maxAbsFy = 0;
+  for (const pos of positions.values()) maxAbsFy = Math.max(maxAbsFy, Math.abs(pos.fy));
+  const headerFy = -(maxAbsFy + ROW_GAP);
+  return STAGE_ORDER.map((stage, index) => ({ stage, fx: index * COLUMN_GAP, fy: headerFy }));
+}
+
 export interface StageProgress {
   stage: CurriculumStage;
   /** Roadmap nodes assigned to this stage. */

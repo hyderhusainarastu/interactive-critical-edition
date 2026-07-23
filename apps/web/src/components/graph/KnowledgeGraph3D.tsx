@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
 import * as THREE from "three";
+import { STAGE_LABEL, type CurriculumStage } from "@ice/curriculum";
 import {
   EDGE_FAMILY_META,
   STATE_META,
@@ -23,6 +24,7 @@ import {
   nodeScaleForDistance,
 } from "./graphSceneScaling";
 import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
+import { assignStagePositions, stageHeaderPositions } from "./roadmapLayout";
 
 // Relative node size by kind — work is the anchor, concepts next, then
 // references, with sections (a per-work outline, often numerous) smallest.
@@ -110,6 +112,12 @@ type NodeGroupUserData = Partial<{
   sphere: THREE.Mesh;
   primarySprite: THREE.Sprite;
   secondarySprite: THREE.Sprite;
+  /** Next-up ring (Phase 22.8): created for EVERY node so it exists in the
+   *  scene from the start, kept invisible except by `applyNodeAccents`'s
+   *  mutation pass — same "create once, mutate visibility" pattern as every
+   *  other per-node accent here, so toggling which node is next-up never
+   *  triggers the D-21-5 full-rebuild class of cost. */
+  ring: THREE.Mesh;
 }>;
 
 /** `userData` shape stashed on each edge-label `THREE.Sprite` by
@@ -156,6 +164,10 @@ export function KnowledgeGraph3D({
   emphasis = EMPTY_FOCUS_EMPHASIS,
   resetSignal = 0,
   isFullscreen = false,
+  layoutMode = "explore",
+  nextUpNodeId = null,
+  onStageHeaderClick,
+  showReadingThread = false,
 }: {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
@@ -173,6 +185,25 @@ export function KnowledgeGraph3D({
   /** Incremented by the stage control; keeps reset independent from selection. */
   resetSignal?: number;
   isFullscreen?: boolean;
+  /** Phase 22.8 (feature plan §2.1/§2.3): "roadmap" applies the fixed
+   *  stage-column layout (`assignStagePositions`) and skips the force
+   *  simulation; "explore" (the default) is byte-identical to this
+   *  component's pre-22.8 behavior — nothing below changes for it. */
+  layoutMode?: "roadmap" | "explore";
+  /** The first not-yet-known node in reading sequence (`nextUp()`,
+   *  `GraphView` computes it once over the shared displayed dataset) — gets
+   *  a distinct selection-independent ring, never a color-only cue. */
+  nextUpNodeId?: string | null;
+  /** Fires when a 3D-anchored stage column header is clicked (roadmap mode
+   *  only) — `GraphView` sets/toggles the same `stage` filter its own
+   *  DOM stage-header buttons already drive, so the two controls can never
+   *  disagree about what "clicking a stage" means. */
+  onStageHeaderClick?: (stage: CurriculumStage) => void;
+  /** Off by default (feature plan §2.4's "rejected as decoration" list keeps
+   *  this OPT-IN): a single static (non-animated) polyline through the
+   *  reading sequence, safe under reduced motion because it never animates
+   *  in the first place. */
+  showReadingThread?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Typed loosely: the library's own generic ref shape (wrapping NodeType in
@@ -274,7 +305,20 @@ export function KnowledgeGraph3D({
   const nodeSceneScale = useMemo(() => nodeScaleForDistance(cameraDistance), [cameraDistance]);
 
   // Clone so the library can annotate nodes with x/y/z without mutating props.
+  // Phase 22.8: roadmap mode overrides the pin-ring formula entirely — EVERY
+  // node gets a deterministic stage-column position from `assignStagePositions`
+  // (feature plan §2.1's "fixed positions eliminate both the hairball and the
+  // force-simulation cost"), so pinning has no separate ring geometry to
+  // fight with in this mode. Explore mode is completely untouched (byte-
+  // identical to the pre-22.8 pin-ring behavior).
   const graphData = useMemo(() => {
+    if (layoutMode === "roadmap") {
+      const positions = assignStagePositions(data.nodes);
+      return {
+        nodes: data.nodes.map((node) => ({ ...node, ...(positions.get(node.id) ?? { fx: 0, fy: 0, fz: 0 }) })),
+        links: data.links.map((link) => ({ ...link })),
+      };
+    }
     const pinned = data.nodes.filter((node) => pinnedWorkIds.includes(node.id));
     const pinIndex = new Map(pinned.map((node, index) => [node.id, index]));
     return {
@@ -289,7 +333,7 @@ export function KnowledgeGraph3D({
       }),
       links: data.links.map((link) => ({ ...link })),
     };
-  }, [data, pinnedWorkIds]);
+  }, [data, pinnedWorkIds, layoutMode]);
 
   // Neighbor adjacency, built once per data change rather than per hover
   // event — shared with `graphFocus.ts`'s selection-focus computation
@@ -335,10 +379,21 @@ export function KnowledgeGraph3D({
     const node = value as GraphNode;
     const baseRadius = NODE_SIZE[node.type];
     const color = typeColors?.[node.type] ?? "#888";
+    // Phase 22.8: "known" is part of the per-node PAYLOAD (baked in by the
+    // server-side roadmap projection), read directly from `node` at creation
+    // time exactly like `node.label`/`node.type` above it — never part of
+    // this callback's dependency array, so it costs nothing extra under
+    // D-21-5's caching rule (it only changes when `graphData` itself does,
+    // i.e. a real re-fetch, the same trigger that already rebuilds every
+    // node's sphere/label regardless).
+    const known = node.roadmap?.known === true;
     const group = new THREE.Group();
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(baseRadius, 18, 14),
-      new THREE.MeshLambertMaterial({ color, transparent: true, opacity: 0.92 }),
+      // Reduced opacity for a known/already-read item — color is never the
+      // sole signal, the check glyph in the secondary label text below
+      // carries the same meaning for anyone who can't distinguish opacity.
+      new THREE.MeshLambertMaterial({ color, transparent: true, opacity: known ? 0.45 : 0.92 }),
     );
     group.add(sphere);
 
@@ -348,7 +403,7 @@ export function KnowledgeGraph3D({
     // construction (THREE.Sprite billboarding) — unchanged from before.
     const title = node.label.length > 42 ? `${node.label.slice(0, 39)}…` : node.label;
     const primarySprite = makeLabelSprite(title, "600 30px system-ui, sans-serif", "#ffffff", PRIMARY_LABEL_CANVAS_HEIGHT);
-    const secondaryText = `${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}`;
+    const secondaryText = `${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}${known ? " · ✓ read" : ""}`;
     const secondarySprite = makeLabelSprite(secondaryText, "22px system-ui, sans-serif", "rgba(255,255,255,0.78)", SECONDARY_LABEL_CANVAS_HEIGHT);
 
     const baseLabelScale = Math.max(20, Math.min(42, 16 + node.label.length * 0.45));
@@ -361,7 +416,18 @@ export function KnowledgeGraph3D({
     secondarySprite.renderOrder = 1;
     group.add(primarySprite, secondarySprite);
 
-    const nodeUserData: NodeGroupUserData = { nodeId: node.id, baseRadius, baseLabelScale, sphere, primarySprite, secondarySprite };
+    // Next-up ring (Phase 22.8): created for EVERY node, hidden by default —
+    // `applyNodeAccents` toggles `.visible` for whichever node id is
+    // currently `nextUpNodeId`, the same create-once/mutate-visibility
+    // pattern D-21-5 already established for selection/pin accents.
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(baseRadius * 1.7, Math.max(0.4, baseRadius * 0.14), 8, 28),
+      new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.85 }),
+    );
+    ring.visible = false;
+    group.add(ring);
+
+    const nodeUserData: NodeGroupUserData = { nodeId: node.id, baseRadius, baseLabelScale, sphere, primarySprite, secondarySprite, ring };
     group.userData = nodeUserData;
     return group;
   }, [typeColors]);
@@ -446,8 +512,12 @@ export function KnowledgeGraph3D({
       const primaryOffset = radiusWorld + stash.baseLabelScale * labelFactor * PRIMARY_LABEL_ASPECT * 0.65;
       stash.primarySprite.position.set(0, primaryOffset, 0);
       stash.secondarySprite.position.set(0, primaryOffset + stash.baseLabelScale * labelFactor * (PRIMARY_LABEL_ASPECT + SECONDARY_LABEL_ASPECT) * 0.6, 0);
+      // Phase 22.8: the next-up ring is selection-independent — a node can
+      // be both selected AND next-up (two different signals), or next-up
+      // while nothing is selected at all.
+      if (stash.ring) stash.ring.visible = nextUpNodeId != null && stash.nodeId === nextUpNodeId;
     });
-  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale]);
+  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId]);
 
   // D-21-4/D-21-5 (edge side): selection-and-hover-connected width emphasis
   // and edge-label reveal/scale, both applied by mutating the already-
@@ -544,6 +614,93 @@ export function KnowledgeGraph3D({
     return () => cancelAnimationFrame(raf);
   }, [selectedNodeId, focusCameraOnSelection]);
 
+  // Phase 22.8: 3D-anchored stage column headers (roadmap mode only) — a
+  // small group of label sprites added DIRECTLY to the scene (not part of
+  // `graphData`, so they're outside react-force-graph-3d's own node/link
+  // management entirely), one per `STAGE_ORDER` stage, positioned by the
+  // same pure `stageHeaderPositions` helper the progress strip's column math
+  // ultimately derives from too. Rebuilt whenever the roadmap node set or
+  // the resolved palette changes; removed outright in explore mode.
+  const headerGroupRef = useRef<THREE.Group | null>(null);
+  useEffect(() => {
+    const graph = fgRef.current;
+    if (!graph) return;
+    const scene = graph.scene();
+    if (headerGroupRef.current) {
+      scene.remove(headerGroupRef.current);
+      headerGroupRef.current = null;
+    }
+    if (layoutMode !== "roadmap" || !typeColors) return;
+    const group = new THREE.Group();
+    for (const header of stageHeaderPositions(data.nodes)) {
+      const sprite = makeLabelSprite(STAGE_LABEL[header.stage], "600 26px system-ui, sans-serif", "#ffffff", PRIMARY_LABEL_CANVAS_HEIGHT);
+      sprite.scale.set(52, 52 * PRIMARY_LABEL_ASPECT, 1);
+      sprite.position.set(header.fx, header.fy, 0);
+      sprite.renderOrder = 1;
+      const headerUserData: { stageHeader: CurriculumStage } = { stageHeader: header.stage };
+      sprite.userData = headerUserData;
+      group.add(sprite);
+    }
+    scene.add(group);
+    headerGroupRef.current = group;
+  }, [layoutMode, data.nodes, typeColors]);
+
+  // Clickable stage headers (feature plan §2.4): a raycast against ONLY the
+  // header group's own sprites (a small, bounded set), never against the
+  // library's own node/link objects — this listener is additive on the
+  // container and never interferes with react-force-graph-3d's own
+  // click/drag handling on the canvas itself.
+  const onCanvasClick = useCallback(
+    (event: MouseEvent) => {
+      const graph = fgRef.current;
+      const container = containerRef.current;
+      if (!graph || !container || !headerGroupRef.current || !onStageHeaderClick) return;
+      const rect = container.getBoundingClientRect();
+      const mouse = new THREE.Vector2(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, graph.camera());
+      const hit = raycaster.intersectObjects(headerGroupRef.current.children, false)[0];
+      const stage = (hit?.object.userData as { stageHeader?: CurriculumStage } | undefined)?.stageHeader;
+      if (stage) onStageHeaderClick(stage);
+    },
+    [onStageHeaderClick],
+  );
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || layoutMode !== "roadmap") return;
+    container.addEventListener("click", onCanvasClick);
+    return () => container.removeEventListener("click", onCanvasClick);
+  }, [layoutMode, onCanvasClick]);
+
+  // Optional static reading-thread polyline (feature plan §2.4's rejected-
+  // decoration list keeps this OPT-IN and non-animated): a single line
+  // through the reading-sequence order, safe under reduced motion because it
+  // never moves once drawn.
+  const threadRef = useRef<THREE.Line | null>(null);
+  useEffect(() => {
+    const graph = fgRef.current;
+    if (!graph) return;
+    const scene = graph.scene();
+    if (threadRef.current) {
+      scene.remove(threadRef.current);
+      threadRef.current = null;
+    }
+    if (layoutMode !== "roadmap" || !showReadingThread) return;
+    const positions = assignStagePositions(data.nodes);
+    const ordered = [...data.nodes]
+      .filter((node) => node.roadmap != null)
+      .sort((a, b) => a.roadmap!.sequence - b.roadmap!.sequence);
+    if (ordered.length < 2) return;
+    const points = ordered.flatMap((node) => {
+      const pos = positions.get(node.id);
+      return pos ? [new THREE.Vector3(pos.fx, pos.fy, pos.fz)] : [];
+    });
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.35 }));
+    scene.add(line);
+    threadRef.current = line;
+  }, [layoutMode, showReadingThread, data.nodes]);
+
   return (
     <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[520px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
       {colors && typeColors && linkColors && (
@@ -592,7 +749,11 @@ export function KnowledgeGraph3D({
           linkDirectionalArrowLength={linkDirectionalArrowLength}
           linkDirectionalArrowRelPos={1}
           enableNodeDrag={false}
-          cooldownTicks={data.nodes.length > 140 ? 35 : 80}
+          // Phase 22.8: every node already carries a fixed fx/fy/fz in
+          // roadmap mode (`assignStagePositions`, above) — the simulation
+          // has nothing left to converge on, so it's skipped outright
+          // rather than merely shortened.
+          cooldownTicks={layoutMode === "roadmap" ? 0 : data.nodes.length > 140 ? 35 : 80}
           showNavInfo={false}
           showPointerCursor={() => true}
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}
