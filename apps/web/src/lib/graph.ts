@@ -2,6 +2,7 @@ import { conceptMastery, db, readingRecords, understandingRatings, workRelations
 import { KNOWN_THRESHOLD } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { edgeTypeForRelationshipCategory, isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
+import { deriveEdgeCategory } from "@/lib/graphEdgeCategory";
 
 /**
  * Builds the per-user knowledge-graph data (plan §9/§16, extended by plan
@@ -591,18 +592,25 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   }
 
   const links: DraftLink[] = [
+    // D-21-9 (fixable half): `cites`/`presupposes` edges from the
+    // citation-resolution/concept-extraction write paths never carry a
+    // `category` in `evidence` (only the classification write paths do) —
+    // `deriveEdgeCategory` fills in the ONE unambiguous category each of
+    // those two edge_type strings actually corresponds to, and leaves
+    // every other edge_type (already-categorized or genuinely uncategorized)
+    // exactly as read. See `@/lib/graphEdgeCategory` for the full rationale.
     ...edges.map((e) => ({
       source: `work:${e.source_id}`,
       target: canonicalNodeId(`external:bib:${e.target_id}`),
       edgeType: e.edge_type,
-      category: e.category,
+      category: deriveEdgeCategory(e.edge_type, e.category),
       confidence: e.confidence,
     })),
     ...conceptEdges.map((e) => ({
       source: `work:${e.source_id}`,
       target: `concept:${e.target_id}`,
       edgeType: e.edge_type,
-      category: e.category,
+      category: deriveEdgeCategory(e.edge_type, e.category),
       confidence: e.confidence,
     })),
     // Synthetic, never persisted (see module doc comment) — the work's own
