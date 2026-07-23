@@ -11,6 +11,8 @@ import {
 import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
 import { getOwnedDocument } from "@/lib/works";
 
 /**
@@ -39,6 +41,12 @@ import { getOwnedDocument } from "@/lib/works";
 export async function POST(_request: Request, { params }: { params: Promise<{ workId: string }> }) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Each fresh run passes through the paid budget machinery. `planReprocess`
+  // dedups a CONCURRENT duplicate, but a sequential loop (re-trigger once the
+  // prior run finishes) would still start unbounded paid runs — this per-user
+  // cap is the cost backstop, matching the graph-expansion route's posture.
+  const rate = await enforceUserRateLimit({ userId, scope: "reprocess-work", limit: 20, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
   // Any edition-producing pipeline (v2+) can reprocess; v1 annotates in place
   // and has no edition to replace. NOTE: this reads the WEB tier's
   // ANALYSIS_PIPELINE — an ownership-independent 409 when the env var is

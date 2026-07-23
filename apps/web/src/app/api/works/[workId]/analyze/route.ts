@@ -2,6 +2,8 @@ import { db, documents, enqueueAnalyzeWork } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
+import { enforceUserRateLimit } from "@/lib/apiRateLimit";
+import { rateLimitResponse } from "@/lib/apiResponse";
 import { getOwnedDocument } from "@/lib/works";
 
 /**
@@ -17,6 +19,12 @@ export async function POST(
 ) {
   const userId = await getApiUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Each enqueue starts a paid worker run. The `analyzing`-status guard below
+  // blocks a concurrent double-run, but not a scripted sequential loop that
+  // re-triggers once the prior run completes — this per-user cap is the cost
+  // backstop against that, matching the money-bearing graph-expansion route.
+  const rate = await enforceUserRateLimit({ userId, scope: "analyze-work", limit: 20, windowMs: 60 * 60_000 });
+  if (!rate.allowed) return rateLimitResponse(rate);
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
