@@ -21,7 +21,8 @@ import {
   type RetrievedRagChunk,
   validateSocraticAnswer,
 } from "@ice/rag";
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { processCompetencySignals, type CompetencyNoticeView } from "./competencyData";
 
 export type RagCitationView = {
   chunkId: string;
@@ -43,7 +44,12 @@ export type RagMessageView = {
 };
 
 const MAX_HISTORY_MESSAGES = 6;
-const RAG_DAILY_SOFT_CAP_USD = 1;
+export const RAG_DAILY_SOFT_CAP_USD = 1;
+// Sub-phase 22.9b (plan §3.5): the Socratic answer call and the competency-
+// designation call share ONE daily pool, so a chatty day of either kind
+// degrades the other rather than each independently reaching $1 (which
+// would silently double the real ceiling this constant is meant to be).
+const RAG_SPEND_STAGES = ["socratic-rag", "competency-designation"] as const;
 
 function explicitlyEnabled(name: string): boolean {
   return ["1", "true", "yes", "on"].includes((process.env[name] ?? "").trim().toLowerCase());
@@ -141,14 +147,17 @@ export async function getRagConversationView(userId: string, conversationId: str
   };
 }
 
-async function currentRagSpend(userId: string): Promise<number> {
+/** Widened (sub-phase 22.9b, plan §3.5) to sum BOTH chat stages sharing the
+ * $1/day pool — exported so `competencyData.ts`'s own gating sees the exact
+ * same combined total this file's `generateSocraticAnswer` already gates on. */
+export async function currentRagSpend(userId: string): Promise<number> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const [row] = await db
     .select({ value: sql<number>`coalesce(sum(${aiUsageLogs.estimatedCostUsd}), 0)` })
     .from(aiUsageLogs)
     .innerJoin(documents, eq(aiUsageLogs.documentId, documents.id))
-    .where(and(eq(documents.userId, userId), eq(aiUsageLogs.stage, "socratic-rag"), gte(aiUsageLogs.createdAt, today)));
+    .where(and(eq(documents.userId, userId), inArray(aiUsageLogs.stage, RAG_SPEND_STAGES), gte(aiUsageLogs.createdAt, today)));
   return Number(row?.value ?? 0);
 }
 
@@ -256,9 +265,29 @@ export async function answerRagConversation(input: { userId: string; conversatio
   }
   const title = conversation.title === "New conversation" ? question.slice(0, 96) : conversation.title;
   await db.update(ragConversations).set({ title, updatedAt: new Date() }).where(eq(ragConversations.id, conversation.id));
+
+  // Sub-phase 22.9b (plan §3.5): kicked off AFTER the answer is generated
+  // (so the shared cost pool already reflects this turn's Socratic spend,
+  // giving the answer call priority), but never awaited here — the SSE
+  // layer (`streamAnswer` in the conversations route) races this against
+  // its own 6s fail-silent cap so a slow/failed competency pass can never
+  // delay or fail the answer itself.
+  const previousAssistantMessage = [...prior].reverse().slice(0, -1).findLast((message) => message.role === "assistant")?.content ?? null;
+  const competencyPromise: Promise<CompetencyNoticeView[]> = processCompetencySignals({
+    userId: input.userId,
+    conversationId: conversation.id,
+    messageId: userMessage.id,
+    userMessage: question,
+    previousAssistantMessage,
+    contextWorkId: conversation.contextWorkId,
+    chunkWorkIds: chunks.map((chunk) => chunk.workId),
+    usageDocumentId: chunks[0]?.documentId ?? null,
+  });
+
   return {
     user: messageView(userMessage),
     assistant: messageView(assistantMessage, citations.map((chunk, ordinal) => citationView(chunk, ordinal))),
+    competencyPromise,
     notFound: generated.answer.notFound,
   };
 }

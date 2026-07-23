@@ -703,6 +703,24 @@ export const readingRecords = pgTable("reading_record", {
   ),
 ]);
 
+/**
+ * Where a mastery score came from. Phase 9.4's precedence is explicit rating →
+ * diagnostic → inference from completed prerequisites (weak evidence only) →
+ * the reader's global level, and precedence is only enforceable if the source
+ * is recorded rather than inferred back from the number. Hoisted above
+ * `understandingRatings` (sub-phase 22.9b, plan §3.6) since that table now
+ * also reuses this enum inline, and — unlike the lazy `AnyPgColumn` forward
+ * references used elsewhere in this file for as-yet-undeclared TABLES — a
+ * `pgEnum` handle is called directly inside the column definition, so it
+ * must already exist at module-evaluation time, not just by the time a
+ * query runs.
+ */
+export const masterySourceEnum = pgEnum("mastery_source", [
+  "explicit",
+  "diagnostic",
+  "inferred",
+]);
+
 export const understandingRatings = pgTable("understanding_rating", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
@@ -715,6 +733,13 @@ export const understandingRatings = pgTable("understanding_rating", {
   // 0..100 with a derived label in the UI (plan §7). >= 60 = "working
   // understanding" → the roadmap deprioritizes it (personalization pass).
   score: integer("score").notNull(),
+  // Sub-phase 22.9b (plan §3.2/§3.6): reuses `mastery_source` (declared
+  // below, forward-referenced the same way `learningResources` is above) so
+  // a chat-inferred rating is precedence-guarded exactly like
+  // `concept_mastery.source` — a NOT NULL DEFAULT keeps this additive: every
+  // pre-existing row is truthfully backfilled as `explicit` (every writer
+  // that existed before this column was a real user action).
+  source: masterySourceEnum("source").notNull().default("explicit"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
   index("understanding_rating_user_idx").on(t.userId),
@@ -1487,18 +1512,6 @@ export const concepts = pgTable("concept", {
 }, (t) => [index("concept_kind_idx").on(t.kind)]);
 
 /**
- * Where a mastery score came from. Phase 9.4's precedence is explicit rating →
- * diagnostic → inference from completed prerequisites (weak evidence only) →
- * the reader's global level, and precedence is only enforceable if the source
- * is recorded rather than inferred back from the number.
- */
-export const masterySourceEnum = pgEnum("mastery_source", [
-  "explicit",
-  "diagnostic",
-  "inferred",
-]);
-
-/**
  * A reader's understanding of one concept. Deliberately shaped like the
  * existing `understanding_rating` (0–100, ≥60 = known) so the roadmap's
  * established threshold means the same thing here.
@@ -1516,6 +1529,66 @@ export const conceptMastery = pgTable("concept_mastery", {
 }, (t) => [
   index("concept_mastery_user_idx").on(t.userId),
   uniqueIndex("concept_mastery_user_concept_unique").on(t.userId, t.conceptId),
+]);
+
+/**
+ * Sub-phase 22.9b (plan §3.6): the Conversational Competency Designation
+ * ledger. One row per applied write AND per precedence-skipped write
+ * (`skipped_precedence`, kept honest but not surfaced) so the in-chat
+ * notice, the undo route, and every provenance touch (Library slider
+ * caption, diagnostic GET, graph inspector — the last deferred to 22.8)
+ * share one source of truth. Mirrors the `understanding_rating`/
+ * `reading_record` exactly-one-target CHECK precedent above, restricted to
+ * the two target kinds chat can actually resolve a candidate for
+ * (concept/work — bibliographic-record and learning-resource targets are
+ * out of scope v1, plan §3.2).
+ */
+export const competencySignalStatusEnum = pgEnum("competency_signal_status", [
+  "applied",
+  "undone",
+  "superseded",
+  "skipped_precedence",
+]);
+
+export const competencySignals = pgTable("competency_signal", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  conversationId: uuid("conversation_id").references(() => ragConversations.id, { onDelete: "set null" }),
+  messageId: uuid("message_id").references(() => ragMessages.id, { onDelete: "set null" }),
+  conceptId: uuid("concept_id").references(() => concepts.id, { onDelete: "cascade" }),
+  workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+  // The enum level ("unfamiliar".."strong") the detector/model emitted —
+  // kept as text here (like `graphEdges.sourceType`/`targetType` above)
+  // since `@ice/rag`'s `CompetencyLevel` is the caller-side vocabulary, not
+  // a second DB enum to keep in lockstep with it.
+  level: text("level").notNull(),
+  newScore: integer("new_score").notNull(),
+  previousScore: integer("previous_score"),
+  previousSource: masterySourceEnum("previous_source"),
+  // Verbatim-quote basis string (§3.2) — never a paraphrase, so the in-chat
+  // notice and the Library/diagnostic provenance lines can show the reader
+  // their own words back, the same grounding discipline as
+  // `annotations.extractedSourceText`.
+  basis: text("basis").notNull(),
+  // Honest label of which signal source produced this row —
+  // "self-report-pattern" (the always-on deterministic detector) or the
+  // gated model's identifier — mirroring the heuristic-classifier
+  // provenance precedent (`annotations.promptVersion: "heuristic"`).
+  detector: text("detector").notNull(),
+  status: competencySignalStatusEnum("status").notNull().default("applied"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("competency_signal_user_idx").on(t.userId, t.createdAt),
+  index("competency_signal_conversation_idx").on(t.conversationId),
+  check(
+    "competency_signal_exactly_one_target",
+    sql`(
+      (case when ${t.conceptId} is null then 0 else 1 end) +
+      (case when ${t.workId} is null then 0 else 1 end)
+    ) = 1`,
+  ),
 ]);
 
 /**

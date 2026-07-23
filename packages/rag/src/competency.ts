@@ -328,23 +328,41 @@ function normalizeWhitespace(value: string): string {
  * retries, then fails closed) on: a `targetId` outside the candidate set; a
  * `quote` that isn't a whitespace-normalized substring of the reader's own
  * message (rejects paraphrase/fabrication, not just exact-byte matches);
- * more than `COMPETENCY_MAX_SIGNALS_PER_MESSAGE` signals; or a duplicate
- * target across signals in the same response.
+ * more than `COMPETENCY_MAX_SIGNALS_PER_MESSAGE` signals; a duplicate target
+ * across signals in the same response; or (sub-phase 22.9b) a **cross-target
+ * confusion**: a quote that names a DIFFERENT candidate's label/alias but
+ * never the target's own — the reproduced failure that motivated this check
+ * was a quote `"never read Kant"` bound to `targetId` = the Republic, which
+ * every earlier check let through (the target id was valid, the quote was a
+ * real substring of the message).
+ *
+ * Takes the full candidate list (not just ids) so this name-cross-check has
+ * something to check the quote's own wording against.
+ *
+ * Residual risk, documented rather than hidden: a grounded quote that names
+ * NO candidate by label/alias at all (e.g. "I don't really get any of this")
+ * cannot be cross-checked this way — the model could still misattribute it
+ * to the wrong target in the candidate list, since nothing in the quote text
+ * itself disambiguates. That gap is exactly what the notice+undo UI (§3.4)
+ * exists to backstop: every applied signal is surfaced with its verbatim
+ * quote and one click undoes it, rather than this validator being asked to
+ * catch every possible misattribution before it's ever shown to the reader.
  */
-export function validateCompetencySignals(parsed: unknown, candidateIds: readonly string[], userMessage: string): CompetencySignal[] {
+export function validateCompetencySignals(parsed: unknown, candidates: readonly CompetencyCandidate[], userMessage: string): CompetencySignal[] {
   if (!parsed || typeof parsed !== "object") throw new Error("Competency response must be an object");
   const value = parsed as { signals?: unknown };
   if (!Array.isArray(value.signals)) throw new Error("Competency response signals must be an array");
   if (value.signals.length > COMPETENCY_MAX_SIGNALS_PER_MESSAGE) {
     throw new Error("Competency response exceeded the maximum signals per message");
   }
+  const candidatesById = new Map(candidates.map((candidate) => [candidate.targetId, candidate]));
   const normalizedMessage = normalizeWhitespace(userMessage);
   const seenTargets = new Set<string>();
   const signals: CompetencySignal[] = [];
   for (const raw of value.signals) {
     if (!raw || typeof raw !== "object") throw new Error("Competency signal must be an object");
     const signal = raw as { targetId?: unknown; level?: unknown; quote?: unknown };
-    if (typeof signal.targetId !== "string" || !candidateIds.includes(signal.targetId)) {
+    if (typeof signal.targetId !== "string" || !candidatesById.has(signal.targetId)) {
       throw new Error("Competency signal referenced a target outside the candidate set");
     }
     if (typeof signal.level !== "string" || !(COMPETENCY_LEVELS as readonly string[]).includes(signal.level)) {
@@ -357,6 +375,23 @@ export function validateCompetencySignals(parsed: unknown, candidateIds: readonl
       throw new Error("Competency signal quote is not grounded in the reader's message");
     }
     if (seenTargets.has(signal.targetId)) throw new Error("Competency response duplicated a target");
+
+    // Cross-target confusion check (see doc comment above): a quote is
+    // rejected when it names some OTHER candidate by label/alias but never
+    // the target it was actually bound to. A quote naming neither (or both)
+    // passes through to the residual-risk case documented above.
+    const target = candidatesById.get(signal.targetId)!;
+    const targetMentionRegex = candidateMentionRegex(target);
+    const targetIsMentioned = targetMentionRegex?.test(signal.quote) ?? false;
+    const mentionsAnotherCandidate = candidates.some((candidate) => {
+      if (candidate.targetId === signal.targetId) return false;
+      const otherRegex = candidateMentionRegex(candidate);
+      return otherRegex?.test(signal.quote as string) ?? false;
+    });
+    if (mentionsAnotherCandidate && !targetIsMentioned) {
+      throw new Error("Competency signal quote names a different candidate than its target");
+    }
+
     seenTargets.add(signal.targetId);
     signals.push({ targetId: signal.targetId, level: signal.level as CompetencyLevel, quote: signal.quote.trim() });
   }

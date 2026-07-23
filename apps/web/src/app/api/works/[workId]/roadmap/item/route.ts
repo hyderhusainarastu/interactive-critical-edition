@@ -66,12 +66,16 @@ export async function POST(
         .where(and(eq(understandingRatings.userId, userId), eq(understandingRatings.bibId, b.bibId)))
         .limit(1);
       if (existing) {
+        // Sub-phase 22.9b (plan §3.2): explicit every time — a real user
+        // action on the roadmap's rating slider, so the precedence chain
+        // must record a genuine 'explicit' source rather than relying on
+        // the column's DEFAULT clause to happen to say the same thing.
         await db
           .update(understandingRatings)
-          .set({ score: b.understandingScore, updatedAt: new Date() })
+          .set({ score: b.understandingScore, source: "explicit", updatedAt: new Date() })
           .where(eq(understandingRatings.id, existing.id));
       } else {
-        await db.insert(understandingRatings).values({ userId, bibId: b.bibId, score: b.understandingScore });
+        await db.insert(understandingRatings).values({ userId, bibId: b.bibId, score: b.understandingScore, source: "explicit" });
       }
     }
   }

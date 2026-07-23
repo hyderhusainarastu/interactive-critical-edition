@@ -50,12 +50,17 @@ export async function POST(
         .where(and(eq(understandingRatings.userId, userId), eq(understandingRatings.learningResourceId, resourceId)))
         .limit(1);
       if (existing) {
+        // Sub-phase 22.9b (plan §3.2): explicit every time, not relying on
+        // the column default — this is a real user action overwriting
+        // whatever was there before (including a chat-inferred value), so
+        // the precedence chain must see a genuine 'explicit' source, not an
+        // accident of the DEFAULT clause.
         await db
           .update(understandingRatings)
-          .set({ score: b.understandingScore, updatedAt: new Date() })
+          .set({ score: b.understandingScore, source: "explicit", updatedAt: new Date() })
           .where(eq(understandingRatings.id, existing.id));
       } else {
-        await db.insert(understandingRatings).values({ userId, learningResourceId: resourceId, score: b.understandingScore });
+        await db.insert(understandingRatings).values({ userId, learningResourceId: resourceId, score: b.understandingScore, source: "explicit" });
       }
     }
   }

@@ -48,9 +48,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ wor
 
   const relevant = await workRelevantConcepts(workId);
   const conceptIds = relevant.map((c) => c.id);
+  // Sub-phase 22.9b (plan §3.4): `evidence` now also carries the verbatim
+  // basis text for a chat-inferred row ('Reader statement in Ask Library
+  // chat: "…"'), so the UI can render the same provenance line it shows
+  // for a completed-prerequisite inference below — cheap to add since this
+  // select already scans the same rows.
   let existing = conceptIds.length
     ? await db
-        .select({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source })
+        .select({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source, evidence: conceptMastery.evidence })
         .from(conceptMastery)
         .where(and(eq(conceptMastery.userId, userId), inArray(conceptMastery.conceptId, conceptIds)))
     : [];
@@ -76,7 +81,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ wor
       }
     }
     if (inferred.length) {
-      const written = await db.insert(conceptMastery).values(inferred).onConflictDoNothing().returning({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source });
+      const written = await db.insert(conceptMastery).values(inferred).onConflictDoNothing().returning({ conceptId: conceptMastery.conceptId, score: conceptMastery.score, source: conceptMastery.source, evidence: conceptMastery.evidence });
       existing = [...existing, ...written];
     }
   }

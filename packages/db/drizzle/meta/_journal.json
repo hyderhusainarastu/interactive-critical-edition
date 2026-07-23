@@ -232,6 +232,13 @@
       "when": 1784760008126,
       "tag": "0032_sleepy_jack_power",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1784767808359,
+      "tag": "0033_thankful_thunderbolts",
+      "breakpoints": true
     }
   ]
 }

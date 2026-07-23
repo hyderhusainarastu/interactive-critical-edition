@@ -3,7 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
-type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null };
+// Sub-phase 22.9b (plan §3.4): one quiet, collapsed line per chat-inferred
+// competency update, rendered under the assistant message it arrived with.
+type CompetencyLevel = "unfamiliar" | "struggling" | "partial" | "familiar" | "strong";
+type CompetencyNotice = {
+  signalId: string;
+  targetKind: "concept" | "work";
+  targetId: string;
+  label: string;
+  level: CompetencyLevel;
+  quote: string;
+  previousScore: number | null;
+  newScore: number;
+};
+type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[] };
 
 function conversationStorageKey(contextWorkId?: string | null) {
   return `palimnote:rag-conversation:${contextWorkId ?? "library"}`;
@@ -112,16 +125,24 @@ export function RagChatPanel({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      // Plain local accumulator, not React state: competency events (if
+      // any) always arrive before `done`, and the final assistant message
+      // id isn't known until `done` itself, so there is nothing useful to
+      // render mid-stream — this just carries them across to attach to the
+      // message once it exists.
+      let competencyNotices: CompetencyNotice[] = [];
       const processEvent = (raw: string) => {
         const eventName = raw.match(/^event: ([^\n]+)/m)?.[1];
         const data = raw.match(/^data: (.+)$/m)?.[1];
         if (!eventName || !data) return;
-        const value = JSON.parse(data) as Message | Citation | { text: string } | { message: Message };
+        const value = JSON.parse(data) as Message | Citation | CompetencyNotice | { text: string } | { message: Message };
         if (eventName === "user") setMessages((existing) => [...existing, value as Message]);
         if (eventName === "delta") setPending((existing) => existing + (value as { text: string }).text);
         if (eventName === "citation") setPendingCitations((existing) => [...existing, value as Citation]);
+        if (eventName === "competency") competencyNotices = [...competencyNotices, value as CompetencyNotice];
         if (eventName === "done") {
-          setMessages((existing) => [...existing, (value as { message: Message }).message]);
+          const message = (value as { message: Message }).message;
+          setMessages((existing) => [...existing, competencyNotices.length ? { ...message, competencyNotices } : message]);
           setPending("");
           setPendingCitations([]);
         }
@@ -185,5 +206,83 @@ export function RagChatPanel({
 }
 
 function MessageCard({ message }: { message: Message }) {
-  return <li className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"}`}><p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p><p className="whitespace-pre-wrap leading-6">{message.content}</p>{message.citations.length > 0 && <ul className="mt-2 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2 text-xs">{message.citations.map((citation) => <li key={citation.chunkId}><a href={citation.href} className="underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>{citation.license && <span className="text-[var(--color-text-muted)]"> · {citation.license}</span>}</li>)}</ul>}</li>;
+  return <li className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"}`}><p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p><p className="whitespace-pre-wrap leading-6">{message.content}</p>{message.citations.length > 0 && <ul className="mt-2 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2 text-xs">{message.citations.map((citation) => <li key={citation.chunkId}><a href={citation.href} className="underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>{citation.license && <span className="text-[var(--color-text-muted)]"> · {citation.license}</span>}</li>)}</ul>}{message.role === "assistant" && message.competencyNotices?.length ? <CompetencyNoticeList notices={message.competencyNotices} /> : null}</li>;
+}
+
+const COMPETENCY_LEVEL_LABEL: Record<CompetencyLevel, string> = {
+  unfamiliar: "unfamiliar",
+  struggling: "struggling",
+  partial: "partially familiar",
+  familiar: "familiar",
+  strong: "strongly familiar",
+};
+
+/**
+ * Quiet, progressive-disclosure notice (plan §3.4): one collapsed line per
+ * update, max 3 (the server already caps at 3; `.slice` here is just a
+ * defensive belt-and-suspenders match). Deliberately says only "based on
+ * what you said" — no "AI"/"model"/"detected" wording anywhere in this
+ * component, per the owner's site-wide display-language directive.
+ */
+function CompetencyNoticeList({ notices }: { notices: CompetencyNotice[] }) {
+  if (!notices.length) return null;
+  return (
+    <ul className="mt-2 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2 text-xs">
+      {notices.slice(0, 3).map((notice) => <CompetencyNoticeItem key={notice.signalId} notice={notice} />)}
+    </ul>
+  );
+}
+
+function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
+  const [expanded, setExpanded] = useState(false);
+  const [undone, setUndone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  async function undo() {
+    if (busy) return;
+    setBusy(true);
+    setUndoError(null);
+    try {
+      const response = await fetch(`/api/rag/competency-signals/${notice.signalId}/undo`, { method: "POST" });
+      if (!response.ok) throw new Error((await response.json().catch(() => ({})))?.error ?? "Could not undo that update.");
+      setUndone(true);
+    } catch (error) {
+      setUndoError(error instanceof Error ? error.message : "Could not undo that update.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (undone) {
+    return <li className="text-[var(--color-text-muted)]">Undone: “{notice.label}” marking removed.</li>;
+  }
+
+  return (
+    <li>
+      <button
+        type="button"
+        className="text-start underline decoration-dotted underline-offset-2"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        Noted: “{notice.label}” marked {COMPETENCY_LEVEL_LABEL[notice.level]} — based on what you said · {expanded ? "hide" : "details"}
+      </button>
+      {expanded && (
+        <div className="mt-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs">
+          <p>Your words: “{notice.quote}”</p>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            {notice.previousScore === null ? "Was: no record" : `Was: ${notice.previousScore}/100`} → Now: {COMPETENCY_LEVEL_LABEL[notice.level]} ({notice.newScore}/100)
+          </p>
+          <p className="mt-1 text-[var(--color-text-muted)]">
+            Applies to: {notice.targetKind === "concept" ? "your concept map" : "your reading roadmap"}.
+          </p>
+          <button type="button" className="mt-2 underline disabled:opacity-50" onClick={() => void undo()} disabled={busy}>
+            {busy ? "Undoing…" : "Undo"}
+          </button>
+          {undoError && <p className="mt-1 text-[var(--color-accent-burgundy)]">{undoError}</p>}
+        </div>
+      )}
+    </li>
+  );
 }

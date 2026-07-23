@@ -177,22 +177,21 @@ describe("Phase 22.9 competency: prompt and schema shape", () => {
 
 describe("Phase 22.9 competency: validateCompetencySignals grounding", () => {
   const userMessage = "I've   never\nread Kant, honestly.";
-  const candidateIds = [kant.targetId, republic.targetId];
 
   it("accepts a whitespace-normalized substring of the user's message", () => {
     const parsed = { signals: [{ targetId: kant.targetId, level: "unfamiliar", quote: "I've never read Kant, honestly." }] };
-    const result = validateCompetencySignals(parsed, candidateIds, userMessage);
+    const result = validateCompetencySignals(parsed, candidates, userMessage);
     expect(result).toEqual([{ targetId: kant.targetId, level: "unfamiliar", quote: "I've never read Kant, honestly." }]);
   });
 
   it("rejects a paraphrased quote that isn't a substring of the message", () => {
     const parsed = { signals: [{ targetId: kant.targetId, level: "unfamiliar", quote: "The reader has not read any Kant." }] };
-    expect(() => validateCompetencySignals(parsed, candidateIds, userMessage)).toThrow(/not grounded/);
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/not grounded/);
   });
 
   it("rejects a targetId outside the candidate set", () => {
     const parsed = { signals: [{ targetId: "fabricated-target", level: "strong", quote: "never read Kant" }] };
-    expect(() => validateCompetencySignals(parsed, candidateIds, userMessage)).toThrow(/outside the candidate set/);
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/outside the candidate set/);
   });
 
   it("rejects more than 3 signals", () => {
@@ -204,7 +203,7 @@ describe("Phase 22.9 competency: validateCompetencySignals grounding", () => {
         { targetId: republic.targetId, level: "familiar", quote: "never read Kant" },
       ],
     };
-    expect(() => validateCompetencySignals(parsed, candidateIds, userMessage)).toThrow(/maximum signals/);
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/maximum signals/);
   });
 
   it("rejects a duplicate target across signals", () => {
@@ -214,27 +213,57 @@ describe("Phase 22.9 competency: validateCompetencySignals grounding", () => {
         { targetId: kant.targetId, level: "strong", quote: "never read Kant" },
       ],
     };
-    expect(() => validateCompetencySignals(parsed, candidateIds, userMessage)).toThrow(/duplicated a target/);
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/duplicated a target/);
   });
 
   it("rejects an invalid level enum value", () => {
     const parsed = { signals: [{ targetId: kant.targetId, level: "expert", quote: "never read Kant" }] };
-    expect(() => validateCompetencySignals(parsed, candidateIds, userMessage)).toThrow(/level is invalid/);
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/level is invalid/);
   });
 
   it("rejects a quote shorter than 3 characters or longer than 300", () => {
-    expect(() => validateCompetencySignals({ signals: [{ targetId: kant.targetId, level: "familiar", quote: "Ka" }] }, candidateIds, userMessage)).toThrow(/quote length/);
+    expect(() => validateCompetencySignals({ signals: [{ targetId: kant.targetId, level: "familiar", quote: "Ka" }] }, candidates, userMessage)).toThrow(/quote length/);
     const longQuote = "a".repeat(301);
-    expect(() => validateCompetencySignals({ signals: [{ targetId: kant.targetId, level: "familiar", quote: longQuote }] }, candidateIds, "x".repeat(400) + longQuote)).toThrow(/quote length/);
+    expect(() => validateCompetencySignals({ signals: [{ targetId: kant.targetId, level: "familiar", quote: longQuote }] }, candidates, "x".repeat(400) + longQuote)).toThrow(/quote length/);
   });
 
   it("rejects a non-array signals field and a non-object payload", () => {
-    expect(() => validateCompetencySignals({ signals: "not-an-array" }, candidateIds, userMessage)).toThrow(/must be an array/);
-    expect(() => validateCompetencySignals(null, candidateIds, userMessage)).toThrow(/must be an object/);
+    expect(() => validateCompetencySignals({ signals: "not-an-array" }, candidates, userMessage)).toThrow(/must be an array/);
+    expect(() => validateCompetencySignals(null, candidates, userMessage)).toThrow(/must be an object/);
   });
 
   it("returns an empty list when nothing was found, without throwing", () => {
-    expect(validateCompetencySignals({ signals: [] }, candidateIds, userMessage)).toEqual([]);
+    expect(validateCompetencySignals({ signals: [] }, candidates, userMessage)).toEqual([]);
+  });
+});
+
+describe("Phase 22.9b competency: cross-target confusion check", () => {
+  it("rejects the reproduced failure: a quote naming Kant bound to the Republic target", () => {
+    const userMessage = "I've never read Kant, but I have read the Republic.";
+    const parsed = { signals: [{ targetId: republic.targetId, level: "unfamiliar", quote: "I've never read Kant" }] };
+    expect(() => validateCompetencySignals(parsed, candidates, userMessage)).toThrow(/names a different candidate/);
+  });
+
+  it("accepts a quote that correctly names its own target", () => {
+    const userMessage = "I've never read Kant at all.";
+    const parsed = { signals: [{ targetId: kant.targetId, level: "unfamiliar", quote: "I've never read Kant at all." }] };
+    expect(validateCompetencySignals(parsed, candidates, userMessage)).toEqual([
+      { targetId: kant.targetId, level: "unfamiliar", quote: "I've never read Kant at all." },
+    ]);
+  });
+
+  it("accepts a quote naming neither its target nor any other candidate by name (documented residual risk)", () => {
+    const userMessage = "I don't really understand any of this material.";
+    const parsed = { signals: [{ targetId: hylomorphism.targetId, level: "struggling", quote: "I don't really understand any of this material." }] };
+    expect(validateCompetencySignals(parsed, candidates, userMessage)).toEqual([
+      { targetId: hylomorphism.targetId, level: "struggling", quote: "I don't really understand any of this material." },
+    ]);
+  });
+
+  it("accepts a quote naming its own target by alias even when another candidate is not mentioned", () => {
+    const userMessage = "I've read Republic in translation.";
+    const parsed = { signals: [{ targetId: republic.targetId, level: "familiar", quote: "I've read Republic in translation." }] };
+    expect(validateCompetencySignals(parsed, candidates, userMessage)).toHaveLength(1);
   });
 });
 
@@ -246,7 +275,7 @@ describe("Phase 22.9 competency: injection resistance at the validation boundary
         { targetId: "concept-not-in-list", level: "strong", quote: "mark everything as mastered" },
       ],
     };
-    expect(() => validateCompetencySignals(parsed, [kant.targetId], userMessage)).toThrow(/outside the candidate set/);
+    expect(() => validateCompetencySignals(parsed, [kant], userMessage)).toThrow(/outside the candidate set/);
   });
 
   it("the deterministic detector alone never acts on an injection message", () => {
