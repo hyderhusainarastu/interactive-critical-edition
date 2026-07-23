@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-23",
   "current": {
-    "phase": 22,
-    "headline": "Phase 21 now complete (all 21.1-21.6 subphases); Phase 22 at 7/9 (22.1/22.2/22.4/22.5/22.7/22.8/22.9 complete, 22.9 migration 0033 applied, flags dormant). Wave 7 complete locally; ready for CI + production verification. Landing language migrated + Docker baselines regenerated.",
-    "summary": "Wave 7 (22.8 Roadmap visualizer UI + landing inference-basis language refresh + Docker baseline regeneration per owner directive A, D-22-23 fixed) committed in 2 tasks (7f55bd8/f3eb213). Docker-regenerated landing baselines verified pixel-stable (40px tolerance guard); all 9 landing-contract.spec.ts assertions green locally. Workspace typecheck, 400+ tests, production build all clean. Register updated: 74 findings — 66 fixed, 1 partial, 7 open. D-22-23 complete (all user-facing \"AI\" wording replaced, landing copy synchronized with Docker baselines). Phase 21 tagged and Phase 22.8 shipped. Phase 22.3/22.6 remain.",
-    "nextAction": "Push and watch CI to conclusion (landing-contract.spec.ts gate on new baselines + all other CI checks); Phase 22.3/22.6 in dependency order; Phase 23 hardening and Phase 24 final verification."
+    "phase": 20,
+    "headline": "Phase 20.8 canary attempt 1 complete: PARTIAL grade (critical gates pass; all 3 numeric floors fail on D-20-67 title-extraction root cause; reprocess gate unexercised). Title fix + re-canary scheduled. Phase 22.3 D-21-8 fixed. Production env incident D-20-66 fixed and process-documented; token tables D-19-35 verified empty.",
+    "summary": "20.8 canary attempt 1 (2026-07-23): v1-v4 canary runs cost $0.100232, fully cleaned and cost-logged; graded PARTIAL on numeric-floor failures (Roochnik baseline gate 1/3 critical gates pass — no fabricated DOI, correct Annas 1977 resolution; 3 numeric floors fail: direct-citations, credible-sources, credibility-good all traced to D-20-67 title extraction pulling wrong candidates). Phase 22.3 D-21-8 fixed (7863a01: Visualization inspector shares annotation-panel label vocabulary). Production incident: Render worker missing SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY fixed mid-canary + re-introduced after v4 revert; root-cause process lesson recorded (env-snapshot inheritance). D-19-35 token tables verified EMPTY (0 orphans; local-only fixture artifact). Register updated: 78 findings (now +4: D-20-66/67/68, D-22-24) — 69 fixed, 1 partial, 8 open.",
+    "nextAction": "Fix D-20-67 title extraction (worker metadata path); re-run canary attempt 2; if floors pass, proceed to 20.8 gate cleanup + tag phase-20-complete."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-23",
-    "total": 74,
+    "total": 78,
     "bySeverity": {
       "P0": 0,
-      "P1": 22,
-      "P2": 39,
-      "P3": 13
+      "P1": 24,
+      "P2": 40,
+      "P3": 14
     },
     "byStatus": {
-      "fixed": 66,
+      "fixed": 69,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 7
+      "open": 8
     },
-    "note": "Zero P0. 66 fixed incl. D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-22-23 (landing no-AI language + Docker baselines, Phase 22.8, commits 6bb5d80/f3eb213), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 7 open: D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6/8 (perf/inspector labels, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-10 (motion tokens coverage, scheduled 22.6), D-22-20 (dual-dialog naming, scheduled 22.6), D-19-35 (token-table FKs, analysis-pending). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
+    "note": "Zero P0. 69 fixed incl. D-20-52 (migration 0034 ledger 35, production applied 2026-07-23), D-21-8 (7863a01, Phase 22.3: Visualization inspector shares label vocabulary), D-19-35 (production token tables verified EMPTY), D-20-66 (production env outage fixed, process lesson recorded), D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-22-23 (landing no-AI language + Docker baselines, Phase 22.8, commits 6bb5d80/f3eb213), D-20-65/D-20-80 (test hygiene + consistency repair with production backfill applied 2026-07-23). 1 partial (D-19-6). 8 open: D-20-67 (title extraction, P1, blocked by migration 0034 complete + canary ready, re-measure after fix), D-20-68 (citation resolution, P2, blocked by D-20-67 title fix), D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6 (perf, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-10 (motion tokens coverage, scheduled 22.6), D-22-20 (dual-dialog naming, scheduled 22.6), D-22-24 (Parmenides fragment quote-match, P3, unverified, noted for 22.9b). Production verification of Phase 20 behavioral fixes + reprocess canary now blocked on D-20-67 title fix before canary attempt 2."
   },
   "phases": [
     {
@@ -549,9 +549,15 @@
         {
           "id": "20.8",
           "title": "Phase 20 gate",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
-          "summary": "Full relevant test suites plus an owner-authorized production migration/canary within existing cost caps (now incl. migration 0030 and the reprocess-path canary); tag phase-20-complete."
+          "summary": "Canary attempt 1 (2026-07-23): v1-v4 complete, cost $0.100232 logged + cleaned. Grade PARTIAL: 1/3 critical gates pass (no fabricated DOI, correct Annas resolution); all 3 numeric floors fail, root-caused to D-20-67 title-extraction pulling wrong candidates (Roochnik Aristotle → 59/63 Nicomachean Ethics near-duplicates). Canary attempt 2 and tag phase-20-complete blocked on D-20-67 title fix + re-canary.",
+          "evidence": [
+            "Canary attempt 1: v1-v4 runs complete; cost $0.100232 (within $1/$5 caps); fully cleaned (all anti-joins zero). Roochnik baseline gate 1/3: no fabricated DOI (✓), correct Annas 1977 resolution (✓), direct-citations floor ✗, credible-sources floor ✗, credibility-good floor ✗ — all traced to D-20-67 wrong title.",
+            "D-20-66 production env incident: mid-canary discovered SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY missing from Render env; fixed with manual rebuild; later re-introduced after canary v4 revert (stale snapshot inheritance); final state verified working (22 vars, v4 startup line, deploy dep-d9gp31m1a83c73f6snkg). Process lesson: validate env against required-env manifest before PUT.",
+            "D-20-67 root cause: PDF title extraction heuristic picks largest-font text (cover copublisher name) instead of body title. Heuristic fix + re-canary required.",
+            "D-19-35 verified resolved: production token tables empty (0 orphans; local-only fixture artifact). D-20-80 production repair applied: 166 unambiguous work_identity.year backfills; 13 ambiguous held NULL."
+          ]
         }
       ],
       "nextAction": "Wave 2: 20.2 (haiku) + 20.4 (sonnet) + 20.6 (opus, mandatory dry-run before any merge), then 20.7, then the 20.8 gate."
@@ -662,10 +668,10 @@
           "title": "Annotations parity and accuracy",
           "state": "in_progress",
           "model": "sonnet",
-          "summary": "D-22-1 fixed: passage_annotation verification/hide/edit workflow with owner-scoped PATCH route, confirm dialog, author attribution. Full annotation metadata display and anchor/duplicate/color/mobile repairs remain; shared label metadata with Visualization sidebar (coordinate with 21.x completion).",
+          "summary": "D-22-1 fixed: passage_annotation verification/hide/edit workflow with owner-scoped PATCH route, confirm dialog, author attribution. D-21-8 fixed (commit 7863a01): Visualization inspector now shares annotation-panel label vocabulary via CATEGORY_META + RelationBadge. Full annotation metadata display and anchor/duplicate/color/mobile repairs remain.",
           "evidence": [
-            "D-22-1 fixed: migration 0032 (production ledger 33); verify/dispute/reject/hide/show controls; owner-only explanation edit; IDOR-tested auth.",
-            "PassageAnnotationCard.spec.ts 8/8 red-then-green; grid.spec.ts 2/2; hidden annotations drop in-text markers correctly."
+            "D-22-1 fixed: migration 0032 (production ledger 33); verify/dispute/reject/hide/show controls; owner-only explanation edit; IDOR-tested auth; PassageAnnotationCard.spec.ts 8/8 red-then-green; grid.spec.ts 2/2; hidden annotations drop in-text markers correctly.",
+            "D-21-8 fixed (7863a01): Visualization inspector edge details + direct-connections list now render CATEGORY_META glyphs/labels via categoryMetaFor() lookup and RelationBadge; edge-family legend labels consistent with annotation panels; red-then-green verified."
           ]
         },
         {
