@@ -10,6 +10,13 @@ export interface ApparatusBlockInput {
   marker?: string;
   pageIndex: number;
   blockOrder: number;
+  /** D-20-89/D-20-91: true only when this block was supplied from the
+   *  document's own text layer because GROBID's structural pass omitted it
+   *  (see `endnoteRecovery.ts`) — never true for a block GROBID itself
+   *  produced. Threaded through so downstream consumers (citation
+   *  resolution) can tell recovered apparatus apart from GROBID-native
+   *  apparatus. */
+  recovered?: boolean;
 }
 
 export interface ExtractedAuthorApparatus {
@@ -19,6 +26,10 @@ export interface ExtractedAuthorApparatus {
   text: string;
   scope: Record<string, unknown>;
   source: "structure" | "endnote-heading" | "citation-heuristic";
+  /** D-20-91: mirrors `ApparatusBlockInput.recovered` — true only for an
+   *  endnote this pipeline supplied from the text layer, not GROBID's own
+   *  structural output. Always false for non-endnote kinds. */
+  recovered: boolean;
 }
 
 const NOTE_HEADING = /^\s*(endnotes?|notes?)\s*:?\s*$/i;
@@ -60,16 +71,16 @@ export function extractAuthorApparatus(input: {
     const scope = { pageIndex: block.pageIndex, blockOrder: block.blockOrder };
     if (block.kind === "footnote") {
       const marker = block.marker ?? block.text.match(NOTE_MARKER)?.[1] ?? block.text.match(NOTE_MARKER)?.[2] ?? null;
-      add({ textBlockId: block.blockId, kind: "footnote", marker, text: block.text, scope, source: "structure" });
+      add({ textBlockId: block.blockId, kind: "footnote", marker, text: block.text, scope, source: "structure", recovered: Boolean(block.recovered) });
       continue;
     }
     if (block.kind === "endnote") {
       const marker = block.marker ?? block.text.match(NOTE_MARKER)?.[1] ?? block.text.match(NOTE_MARKER)?.[2] ?? null;
-      add({ textBlockId: block.blockId, kind: "endnote", marker, text: block.text, scope, source: "structure" });
+      add({ textBlockId: block.blockId, kind: "endnote", marker, text: block.text, scope, source: "structure", recovered: Boolean(block.recovered) });
       continue;
     }
     if (block.kind === "bibliography" || block.kind === "reference") {
-      add({ textBlockId: block.blockId, kind: "bibliography_entry", marker: null, text: block.text, scope, source: "structure" });
+      add({ textBlockId: block.blockId, kind: "bibliography_entry", marker: null, text: block.text, scope, source: "structure", recovered: false });
       continue;
     }
     if (inEndnotes && block.kind === "body") {
@@ -82,6 +93,7 @@ export function extractAuthorApparatus(input: {
           text: block.text,
           scope,
           source: "endnote-heading",
+          recovered: false,
         });
       }
     }
@@ -95,6 +107,7 @@ export function extractAuthorApparatus(input: {
       text: citation.text,
       scope: { citationKind: citation.kind },
       source: "citation-heuristic",
+      recovered: false,
     });
   }
 

@@ -237,7 +237,7 @@ export async function handleEditionExtraction(documentId: string) {
     // re-queried later so an annotation can only ever reference a block that
     // genuinely exists (the same real IDs that were just inserted).
     const bodyBlocks: { id: string; text: string; pageIndex: number; blockOrder: number; sectionTitle: string | null }[] = [];
-    const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference"; text: string; marker?: string; pageIndex: number; blockOrder: number }[] = [];
+    const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference"; text: string; marker?: string; pageIndex: number; blockOrder: number; recovered?: boolean }[] = [];
     let currentSectionTitle: string | null = null;
 
     for (const parsedPage of parsed.pages) {
@@ -256,6 +256,11 @@ export async function handleEditionExtraction(documentId: string) {
           text: block.text,
           bbox: block.bbox ?? null,
           marker: block.marker ?? null,
+          // D-20-89: honest provenance for an endnote this pipeline supplied
+          // from the document's own text layer because GROBID's structural
+          // pass omitted it (never for a block GROBID itself produced,
+          // which stays null here exactly as before this fix).
+          confidence: block.recovered ? 0.6 : null,
         }))).returning({ id: textBlocks.id, kind: textBlocks.kind, text: textBlocks.text, marker: textBlocks.marker, blockOrder: textBlocks.blockOrder });
         if (pipelineAtLeast(pipeline, "v3")) {
           for (const b of insertedBlocks) {
@@ -266,6 +271,12 @@ export async function handleEditionExtraction(documentId: string) {
               marker: b.marker ?? undefined,
               pageIndex: parsedPage.pageIndex,
               blockOrder: b.blockOrder,
+              // D-20-89/D-20-91: `b.blockOrder` is the same index this block
+              // was inserted at (`parsedPage.blocks.map((block, blockOrder)
+              // => ...)` above), so it reliably indexes back into the
+              // pre-insert array to recover the `recovered` flag that
+              // `insertedBlocks`' `.returning()` projection doesn't carry.
+              recovered: Boolean(parsedPage.blocks[b.blockOrder]?.recovered),
             });
             if ((b.kind === "title" || b.kind === "header") && b.text.trim()) currentSectionTitle = b.text.trim();
             if (b.kind === "body" && b.text.trim().length >= 40) {
@@ -289,7 +300,11 @@ export async function handleEditionExtraction(documentId: string) {
         pageAnchor: { pageIndex: parsedPage.pageIndex, bbox: block.bbox ?? null, apparatusKind: block.kind },
         text: block.text,
         kind: "authorial",
-        source: "grobid",
+        // D-20-89: a block recovered from the text layer (GROBID's own
+        // structural pass produced no trace of it) is labeled distinctly
+        // from GROBID-native apparatus rather than presented as equally
+        // certain layout-aware structure.
+        source: block.recovered ? "text-layer-recovery" : "grobid",
       })));
     }
     await db.insert(docMetadata).values({
