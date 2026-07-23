@@ -41,7 +41,7 @@ import {
   type CitationFrequencySignal,
   type RelationshipCategory,
 } from "@ice/ai-adapters";
-import { resolveCitation, type ResolvedRecord } from "@ice/bibliographic";
+import { resolveCitation, titleOverlap, type ResolvedRecord } from "@ice/bibliographic";
 import { extractCitationMentions, extractCitations, type CitationSourceInput, type ExtractedAuthorApparatus, type RawCitation } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 import { createHash } from "node:crypto";
@@ -87,7 +87,7 @@ import {
   findOpenAccessEvidence,
   retrieveOpenAccessText,
 } from "@ice/research";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
 import { compactWorkSignal, persistV4WorkSignals } from "./v4";
 
@@ -442,7 +442,19 @@ export async function createCitationLibraryProjection(input: {
   return resource.id;
 }
 
-function resolvedCitationLibraryFields(record: ResolvedRecord) {
+/**
+ * A citation match's minimal shape, satisfied by a live @ice/bibliographic
+ * `ResolvedRecord`, a shared-catalogue row, or a same-run `research_resource`
+ * row — the three sources `resolveCitationMetadata` and
+ * `linkCitationsToRunDiscoveries` can now resolve a citation from. Widened
+ * from `ResolvedRecord.source` (which is only the three live-lookup provider
+ * names) to a plain `string` so a catalogue/same-run reuse can honestly
+ * record ITS OWN provenance (`catalog:<original source>` /
+ * `research:<provider>`) instead of masquerading as a fresh live lookup.
+ */
+type CitationMatch = Omit<ResolvedRecord, "source" | "raw"> & { source: string };
+
+function resolvedCitationLibraryFields(record: CitationMatch) {
   const authors = record.authors
     ? record.authors.split(/\s*;\s*|\s+and\s+|\s*,\s*/).map((author) => author.trim()).filter(Boolean)
     : [];
@@ -462,56 +474,122 @@ function resolvedCitationLibraryFields(record: ResolvedRecord) {
 }
 
 /**
- * Worker-queue consumer for metadata resolution. It is intentionally
- * serialized by the worker queue; this makes external lookup rate-limited and
- * keeps the immediate citation projection independent from provider health.
+ * The SAME confidence guard @ice/bibliographic's own live sources apply to
+ * their single top-ranked hit (title overlap >= 0.34), reused here so a
+ * catalogue/same-run reuse can never be MORE permissive than a fresh network
+ * match would have been — only more available.
  */
-export async function resolveCitationMetadata(citationId: string): Promise<void> {
-  const [citation] = await db
-    .select({
-      id: citations.id,
-      documentId: citations.documentId,
-      rawText: citations.rawText,
-      normalizedQuery: citations.normalizedQuery,
-      sourceType: citations.sourceType,
-      parserConfidence: citations.parserConfidence,
-      sourceAnchor: citations.sourceAnchor,
-      workId: documents.workId,
-      workIdentityId: works.workIdentityId,
-      userId: documents.userId,
-    })
-    .from(citations)
-    .innerJoin(documents, eq(documents.id, citations.documentId))
-    .innerJoin(works, eq(works.id, documents.workId))
-    .where(eq(citations.id, citationId))
-    .limit(1);
-  if (!citation) return;
+const CATALOG_MATCH_THRESHOLD = 0.34;
 
-  let record: ResolvedRecord | null = null;
-  try {
-    record = await resolveCitation(citation.normalizedQuery);
-  } catch (error) {
-    // Resolution availability is not a prerequisite for Library coverage.
-    reportError(error, { scope: "worker.resolveCitationMetadata", citationId });
+function bestOverlapMatch<T extends { title: string }>(query: string, candidates: readonly T[]): T | null {
+  let best: T | null = null;
+  let bestScore = 0;
+  for (const candidate of candidates) {
+    const score = titleOverlap(query, candidate.title);
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
   }
-  if (!record) {
-    await db.update(citations).set({ resolutionState: "unresolved", resolutionSource: "unresolved" }).where(eq(citations.id, citationId));
-    return;
-  }
+  return bestScore >= CATALOG_MATCH_THRESHOLD ? best : null;
+}
 
-  const bibId = await findOrCreateBibRecord(record);
+/** Query terms worth pre-filtering the catalogue by — short/common words
+ *  would match almost every row and defeat the point of a coarse filter. */
+function significantWords(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 4)
+    .sort((a, b) => b.length - a.length);
+}
+
+/**
+ * D-20-68 (the Annas 1977 canary regression): a live lookup returning nothing
+ * does not mean the work is unknown — the shared, append-only
+ * `bibliographic_record` catalogue may already hold a confident match from an
+ * earlier resolution (this citation's own prior run, or a different
+ * document's), and the code previously never consulted it before giving up.
+ * That is what made identical citation text resolve on one run and not the
+ * next: the outcome depended entirely on one live network call's luck
+ * (Crossref's `rows=1` top-hit ranking is not a stable function of the query
+ * alone), with no fallback to a match already sitting in the database. This
+ * coarsely pre-filters by the query's own significant words (no trigram
+ * extension assumed, so bounded rather than a full-table fuzzy scan) before
+ * scoring candidates with the same title-overlap guard a live match uses.
+ */
+async function findCatalogMatchForQuery(query: string): Promise<{ id: string; record: CitationMatch } | null> {
+  const words = significantWords(query).slice(0, 3);
+  if (words.length < 2) return null;
+  const conditions = words.map((word) => sql`title ilike ${`%${word}%`}`);
+  const rows = (await db.execute(sql`
+    SELECT id, source, external_id, title, authors, year, doi, url, access_status
+    FROM bibliographic_record
+    WHERE ${sql.join(conditions, sql` AND `)}
+    LIMIT 20
+  `)) as unknown as {
+    id: string;
+    source: string;
+    external_id: string | null;
+    title: string;
+    authors: string | null;
+    year: number | null;
+    doi: string | null;
+    url: string | null;
+    access_status: ResolvedRecord["accessStatus"];
+  }[];
+  const match = bestOverlapMatch(query, rows);
+  if (!match) return null;
+  return {
+    id: match.id,
+    record: {
+      source: `catalog:${match.source}`,
+      externalId: match.external_id,
+      title: match.title,
+      authors: match.authors,
+      year: match.year,
+      doi: match.doi,
+      url: match.url,
+      accessStatus: match.access_status,
+    },
+  };
+}
+
+/**
+ * Everything a resolved match — live, catalogue-reused, or same-run-linked —
+ * needs applied to a citation: the Library projection merge, the citation row
+ * itself, and the `cites` graph edge. Factored out of `resolveCitationMetadata`
+ * so `linkCitationsToRunDiscoveries` (a different caller, a different source
+ * of the match) shares the exact same downstream behavior rather than a
+ * second hand-copied version of it.
+ */
+async function applyResolvedCitation(input: {
+  citationId: string;
+  workId: string;
+  workIdentityId: string | null;
+  userId: string;
+  rawText: string;
+  normalizedQuery: string;
+  sourceType: "bibliography" | "footnote" | "endnote" | "inline";
+  parserConfidence: number;
+  sourceAnchor: RawCitation["anchor"];
+  record: CitationMatch;
+  bibId: string;
+}): Promise<void> {
+  const { citationId, workId, workIdentityId, userId, record, bibId } = input;
   const [link] = await db
     .select({ learningResourceId: citationLibraryLinks.learningResourceId })
     .from(citationLibraryLinks)
     .where(eq(citationLibraryLinks.citationId, citationId))
     .limit(1);
   const citationMention: RawCitation = {
-    text: citation.rawText,
-    query: citation.normalizedQuery,
-    kind: citation.sourceType === "inline" ? "inline" : "reference",
-    sourceType: citation.sourceType,
-    parserConfidence: citation.parserConfidence,
-    anchor: citation.sourceAnchor as RawCitation["anchor"],
+    text: input.rawText,
+    query: input.normalizedQuery,
+    kind: input.sourceType === "inline" ? "inline" : "reference",
+    sourceType: input.sourceType,
+    parserConfidence: input.parserConfidence,
+    anchor: input.sourceAnchor,
   };
   const fields = resolvedCitationLibraryFields(record);
   const canonicalKey = normalizedKey({
@@ -530,7 +608,7 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
       .where(eq(learningResources.normalizedKey, canonicalKey))
       .limit(1);
     const targetId = existing?.id ?? link.learningResourceId;
-    if (citation.workIdentityId) await ensureCitationRole({ learningResourceId: targetId, workIdentityId: citation.workIdentityId, citation: citationMention });
+    if (workIdentityId) await ensureCitationRole({ learningResourceId: targetId, workIdentityId, citation: citationMention });
     if (existing && existing.id !== link.learningResourceId) {
       // Merge every provenance link before removing the temporary stub. This
       // makes DOI/ISBN/URL/title identity canonical without duplicate rows.
@@ -547,9 +625,9 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
     .select({ id: graphEdges.id })
     .from(graphEdges)
     .where(and(
-      eq(graphEdges.userId, citation.userId),
+      eq(graphEdges.userId, userId),
       eq(graphEdges.sourceType, "work"),
-      eq(graphEdges.sourceId, citation.workId),
+      eq(graphEdges.sourceId, workId),
       eq(graphEdges.targetType, "bibliographic_record"),
       eq(graphEdges.targetId, bibId),
       eq(graphEdges.edgeType, "cites"),
@@ -557,16 +635,166 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
     .limit(1);
   if (!existingEdge) {
     await db.insert(graphEdges).values({
-      userId: citation.userId,
+      userId,
       sourceType: "work",
-      sourceId: citation.workId,
+      sourceId: workId,
       targetType: "bibliographic_record",
       targetId: bibId,
       edgeType: "cites",
       weight: 1,
-      confidence: citation.parserConfidence,
-      evidence: { citationId, sourceType: citation.sourceType, anchor: citation.sourceAnchor },
+      confidence: input.parserConfidence,
+      evidence: { citationId, sourceType: input.sourceType, anchor: input.sourceAnchor },
       createdBy: "system",
+    });
+  }
+}
+
+/**
+ * Worker-queue consumer for metadata resolution. It is intentionally
+ * serialized by the worker queue; this makes external lookup rate-limited and
+ * keeps the immediate citation projection independent from provider health.
+ */
+export async function resolveCitationMetadata(citationId: string): Promise<void> {
+  const [citation] = await db
+    .select({
+      id: citations.id,
+      documentId: citations.documentId,
+      rawText: citations.rawText,
+      normalizedQuery: citations.normalizedQuery,
+      sourceType: citations.sourceType,
+      parserConfidence: citations.parserConfidence,
+      sourceAnchor: citations.sourceAnchor,
+      resolutionState: citations.resolutionState,
+      workId: documents.workId,
+      workIdentityId: works.workIdentityId,
+      userId: documents.userId,
+    })
+    .from(citations)
+    .innerJoin(documents, eq(documents.id, citations.documentId))
+    .innerJoin(works, eq(works.id, documents.workId))
+    .where(eq(citations.id, citationId))
+    .limit(1);
+  if (!citation) return;
+  // Idempotent no-op (D-20-68): a duplicate/retried job (pg-boss retry, or
+  // this same citation already having been linked by
+  // `linkCitationsToRunDiscoveries` earlier in the same analysis run) must
+  // never re-run a live lookup against an already-resolved citation — a
+  // slow/failed SECOND attempt at the same external API can otherwise
+  // downgrade a citation that was already correctly resolved back to
+  // "unresolved". This is exactly the shape of the Annas 1977 canary
+  // regression: identical input, resolved once, unresolved the next time.
+  if (citation.resolutionState === "resolved") return;
+
+  let record: CitationMatch | null = null;
+  let bibId: string | null = null;
+  try {
+    const live = await resolveCitation(citation.normalizedQuery);
+    if (live) {
+      record = live;
+      bibId = await findOrCreateBibRecord(live);
+    }
+  } catch (error) {
+    // Resolution availability is not a prerequisite for Library coverage.
+    reportError(error, { scope: "worker.resolveCitationMetadata", citationId });
+  }
+  if (!record) {
+    const catalogMatch = await findCatalogMatchForQuery(citation.normalizedQuery);
+    if (catalogMatch) {
+      record = catalogMatch.record;
+      bibId = catalogMatch.id;
+    }
+  }
+  if (!record || !bibId) {
+    await db.update(citations).set({ resolutionState: "unresolved", resolutionSource: "unresolved" }).where(eq(citations.id, citationId));
+    return;
+  }
+
+  await applyResolvedCitation({
+    citationId,
+    workId: citation.workId,
+    workIdentityId: citation.workIdentityId,
+    userId: citation.userId,
+    rawText: citation.rawText,
+    normalizedQuery: citation.normalizedQuery,
+    sourceType: citation.sourceType,
+    parserConfidence: citation.parserConfidence,
+    sourceAnchor: citation.sourceAnchor as RawCitation["anchor"],
+    record,
+    bibId,
+  });
+}
+
+/**
+ * D-20-68 (the Irwin canary case): the explicit-citation discovery lane can
+ * surface a resource in THIS SAME RUN — via a provider @ice/bibliographic's
+ * narrower live lookup never queries at all (e.g. Google Books) — that the
+ * matching structural citation never gets linked to. The reason is ordering,
+ * not coverage: `resolveCitationMetadata` runs as an independent,
+ * asynchronously-queued job enqueued right when the citation is first
+ * inserted (near the START of `analyzeEditionRun`), while `research_resource`
+ * rows for this run are only written much later in the SAME function call —
+ * so the async job frequently has nothing of this run's own to see even in
+ * principle, and nothing ever revisits it afterward. This closes that gap
+ * synchronously, called only once discovery has actually finished inserting
+ * this run's `research_resource` rows, so the link never races the async
+ * queue's own timing. Citations already `resolved` (by the async path, or a
+ * prior call to this function on reprocess) are left untouched.
+ */
+export async function linkCitationsToRunDiscoveries(documentId: string, runId: string): Promise<void> {
+  const candidates = await db
+    .select({ title: researchResources.title, bibRecordId: researchResources.bibRecordId, provider: researchResources.provider })
+    .from(researchResources)
+    .where(and(eq(researchResources.runId, runId), isNotNull(researchResources.bibRecordId)));
+  if (!candidates.length) return;
+
+  const pending = await db
+    .select({
+      id: citations.id,
+      workId: documents.workId,
+      workIdentityId: works.workIdentityId,
+      userId: documents.userId,
+      rawText: citations.rawText,
+      normalizedQuery: citations.normalizedQuery,
+      sourceType: citations.sourceType,
+      parserConfidence: citations.parserConfidence,
+      sourceAnchor: citations.sourceAnchor,
+    })
+    .from(citations)
+    .innerJoin(documents, eq(documents.id, citations.documentId))
+    .innerJoin(works, eq(works.id, documents.workId))
+    .where(and(eq(citations.documentId, documentId), ne(citations.resolutionState, "resolved")));
+  if (!pending.length) return;
+
+  for (const citation of pending) {
+    const match = bestOverlapMatch(citation.normalizedQuery, candidates);
+    if (!match?.bibRecordId) continue;
+    const [bibRow] = await db
+      .select()
+      .from(bibliographicRecords)
+      .where(eq(bibliographicRecords.id, match.bibRecordId))
+      .limit(1);
+    if (!bibRow) continue;
+    await applyResolvedCitation({
+      citationId: citation.id,
+      workId: citation.workId,
+      workIdentityId: citation.workIdentityId,
+      userId: citation.userId,
+      rawText: citation.rawText,
+      normalizedQuery: citation.normalizedQuery,
+      sourceType: citation.sourceType,
+      parserConfidence: citation.parserConfidence,
+      sourceAnchor: citation.sourceAnchor as RawCitation["anchor"],
+      record: {
+        source: `research:${match.provider}`,
+        externalId: bibRow.externalId,
+        title: bibRow.title,
+        authors: bibRow.authors,
+        year: bibRow.year,
+        doi: bibRow.doi,
+        url: bibRow.url,
+        accessStatus: bibRow.accessStatus,
+      },
+      bibId: match.bibRecordId,
     });
   }
 }
@@ -1785,6 +2013,13 @@ export async function analyzeEditionRun(input: {
       });
     }
   }
+
+  // D-20-68: link any citation this run's own discovery already found a
+  // candidate for (see linkCitationsToRunDiscoveries's doc comment) — must run
+  // after every research_resource row for this run has been inserted (i.e.
+  // after the `ranked` loop above), and before the run is marked validated, so
+  // this pass always sees the run's own complete discovery set.
+  await linkCitationsToRunDiscoveries(input.documentId, input.runId);
 
   if (usageLogs.length) await db.insert(aiUsageLogs).values(usageLogs);
 
