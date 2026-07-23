@@ -611,13 +611,27 @@ function yearConflictsWithQuery(query: string, candidate: OverlapCandidate): boo
  * 441, $50.00 (cloth)"; "Richmond Lattimore: The Odyssey of Homer. … Pp. 374.
  * … Cloth, $8.95."; "Sarah Broadie and Christopher Rowe (eds) … Pp. x+468.
  * £15.00 (Pbk)." These guards read ONLY the candidate's own title for signals
- * that never appear in a genuine work's title — an explicit "review" marker,
- * a pagination notice ("Pp. 374"/"Pp. x+468"), or a binding notice
- * ("(cloth)"/"(Pbk)") — so a review notice is rejected while a same-titled
- * monograph is untouched. Deliberately grounded in the real corpus, not
- * speculative; deliberately omits a bare currency signal, which a legitimate
- * title can carry ("$2.00 a Day"). */
-const REVIEW_TITLE_MARKER = /^\s*(?:book\s+)?reviews?\b|^\s*reviews?\s+of\b|^\s*review\s*:|\(\s*review\s*\)\s*$|\[\s*review\s*\]\s*$/i;
+ * that never appear in a genuine work's title — an appended "(review)"/
+ * "[review]" document-type tag, a pagination notice ("Pp. 374"/"Pp. x+468"),
+ * or a binding notice ("(cloth)"/"(Pbk)") — so a review notice is rejected
+ * while a same-titled monograph is untouched. Deliberately grounded in the
+ * real corpus, not speculative; deliberately omits a bare currency signal,
+ * which a legitimate title can carry ("$2.00 a Day").
+ *
+ * Adversarial verification (post-merge) found the original marker also
+ * matched titles STARTING with "Review"/"Reviews of"/"Review:" — a prefix
+ * shape that never actually appears in any of the four corpus examples above
+ * (all four are caught by the suffix tag alone or by pagination/binding), but
+ * DOES match real, legitimately-citable titles: journal names used as a
+ * title field ("Review of Economic Studies", "Reviews of Modern Physics") and
+ * genuine review-articles that this exact scholarly domain cites directly as
+ * primary sources ("Review of Aristotle's Ethics, by W. D. Ross"). Vetoing
+ * those would silently turn a correct resolution into a false "unresolved"
+ * with no recovery path. The prefix branch was removed as unneeded weight —
+ * the suffix tag is what the real bypass needed, and it carries much lower
+ * false-positive risk, since "(review)"/"[review]" is a document-type tag an
+ * index appends rather than an organic part of an authored title. */
+const REVIEW_TITLE_MARKER = /\(\s*review\s*\)\s*$|\[\s*review\s*\]\s*$/i;
 const PAGINATION_NOTICE = /\bpp\.\s*[ivxlcdm\d]/i;
 const BINDING_NOTICE = /\((?:cloth|paper|pbk|hbk|hardback|paperback|hardcover)\)/i;
 

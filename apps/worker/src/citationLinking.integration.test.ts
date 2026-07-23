@@ -718,6 +718,46 @@ describe.skipIf(!hasDb)("D-20-68 — citation-to-candidate linking", () => {
       await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, resolved.resolvedBibId!));
       await purgeFixtureTitles();
     });
+
+    /**
+     * Adversarial-verification addition (post-merge): `isReviewTitle`'s
+     * original marker also matched titles STARTING with "Review"/"Reviews
+     * of"/"Review:" — a shape none of the four real corpus examples in the
+     * doc comment above actually need (all four are caught by the suffix tag
+     * alone or by pagination/binding), but one that DOES match real,
+     * legitimately-citable titles in this exact scholarly domain: a
+     * review-article a footnote cites directly as its own source, e.g.
+     * "Review of Love and Friendship in Plato and Aristotle, by A. W.
+     * Price". Vetoing that would silently convert a correct resolution into
+     * a false "unresolved" with no recovery path — worse than the bug this
+     * fix was meant to close. The prefix branch was removed; this proves a
+     * clean live hit whose title begins with "Review of" (year agrees, no
+     * suffix tag, no pagination/binding notice) still resolves normally.
+     */
+    it("does NOT veto a live hit that is itself a legitimately-cited review article (title starts with 'Review of')", async () => {
+      const reviewArticleTitle = "Review of Love and Friendship in Plato and Aristotle, by A. W. Price";
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.title, reviewArticleTitle));
+      const { document, run } = await seedDocument();
+      resolver.resolveCitation.mockResolvedValueOnce({
+        source: "crossref" as const,
+        externalId: "10.9999/bussanich-review",
+        title: reviewArticleTitle,
+        authors: "John Bussanich",
+        year: 1977,
+        doi: "10.9999/bussanich-review",
+        url: "https://doi.org/10.9999/bussanich-review",
+        accessStatus: "subscription" as const,
+        raw: {},
+      });
+      const citation = await seedCitation(document, run);
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBeTruthy();
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, resolved.resolvedBibId!));
+    });
   });
 
   it("never re-runs a live lookup or downgrades an already-resolved citation (idempotency guard)", async () => {
