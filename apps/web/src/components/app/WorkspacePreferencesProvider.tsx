@@ -90,10 +90,19 @@ export function WorkspacePreferencesProvider({
       } catch {
         // Still save to the server for devices with browser storage disabled.
       }
+      // `keepalive: true` lets this request outlive the page that issued it —
+      // without it, a reload/navigation fired immediately after a preference
+      // change (as workspace-shell.spec.ts's focus-mode persistence test
+      // deliberately does, to prove the server round-trip rather than a
+      // localStorage cache) can abort the in-flight PUT before Postgres ever
+      // sees it, so the very next boot reads the stale prior value. This is
+      // the same mechanism `navigator.sendBeacon` uses for unload-time
+      // analytics, applied here to an ordinary same-origin fetch.
       void fetch("/api/preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
+        keepalive: true,
       }).then(async (response) => {
         if (!response.ok) throw new Error();
         const body = await response.json();

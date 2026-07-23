@@ -144,6 +144,23 @@ test.describe("Work trash (Phase 9.7 + 20.3)", () => {
     await expect(page.getByText("404")).not.toBeVisible();
   });
 
+  // D-22-10 (plan §22.7): the trash list gained a one-shot `.app-reveal`
+  // scroll-entrance (mirroring library.spec.ts's own "does not animate when
+  // motion is reduced" pattern for the Library Focus control) — under
+  // reduced motion `useScrollReveal` must never set `data-reveal-ready`, so
+  // the animation never has anything to trigger from.
+  test("does not animate the trash list when motion is reduced", async ({ page }) => {
+    const { workId } = await seedOwnedWork(userId);
+    await db.update(works).set({ deletedAt: new Date() }).where(eq(works.id, workId));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    await login(page);
+    await page.goto("/works/trash");
+    const row = page.locator(`[data-trash-item="${workId}"]`);
+    await expect(row).toBeVisible();
+    await expect(page.locator("ul.app-reveal")).not.toHaveAttribute("data-reveal-ready", "true");
+  });
+
   test("trashing a work removes its chunks from RAG retrieval (Phase 20.3)", async ({ page }) => {
     const [work] = await db
       .insert(works)

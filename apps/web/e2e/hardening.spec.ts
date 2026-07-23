@@ -37,6 +37,11 @@ test.describe("Phase 12 hardening", () => {
     await expect(page.locator(":focus")).not.toHaveCount(0);
     const transitionDuration = await page.locator(".app-icon-button").first().evaluate((node) => Number.parseFloat(getComputedStyle(node, "::after").transitionDuration));
     expect(transitionDuration).toBeLessThanOrEqual(0.01);
+    // D-22-10: Writer's "New project" button gained the shared `.app-control`
+    // hover/focus transition — same blanket reduced-motion override, checked
+    // directly on the element this time (no `::after` pseudo involved).
+    const newProjectTransition = await page.getByRole("button", { name: "New project" }).evaluate((node) => Number.parseFloat(getComputedStyle(node).transitionDuration));
+    expect(newProjectTransition).toBeLessThanOrEqual(0.01);
 
     const accessibility = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);

@@ -106,7 +106,7 @@ export function GlobalRagSidebar({
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
       />
-      <RagChatPanel id={id} contextWorkId={contextWorkId} onClose={onClose} widthPx={width} />
+      <RagChatPanel id={id} contextWorkId={contextWorkId} onClose={onClose} widthPx={width} dialogLabel="Ask Library — global sidebar" />
     </>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { PermanentDeleteDialog } from "./PermanentDeleteDialog";
 
 interface TrashedWork {
@@ -33,6 +34,7 @@ export function TrashView() {
   const [purging, setPurging] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const purgeTriggerRef = useRef<HTMLElement | null>(null);
+  const listRevealRef = useScrollReveal<HTMLUListElement>();
 
   // `load` is used by `restore`/`purgeNow` to refetch after a mutation; the
   // initial load below is inlined with the `.then` pattern instead of
@@ -125,7 +127,7 @@ export function TrashView() {
       {items && items.length === 0 && <p className="text-[var(--color-text-muted)]">Nothing in the trash.</p>}
 
       {items && items.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
+        <ul ref={listRevealRef} className="app-reveal flex flex-col divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
           {items.map((item) => (
             <li key={item.workId} data-trash-item={item.workId} className="flex items-center justify-between gap-4 px-4 py-3">
               <div>
@@ -148,14 +150,14 @@ export function TrashView() {
                 <button
                   type="button"
                   onClick={() => restore(item.workId)}
-                  className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)]"
+                  className="app-control rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)]"
                 >
                   Restore
                 </button>
                 <button
                   type="button"
                   onClick={(event) => openPurgeDialog(item, event.currentTarget)}
-                  className="rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
+                  className="app-control rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
                 >
                   Delete permanently now
                 </button>

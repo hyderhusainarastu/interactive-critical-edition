@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import type { BookmarkRecord, HighlightRecord, NoteRecord } from "./types";
 
 function positionLabel(p: BookmarkRecord["position"]) {
@@ -27,9 +28,10 @@ export function NotesSidebar({
   pendingHighlightIds?: string[];
 }) {
   const [draft, setDraft] = useState("");
+  const revealRef = useScrollReveal<HTMLElement>();
 
   return (
-    <aside className="w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+    <aside ref={revealRef} className="app-reveal w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
       <section className="mb-6">
         <h2 className="mb-2 font-semibold text-[var(--color-text)]">Add a note</h2>
         {pendingHighlightIds.length > 0 && <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.</p>}
@@ -37,7 +39,7 @@ export function NotesSidebar({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           rows={3}
-          className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"
+          className="app-control w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"
           placeholder="Write a note about this work…"
         />
         <button
@@ -47,7 +49,7 @@ export function NotesSidebar({
             onAddNote(draft.trim(), pendingHighlightIds);
             setDraft("");
           }}
-          className="mt-2 rounded-md bg-[var(--color-accent-ink)] px-3 py-1 text-xs text-[var(--color-background)] disabled:opacity-40"
+          className="app-control mt-2 rounded-md bg-[var(--color-accent-ink)] px-3 py-1 text-xs text-[var(--color-background)] disabled:opacity-40"
         >
           Save note
         </button>
@@ -70,7 +72,7 @@ export function NotesSidebar({
                 <span>
                   {h.anchor.kind === "pdf" ? `Page ${h.anchor.page}` : h.anchor.kind === "processed" ? `Processed page ${h.anchor.pageIndex + 1}` : `¶${h.anchor.paragraphIndex + 1}`}
                 </span>
-                <button type="button" onClick={() => onDeleteHighlight(h.id)} className="underline">
+                <button type="button" onClick={() => onDeleteHighlight(h.id)} className="app-control underline">
                   Remove
                 </button>
               </div>
@@ -94,7 +96,7 @@ export function NotesSidebar({
               <button
                 type="button"
                 onClick={() => onDeleteNote(n.id)}
-                className="mt-1 text-[var(--color-text-muted)] underline"
+                className="app-control mt-1 text-[var(--color-text-muted)] underline"
               >
                 Delete
               </button>
@@ -112,7 +114,7 @@ export function NotesSidebar({
           {bookmarks.map((b) => (
             <li key={b.id} className="flex items-center justify-between rounded-md border border-[var(--color-border)] p-2">
               <span>{b.label || positionLabel(b.position)}</span>
-              <button type="button" onClick={() => onDeleteBookmark(b.id)} className="text-[var(--color-text-muted)] underline">
+              <button type="button" onClick={() => onDeleteBookmark(b.id)} className="app-control text-[var(--color-text-muted)] underline">
                 Remove
               </button>
             </li>

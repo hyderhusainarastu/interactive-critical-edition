@@ -33,7 +33,7 @@ export function WorkPicker({
 
   if (active) {
     return (
-      <button type="button" onClick={onClear}>
+      <button type="button" className="app-control" onClick={onClear}>
         Exit split view
       </button>
     );
@@ -54,11 +54,11 @@ export function WorkPicker({
         }
       }}
     >
-      <button ref={triggerRef} type="button" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
+      <button ref={triggerRef} type="button" className="app-control" aria-expanded={open} aria-controls={listId} onClick={() => setOpen((v) => !v)}>
         Split view
       </button>
       {open && (
-        <div id={listId} role="group" aria-label="Choose a work for split view" className="absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md">
+        <div id={listId} role="group" aria-label="Choose a work for split view" className="app-panel-enter absolute left-0 top-full z-20 mt-1 w-56 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1 shadow-md">
           {!options && <p className="px-2 py-1.5 text-[var(--color-text-muted)]">Loading…</p>}
           {options?.length === 0 && (
             <p className="px-2 py-1.5 text-[var(--color-text-muted)]">No other works ready yet.</p>
@@ -67,7 +67,7 @@ export function WorkPicker({
             <button
               key={w.workId}
               type="button"
-              className="block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-background)]"
+              className="app-control block w-full rounded px-2 py-1.5 text-left hover:bg-[var(--color-background)]"
               onClick={() => {
                 onSelect(w.workId);
                 setOpen(false);

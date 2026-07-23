@@ -69,7 +69,7 @@ export function PermanentDeleteDialog({
         aria-modal="true"
         aria-labelledby={headingId}
         tabIndex={-1}
-        className="w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-5 shadow-2xl"
+        className="app-panel-enter w-full max-w-md rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-5 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
         onKeyDown={onKeyDown}
       >
@@ -92,7 +92,7 @@ export function PermanentDeleteDialog({
               onChange={(event) => setTyped(event.target.value)}
               autoComplete="off"
               spellCheck={false}
-              className="mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm text-[var(--color-text)]"
+              className="app-control mt-1 w-full rounded-md border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm text-[var(--color-text)]"
             />
           </div>
         )}
@@ -101,7 +101,7 @@ export function PermanentDeleteDialog({
             ref={cancelRef}
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+            className="app-control rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
           >
             Cancel
           </button>
@@ -109,7 +109,7 @@ export function PermanentDeleteDialog({
             type="button"
             disabled={!confirmEnabled}
             onClick={onConfirm}
-            className="rounded-md border border-[var(--color-accent-burgundy)] px-4 py-2 text-sm text-[var(--color-accent-burgundy)] disabled:cursor-not-allowed disabled:opacity-50"
+            className="app-control rounded-md border border-[var(--color-accent-burgundy)] px-4 py-2 text-sm text-[var(--color-accent-burgundy)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? "Deleting…" : "Delete permanently"}
           </button>

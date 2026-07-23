@@ -69,7 +69,7 @@ test.describe("Sub-phase 22.9b conversational competency designation", () => {
   });
 
   test("a self-reported unfamiliarity statement is noted, grounded in the reader's own words, and undo restores the prior (empty) state", async ({ page }) => {
-    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
     await expect(chat).toBeVisible();
     await chat.getByLabel("Ask a question about your Library").fill("I've never heard of Akrasia.");
     await chat.getByRole("button", { name: "Ask" }).click();
@@ -123,7 +123,7 @@ test.describe("Sub-phase 22.9b conversational competency designation", () => {
   });
 
   test("never overwrites an explicit rating already on record (precedence regression)", async ({ page }) => {
-    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
     await expect(chat).toBeVisible();
     await chat.getByLabel("Ask a question about your Library").fill("I've never heard of Sophrosyne.");
     await chat.getByRole("button", { name: "Ask" }).click();
@@ -147,7 +147,7 @@ test.describe("Sub-phase 22.9b conversational competency designation", () => {
   });
 
   test("a work-directed statement writes understanding_rating.workId, undo removes it (DB-level: no roadmap/graph UI reads this target yet)", async ({ page }) => {
-    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
     await expect(chat).toBeVisible();
     await chat.getByLabel("Ask a question about your Library").fill("I've read Vice and Reason already.");
     await chat.getByRole("button", { name: "Ask" }).click();

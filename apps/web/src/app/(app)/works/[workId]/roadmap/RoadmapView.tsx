@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
   TIER_LABEL,
   TIER_ORDER,
@@ -73,6 +74,8 @@ export function RoadmapView({
   const [addQuery, setAddQuery] = useState("");
   const [addResults, setAddResults] = useState<SearchResult[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
+  const controlsRevealRef = useScrollReveal<HTMLDivElement>();
+  const loadingRevealRef = useScrollReveal<HTMLParagraphElement>();
 
   // Used by `mutate` to refetch after a change. Not called from the effect
   // (the set-state-in-effect rule flags calling any state-setting function
@@ -196,10 +199,10 @@ export function RoadmapView({
       </p>
 
       {/* Controls */}
-      <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+      <div ref={controlsRevealRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-[var(--color-text-muted)]">Depth</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value as RoadmapMode)} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+          <select value={mode} onChange={(e) => setMode(e.target.value as RoadmapMode)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
             <option value="comprehensive">Comprehensive</option>
             <option value="concise">Concise (essential + high)</option>
           </select>
@@ -210,7 +213,7 @@ export function RoadmapView({
             <select
               value={levelMode}
               onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-              className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
             >
               <option value="cumulative">Selected + foundations</option>
               <option value="exact">Exact level</option>
@@ -229,7 +232,7 @@ export function RoadmapView({
           <select
             value={readerLevel}
             onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+            className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
           >
             {READER_LEVEL_OPTIONS.map((lvl) => (
               <option key={lvl} value={lvl}>
@@ -247,7 +250,7 @@ export function RoadmapView({
             value={maxMinutes}
             onChange={(e) => setMaxMinutes(e.target.value)}
             placeholder="no limit"
-            className="w-28 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+            className="app-control w-28 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
           />
         </label>
         <div className="ml-auto text-xs text-[var(--color-text-muted)]">
@@ -259,14 +262,14 @@ export function RoadmapView({
       <div className="mb-6">
         <button
           type="button"
-          className="text-sm underline"
+          className="app-control text-sm underline"
           onClick={() => setShowAddSearch((v) => !v)}
           aria-expanded={showAddSearch}
         >
           {showAddSearch ? "Cancel adding a reference" : "+ Add a reference"}
         </button>
         {showAddSearch && (
-          <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <div className="app-panel-enter mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-xs text-[var(--color-text-muted)]">
                 Search the catalog by title — this puts it in your roadmap even though nothing detected a connection
@@ -277,7 +280,7 @@ export function RoadmapView({
                 value={addQuery}
                 onChange={(e) => setAddQuery(e.target.value)}
                 placeholder="Title…"
-                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 aria-label="Search for a reference to add"
               />
             </label>
@@ -297,7 +300,7 @@ export function RoadmapView({
                     {r.year ? ` (${r.year})` : ""}
                     {r.authors && <span className="text-[var(--color-text-muted)]"> — {r.authors}</span>}
                   </span>
-                  <button type="button" className="shrink-0 underline" onClick={() => addManually(r.id)}>
+                  <button type="button" className="app-control shrink-0 underline" onClick={() => addManually(r.id)}>
                     Add
                   </button>
                 </li>
@@ -308,7 +311,7 @@ export function RoadmapView({
       </div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
-      {!data && !error && <p className="text-[var(--color-text-muted)]">Computing roadmap…</p>}
+      {!data && !error && <p ref={loadingRevealRef} className="app-reveal text-[var(--color-text-muted)]">Computing roadmap…</p>}
 
       {data && data.analysisStatus !== "complete" && (
         <p className="mb-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
@@ -342,7 +345,7 @@ export function RoadmapView({
           default so hidden items don't flood the page (owner directive B). */}
       {data && data.hiddenItems.length > 0 && (
         <details className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text)]">
+          <summary className="app-control cursor-pointer text-sm font-semibold text-[var(--color-text)]">
             Hidden items ({data.hiddenItems.length})
           </summary>
           <ul className="mt-2 flex flex-col gap-2">
@@ -353,7 +356,7 @@ export function RoadmapView({
                   {h.year ? ` (${h.year})` : ""}
                   {h.authors && <span className="text-[var(--color-text-muted)]"> — {h.authors}</span>}
                 </span>
-                <button type="button" className="shrink-0 underline" onClick={() => mutate(h.bibId, { hidden: false })}>
+                <button type="button" className="app-control shrink-0 underline" onClick={() => mutate(h.bibId, { hidden: false })}>
                   Restore
                 </button>
               </li>
@@ -435,7 +438,7 @@ function RoadmapCard({
               <select
                 defaultValue={item.status ?? ""}
                 onChange={(e) => onMutate(item.bibId, { readingStatus: e.target.value || null })}
-                className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
                 aria-label={`Reading status of ${item.title}`}
               >
                 <option value="">—</option>
@@ -452,7 +455,7 @@ function RoadmapCard({
                 type="number"
                 min={1}
                 defaultValue={item.sequence}
-                className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+                className="app-control w-14 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
                 aria-label={`Pin ${item.title} to position`}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -466,10 +469,10 @@ function RoadmapCard({
                 }}
               />
             </label>
-            <button type="button" className="underline" onClick={() => onMutate(item.bibId, { manualPosition: null })}>
+            <button type="button" className="app-control underline" onClick={() => onMutate(item.bibId, { manualPosition: null })}>
               Clear pin
             </button>
-            <button type="button" className="underline" onClick={() => onMutate(item.bibId, { hidden: true })}>
+            <button type="button" className="app-control underline" onClick={() => onMutate(item.bibId, { hidden: true })}>
               Hide
             </button>
           </div>

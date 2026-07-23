@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationRecord,
@@ -80,6 +81,8 @@ export function ReaderShell({
   // on close, unlike every other reader-shell disclosure).
   const ragTriggerRef = useRef<HTMLButtonElement>(null);
   const ragPanelId = useId();
+  const toolbarRevealRef = useScrollReveal<HTMLDivElement>();
+  const loadingRevealRef = useScrollReveal<HTMLParagraphElement>();
 
   useEffect(() => {
     let ignore = false;
@@ -326,7 +329,7 @@ export function ReaderShell({
     return <p className="mx-auto max-w-xl px-6 py-12 text-[var(--color-accent-burgundy)]">{error}</p>;
   }
   if (!data) {
-    return <p className="mx-auto max-w-xl px-6 py-12 text-[var(--color-text-muted)]">Loading…</p>;
+    return <p ref={loadingRevealRef} className="app-reveal mx-auto max-w-xl px-6 py-12 text-[var(--color-text-muted)]">Loading…</p>;
   }
 
   const isPdf = data.mimeType === "application/pdf";
@@ -343,7 +346,7 @@ export function ReaderShell({
     <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen">
       <div className={splitWorkId ? "flex flex-1 divide-x divide-[var(--color-border)]" : "flex flex-1"}>
         <div className="min-w-0 flex-1">
-          {!readerFocus && <div className="flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
+          {!readerFocus && <div ref={toolbarRevealRef} className="app-reveal flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
             <strong className="text-[var(--color-text)]">{data.title}</strong>
             {edition && (
               <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
@@ -351,7 +354,7 @@ export function ReaderShell({
                   type="button"
                   aria-pressed={!effectiveShowInteractive}
                   onClick={() => setShowInteractive(false)}
-                  className="rounded px-2.5 py-1"
+                  className="app-control rounded px-2.5 py-1"
                   style={{ background: !effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
                 >
                   Published edition
@@ -360,7 +363,7 @@ export function ReaderShell({
                   type="button"
                   aria-pressed={effectiveShowInteractive}
                   onClick={() => setShowInteractive(true)}
-                  className="rounded px-2.5 py-1"
+                  className="app-control rounded px-2.5 py-1"
                   style={{ background: effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
                 >
                   Interactive reader
@@ -375,7 +378,7 @@ export function ReaderShell({
                   aria-label={`${c} highlight`}
                   aria-pressed={pendingColor === c}
                   onClick={() => setPendingColor(c)}
-                  className="h-4 w-4 rounded-full border"
+                  className="app-control h-4 w-4 rounded-full border"
                   style={{
                     background: `var(--color-${c === "gold" ? "highlight" : `accent-${c}`})`,
                     borderColor: pendingColor === c ? "var(--color-text)" : "transparent",
@@ -385,6 +388,7 @@ export function ReaderShell({
             </div>
             <button
               type="button"
+              className="app-control"
               onClick={() =>
                 addBookmark(
                   currentPositionRef.current ?? (isPdf ? { kind: "pdf", page: 1 } : { kind: "text", paragraphIndex: 0 }),
@@ -403,7 +407,7 @@ export function ReaderShell({
             )}
             <button
               type="button"
-              className="ml-auto"
+              className="app-control ml-auto"
               onClick={() => setShowAnalysis((v) => !v)}
               aria-pressed={showAnalysis}
             >
@@ -414,13 +418,14 @@ export function ReaderShell({
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
                   ` (${data.annotations.filter((a) => !a.hidden).length})`}
             </button>
-            <button type="button" onClick={() => setShowNotes((v) => !v)}>
+            <button type="button" className="app-control" onClick={() => setShowNotes((v) => !v)}>
               {showNotes ? "Hide notes" : "Notes"}
             </button>
             {enablePhase18Rag && !embedded && (
               <button
                 ref={ragTriggerRef}
                 type="button"
+                className="app-control"
                 aria-expanded={showRagChat}
                 aria-controls={ragPanelId}
                 onClick={() => setShowRagChat((v) => !v)}
@@ -535,7 +540,7 @@ export function ReaderShell({
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} />}
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" />}
     </div>
   );
 }
@@ -562,7 +567,7 @@ function FootnoteModal({ footnote, onClose }: { footnote: FootnoteRecord; onClos
         role="dialog"
         aria-modal="true"
         aria-label={`Original note [${footnote.marker}]`}
-        className="max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg"
+        className="app-panel-enter max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -575,7 +580,7 @@ function FootnoteModal({ footnote, onClose }: { footnote: FootnoteRecord; onClos
           Original note [{footnote.marker}]
         </p>
         <p className="text-[var(--color-text)]">{footnote.content}</p>
-        <button ref={closeButtonRef} type="button" className="mt-3 text-sm underline" onClick={onClose}>
+        <button ref={closeButtonRef} type="button" className="app-control mt-3 text-sm underline" onClick={onClose}>
           Close
         </button>
       </div>

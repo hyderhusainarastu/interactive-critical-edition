@@ -281,7 +281,7 @@ test.describe("Phase 12 workspace foundation", () => {
 
       await trigger.focus();
       await trigger.click();
-      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      const dialog = page.getByRole("dialog", { name: "Ask Library — global sidebar" });
       await expect(dialog).toBeVisible();
       await expect(trigger).toHaveAttribute("aria-expanded", "true");
       await expect(dialog.getByRole("button", { name: "Close chat" })).toBeFocused();
@@ -301,7 +301,7 @@ test.describe("Phase 12 workspace foundation", () => {
       await page.waitForURL("/dashboard");
 
       await page.getByRole("button", { name: "Library chat sidebar" }).click();
-      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      const dialog = page.getByRole("dialog", { name: "Ask Library — global sidebar" });
       await expect(dialog).toBeVisible();
 
       await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Library", exact: true }).click();
@@ -320,8 +320,32 @@ test.describe("Phase 12 workspace foundation", () => {
 
       await page.goto(`/works/${workId}`);
       await page.getByRole("button", { name: "Library chat sidebar" }).click();
-      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      const dialog = page.getByRole("dialog", { name: "Ask Library — global sidebar" });
       await expect(dialog.getByText("Scope: Current work")).toBeVisible();
+    });
+
+    // D-22-20: the Reader's own contextual drawer and this shell-level global
+    // sidebar both render the shared `RagChatPanel` as a `dialog`, and both
+    // are reachable independently on the same Reader route — before the fix
+    // they shared one accessible name ("Library-grounded Socratic chat"), so
+    // opening both left two dialogs indistinguishable to assistive tech. Each
+    // now gets its own name (`getByRole` with `exact` resolves uniquely).
+    test("names the Reader's contextual drawer and the global sidebar distinctly when both are open", async ({ page }) => {
+      const { workId } = await seedPublishedEdition(userId);
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      await page.goto(`/works/${workId}/reader`);
+      await page.getByRole("button", { name: "Ask Library", exact: true }).click();
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
+
+      const readerDrawer = page.getByRole("dialog", { name: "Ask Library — Reader panel", exact: true });
+      const globalSidebar = page.getByRole("dialog", { name: "Ask Library — global sidebar", exact: true });
+      await expect(readerDrawer).toBeVisible();
+      await expect(globalSidebar).toBeVisible();
     });
 
     test("renders as a bottom sheet on mobile, reachable from its own visible trigger", async ({ page }) => {
@@ -335,7 +359,7 @@ test.describe("Phase 12 workspace foundation", () => {
       const trigger = page.getByRole("button", { name: "Library chat sidebar" });
       await expect(trigger).toBeVisible();
       await trigger.click();
-      const dialog = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+      const dialog = page.getByRole("dialog", { name: "Ask Library — global sidebar" });
       await expect(dialog).toBeVisible();
       // The desktop-only resize separator must not appear on a mobile sheet.
       await expect(page.getByRole("separator", { name: "Resize Ask Library sidebar" })).toBeHidden();

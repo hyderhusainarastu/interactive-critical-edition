@@ -95,7 +95,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
-      {focusMode && <button ref={focusModeExitRef} type="button" className="fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
+      {focusMode && <button ref={focusModeExitRef} type="button" className="app-control fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
       <header inert={focusMode} className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
@@ -103,20 +103,20 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
             {navItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
           </nav>
           <div className="flex items-center gap-1.5">
-            <button type="button" className="app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={(event) => window.dispatchEvent(new CustomEvent("palimnote:open-command-palette", { detail: event.currentTarget }))}>⌕</button>
+            <button type="button" className="app-control app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={(event) => window.dispatchEvent(new CustomEvent("palimnote:open-command-palette", { detail: event.currentTarget }))}>⌕</button>
             <div className="hidden items-center rounded-md border border-[var(--color-border)] p-0.5 sm:flex" aria-label="Quick light or dark switch">
-              <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "light" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "light"} onClick={() => updatePreferences({ theme: "light" })}>Light</button>
-              <button type="button" className={`rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
+              <button type="button" className={`app-control rounded px-2 py-1 text-xs ${preferences.theme === "light" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "light"} onClick={() => updatePreferences({ theme: "light" })}>Light</button>
+              <button type="button" className={`app-control rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
             </div>
             <div className="relative">
-              <button ref={preferencesTriggerRef} type="button" className="app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
+              <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
               {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} onClose={closePreferences} />}
             </div>
             {ragEnabled && (
               <button
                 ref={ragTriggerRef}
                 type="button"
-                className="app-icon-button"
+                className="app-control app-icon-button"
                 data-tooltip="Library chat sidebar"
                 aria-label="Library chat sidebar"
                 aria-expanded={ragOpen}
@@ -127,9 +127,9 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
               </button>
             )}
             <form action={logoutAction} className="hidden lg:block">
-              <button type="submit" className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
+              <button type="submit" className="app-control text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
             </form>
-            <button ref={drawerTriggerRef} type="button" className="app-icon-button md:hidden" data-tooltip="Open navigation" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>☰</button>
+            <button ref={drawerTriggerRef} type="button" className="app-control app-icon-button md:hidden" data-tooltip="Open navigation" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>☰</button>
           </div>
         </div>
       </header>
@@ -143,7 +143,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
   const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-  return <Link href={item.href} onClick={onClick} aria-current={active ? "page" : undefined} className={`rounded-md px-2.5 py-1.5 text-sm ${active ? "bg-[var(--color-surface)] font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
+  return <Link href={item.href} onClick={onClick} aria-current={active ? "page" : undefined} className={`app-control rounded-md px-2.5 py-1.5 text-sm ${active ? "bg-[var(--color-surface)] font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
 }
 
 function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; pathname: string; email: string | null | undefined; onClose: () => void }) {
@@ -183,10 +183,10 @@ function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; p
 
   return (
     <div className="fixed inset-0 z-40 bg-black/35 md:hidden" role="presentation" onMouseDown={onClose}>
-      <aside ref={drawerRef} role="dialog" aria-modal="true" tabIndex={-1} className="ms-auto flex h-full w-[min(20rem,86vw)] flex-col bg-[var(--color-background)] p-5 shadow-2xl" aria-label="Mobile navigation" onMouseDown={(event) => event.stopPropagation()} onKeyDown={keepFocusInDrawer}>
-        <div className="flex items-center justify-between"><strong className="font-serif text-lg">Palimnote</strong><button ref={closeButtonRef} type="button" className="app-icon-button" aria-label="Close navigation" onClick={onClose}>×</button></div>
+      <aside ref={drawerRef} role="dialog" aria-modal="true" tabIndex={-1} className="app-panel-enter ms-auto flex h-full w-[min(20rem,86vw)] flex-col bg-[var(--color-background)] p-5 shadow-2xl" aria-label="Mobile navigation" onMouseDown={(event) => event.stopPropagation()} onKeyDown={keepFocusInDrawer}>
+        <div className="flex items-center justify-between"><strong className="font-serif text-lg">Palimnote</strong><button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close navigation" onClick={onClose}>×</button></div>
         <nav className="mt-6 flex flex-col gap-1">{items.map((item) => <NavLink key={item.href} item={item} pathname={pathname} onClick={onClose} />)}</nav>
-        <div className="mt-auto border-t border-[var(--color-border)] pt-4 text-sm text-[var(--color-text-muted)]"><p className="truncate">{email}</p><form action={logoutAction} className="mt-3"><button type="submit" className="underline">Log out</button></form></div>
+        <div className="mt-auto border-t border-[var(--color-border)] pt-4 text-sm text-[var(--color-text-muted)]"><p className="truncate">{email}</p><form action={logoutAction} className="mt-3"><button type="submit" className="app-control underline">Log out</button></form></div>
       </aside>
     </div>
   );
@@ -200,12 +200,12 @@ function PreferencesMenu({ id, preferences, onUpdate, onFocusModeChange, onClose
   }, []);
 
   return (
-    <section id={id} role="dialog" className="absolute end-0 top-11 z-40 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 shadow-xl" aria-label="Workspace preferences" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-      <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Workspace preferences</h2><button ref={closeButtonRef} type="button" className="app-icon-button h-7 w-7" aria-label="Close preferences" onClick={onClose}>×</button></div>
-      <PreferenceField label="Theme"><select value={preferences.theme} onChange={(event) => onUpdate({ theme: event.target.value as WorkspacePreferences["theme"] })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></PreferenceField>
-      <PreferenceField label="Text size"><select value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
-      <PreferenceField label="Reading width"><select value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>
-      <PreferenceField label="Script display"><select value={preferences.scriptDisplay} onChange={(event) => onUpdate({ scriptDisplay: event.target.value as WorkspacePreferences["scriptDisplay"] })}><option value="original">Verified original script</option><option value="transliteration">Transliteration</option></select></PreferenceField>
+    <section id={id} role="dialog" className="app-panel-enter absolute end-0 top-11 z-40 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 shadow-xl" aria-label="Workspace preferences" onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
+      <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-semibold">Workspace preferences</h2><button ref={closeButtonRef} type="button" className="app-control app-icon-button h-7 w-7" aria-label="Close preferences" onClick={onClose}>×</button></div>
+      <PreferenceField label="Theme"><select className="app-control" value={preferences.theme} onChange={(event) => onUpdate({ theme: event.target.value as WorkspacePreferences["theme"] })}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></PreferenceField>
+      <PreferenceField label="Text size"><select className="app-control" value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
+      <PreferenceField label="Reading width"><select className="app-control" value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>
+      <PreferenceField label="Script display"><select className="app-control" value={preferences.scriptDisplay} onChange={(event) => onUpdate({ scriptDisplay: event.target.value as WorkspacePreferences["scriptDisplay"] })}><option value="original">Verified original script</option><option value="transliteration">Transliteration</option></select></PreferenceField>
       <label className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3 text-sm"><span>Focus mode</span><input type="checkbox" checked={preferences.focusMode} onChange={(event) => onFocusModeChange(event.target.checked)} /></label>
     </section>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { CategoryGlyph } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, confidenceLabel, VERIFICATION_LABELS } from "./annotationMeta";
 import type { AnalysisStatus, AnnotationRecord, RelationshipCategory, VerificationStatus } from "./types";
@@ -42,6 +43,7 @@ export function AnnotationsPanel({
   const [categoryFilter, setCategoryFilter] = useState<RelationshipCategory | "">("");
   const [verificationFilter, setVerificationFilter] = useState<VerificationStatus | "">("");
   const [sort, setSort] = useState<SortKey>("confidence");
+  const revealRef = useScrollReveal<HTMLElement>();
 
   // Categories/statuses actually present, derived from the full set (not the
   // filtered one) so option lists don't shrink as filters narrow the list.
@@ -70,7 +72,7 @@ export function AnnotationsPanel({
   const anyHeuristic = annotations.some((a) => a.isHeuristic);
 
   return (
-    <aside className="w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside ref={revealRef} className="app-reveal w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--color-text)]">Scholarly analysis</h2>
@@ -89,15 +91,15 @@ export function AnnotationsPanel({
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[0.72rem]">
-        <button type="button" className="underline" onClick={() => setShowLegend((v) => !v)}>
+        <button type="button" className="app-control underline" onClick={() => setShowLegend((v) => !v)}>
           {showLegend ? "Hide legend" : "Legend"}
         </button>
-        <button type="button" className="underline" onClick={() => setShowHidden((v) => !v)}>
+        <button type="button" className="app-control underline" onClick={() => setShowHidden((v) => !v)}>
           {showHidden ? "Hide dismissed" : "Show dismissed"}
         </button>
         <button
           type="button"
-          className="ml-auto underline disabled:opacity-50"
+          className="app-control ml-auto underline disabled:opacity-50"
           onClick={onReanalyze}
           disabled={analysisStatus === "analyzing"}
         >
@@ -111,7 +113,7 @@ export function AnnotationsPanel({
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value as RelationshipCategory | "")}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+            className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -126,7 +128,7 @@ export function AnnotationsPanel({
           <select
             value={verificationFilter}
             onChange={(e) => setVerificationFilter(e.target.value as VerificationStatus | "")}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+            className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
           >
             <option value="">All statuses</option>
             {verificationStatuses.map((s) => (
@@ -141,7 +143,7 @@ export function AnnotationsPanel({
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortKey)}
-            className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+            className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
           >
             {(Object.entries(SORT_LABEL) as Array<[SortKey, string]>).map(([key, label]) => (
               <option key={key} value={key}>
@@ -273,9 +275,9 @@ function AnnotationCard({
       )}
 
       {editing ? (
-        <div className="mt-2">
+        <div className="app-panel-enter mt-2">
           <textarea
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[0.8rem]"
+            className="app-control w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 text-[0.8rem]"
             rows={3}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -283,7 +285,7 @@ function AnnotationCard({
           <div className="mt-1 flex gap-2 text-[0.72rem]">
             <button
               type="button"
-              className="underline"
+              className="app-control underline"
               onClick={() => {
                 onUpdate(a.id, { explanation: draft });
                 setEditing(false);
@@ -291,7 +293,7 @@ function AnnotationCard({
             >
               Save
             </button>
-            <button type="button" className="underline" onClick={() => setEditing(false)}>
+            <button type="button" className="app-control underline" onClick={() => setEditing(false)}>
               Cancel
             </button>
           </div>
@@ -317,10 +319,10 @@ function AnnotationCard({
         <StatusButton current={a.verificationStatus} value="user_verified" label="Verify" onUpdate={(v) => onUpdate(a.id, { verificationStatus: v })} />
         <StatusButton current={a.verificationStatus} value="disputed" label="Dispute" onUpdate={(v) => onUpdate(a.id, { verificationStatus: v })} />
         <StatusButton current={a.verificationStatus} value="rejected" label="Reject" onUpdate={(v) => onUpdate(a.id, { verificationStatus: v })} />
-        <button type="button" className="underline" onClick={() => setEditing((v) => !v)}>
+        <button type="button" className="app-control underline" onClick={() => setEditing((v) => !v)}>
           Edit
         </button>
-        <button type="button" className="ml-auto underline" onClick={() => onUpdate(a.id, { hidden: !a.hidden })}>
+        <button type="button" className="app-control ml-auto underline" onClick={() => onUpdate(a.id, { hidden: !a.hidden })}>
           {a.hidden ? "Unhide" : "Hide"}
         </button>
       </div>
@@ -344,7 +346,7 @@ function StatusButton({
     <button
       type="button"
       aria-pressed={isActive}
-      className="underline"
+      className="app-control underline"
       style={{ fontWeight: isActive ? 700 : 400 }}
       // Toggling an active status back to unreviewed lets a misclick be undone.
       onClick={() => onUpdate(isActive ? "unreviewed" : value)}

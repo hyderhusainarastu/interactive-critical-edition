@@ -34,6 +34,7 @@ export function RagChatPanel({
   onClose,
   presentation = "drawer",
   widthPx,
+  dialogLabel = "Library-grounded Socratic chat",
 }: {
   /** Stable DOM id so a trigger button elsewhere can `aria-controls` this panel. */
   id?: string;
@@ -42,6 +43,18 @@ export function RagChatPanel({
   presentation?: "drawer" | "page";
   /** Desktop-only drawer width override (e.g. from a resizable sidebar wrapper); ignored below the `md` breakpoint, which always renders full-width. */
   widthPx?: number;
+  /**
+   * D-22-20: this panel is mounted as a `dialog` from two independent
+   * disclosures — the Reader's own contextual drawer and the shell-level
+   * global sidebar (`GlobalRagSidebar`) — and both can be open at once on a
+   * Reader route. With one shared, unparameterized label both instances
+   * resolved to the same accessible name, exactly the ambiguity D-19-14/15/
+   * 18/19 already established every other reader-shell disclosure must
+   * avoid. Callers now pass a name unique to their own instance; the
+   * original shared label remains the default for the standalone
+   * `/ask-library` page, where only one instance can ever be open.
+   */
+  dialogLabel?: string;
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -169,10 +182,18 @@ export function RagChatPanel({
     <section
       id={id}
       className={isDrawer
-        ? "fixed inset-y-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl md:w-[var(--rag-sidebar-width,min(26rem,100vw))] max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl"
+        // `top-14 bottom-0` (not `inset-y-0`) so the drawer starts below the
+        // app shell's sticky header (`min-h-14`) rather than painting over
+        // it — found while adding D-22-20's dual-dialog regression test:
+        // with `inset-y-0`, this panel's own z-40 sat above the header's
+        // z-30, visually covering the header row (including the OTHER RAG
+        // entry point's own trigger button) whenever this drawer was open,
+        // so a mouse user physically could not reach it. `max-md:top-auto`
+        // still overrides this for the mobile bottom-sheet presentation.
+        ? "app-panel-enter fixed top-14 bottom-0 end-0 z-40 flex w-[min(26rem,100vw)] flex-col border-s border-[var(--color-border)] bg-[var(--color-background)] shadow-2xl md:w-[var(--rag-sidebar-width,min(26rem,100vw))] max-md:inset-x-0 max-md:top-auto max-md:max-h-[78vh] max-md:w-full max-md:rounded-t-xl"
         : "flex min-h-[min(46rem,calc(100vh-12rem))] w-full flex-col overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] shadow-sm"}
       style={isDrawer && widthPx ? { ["--rag-sidebar-width" as string]: `${widthPx}px` } : undefined}
-      aria-label="Library-grounded Socratic chat"
+      aria-label={dialogLabel}
       role={isDrawer ? "dialog" : "region"}
       aria-modal={isDrawer ? true : undefined}
       onKeyDown={(event) => {
@@ -188,7 +209,7 @@ export function RagChatPanel({
           <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p>
           <p className="mt-1 text-xs font-medium text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
         </div>
-        <div className="flex gap-1"><button type="button" className="app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
+        <div className="flex gap-1"><button type="button" className="app-control app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
       </header>
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
@@ -198,8 +219,8 @@ export function RagChatPanel({
       </div>
       <form onSubmit={ask} className="border-t border-[var(--color-border)] p-3">
         <label className="sr-only" htmlFor="rag-question">Ask a question about your Library</label>
-        <textarea id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
-        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped.</span><button type="submit" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
+        <textarea id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="app-control w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
+        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped.</span><button type="submit" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="app-control rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
       </form>
     </section>
   );
@@ -262,14 +283,14 @@ function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
     <li>
       <button
         type="button"
-        className="text-start underline decoration-dotted underline-offset-2"
+        className="app-control text-start underline decoration-dotted underline-offset-2"
         aria-expanded={expanded}
         onClick={() => setExpanded((value) => !value)}
       >
         Noted: “{notice.label}” marked {COMPETENCY_LEVEL_LABEL[notice.level]} — based on what you said · {expanded ? "hide" : "details"}
       </button>
       {expanded && (
-        <div className="mt-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs">
+        <div className="app-panel-enter mt-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs">
           <p>Your words: “{notice.quote}”</p>
           <p className="mt-1 text-[var(--color-text-muted)]">
             {notice.previousScore === null ? "Was: no record" : `Was: ${notice.previousScore}/100`} → Now: {COMPETENCY_LEVEL_LABEL[notice.level]} ({notice.newScore}/100)
@@ -277,7 +298,7 @@ function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
           <p className="mt-1 text-[var(--color-text-muted)]">
             Applies to: {notice.targetKind === "concept" ? "your concept map" : "your reading roadmap"}.
           </p>
-          <button type="button" className="mt-2 underline disabled:opacity-50" onClick={() => void undo()} disabled={busy}>
+          <button type="button" className="app-control mt-2 underline disabled:opacity-50" onClick={() => void undo()} disabled={busy}>
             {busy ? "Undoing…" : "Undo"}
           </button>
           {undoError && <p className="mt-1 text-[var(--color-accent-burgundy)]">{undoError}</p>}

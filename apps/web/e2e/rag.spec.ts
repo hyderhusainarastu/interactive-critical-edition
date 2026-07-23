@@ -57,7 +57,7 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
 
   test("streams a source-linked answer and says not found when the Library lacks evidence", async ({ page }) => {
     await page.getByRole("button", { name: "Ask Library" }).click();
-    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
     await expect(chat).toBeVisible();
     await chat.getByLabel("Ask a question about your Library").fill("How does passion relate to decision?");
     await chat.getByRole("button", { name: "Ask" }).click();
@@ -80,7 +80,7 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await trigger.focus();
     await trigger.click();
 
-    const chat = page.getByRole("dialog", { name: "Library-grounded Socratic chat" });
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
     await expect(chat).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(chat.getByRole("button", { name: "Close chat" })).toBeFocused();

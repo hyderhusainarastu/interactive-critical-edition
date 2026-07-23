@@ -267,6 +267,22 @@ body {
   @keyframes app-scroll-reveal { to { opacity: 1; transform: translateY(0); } }
 }
 
+/* D-22-10 (plan §22.7): a second, complementary one-shot entrance for
+   components that are conditionally mounted rather than scrolled into view —
+   modals, drawers, and popovers (RagChatPanel, FootnoteModal,
+   PermanentDeleteDialog, AppShell's PreferencesMenu/MobileDrawer, WorkPicker's
+   split-view list, GraphView's "Roadmap for" popover). Unlike `.app-reveal`
+   this needs no IntersectionObserver wiring — the element is freshly created
+   at open time, so the animation can run unconditionally on mount and finish
+   once; it never repeats while the panel stays open. Gated the same way as
+   `.app-reveal` (absent entirely under reduced motion), plus the blanket
+   `prefers-reduced-motion: reduce` override above already collapses its
+   duration to ~0 as a second, redundant safety net. */
+@media (prefers-reduced-motion: no-preference) {
+  .app-panel-enter { animation: app-panel-enter .18s ease-out both; }
+  @keyframes app-panel-enter { from { opacity: 0; transform: translateY(6px); } }
+}
+
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
