@@ -89,6 +89,63 @@ export function edgeLabelVisible(distance: number, isHighlighted: boolean): bool
   return safeDistance < SECONDARY_LABEL_HIDE_DISTANCE;
 }
 
+export interface SceneBbox {
+  x: [number, number];
+  y: [number, number];
+  z: [number, number];
+}
+
+export interface CameraFit {
+  target: { x: number; y: number; z: number };
+  distance: number;
+}
+
+/** Camera never sits closer than this, even for a single-node or
+ *  zero-extent bounding box — avoids a degenerate near-zero/negative
+ *  distance for a graph with (effectively) one point. */
+const MIN_FIT_DISTANCE = 90;
+/** Extra breathing room beyond the tight geometric fit, so a node's own
+ *  label sprite (drawn just outside its sphere) isn't clipped right at the
+ *  frame edge. */
+const FIT_PADDING_FACTOR = 1.2;
+
+/**
+ * D-23-52 (owner report: Visualization "does not have the requested 3D
+ * effects" / "impossible to navigate"): react-force-graph-3d ships its own
+ * `zoomToFit`, but its internal distance formula
+ * (`maxBoxSide / Math.atan(paddedFovDegrees * Math.PI / 180)`, in
+ * three-render-objects' `fitToBbox`) is not a standard FOV-fit computation —
+ * it feeds a small-angle quantity into `atan` where a `tan`-based
+ * half-angle triangle is what actually frames a box, so it reliably
+ * over-zooms (frames the graph ~2.5x farther away, and therefore smaller
+ * and harder to read, than the FOV can actually support). This is the
+ * geometrically correct replacement: a standard "fit a box within a
+ * perspective camera's frustum" computation from the box's OWN measured
+ * center/extents (as reported by `getGraphBbox()`, so it already reflects
+ * real rendered geometry — spheres, label sprites, rings — not just raw
+ * node coordinates), aiming the camera at the box's actual centroid rather
+ * than always the world origin. Pure and unit-tested
+ * (`graphSceneScaling.test.ts`) with plain numbers, no THREE/WebGL
+ * involved — the caller (`KnowledgeGraph3D`) only reads the bbox and
+ * applies the resulting `cameraPosition`.
+ */
+export function fitCameraToBbox(bbox: SceneBbox, aspect: number, fovDegrees = 50): CameraFit {
+  const target = {
+    x: (bbox.x[0] + bbox.x[1]) / 2,
+    y: (bbox.y[0] + bbox.y[1]) / 2,
+    z: (bbox.z[0] + bbox.z[1]) / 2,
+  };
+  const halfWidth = (bbox.x[1] - bbox.x[0]) / 2;
+  const halfHeight = (bbox.y[1] - bbox.y[0]) / 2;
+  const safeAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+  const vFov = (fovDegrees * Math.PI) / 180 / 2;
+  const hFov = Math.atan(Math.tan(vFov) * safeAspect);
+  const distanceForHeight = halfHeight / Math.tan(vFov);
+  const distanceForWidth = halfWidth / Math.tan(hFov);
+  const distance = Math.max(distanceForHeight, distanceForWidth, 0) * FIT_PADDING_FACTOR;
+  return { target, distance: Math.max(distance, MIN_FIT_DISTANCE) };
+}
+
 export type EdgeDirectionCue = "particles" | "arrow" | "none";
 
 /**

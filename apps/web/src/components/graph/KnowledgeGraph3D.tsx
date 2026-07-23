@@ -21,6 +21,7 @@ import {
   edgeDirectionCue,
   edgeLabelVisible,
   edgeRelationLabel,
+  fitCameraToBbox,
   nodeScaleForDistance,
 } from "./graphSceneScaling";
 import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
@@ -563,10 +564,72 @@ export function KnowledgeGraph3D({
     return () => cancelAnimationFrame(raf);
   }, [applyLinkAccents, graphData]);
 
+  // D-23-52 (owner report: Visualization "does not have the requested 3D
+  // effects" / "impossible to navigate"): react-force-graph-3d's own
+  // auto-camera (`onUpdate` in node_modules/3d-force-graph) re-aims the
+  // camera using ONLY the node COUNT — `Math.cbrt(nodeCount) * 170` — never
+  // the nodes' actual spatial extent. That assumption holds in explore mode
+  // (the force simulation naturally clusters nodes near the origin) but not
+  // in roadmap mode, whose fixed stage-column layout (`roadmapLayout.ts`,
+  // COLUMN_GAP=260) routinely spans hundreds of world units even for a
+  // handful of nodes. A camera aimed by node count alone can end up framing
+  // empty space next to the graph — reproduced locally: the roadmap default
+  // view rendered a genuinely blank canvas with real seeded data.
+  //
+  // The library's own built-in `zoomToFit` was tried first and rejected: its
+  // internal distance formula (`three-render-objects`' `fitToBbox`, plugging
+  // a small-angle quantity into `Math.atan` where a `Math.tan`-based
+  // half-angle triangle is what actually frames a box) reliably over-zooms
+  // by roughly 2.5x, AND it always aims at world origin rather than the
+  // box's own centroid — measured directly against this bug: a 4-node
+  // roadmap graph whose real bbox needed distance ~840 for a tight fit
+  // instead got framed at distance ~2190. `fitCameraToBbox`
+  // (`graphSceneScaling.ts`, unit-tested) is a correct, from-scratch
+  // replacement: real trigonometry, aimed at the bbox's actual center.
+  const fitCameraToGraph = useCallback(
+    (durationMs: number) => {
+      const graph = fgRef.current as ForceGraphMethods | undefined;
+      if (!graph) return;
+      const bbox = graph.getGraphBbox();
+      const aspect = size.h > 0 ? size.w / size.h : 1;
+      const fit = fitCameraToBbox(bbox, aspect);
+      // Bearing (viewing direction) is taken from the camera's current
+      // position relative to WORLD ORIGIN, the same convention
+      // `focusCameraOnSelection` below already uses — only the distance and
+      // look-at target are corrected here. Falls back to a fixed +z bearing
+      // when the camera sits exactly at the origin (never true after the
+      // library's own initial (0,0,1000) default, but guarded rather than
+      // normalizing a zero-length vector).
+      const camera = graph.camera();
+      const direction =
+        camera.position.lengthSq() > 0 ? camera.position.clone().normalize() : new THREE.Vector3(0, 0, 1);
+      graph.cameraPosition(
+        {
+          x: fit.target.x + direction.x * fit.distance,
+          y: fit.target.y + direction.y * fit.distance,
+          z: fit.target.z + direction.z * fit.distance,
+        },
+        fit.target,
+        durationMs,
+      );
+    },
+    [size],
+  );
+
+  // Fires once the simulation settles for the CURRENT `graphData` — for
+  // roadmap mode (`cooldownTicks: 0`) this is essentially the next tick
+  // after real node/link objects exist; for explore mode it's after the
+  // force layout actually converges. Either way it is the library's own
+  // documented signal that node positions are final and worth framing —
+  // more reliable than guessing a fixed retry-frame count (measured
+  // directly: an immediate-plus-one-more-frame retry still ran before real
+  // node objects existed and framed an empty scene).
+  const onEngineStop = useCallback(() => fitCameraToGraph(0), [fitCameraToGraph]);
+
   useEffect(() => {
     if (!resetSignal) return;
-    (fgRef.current as ForceGraphMethods | undefined)?.cameraPosition({ x: 0, y: 0, z: 260 }, { x: 0, y: 0, z: 0 }, effectsEnabled ? 450 : 0);
-  }, [effectsEnabled, resetSignal]);
+    fitCameraToGraph(effectsEnabled ? 450 : 0);
+  }, [effectsEnabled, resetSignal, fitCameraToGraph]);
 
   // D-21-2 (requirement 1): camera framing is centralized HERE, keyed on
   // the `selectedNodeId` PROP rather than the scene's own click event — a
@@ -702,7 +765,7 @@ export function KnowledgeGraph3D({
   }, [layoutMode, showReadingThread, data.nodes]);
 
   return (
-    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[520px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
+    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
       {colors && typeColors && linkColors && (
         <ForceGraph3D
           ref={fgRef as never}
@@ -759,6 +822,7 @@ export function KnowledgeGraph3D({
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}
           onNodeClick={(n: object) => onNodeClick(n as GraphNode)}
           onLinkClick={(link: object) => onLinkClick?.(link as GraphLink)}
+          onEngineStop={onEngineStop}
         />
       )}
     </div>

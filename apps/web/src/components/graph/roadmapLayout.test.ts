@@ -64,10 +64,17 @@ const nodes: GraphNode[] = [
   assert.ok(fx("external:bib:1") < fx("external:bib:3"), "prerequisites column is left of core_engagement");
   assert.ok(fx("external:bib:3") < fx("external:bib:4"), "core_engagement is left of extension");
   assert.ok(fx("external:bib:4") < fx("work:1"), "the anchor column trails every stage column");
-  // Exact column math: prerequisites=col0, core_engagement=col2, extension=col4, anchor=col5.
-  assert.equal(fx("external:bib:1"), 0, "prerequisites is column 0 (fx 0)");
-  assert.equal(fx("external:bib:3"), STAGE_ORDER.indexOf("core_engagement") * 260);
-  assert.equal(fx("work:1"), STAGE_ORDER.length * 260, "anchor sits one column past the last stage");
+  // D-23-52: columns are centered around x=0 (offset = (totalColumns-1)/2)
+  // rather than starting at fx=0, so the camera's origin-aimed framing
+  // actually points at the layout instead of empty space beside it.
+  // Exact column math: prerequisites=col0, core_engagement=col2, extension=col4, anchor=col5;
+  // totalColumns=6, offset=2.5.
+  const offset = (STAGE_ORDER.length + 1 - 1) / 2;
+  assert.equal(fx("external:bib:1"), (0 - offset) * 260, "prerequisites is column 0, centered");
+  assert.equal(fx("external:bib:3"), (STAGE_ORDER.indexOf("core_engagement") - offset) * 260);
+  assert.equal(fx("work:1"), (STAGE_ORDER.length - offset) * 260, "anchor sits one column past the last stage, centered");
+  assert.ok(fx("external:bib:1") < 0, "the first stage column sits left of the centered origin");
+  assert.ok(fx("work:1") > 0, "the trailing anchor column sits right of the centered origin");
   // All flat on z.
   for (const pos of p.values()) assert.equal(pos.fz, 0, "roadmap layout is flat on the z-plane");
 }
@@ -111,8 +118,9 @@ const nodes: GraphNode[] = [
   const headers = stageHeaderPositions(nodes);
   assert.deepEqual(headers.map((h) => h.stage), STAGE_ORDER, "one header per stage, in STAGE_ORDER");
   const nodePositions = assignStagePositions(nodes);
+  const headerOffset = (STAGE_ORDER.length + 1 - 1) / 2;
   for (const header of headers) {
-    const stageNodeFx = STAGE_ORDER.indexOf(header.stage) * 260;
+    const stageNodeFx = (STAGE_ORDER.indexOf(header.stage) - headerOffset) * 260;
     assert.equal(header.fx, stageNodeFx, "header shares its stage's column x");
   }
   const maxAbsFy = Math.max(...[...nodePositions.values()].map((p) => Math.abs(p.fy)));

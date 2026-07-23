@@ -644,8 +644,111 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
             />
           )}
 
+          {/* D-23-52 (owner report: canvas buried below a wall of controls,
+              "impossible to navigate"): the 3D scene/accessible table now
+              render IMMEDIATELY after the primary layout controls above —
+              filters, legends, pinned works, and paid expansion (all still
+              fully present and functional, nothing removed or hidden) move
+              to AFTER the canvas instead of before it. Reordering only
+              (every control keeps its existing accessible name/role/test
+              hook), so nothing that already targets them by label/role
+              changes meaning — only where on the page they sit. */}
+          {displayed.nodes.length === 0 ? (
+            <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
+          ) : (
+            <div className="space-y-4">
+              <section
+                ref={graphWorkspaceRef}
+                className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
+                aria-label="3D graph canvas"
+                data-graph-stage
+                data-reading-thread={showReadingThread ? "on" : "off"}
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <p className="text-[var(--color-text-muted)]">Select a labeled node to focus it; drag to orbit and scroll to zoom.</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Phase 21.6 (D-21-2): a render-level emphasis mode over
+                        the SAME filtered data both views already share —
+                        never a second data derivation. "Focus selected" is
+                        the default (one-hop neighbors full emphasis, the
+                        rest fade); "Expand one hop" widens the emphasized
+                        set by one more hop; "Full graph" turns fading off
+                        entirely regardless of selection. */}
+                    <div role="group" aria-label="Focus mode" className="flex gap-1">
+                      {FOCUS_MODES.map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setFocusMode(mode)}
+                          aria-pressed={focusMode === mode}
+                          className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${focusMode === mode ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                        >
+                          {FOCUS_MODE_LABEL[mode]}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearFocus}
+                      disabled={!selected && !selectedLink}
+                      className="app-control rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Clear focus
+                    </button>
+                    <button type="button" onClick={() => setResetSignal((value) => value + 1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">Reset view</button>
+                    <button ref={fullscreenButtonRef} type="button" onClick={toggleFullscreen} aria-pressed={isFullscreen} className="app-control rounded border border-[var(--color-border)] px-2 py-1">{isFullscreen ? "Exit fullscreen" : "Fullscreen"}</button>
+                    <button type="button" onClick={exportPng} className="app-control rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
+                  </div>
+                </div>
+                {layoutMode === "roadmap" && sequenceOrderedNodes.length > 0 && (
+                  <div className="mb-2 flex items-center gap-2 text-xs" role="group" aria-label="Reading sequence">
+                    <span className="text-[var(--color-text-muted)]">Reading order</span>
+                    <button type="button" onClick={() => stepSequence(-1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">
+                      ← Previous
+                    </button>
+                    <button type="button" onClick={() => stepSequence(1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">
+                      Next →
+                    </button>
+                  </div>
+                )}
+                <div className={`${isFullscreen ? "grid h-[calc(100vh-4.5rem)] min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]"}`}>
+                  <KnowledgeGraph3D
+                    data={displayed}
+                    onNodeClick={onNodeClick}
+                    onLinkClick={setSelectedLink}
+                    pinnedWorkIds={pinnedWorkIds}
+                    selectedNodeId={selected?.id}
+                    emphasis={focusEmphasis}
+                    resetSignal={resetSignal}
+                    isFullscreen={isFullscreen}
+                    layoutMode={layoutMode}
+                    nextUpNodeId={nextUpNode?.id ?? null}
+                    onStageHeaderClick={(stage) => updateFilter("stage", filters.stage === stage ? "all" : stage)}
+                    showReadingThread={showReadingThread}
+                  />
+                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} allNodes={data.nodes} />
+                </div>
+              </section>
+              <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
+                <summary className="cursor-pointer text-sm font-medium">Accessible node browser</summary>
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace. Use the arrow keys on a focused row to move to its previous/next connected node; Escape clears the current focus.</p>
+                <div className="mt-2 overflow-x-auto">
+                  <GraphAccessibleFallback
+                    data={displayed}
+                    selectedNodeId={selected?.id}
+                    onNodeClick={onNodeClick}
+                    emphasis={focusEmphasis}
+                    onNextConnected={() => stepConnectedNode(1)}
+                    onPreviousConnected={() => stepConnectedNode(-1)}
+                    onClearFocus={clearFocus}
+                  />
+                </div>
+              </details>
+            </div>
+          )}
+
           {/* Legend + stats */}
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <div className="mb-4 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
             {STATE_ORDER.map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
                 <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `var(${STATE_META[s].colorVar})` }} />
@@ -868,100 +971,6 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           )}
 
           {enableExpansion && <GraphExpansionControls workNodes={workNodes} />}
-
-          {displayed.nodes.length === 0 ? (
-            <p className="text-[var(--color-text-muted)]">No nodes match this filter.</p>
-          ) : (
-            <div className="space-y-4">
-              <section
-                ref={graphWorkspaceRef}
-                className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
-                aria-label="3D graph canvas"
-                data-graph-stage
-                data-reading-thread={showReadingThread ? "on" : "off"}
-              >
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <p className="text-[var(--color-text-muted)]">Select a labeled node to focus it; drag to orbit and scroll to zoom.</p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Phase 21.6 (D-21-2): a render-level emphasis mode over
-                        the SAME filtered data both views already share —
-                        never a second data derivation. "Focus selected" is
-                        the default (one-hop neighbors full emphasis, the
-                        rest fade); "Expand one hop" widens the emphasized
-                        set by one more hop; "Full graph" turns fading off
-                        entirely regardless of selection. */}
-                    <div role="group" aria-label="Focus mode" className="flex gap-1">
-                      {FOCUS_MODES.map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setFocusMode(mode)}
-                          aria-pressed={focusMode === mode}
-                          className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${focusMode === mode ? "bg-[var(--color-surface)] font-medium" : ""}`}
-                        >
-                          {FOCUS_MODE_LABEL[mode]}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={clearFocus}
-                      disabled={!selected && !selectedLink}
-                      className="app-control rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Clear focus
-                    </button>
-                    <button type="button" onClick={() => setResetSignal((value) => value + 1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">Reset view</button>
-                    <button ref={fullscreenButtonRef} type="button" onClick={toggleFullscreen} aria-pressed={isFullscreen} className="app-control rounded border border-[var(--color-border)] px-2 py-1">{isFullscreen ? "Exit fullscreen" : "Fullscreen"}</button>
-                    <button type="button" onClick={exportPng} className="app-control rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
-                  </div>
-                </div>
-                {layoutMode === "roadmap" && sequenceOrderedNodes.length > 0 && (
-                  <div className="mb-2 flex items-center gap-2 text-xs" role="group" aria-label="Reading sequence">
-                    <span className="text-[var(--color-text-muted)]">Reading order</span>
-                    <button type="button" onClick={() => stepSequence(-1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">
-                      ← Previous
-                    </button>
-                    <button type="button" onClick={() => stepSequence(1)} className="app-control rounded border border-[var(--color-border)] px-2 py-1">
-                      Next →
-                    </button>
-                  </div>
-                )}
-                <div className={`${isFullscreen ? "grid h-[calc(100vh-4.5rem)] min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]"}`}>
-                  <KnowledgeGraph3D
-                    data={displayed}
-                    onNodeClick={onNodeClick}
-                    onLinkClick={setSelectedLink}
-                    pinnedWorkIds={pinnedWorkIds}
-                    selectedNodeId={selected?.id}
-                    emphasis={focusEmphasis}
-                    resetSignal={resetSignal}
-                    isFullscreen={isFullscreen}
-                    layoutMode={layoutMode}
-                    nextUpNodeId={nextUpNode?.id ?? null}
-                    onStageHeaderClick={(stage) => updateFilter("stage", filters.stage === stage ? "all" : stage)}
-                    showReadingThread={showReadingThread}
-                  />
-                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} allNodes={data.nodes} />
-                </div>
-              </section>
-              <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
-                <summary className="cursor-pointer text-sm font-medium">Accessible node browser</summary>
-                <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace. Use the arrow keys on a focused row to move to its previous/next connected node; Escape clears the current focus.</p>
-                <div className="mt-2 overflow-x-auto">
-                  <GraphAccessibleFallback
-                    data={displayed}
-                    selectedNodeId={selected?.id}
-                    onNodeClick={onNodeClick}
-                    emphasis={focusEmphasis}
-                    onNextConnected={() => stepConnectedNode(1)}
-                    onPreviousConnected={() => stepConnectedNode(-1)}
-                    onClearFocus={clearFocus}
-                  />
-                </div>
-              </details>
-            </div>
-          )}
         </>
       )}
     </div>

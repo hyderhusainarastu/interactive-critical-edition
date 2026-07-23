@@ -24,6 +24,21 @@ const ROW_GAP = 120;
 /** Anchors (uploaded works with no roadmap stage) sit one column past the last
  *  stage — the right-hand "your works" edge of the left-to-right progression. */
 const ANCHOR_COLUMN = STAGE_ORDER.length;
+/** Total columns = every curriculum stage plus the trailing anchor column. */
+const TOTAL_COLUMNS = STAGE_ORDER.length + 1;
+/**
+ * D-23-52 (owner report: Visualization "does not have the requested 3D
+ * effects"): columns used to start at x=0 and run rightward, so the whole
+ * layout's centroid sat hundreds of world units off-axis from the origin.
+ * `KnowledgeGraph3D`'s camera framing (both the library's own node-count-only
+ * auto-aim and this app's `zoomToFit` fix) points at world origin (0,0,0) —
+ * an off-axis layout meant the camera routinely aimed at empty space next to
+ * the graph rather than the graph itself, rendering a blank 3D scene. Centering
+ * the column grid around x=0 makes "look at the origin" and "look at the
+ * layout" the same thing again, the same assumption explore mode's
+ * force-simulated (naturally origin-clustered) layout already satisfies.
+ */
+const COLUMN_X_OFFSET = (TOTAL_COLUMNS - 1) / 2;
 
 const STAGE_COLUMN: Record<CurriculumStage, number> = Object.fromEntries(
   STAGE_ORDER.map((stage, index) => [stage, index]),
@@ -72,7 +87,7 @@ export function assignStagePositions(nodes: GraphNode[]): Map<string, FixedPosit
       // Anchor column (no roadmap): stable by label then id.
       return a.label.localeCompare(b.label) || a.id.localeCompare(b.id);
     });
-    const fx = column * COLUMN_GAP;
+    const fx = (column - COLUMN_X_OFFSET) * COLUMN_GAP;
     const offset = (ordered.length - 1) / 2;
     ordered.forEach((node, row) => {
       positions.set(node.id, { fx, fy: (row - offset) * ROW_GAP, fz: 0 });
@@ -104,7 +119,7 @@ export function stageHeaderPositions(nodes: GraphNode[]): StageHeaderPosition[] 
   let maxAbsFy = 0;
   for (const pos of positions.values()) maxAbsFy = Math.max(maxAbsFy, Math.abs(pos.fy));
   const headerFy = -(maxAbsFy + ROW_GAP);
-  return STAGE_ORDER.map((stage, index) => ({ stage, fx: index * COLUMN_GAP, fy: headerFy }));
+  return STAGE_ORDER.map((stage, index) => ({ stage, fx: (index - COLUMN_X_OFFSET) * COLUMN_GAP, fy: headerFy }));
 }
 
 export interface StageProgress {

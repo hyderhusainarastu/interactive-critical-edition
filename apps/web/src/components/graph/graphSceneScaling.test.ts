@@ -5,6 +5,7 @@ import {
   edgeDirectionCue,
   edgeLabelVisible,
   edgeRelationLabel,
+  fitCameraToBbox,
   nodeScaleForDistance,
 } from "./graphSceneScaling";
 
@@ -109,5 +110,59 @@ assert.equal(edgeRelationLabel("discovered_source", undefined), "discovered sour
 // than throwing on an unrecognized key.
 assert.equal(edgeRelationLabel("review_of", "source_provenance"), "review of");
 assert.equal(edgeRelationLabel("responds_to", "cross_library"), "responds to");
+
+// --- fitCameraToBbox (D-23-52) -------------------------------------------
+
+// A box centered on the origin: the fit target IS the origin, and the
+// resulting distance actually places the box within the frustum (verified
+// geometrically, not just "some positive number") — the half-extent, when
+// projected through the SAME half-fov used to derive the distance, must be
+// <= the visible half-size at that distance.
+{
+  const fit = fitCameraToBbox({ x: [-100, 100], y: [-50, 50], z: [-5, 5] }, 1.5);
+  assert.deepEqual(fit.target, { x: 0, y: 0, z: 0 });
+  assert.ok(fit.distance > 0);
+  const vFov = ((50 * Math.PI) / 180) / 2;
+  const hFov = Math.atan(Math.tan(vFov) * 1.5);
+  const visibleHalfHeight = fit.distance * Math.tan(vFov);
+  const visibleHalfWidth = fit.distance * Math.tan(hFov);
+  assert.ok(visibleHalfHeight >= 50 - 1e-6, "the box's half-height must fit within the frame at the computed distance");
+  assert.ok(visibleHalfWidth >= 100 - 1e-6, "the box's half-width must fit within the frame at the computed distance");
+}
+
+// An off-center box (the D-23-52 roadmap-layout shape: nodes clustered away
+// from world origin): the fit TARGETS the box's own centroid, not (0,0,0) —
+// this is the actual defect the library's own `zoomToFit` has (it always
+// aims at world origin regardless of where the data actually sits).
+{
+  const fit = fitCameraToBbox({ x: [-408, 672], y: [-131, 140], z: [-9, 9] }, 1.22);
+  assert.equal(fit.target.x, (-408 + 672) / 2);
+  assert.equal(fit.target.y, (-131 + 140) / 2);
+  assert.ok(fit.distance > 0);
+}
+
+// Degenerate box (a single point, or all coordinates equal) never produces
+// a zero/negative/NaN distance — floors at MIN_FIT_DISTANCE.
+{
+  const fit = fitCameraToBbox({ x: [0, 0], y: [0, 0], z: [0, 0] }, 1);
+  assert.ok(Number.isFinite(fit.distance) && fit.distance > 0, "a zero-extent box still yields a finite, positive distance");
+}
+
+// A non-finite/zero aspect degrades to 1 (square) rather than propagating
+// NaN/Infinity into the resulting distance.
+{
+  for (const badAspect of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const fit = fitCameraToBbox({ x: [-50, 50], y: [-50, 50], z: [0, 0] }, badAspect);
+    assert.ok(Number.isFinite(fit.distance) && fit.distance > 0, `aspect ${badAspect} must still yield a finite, positive distance`);
+  }
+}
+
+// A wider box needs a larger distance than a narrower one at the same
+// aspect (monotonic in extent, not a constant).
+{
+  const narrow = fitCameraToBbox({ x: [-50, 50], y: [-50, 50], z: [0, 0] }, 1);
+  const wide = fitCameraToBbox({ x: [-500, 500], y: [-50, 50], z: [0, 0] }, 1);
+  assert.ok(wide.distance > narrow.distance, "a wider bounding box requires a larger fit distance");
+}
 
 console.log("graphSceneScaling.test.ts: all assertions passed");
