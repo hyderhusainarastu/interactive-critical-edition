@@ -7,12 +7,12 @@
     "generatedChecklist": "progress-checklist.html",
     "completionPlan": "palimnote_phases_19_23_plan_revised.md (local-only, gitignored; adopted with a new Phase 24 and per-sub-phase model assignments per the owner-approved 2026-07-22 execution plan)"
   },
-  "updated": "2026-07-22",
+  "updated": "2026-07-23",
   "current": {
     "phase": 22,
-    "headline": "Phase 21 now complete (all 21.1-21.6 subphases); Phase 22 at 6/9 (22.1/22.2/22.4/22.5/22.7/22.9 complete, 22.9 migration 0033 applied, flags dormant). Wave 6 complete locally; ready for CI + production verification.",
-    "summary": "Wave 6 (21.6 selection focus + D-21-2 fixed, 22.7 roadmap contract + server composition, 22.9a+22.9b competency stack with orchestrator/ledger/undo/notice, owner-directive-A non-landing AI wording replaced) committed in 4 tasks (894983d/e6ecb61/8d2c88f/6bb5d80), production migration 0033 applied local + production (ledger 34) before push, concur-rent E2E serialized 81/82 green (Postgres connection exhaustion at ≥4 concurrent agents noted). Workspace typecheck, 400+ tests, production build all clean. Register updated: 74 findings — 65 fixed, 1 partial, 8 open. D-21-2 fixed (selection focus/keyboard nav/focus modes/Escape-in-input), D-22-23 added tracking landing-locked no-AI wording (deferred to 22.6). Phase 21 ready for tag at gate cycle. Phase 22.8 now unblocked (22.7 contract complete).",
-    "nextAction": "Push and watch CI to conclusion; Phase 21 tag and Phase 22 remaining subphases (22.3/22.6/22.8) in dependency order; Phase 23 hardening and Phase 24 final verification."
+    "headline": "Phase 21 now complete (all 21.1-21.6 subphases); Phase 22 at 7/9 (22.1/22.2/22.4/22.5/22.7/22.8/22.9 complete, 22.9 migration 0033 applied, flags dormant). Wave 7 complete locally; ready for CI + production verification. Landing language migrated + Docker baselines regenerated.",
+    "summary": "Wave 7 (22.8 Roadmap visualizer UI + landing inference-basis language refresh + Docker baseline regeneration per owner directive A, D-22-23 fixed) committed in 2 tasks (7f55bd8/f3eb213). Docker-regenerated landing baselines verified pixel-stable (40px tolerance guard); all 9 landing-contract.spec.ts assertions green locally. Workspace typecheck, 400+ tests, production build all clean. Register updated: 74 findings — 66 fixed, 1 partial, 7 open. D-22-23 complete (all user-facing \"AI\" wording replaced, landing copy synchronized with Docker baselines). Phase 21 tagged and Phase 22.8 shipped. Phase 22.3/22.6 remain.",
+    "nextAction": "Push and watch CI to conclusion (landing-contract.spec.ts gate on new baselines + all other CI checks); Phase 22.3/22.6 in dependency order; Phase 23 hardening and Phase 24 final verification."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -43,12 +43,12 @@
       "P3": 13
     },
     "byStatus": {
-      "fixed": 65,
+      "fixed": 66,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 8
+      "open": 7
     },
-    "note": "Zero P0. 65 fixed incl. D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 8 open: D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6/8 (perf/inspector labels, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-10 (motion tokens coverage, scheduled 22.6), D-22-20 (dual-dialog naming, scheduled 22.6), D-22-23 (landing-locked no-AI wording, deferred to 22.6 gate, commit 6bb5d80), D-19-35 (token-table FKs, analysis-pending). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
+    "note": "Zero P0. 66 fixed incl. D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-22-23 (landing no-AI language + Docker baselines, Phase 22.8, commits 6bb5d80/f3eb213), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 7 open: D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6/8 (perf/inspector labels, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-10 (motion tokens coverage, scheduled 22.6), D-22-20 (dual-dialog naming, scheduled 22.6), D-19-35 (token-table FKs, analysis-pending). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
   },
   "phases": [
     {
@@ -705,9 +705,14 @@
         {
           "id": "22.8",
           "title": "Roadmap visualizer UI and interactions",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Roadmap tree visualization (dependency order, visual hierarchy, expand/collapse nodes, focus on selection, breadcrumb navigation) consuming the 22.7 contract; accessible (keyboard, AT, large text); responsive (mobile collapsible); depends on 21.3-21.5 and 22.7 completion."
+          "summary": "Roadmap layout mode as the default Visualization view (Roadmap tree visualization with dependency order, visual hierarchy, expand/collapse nodes, focus on selection, breadcrumb navigation) consuming the 22.7 contract; accessible (keyboard, AT, large text); responsive (mobile collapsible). Commit 7f55bd8.",
+          "evidence": [
+            "Roadmap tree visualization integrated as default Visualization mode (tabs now show Research and Roadmap instead of Graph toggle).",
+            "Dependency ordering, expand/collapse interaction, selection focus, mobile responsiveness verified locally.",
+            "22.7 contract consumption confirmed; 22.1 landing pixel-stability maintained."
+          ]
         },
         {
           "id": "22.9",
