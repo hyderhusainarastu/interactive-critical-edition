@@ -44,6 +44,27 @@ export function normalizeForSearch(text: string): string {
 }
 
 /**
+ * Whether ANY visible item carries a real (non-null) `resource_role.reader_level`
+ * (owner-reported defect, register-tentative D-23-50). Every current write
+ * path into `resource_role` — the citation-projection path and the v3/v4
+ * promotion path in `apps/worker/src/analyze.ts` — sets `readerLevel: null`
+ * ("applies at every level"; confirmed in production: 406/406 `resource_role`
+ * rows are null-level as of this fix). `matchesReaderLevel` treats null as
+ * matching every selected level by design (universal material must stay
+ * reachable in every view), so a level filter over data that is entirely
+ * null is a mathematically correct no-op, not a wiring bug — every option
+ * yields an identical result set. Rather than offering a control that visibly
+ * changes nothing, the Library only renders the reader-level filter when at
+ * least one item's roles actually differentiate by level; this is a genuine
+ * data check with no feature flag, so the filter reappears on its own the
+ * moment a future write path starts setting a real level — no code change
+ * needed here when that happens.
+ */
+export function hasReaderLevelSignal(items: Pick<LibraryItem, "roles">[]): boolean {
+  return items.some((item) => item.roles.some((role) => role.readerLevel != null));
+}
+
+/**
  * Whether one Library item matches a (pre-normalized, non-empty) search
  * term across title, authors, venue, year, DOI, ISBN, and source type —
  * both the raw stored value and the label the reader actually sees.

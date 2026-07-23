@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/ragConversationClient";
 
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
 // Sub-phase 22.9b (plan §3.4): one quiet, collapsed line per chat-inferred
@@ -22,11 +23,14 @@ function conversationStorageKey(contextWorkId?: string | null) {
   return `palimnote:rag-conversation:${contextWorkId ?? "library"}`;
 }
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) throw new Error((await response.json().catch(() => ({})))?.error ?? "Request failed");
-  return response.json();
-}
+/** Human, non-jargon copy for the one failure this panel can still show
+ * after the self-heal below: the fresh-conversation create itself failed
+ * (network/outage), not a stale pointer — there's genuinely nothing to
+ * retry automatically, so a labelled Retry action is offered instead. Never
+ * surfaces a raw server string like "Not found". */
+const CONVERSATION_UNAVAILABLE_MESSAGE = "Chat could not be started right now.";
+const CONVERSATION_HEALED_NOTICE = "Your last conversation was no longer available, so a new one was started.";
+const QUESTION_RETRY_NOTICE = "That conversation was no longer available, so a new one was started. Your question is still here — press Ask to send it.";
 
 export function RagChatPanel({
   id,
@@ -62,6 +66,12 @@ export function RagChatPanel({
   const [pending, setPending] = useState("");
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // True only when the panel has genuinely nothing to show but a Retry
+  // affordance — the stored-pointer self-heal already failed AND the
+  // fresh-conversation create also failed. Distinct from `error`, which can
+  // be shown alongside a perfectly usable, already-open conversation (e.g.
+  // an in-conversation answer failure).
+  const [conversationUnavailable, setConversationUnavailable] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -74,40 +84,71 @@ export function RagChatPanel({
     closeButtonRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const stored = window.localStorage.getItem(conversationStorageKey(contextWorkId));
-        if (stored) {
-          const view = await jsonFetch<{ conversation: { id: string }; messages: Message[] }>(`/api/rag/conversations/${stored}`);
-          if (!cancelled) {
-            setConversationId(view.conversation.id);
-            setMessages(view.messages);
-          }
-          return;
-        }
-        const created = await jsonFetch<{ conversation: { id: string } }>("/api/rag/conversations", {
+  // Owner-blocking production defect fix (2026-07-23): a conversation id
+  // persisted in localStorage can stop resolving server-side (the owning
+  // account was deleted, e.g. by test-account cleanup sharing the same
+  // production origin/browser) long after it was stored. Previously the
+  // resulting 404 was shown verbatim and the panel — textarea and Ask both
+  // gated on `!conversationId` — stayed permanently disabled for that
+  // storage key, on every page sharing it. `loadOrCreateRagConversation`
+  // treats "stored id no longer resolves" exactly like "no id was stored":
+  // it clears the stale pointer and transparently creates a fresh
+  // conversation, the same request the true first-run path already makes.
+  // Only a failure of THAT fresh create is allowed to surface.
+  const initializeConversation = useCallback(async (signal: { cancelled: boolean }) => {
+    // No setState before the first `await` here — a synchronous setState
+    // call in an effect body trips this codebase's own set-state-in-effect
+    // rule (see RoadmapView/LibraryView precedent), so every state update
+    // below happens only after the request resolves, same as those.
+    try {
+      const result = await loadOrCreateRagConversation<Message>({
+        getStoredConversationId: () => window.localStorage.getItem(conversationStorageKey(contextWorkId)),
+        setStoredConversationId: (id) => window.localStorage.setItem(conversationStorageKey(contextWorkId), id),
+        clearStoredConversationId: () => window.localStorage.removeItem(conversationStorageKey(contextWorkId)),
+        fetchConversation: (id) => ragJsonFetch(`/api/rag/conversations/${id}`),
+        createConversation: () => ragJsonFetch("/api/rag/conversations", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contextWorkId }),
-        });
-        window.localStorage.setItem(conversationStorageKey(contextWorkId), created.conversation.id);
-        if (!cancelled) setConversationId(created.conversation.id);
-      } catch (loadError) {
-        if (!cancelled) setError(loadError instanceof Error ? loadError.message : "Could not open conversation.");
-      }
+        }),
+      });
+      if (signal.cancelled) return;
+      setConversationId(result.conversationId);
+      setMessages(result.messages);
+      setConversationUnavailable(false);
+      setError(result.healedStalePointer ? CONVERSATION_HEALED_NOTICE : null);
+    } catch {
+      // Only a failure of the fresh create itself lands here (a non-404
+      // failure resolving a stored id propagates too, treated the same
+      // way — there is genuinely no conversation to show either way).
+      if (signal.cancelled) return;
+      setConversationId(null);
+      setError(CONVERSATION_UNAVAILABLE_MESSAGE);
+      setConversationUnavailable(true);
     }
-    void load();
-    return () => { cancelled = true; };
   }, [contextWorkId]);
+
+  // Fetch-on-mount whose setState calls all happen post-`await` inside
+  // `initializeConversation` (see its own comment above); same documented
+  // exception this codebase already uses in
+  // EditionAnnotationsPanel/LibraryView/WorkspacePreferencesProvider.
+  useEffect(() => {
+    const signal = { cancelled: false };
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void initializeConversation(signal);
+    return () => { signal.cancelled = true; };
+  }, [initializeConversation]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, pending]);
 
-  async function createConversation() {
-    const created = await jsonFetch<{ conversation: { id: string } }>("/api/rag/conversations", {
+  /** Raw "start a fresh conversation" request, shared by the explicit "＋
+   * New conversation" button and the mid-session self-heal below. Throws on
+   * failure rather than swallowing it — each caller decides its own
+   * messaging for that case. */
+  const startFreshConversation = useCallback(async () => {
+    const created = await ragJsonFetch<{ conversation: { id: string } }>("/api/rag/conversations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contextWorkId }),
@@ -117,14 +158,24 @@ export function RagChatPanel({
     setMessages([]);
     setPending("");
     setPendingCitations([]);
-    setError(null);
+    return created.conversation.id;
+  }, [contextWorkId]);
+
+  async function createConversation() {
+    try {
+      await startFreshConversation();
+      setError(null);
+      setConversationUnavailable(false);
+    } catch {
+      setError(CONVERSATION_UNAVAILABLE_MESSAGE);
+      setConversationUnavailable(true);
+    }
   }
 
   async function ask(event: React.FormEvent) {
     event.preventDefault();
     const question = draft.trim();
     if (!question || !conversationId || pending) return;
-    setDraft("");
     setPending("");
     setPendingCitations([]);
     setError(null);
@@ -134,7 +185,25 @@ export function RagChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: question }),
       });
+      if (response.status === 404) {
+        // The conversation vanished server-side mid-session — same failure
+        // class as the mount-time stale pointer. Self-heal by starting a
+        // fresh conversation, but deliberately do NOT auto-resend: the
+        // typed question stays exactly where it is (`draft` is untouched)
+        // so the user can just press Ask again, rather than risking a
+        // silent double-send on a flaky connection.
+        try {
+          await startFreshConversation();
+          setError(QUESTION_RETRY_NOTICE);
+        } catch {
+          setConversationId(null);
+          setError(CONVERSATION_UNAVAILABLE_MESSAGE);
+          setConversationUnavailable(true);
+        }
+        return;
+      }
       if (!response.ok || !response.body) throw new Error((await response.json().catch(() => ({})))?.error ?? "Could not answer that question.");
+      setDraft("");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -220,7 +289,20 @@ export function RagChatPanel({
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
         <ol className="flex flex-col gap-3">{messages.map((message) => <MessageCard key={message.id} message={message} />)}</ol>
         {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} />}
-        {error && <p className="mt-3 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
+        {error && (
+          <div className="mt-3">
+            <p className="text-sm text-[var(--color-accent-burgundy)]">{error}</p>
+            {conversationUnavailable && (
+              <button
+                type="button"
+                className="app-control mt-2 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm"
+                onClick={() => void initializeConversation({ cancelled: false })}
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <form onSubmit={ask} className="border-t border-[var(--color-border)] p-3">
         <label className="sr-only" htmlFor="rag-question">Ask a question about your Library</label>

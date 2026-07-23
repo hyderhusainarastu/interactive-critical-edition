@@ -14,7 +14,7 @@ import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import type { LibraryItem, LibraryWork } from "@/lib/library";
-import { SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
+import { hasReaderLevelSignal, SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
 
 /** Debounce delay (ms) before a typed search term triggers the
  *  server-authoritative `/api/library` fetch (plan §20.1). */
@@ -211,6 +211,11 @@ export function LibraryView({
 
   const relationships = useMemo(() => [...new Set(items.flatMap((item) => item.roles.map((role) => role.relationship)))].sort(), [items]);
   const resourceTypes = useMemo(() => [...new Set(items.map((i) => i.resourceType))].sort(), [items]);
+  // Owner-reported defect (register-tentative D-23-50): the reader-level
+  // filter is only offered when at least one item's roles actually
+  // differentiate by level — see `hasReaderLevelSignal`'s doc comment for
+  // why every current write path makes this false against real data.
+  const readerLevelSignal = useMemo(() => hasReaderLevelSignal(items), [items]);
 
   const focusedWork = initialWorks.find((work) => work.id === workId) ?? null;
 
@@ -238,7 +243,7 @@ export function LibraryView({
     let filtered = items.filter((i) => matchesTab(i, tab));
     if (relationship) filtered = filtered.filter((item) => item.roles.some((role) => role.relationship === relationship));
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
-    if (readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel, levelMode)));
+    if (readerLevelSignal && readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel, levelMode)));
     if (workId) filtered = filtered.filter((i) => i.focusMetrics.some((metric) => metric.workId === workId));
     const sorted = [...filtered];
     const metricFor = (item: LibraryItem) => {
@@ -259,7 +264,7 @@ export function LibraryView({
     else if (sort === "recency") sorted.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || stableTitle(left, right));
     else sorted.sort((left, right) => (metricFor(right)?.relevance ?? -1) - (metricFor(left)?.relevance ?? -1) || credibilityOrder(left, right) || stableTitle(left, right));
     return sorted;
-  }, [items, tab, relationship, resourceType, readerLevel, levelMode, workId, sort]);
+  }, [items, tab, relationship, resourceType, readerLevel, levelMode, workId, sort, readerLevelSignal]);
 
   function selectFocus(nextWorkId: string) {
     setWorkId(nextWorkId);
@@ -407,28 +412,46 @@ export function LibraryView({
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">
-                Reader level
-                {readerLevel !== "all" && (
-                  <span className="ml-1 text-[var(--color-text-muted)]">
-                    ({enablePhase12Identity && levelMode === "exact" ? "exact tags, plus universal material" : "selected level and foundations"})
-                  </span>
-                )}
-              </span>
-              <select
-                value={readerLevel}
-                onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-              >
-                {READER_LEVEL_FILTER_OPTIONS.map((level) => (
-                  <option key={level} value={level}>
-                    {READER_LEVEL_FILTER_LABEL[level]} ({levelCounts[level]})
-                  </option>
-                ))}
-              </select>
-            </label>
-            {enablePhase12Identity && readerLevel !== "all" && (
+            {readerLevelSignal ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  Reader level
+                  {readerLevel !== "all" && (
+                    <span className="ml-1 text-[var(--color-text-muted)]">
+                      ({enablePhase12Identity && levelMode === "exact" ? "exact tags, plus universal material" : "selected level and foundations"})
+                    </span>
+                  )}
+                </span>
+                <select
+                  value={readerLevel}
+                  onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
+                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  {READER_LEVEL_FILTER_OPTIONS.map((level) => (
+                    <option key={level} value={level}>
+                      {READER_LEVEL_FILTER_LABEL[level]} ({levelCounts[level]})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              // Owner-reported defect (D-23-50): no `resource_role` row this
+              // reader has ever been recommended carries a level-specific
+              // tag, so every filter option would return the identical set —
+              // offering the control here would be a lie by omission. Say so
+              // instead of a select that visibly does nothing.
+              <div className="flex max-w-[16rem] flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+                <p
+                  role="note"
+                  aria-label="Reader level filtering is not available"
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-text-muted)]"
+                >
+                  Not available yet — every source here currently applies at every level.
+                </p>
+              </div>
+            )}
+            {enablePhase12Identity && readerLevelSignal && readerLevel !== "all" && (
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
                 <select
