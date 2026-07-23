@@ -61,7 +61,20 @@ export function normalizeForSearch(text: string): string {
  * needed here when that happens.
  */
 export function hasReaderLevelSignal(items: Pick<LibraryItem, "roles">[]): boolean {
-  return items.some((item) => item.roles.some((role) => role.readerLevel != null));
+  return items.some((item) => rolesHaveReaderLevelSignal(item.roles));
+}
+
+/**
+ * Flat-roles sibling of `hasReaderLevelSignal` for callers that hold
+ * `resource_role` rows directly rather than Library items grouping them
+ * (the Curriculum page's `computeCurriculum` reads roles for ONE work,
+ * D-23-8 — same vacuous-filter defect, different data shape). Same rule:
+ * a reader-level filter is only offerable when at least one role carries a
+ * real (non-null) level; over all-null data every option returns the
+ * identical set, so the control must be replaced by an honest note instead.
+ */
+export function rolesHaveReaderLevelSignal(roles: ReadonlyArray<{ readerLevel: string | null }>): boolean {
+  return roles.some((role) => role.readerLevel != null);
 }
 
 /**

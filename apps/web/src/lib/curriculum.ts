@@ -9,6 +9,7 @@ import {
 } from "@ice/curriculum";
 import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
 
 const EMPTY_ROUTE_COUNTS: Record<CurriculumRoute, number> = { minimal: 0, university: 0, graduate: 0 };
 
@@ -19,6 +20,14 @@ export interface CurriculumResponse extends CurriculumResult {
    *  Library (`apps/web/src/lib/library.ts`) rather than a silent empty list. */
   hasWorkIdentity: boolean;
   routeCounts: Record<CurriculumRoute, number>;
+  /** Whether ANY `resource_role` row for this work carries a real (non-null)
+   *  reader level (D-23-8, twin of the Library's D-23-12/`hasReaderLevelSignal`).
+   *  Every current write path sets `readerLevel: null` ("applies at every
+   *  level"), making a level filter a mathematically correct no-op — so the
+   *  Curriculum page only offers the control when this is true, and shows an
+   *  honest inline note otherwise. Pure data check, no feature flag: the
+   *  filter reappears on its own the moment a write path sets a real level. */
+  readerLevelSignal: boolean;
 }
 
 export interface CurriculumLevelOptions {
@@ -52,13 +61,18 @@ export async function computeCurriculum(
   if (!work) return null;
 
   if (!work.workIdentityId) {
-    return { hasWorkIdentity: false, route, stages: [], routeCounts: EMPTY_ROUTE_COUNTS };
+    return { hasWorkIdentity: false, route, stages: [], routeCounts: EMPTY_ROUTE_COUNTS, readerLevelSignal: false };
   }
 
   const roles = await db.select().from(resourceRoles).where(eq(resourceRoles.workIdentityId, work.workIdentityId));
   if (!roles.length) {
-    return { hasWorkIdentity: true, route, stages: [], routeCounts: EMPTY_ROUTE_COUNTS };
+    return { hasWorkIdentity: true, route, stages: [], routeCounts: EMPTY_ROUTE_COUNTS, readerLevelSignal: false };
   }
+
+  // Computed over the UNFILTERED role set — the signal must say whether the
+  // data could ever differentiate by level, not whether the current filter
+  // selection happened to keep a level-tagged row (D-23-8).
+  const readerLevelSignal = rolesHaveReaderLevelSignal(roles);
 
   const resourceIds = [...new Set(roles.map((r) => r.learningResourceId))];
   const resources = await db.select().from(learningResources).where(inArray(learningResources.id, resourceIds));
@@ -106,5 +120,5 @@ export async function computeCurriculum(
   const result = buildCurriculum(candidates, profile, route);
   const routeCounts = countByRoute(candidates, profile);
 
-  return { hasWorkIdentity: true, ...result, routeCounts };
+  return { hasWorkIdentity: true, ...result, routeCounts, readerLevelSignal };
 }

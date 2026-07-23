@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { hasReaderLevelSignal } from "./librarySearch";
+import { hasReaderLevelSignal, rolesHaveReaderLevelSignal } from "./librarySearch";
 
 /**
  * Owner-reported defect regression (register-tentative D-23-50): "the
@@ -54,5 +54,25 @@ assert.equal(hasReaderLevelSignal([itemWithRoles([null]), itemWithRoles(["underg
 // A single item mixing a universal role with a level-tagged one still
 // counts as a signal.
 assert.equal(hasReaderLevelSignal([itemWithRoles([null, "advanced"])]), true);
+
+// --- rolesHaveReaderLevelSignal (D-23-8, Curriculum twin of D-23-12) ---
+// The flat-roles sibling `computeCurriculum` uses over one work's
+// `resource_role` rows directly. Mirrors the item-shaped cases above.
+
+const role = (readerLevel: string | null) => ({ readerLevel });
+
+// The exact production shape: every role is null-level. No signal — the
+// Curriculum page must show the honest note, not the filter.
+assert.equal(rolesHaveReaderLevelSignal([role(null), role(null)]), false);
+
+// No roles at all — vacuously no signal, not a crash.
+assert.equal(rolesHaveReaderLevelSignal([]), false);
+
+// One real level anywhere flips the signal true, so the filter reappears
+// automatically the day a write path classifies by level.
+assert.equal(rolesHaveReaderLevelSignal([role(null), role("undergraduate")]), true);
+
+// Mixed universal + level-tagged roles still count as a signal.
+assert.equal(rolesHaveReaderLevelSignal([role(null), role("advanced"), role(null)]), true);
 
 console.log("librarySearch.test.ts: all assertions passed");

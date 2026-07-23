@@ -17,6 +17,7 @@ interface CurriculumResponse {
   route: CurriculumRoute;
   stages: CurriculumStageResult[];
   routeCounts: Record<CurriculumRoute, number>;
+  readerLevelSignal: boolean;
 }
 
 const READER_LEVEL_LABEL: Record<string, string> = {
@@ -135,21 +136,39 @@ export function CurriculumView({
             ))}
           </select>
         </label>
-        {enablePhase12Identity && (
+        {enablePhase12Identity && data && (
           <>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
-              <select
-                value={readerLevel}
-                onChange={(event) => setReaderLevel(event.target.value as ReaderLevelFilter)}
-                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-              >
-                {READER_LEVEL_OPTIONS.map((level) => (
-                  <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>
-                ))}
-              </select>
-            </label>
-            {readerLevel !== "all" && (
+            {data.readerLevelSignal ? (
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+                <select
+                  value={readerLevel}
+                  onChange={(event) => setReaderLevel(event.target.value as ReaderLevelFilter)}
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  {READER_LEVEL_OPTIONS.map((level) => (
+                    <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              // D-23-8, twin of the Library's D-23-12: no `resource_role` row
+              // behind this curriculum carries a level-specific tag, so every
+              // filter option would return the identical set — offering the
+              // control here would be a lie by omission. Say so instead of a
+              // select that visibly does nothing.
+              <div className="flex max-w-[16rem] flex-col gap-1">
+                <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+                <p
+                  role="note"
+                  aria-label="Reader level filtering is not available"
+                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-xs text-[var(--color-text-muted)]"
+                >
+                  Not available yet — every source here currently applies at every level.
+                </p>
+              </div>
+            )}
+            {data.readerLevelSignal && readerLevel !== "all" && (
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
                 <select
