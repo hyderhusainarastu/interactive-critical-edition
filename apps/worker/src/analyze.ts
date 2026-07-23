@@ -43,7 +43,7 @@ import {
 } from "@ice/ai-adapters";
 import { resolveCitation, titleOverlap, type ResolvedRecord } from "@ice/bibliographic";
 import { extractCitationMentions, extractCitations, type CitationSourceInput, type ExtractedAuthorApparatus, type RawCitation } from "@ice/ingestion";
-import { reportError } from "@ice/observability";
+import { reportError, reportEvent } from "@ice/observability";
 import { createHash } from "node:crypto";
 import {
   allAdapters,
@@ -90,7 +90,7 @@ import {
   buildCitationBridgeResource,
   shouldBridgeCitationToResearchResource,
 } from "@ice/research";
-import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
 import { compactWorkSignal, persistV4WorkSignals } from "./v4";
 
@@ -1265,6 +1265,63 @@ export async function analyzeEditionRun(input: {
   }
 
   const budget = makeBudget();
+  // Crash-loop-proof budget (floors2 crash follow-up, §5 item 2): pg-boss
+  // retries `extract-text`/`edition-reprocess` up to 3x on failure, and
+  // `handleEditionExtraction` re-runs this ENTIRE pipeline — including every
+  // paid stage — from scratch on each attempt, each under a NEW `runId`. If
+  // the in-memory budget always started at $0, a document whose pipeline
+  // keeps hitting the same crash would silently re-spend up to the hard cap
+  // on every single attempt, with the $1 soft-cap / $5 hard-cap enforcement
+  // never actually seeing the prior attempts' real spend. Seed it instead
+  // from `ai_usage_log` rows already persisted for THIS DOCUMENT's prior
+  // FAILED runs only (joined through `processing_run.status = 'failed'` —
+  // the honest predicate for "crashed/still-crash-looping", per the actual
+  // `processing_run_status` vocabulary: pending/running/complete/failed).
+  // A prior COMPLETE run — published or superseded — is a legitimate edition,
+  // not a crash; a fresh reprocess after one must start its budget at $0, or
+  // every later reprocess of a well-behaved document would degrade for no
+  // reason. A retry gets a fresh `runId`, so run-scoping alone would miss
+  // exactly the spend this seed exists to catch — hence the document-level
+  // join, narrowed to failed runs rather than every run of the document.
+  //
+  // ROUND-2 (episode scoping): "narrowed to failed runs" alone is still not
+  // enough — a document can crash-loop (v1 failed), get manually recovered
+  // and published (v2 complete), and only later be reprocessed again (v3).
+  // Without a version floor, v1's old crash spend would keep seeding EVERY
+  // future reprocess forever, even though a legitimate publish already
+  // happened in between. A publish closes out the crash episode it followed,
+  // so only failed runs with a version STRICTLY GREATER than the document's
+  // most recent COMPLETE run's version — i.e. failed since that last publish
+  // — belong to the CURRENT episode. `episodeStartVersion` is 0 (seed
+  // everything) when the document has never had a complete run at all.
+  // `ai_usage_log.run_id` is a real per-run column (FK added by migration
+  // 0010), not merely a document-level or time-window association, so this
+  // join attributes spend to exactly the runs it was actually incurred by —
+  // no `created_at` window approximation is needed or used here.
+  const [lastComplete] = await db
+    .select({ version: sql<number>`coalesce(max(${processingRuns.version}), 0)` })
+    .from(processingRuns)
+    .where(and(eq(processingRuns.documentId, input.documentId), eq(processingRuns.status, "complete")));
+  const episodeStartVersion = lastComplete?.version ?? 0;
+  const [priorSpend] = await db
+    .select({ total: sql<number>`coalesce(sum(${aiUsageLogs.estimatedCostUsd}), 0)` })
+    .from(aiUsageLogs)
+    .innerJoin(processingRuns, eq(aiUsageLogs.runId, processingRuns.id))
+    .where(and(
+      eq(processingRuns.documentId, input.documentId),
+      eq(processingRuns.status, "failed"),
+      gt(processingRuns.version, episodeStartVersion),
+    ));
+  // Tracked explicitly, once, as an immutable local — never recomputed from
+  // `budget.spentUsd` later (which keeps accumulating this run's own spend)
+  // so every place that persists `processing_run.ai_cost_usd` below can
+  // subtract it back out and report ONLY this run's own spend, preserving
+  // cost.ts's documented per-run invariant, the admin dashboard's global
+  // sum, and the reader's per-edition cost display. The in-memory `budget`
+  // itself still carries the seed permanently, so `canAfford`/`overSoftCap`
+  // keep enforcing the true cumulative spend across a crash-loop retry.
+  const seededUsd = priorSpend?.total ?? 0;
+  if (seededUsd > 0) charge(budget, seededUsd);
   const responses = new OpenAIResponsesClient();
   const safetyIdentifier = safetyIdentifierFor(doc.userId);
   const cheapModel = process.env.OPENAI_MODEL_CHEAP ?? "gpt-5.4-nano";
@@ -1273,6 +1330,22 @@ export async function analyzeEditionRun(input: {
   // only for the hard-cap affordability gate before starting a synthesis call.
   const NOTE_COST_ESTIMATE = 0.01;
   const usageLogs: (typeof aiUsageLogs.$inferInsert)[] = [];
+  // How many of `usageLogs`' entries have already been written to the DB.
+  // Used as a "flushed marker" so `flushUsageLogs` — called both
+  // periodically and unconditionally in the `finally` below — only ever
+  // inserts the DELTA since its last call, never the same row twice.
+  let flushedUsageCount = 0;
+  const flushUsageLogs = async () => {
+    const pending = usageLogs.slice(flushedUsageCount);
+    if (!pending.length) return;
+    await db.insert(aiUsageLogs).values(pending);
+    flushedUsageCount = usageLogs.length;
+  };
+  // How many un-flushed log entries accumulate before an incremental flush,
+  // independent of the unconditional flush in `finally` — bounds how much a
+  // crash mid-run (one that a plain try/finally in this same process could
+  // still miss, e.g. a hard process kill) can leave unpersisted.
+  const USAGE_FLUSH_BATCH_SIZE = 5;
   const logUsage = (task: string, stage: string, model: string, pTok: number, cTok: number, costOverride?: number) => {
     const cost = costOverride ?? estimateCostUsd(model, pTok, cTok);
     charge(budget, cost);
@@ -1289,6 +1362,16 @@ export async function analyzeEditionRun(input: {
     });
   };
 
+  // Crash-safety wrapper (floors2 crash follow-up, §5 item 2): everything
+  // from here on is the actual pipeline work, run inside a try/finally so
+  // whatever `usageLogs` has accumulated — and the run's cost-so-far — is
+  // always persisted on the way out, success OR throw. Before this fix, the
+  // single `db.insert(aiUsageLogs)` bulk write only ran after the ENTIRE
+  // pipeline finished successfully, so a mid-run crash (e.g. the duplicate-
+  // key crash this same fix set repairs above) discarded every real OpenAI
+  // call's cost with no ledger row anywhere to catch it — the $1/$5 caps
+  // this pipeline depends on were themselves blind to that spend.
+  try {
   // v3 only, and only when the extraction stage found real body blocks to
   // anchor to (see index.ts: `bodyBlocks` is only ever the actually-inserted
   // text_block rows). One bulk call regardless of document length keeps cost
@@ -1789,8 +1872,9 @@ export async function analyzeEditionRun(input: {
     const bibId = isScholarly ? await findOrCreateBibFromResource(r) : null;
     const openAccess = findOpenAccessEvidence(r.raw, r.url);
     const resourceWork = deriveWorkIdentity(r, { citedAuthorSurnames: identity.citedAuthorSurnames });
+    const candidateNormalizedKey = normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year });
 
-    const [resourceRow] = await db
+    const insertedResourceRows = await db
       .insert(researchResources)
       .values({
         runId: input.runId,
@@ -1803,7 +1887,7 @@ export async function analyzeEditionRun(input: {
         doi: canonicalizeDoi(r.doi),
         isbn: canonicalizeIsbn(r.isbn),
         canonicalUrl: canonicalizeUrl(r.url),
-        normalizedKey: normalizedKey({ doi: r.doi, isbn: r.isbn, url: r.url, title: r.title, authors: r.authors, year: r.year }),
+        normalizedKey: candidateNormalizedKey,
         // Canonical WORK identity, so the Library can show one entry per work
         // with its reviews and editions attached instead of repeating a book.
         workKey: resourceWork.key,
@@ -1816,7 +1900,39 @@ export async function analyzeEditionRun(input: {
         bibRecordId: bibId,
         raw: r.raw,
       })
+      // D-23-xx (floors2 crash): two independently-accepted candidates in the
+      // SAME run can legitimately resolve `deriveWorkIdentity`/`normalizedKey`
+      // onto the identical (runId, normalizedKey) pair with DIFFERENT
+      // work_role/work_evidence (e.g. one candidate is the primary edition,
+      // another is a review of it that also carries the same DOI-derived
+      // key) — `research_resource_run_key_unique` then rejects the second
+      // insert outright, and an unguarded insert crashed the whole job 6/6
+      // times in production. First-in wins: the row an earlier iteration of
+      // this same loop already committed is kept exactly as-is. There is no
+      // codebase precedent for merging two conflicting NON-NULL values onto
+      // one row — `findOrCreateWorkIdentity`'s own "backfill" pattern (this
+      // file) only ever fills a column that is still NULL, and explicitly
+      // never overwrites one that already has a value — so inventing a
+      // merge here for `work_role`/`work_evidence` would be new, unproven
+      // policy. Skip the rest of this candidate's writes instead and log a
+      // structured warning so the collision stays visible without crashing.
+      .onConflictDoNothing({ target: [researchResources.runId, researchResources.normalizedKey] })
       .returning({ id: researchResources.id });
+
+    if (!insertedResourceRows.length) {
+      reportEvent("research_resource_duplicate_key_skipped", {
+        scope: "worker.analyzeEditionRun",
+        runId: input.runId,
+        documentId: input.documentId,
+        normalizedKey: candidateNormalizedKey,
+        skippedTitle: r.title,
+        skippedProvider: r.provider,
+        skippedWorkRole: resourceWork.role,
+        skippedWorkEvidence: resourceWork.evidence,
+      });
+      continue;
+    }
+    const [resourceRow] = insertedResourceRows;
 
     // Provider/query provenance was already retained in raw metadata, but a
     // first-class row makes a source node's evidence inspectable without
@@ -2059,6 +2175,15 @@ export async function analyzeEditionRun(input: {
           });
       }
     }
+
+    // Incremental flush (floors2 crash follow-up, §5 item 2): this loop is
+    // where the production crash actually happened, and it can run up to
+    // `maxFullInspections * 2` iterations (see selection.ts's defense-in-
+    // depth cap) — bound how much a crash inside THIS loop specifically
+    // could still leave unpersisted, on top of the unconditional `finally`
+    // flush below. Safe to call every iteration: it's a no-op whenever fewer
+    // than `USAGE_FLUSH_BATCH_SIZE` new entries have accumulated.
+    if (usageLogs.length - flushedUsageCount >= USAGE_FLUSH_BATCH_SIZE) await flushUsageLogs();
   }
 
   // Persist only deterministic, provenance-backed source-to-source links.
@@ -2095,7 +2220,7 @@ export async function analyzeEditionRun(input: {
   // this pass always sees the run's own complete discovery set.
   await linkCitationsToRunDiscoveries(input.documentId, input.runId);
 
-  if (usageLogs.length) await db.insert(aiUsageLogs).values(usageLogs);
+  await flushUsageLogs();
 
   // `degraded` means the edition is WORSE than it should be — not that
   // discovery finished within its budget. Hitting the pre-dedup resource cap
@@ -2109,6 +2234,41 @@ export async function analyzeEditionRun(input: {
   const degraded = overSoftCap(budget);
   await db
     .update(processingRuns)
-    .set({ stage: "validation", aiCostUsd: budget.spentUsd, degraded, saturationNote: discovery.saturationNote, updatedAt: new Date() })
+    .set({ stage: "validation", aiCostUsd: budget.spentUsd - seededUsd, degraded, saturationNote: discovery.saturationNote, updatedAt: new Date() })
     .where(eq(processingRuns.id, input.runId));
+  } catch (error) {
+    // Error-cause preservation (floors2 crash follow-up, §5 error-cause
+    // item): the caller (`extraction.ts`'s catch block) only ever persists
+    // `error.message` onto `processing_run.error`/`document.processingError`.
+    // Drizzle wraps the real driver error in `DrizzleQueryError`, whose own
+    // `.message` is just "Failed query: ... params: ...", losing the actual
+    // Postgres error (`.cause.message`/`.cause.code`, e.g. `23505` unique-
+    // violation or `42P01` undefined-table — this project's own already-
+    // documented pg/Drizzle gotcha, see PROJECT-LOG Known Problems). Fold the
+    // cause into the message here, at the source, so whatever later reads
+    // `error.message` — with no change needed on its part — gets the real
+    // driver detail instead of having to dig for it after the fact.
+    const err = error instanceof Error ? error : new Error(String(error));
+    const cause = (err as { cause?: { message?: string; code?: string } }).cause;
+    if (cause && (cause.message || cause.code)) {
+      err.message = `${err.message} [cause${cause.code ? `: ${cause.code}` : ""}${cause.message ? ` ${cause.message}` : ""}]`;
+    }
+    throw err;
+  } finally {
+    // Unconditional, whether the try block succeeded or threw: persist
+    // whatever usage this run actually incurred. `flushUsageLogs` inserts
+    // only the delta since its last call (via `flushedUsageCount`), so
+    // calling it again here after the success path already flushed is a
+    // safe no-op, not a duplicate insert. On a throw, this is what makes the
+    // spend from THIS attempt's own `ai_usage_log` rows visible to the next
+    // attempt's budget seed above (the seed sums `ai_usage_log`, not this
+    // column) instead of vanishing along with the crash. `aiCostUsd` itself
+    // is set to `budget.spentUsd - seededUsd` — this run's own spend only,
+    // matching the success-path update above and the per-run invariant.
+    await flushUsageLogs();
+    await db
+      .update(processingRuns)
+      .set({ aiCostUsd: budget.spentUsd - seededUsd, updatedAt: new Date() })
+      .where(eq(processingRuns.id, input.runId));
+  }
 }
