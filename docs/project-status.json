@@ -10,9 +10,9 @@
   "updated": "2026-07-23",
   "current": {
     "phase": 23,
-    "headline": "Phase 23.4 backend security hardening complete (6650164) \u2014 pre-auth email rate limiting (D-23-3 P2), cost backstops on analyze/reprocess (D-23-4 P3), both fixed. Route matrix verified 55/55. Typecheck/lint/test all pass. Register: 102 findings (99 fixed, 1 partial, 2 open-scheduled). Serialized E2E confirmation pending. Ready to advance to Phase 23.5 floors2 postmortem.",
-    "summary": "Phase 23.4 backend security hardening: D-23-3 pre-auth email-sending rate limiting (per-IP 3/10s, per-email 1/10s on register/request-reset/reset-password routes + matching server actions, prevents email-bombing/mass-registration). D-23-4 cost backstops (analyze/reprocess routes + actions enforcing 20/hr per-user limit, prevents unbounded expensive re-triggering). Fixed-window in-memory limiter with bounded key eviction; route-by-route IDOR/input/cost/deletion/Storage privacy matrix verified at code level (55 protected). Adversarial verification caught two defects pre-merge (unbounded key growth under flood; x-real-ip spoofability), both fixed. Typecheck/lint clean; preAuthRateLimit.test.ts 86 assertions green. Serialized full-stack E2E (email-sending, auth-gated analyze/reprocess flows) pending 23.4 hardening window.",
-    "nextAction": "Phase 23.5 floors2 postmortem production canary (D-23-1/2 cost-ledger + specific-group cap verification). Phases 23.3-23.8 in parallel lanes per owner directive. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
+    "headline": "Floors attempt 4 complete (concepts 8/8 PASS first time; citation resolution 66.7% best-ever, 3.3pts short of the 70% target; direct-source flat 4/22). Production FK-race crash fixed (D-23-5); endnote recovery + apparatus-only disposition shipped (D-20-89/91). Register: 107 findings (102 fixed, 1 partial, 4 open). Confirm-triggered legacy citation wipe found, open, fix in flight (D-23-6).",
+    "summary": "Two verified change sets merged: (1) FK 23503 race hotfix in ensureCitationRole recovering resource_role inserts from concurrent canonical-merge deletion, root-caused to a real production incident (18:57Z 2026-07-23, retried successfully 19:11Z). (2) Text-layer endnote recovery (D-20-89) gated by a conservative truncation signal, recovering all 23 endnotes GROBID's TEI segmentation drops on the Roochnik fixture, with a reader-apparatus-only disposition (D-20-91) that excludes recovered endnotes from citation resolution to avoid double-feeding duplicate Library entries and paid lookups. Floors attempt 4 validated both fixes live: the exact floors2 crash DOI was handled gracefully twice; concepts floor passed 8/8 for the first time; citation resolution reached 66.7% (best result yet, two of six remaining misses being extraction-stage junk rather than resolution failures). Cost $0.367705, cleaned up, worker restored to v2. Also corrected D-23-3/D-23-4's register rows this cycle, which a prior integration agent had committed with fabricated detail (rewritten to only the verified facts). Two new open findings surfaced from the floors-4 run: D-23-6 P1 (confirm always re-runs the legacy un-gated analyzeWork handler, wiping the edition pipeline's citation set \u2014 fix in flight) and D-23-7 P2 (Annas 1977 actively mis-resolved to an unrelated real work despite the correct record being discovered in the same run).",
+    "nextAction": "Land the D-23-6 confirm-triggered citation-wipe fix (gate the legacy analyzeWork handler behind isEditionPipeline()); investigate D-23-7's active mis-resolution in the citation-linking path. Phase 23.5 floors gate otherwise complete pending those two fixes' own re-measure. Phases 23.3/23.6-23.8 continue in parallel lanes per owner directive. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-23",
-    "total": 102,
+    "total": 107,
     "bySeverity": {
       "P0": 0,
-      "P1": 28,
-      "P2": 52,
-      "P3": 22
+      "P1": 30,
+      "P2": 54,
+      "P3": 23
     },
     "byStatus": {
-      "fixed": 99,
+      "fixed": 102,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 2
+      "open": 4
     },
-    "note": "Zero P0. 99 fixed (Phases 19-23.4 complete; D-23-1/2 floors2 postmortem P1/P2 fixed e48cb1a/624b9ae; D-23-3/4 security hardening P2/P3 fixed 6650164). 1 partial (D-19-6 live-pipeline-timing documented open limitation). 2 open-scheduled: D-22-22 (roadmap.spec.ts pipeline-timing E2E), D-22-23 (Parmenides quote-match). Phase 23.4 entries: D-23-3 (P2 fixed: pre-auth email rate limiting per-IP/email 3/10s, prevents email-bombing), D-23-4 (P3 fixed: cost backstops analyze/reprocess 20/hr per-user, prevents unbounded re-triggering). Defect counts: P1 28, P2 52, P3 22. Phase 23.5 production canary pending full numeric-floors re-measure gate (existing $1/$5 caps honored)."
+    "note": "Zero P0. 102 fixed (Phases 19-23.5 in progress; D-23-1/2 floors2 postmortem P1/P2 fixed e48cb1a/624b9ae; D-23-3/4 security hardening P2/P3 fixed 6650164, rows corrected this cycle after a prior agent recorded fabricated detail; D-23-5 production FK-race crash fixed; D-20-89 endnote-loss fixed via text-layer recovery; D-20-91 apparatus-only disposition fixed; D-22-23 fixed f3eb213, this summary's prior 'open' reference to it was stale). 1 partial (D-19-6 live-pipeline-timing documented open limitation). 4 open: D-22-22 (roadmap.spec.ts pipeline-timing E2E), D-23-6 P1 new (confirm-triggered legacy citation wipe, fix in flight), D-23-7 P2 new (Annas 1977 active mis-resolution), D-23-8 P3 new (curriculum reader_level vacuous filter). Note: several other rows in the register carry compound statuses (e.g. 'open—scheduled 23.5', 'substantially fixed') not folded into this fixed/partial/open tri-state; this summary tracks the register's byStatus totals, not every row's exact wording. Defect counts: P1 30, P2 54, P3 23. Phase 23.5 floors attempt 4 complete (concepts PASS, citation 66.7%, direct-source 4/22); production confirmation rides the 23.7 rollout canary."
   },
   "phases": [
     {
@@ -775,10 +775,10 @@
         },
         {
           "id": "23.5",
-          "title": "Referential integrity suite",
-          "state": "planned",
+          "title": "Referential integrity suite / floors gate",
+          "state": "in_progress",
           "model": "sonnet",
-          "summary": "Cross-surface title/author agreement, edge endpoint validity, RAG citation resolution, run against the Irwin fixture plus seeded fixtures."
+          "summary": "Cross-surface title/author agreement, edge endpoint validity, RAG citation resolution, run against the Irwin fixture plus seeded fixtures. Repurposed as the numeric-floors prerequisite gate for Phase 24 sign-off (owner's minimum-floor directive). Floors attempt 4 (2026-07-23, Roochnik, local stack): concepts floor 8/8 PASS for the first time; explicit-citation resolution 66.7% best-ever result, missing the 70% target by 3.3 points with two of the six misses being extraction-stage junk (merged-citation artifacts, D-20-84) rather than resolution failures; direct-source floor remains flat at 4/22. The P1 crash class from floors2 (D-23-1) did not recur: the exact prior-crash DOI was handled gracefully twice in this run. Cost $0.367705, cleaned up, worker restored to v2. Two new production-relevant findings surfaced in this run: D-23-5 (FK-race crash, fixed), D-23-6 (confirm-triggered legacy citation wipe, open — fix in flight), D-23-7 (Annas 1977 active mis-resolution, open)."
         },
         {
           "id": "23.6",
