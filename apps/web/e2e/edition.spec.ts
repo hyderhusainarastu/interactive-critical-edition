@@ -125,6 +125,14 @@ test("a passage annotation renders as an in-text marker; clicking it reveals its
   await expect(detail).toContainText(/tension Irwin's paper investigates/i);
   await expect(detail).toContainText(/live according to passion/i);
   await expect(detail).toContainText(/source: anchored document passage.*confidence.*provenance/i);
+  // Phase 22.3 residual parity check (D-21-8): this annotation is seeded
+  // with `relationship: "interpretive_aid"` (helpers.ts). The Relationship
+  // filter renders its option text straight from the SAME shared
+  // `CATEGORY_META` module the Visualization inspector now also reuses for
+  // a categorized edge (GraphView.tsx) — locking in that this annotation
+  // sidebar was never the divergent side of D-21-8's finding, only the
+  // Visualization inspector was.
+  await expect(page.getByLabel("Relationship")).toContainText("Interpretive aid");
 });
 
 test("a quote-matched critical note marker opens the sidebar Notes tab (plan §36 11.6)", async ({ page }) => {

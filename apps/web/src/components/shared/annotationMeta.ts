@@ -124,3 +124,23 @@ export function confidenceLabel(confidence: number): string {
   if (confidence >= 0.3) return "Low";
   return "Very low";
 }
+
+/**
+ * Safe lookup for callers that only have a generic, possibly-absent string
+ * category value rather than one already typed as `RelationshipCategory` —
+ * e.g. the Visualization graph's `GraphLink.category: string | null` (Phase
+ * 21/22, D-21-8/D-21-9). `graph_edge` rows only carry a relationship-category
+ * value where a write path derives one unambiguously (citation/classification/
+ * resource-role/passage-annotation edges); source-relation, discovery, and
+ * structural edges legitimately never do. Returns `undefined` for null,
+ * undefined, or any unrecognized string (e.g. `"cross_library"`,
+ * `"source_provenance"`, an `edition_relation.relation_type` value) rather
+ * than guessing or throwing, so a caller can render an explicit, honest
+ * fallback for edges that carry no 10-category value instead of a fabricated
+ * one.
+ */
+export function categoryMetaFor(category: string | null | undefined): CategoryMeta | undefined {
+  return category != null && Object.prototype.hasOwnProperty.call(CATEGORY_META, category)
+    ? CATEGORY_META[category as RelationshipCategory]
+    : undefined;
+}

@@ -8,7 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABEL, STAGE_ORDER, type CurriculumStage } from "@ice/curriculum";
 import { READER_LEVELS, TIER_LABEL, type ReaderLevelFilter } from "@ice/roadmap";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
-import { CATEGORY_META } from "../shared/annotationMeta";
+import { CATEGORY_META, categoryMetaFor, confidenceLabel } from "../shared/annotationMeta";
+import { RelationBadge } from "../shared/annotationPrimitives";
 import {
   CREDIBILITY_BAND_META,
   DEFAULT_GRAPH_FILTERS,
@@ -19,6 +20,7 @@ import {
   TYPE_LABEL,
   credibilityBandFor,
   edgeFamilyFor,
+  edgeTypeLabel,
   filterGraphData,
   isDefaultFilters,
   roadmapSubset,
@@ -1043,22 +1045,43 @@ function GraphInspector({
           )}
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <p className="text-xs font-medium text-[var(--color-text)]">Direct connections</p>
-            {connections.length === 0 ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">No visible direct connections under the current filters.</p> : <ul className="mt-2 space-y-1.5">{connections.map(({ node, link }) => <li key={`${node.id}:${link.edgeType}`}><button type="button" onClick={() => onSelectNode(node)} className="text-left text-xs underline underline-offset-2"><span className="font-medium">{node.label}</span> · {link.edgeType.replace(/_/g, " ")}</button></li>)}</ul>}
+            {connections.length === 0 ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">No visible direct connections under the current filters.</p> : <ul className="mt-2 space-y-1.5">{connections.map(({ node, link }) => <li key={`${node.id}:${link.edgeType}`}><button type="button" onClick={() => onSelectNode(node)} className="text-left text-xs underline underline-offset-2"><span className="font-medium">{node.label}</span> · {categoryMetaFor(link.category)?.label ?? edgeTypeLabel(link.edgeType)}</button></li>)}</ul>}
           </div>
         </div>
       )}
-      {selectedLink && (
-        <div className={selected ? "mt-5 border-t border-[var(--color-border)] pt-4" : ""} data-graph-evidence>
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-medium text-[var(--color-text)]">{selectedLink.edgeType.replace(/_/g, " ")}</p>
-            <button type="button" className="text-xs underline" onClick={onCloseLink}>Close</button>
+      {selectedLink && (() => {
+        // D-21-8/D-21-9 fix: an edge that carries a relationship_category
+        // (the classification/citation/resource-role/passage-annotation
+        // edges D-21-9 populates `category` for) is presented with the
+        // SAME glyph + label + qualitative confidence band the annotation
+        // sidebars use for that category (`CATEGORY_META`/`confidenceLabel`,
+        // via `RelationBadge` — the shared presentation primitive both
+        // surfaces now draw from), never a second, diverging label for the
+        // same underlying concept. An edge with no category (source-relation,
+        // discovery, and structural edges genuinely carry none) keeps the
+        // honest, undecorated edge-type-string fallback instead of a
+        // fabricated category.
+        const meta = categoryMetaFor(selectedLink.category);
+        return (
+          <div className={selected ? "mt-5 border-t border-[var(--color-border)] pt-4" : ""} data-graph-evidence>
+            <div className="flex items-start justify-between gap-2">
+              {meta ? (
+                <RelationBadge colorVar={meta.colorVar} glyph={meta.glyph} label={meta.label} />
+              ) : (
+                <p className="font-medium text-[var(--color-text)]">{edgeTypeLabel(selectedLink.edgeType)}</p>
+              )}
+              <button type="button" className="text-xs underline" onClick={onCloseLink}>Close</button>
+            </div>
+            <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]" data-graph-link-confidence>
+              {meta ? `${confidenceLabel(selectedLink.confidence)} · ${Math.round(selectedLink.confidence * 100)}%` : `Confidence ${Math.round(selectedLink.confidence * 100)}%`}
+              {" · "}{selectedLink.directed === false ? "bidirectional" : "directed"}{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}
+            </p>
+            {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
+            {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
           </div>
-          <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]">Confidence {Math.round(selectedLink.confidence * 100)}% · {selectedLink.directed === false ? "bidirectional" : "directed"}{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}</p>
-          {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
-          {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
-        </div>
-      )}
+        );
+      })()}
     </aside>
   );
 }

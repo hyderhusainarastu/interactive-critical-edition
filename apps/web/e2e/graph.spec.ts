@@ -313,7 +313,21 @@ test.describe("Visualization graph", () => {
     await expect(inspector).toContainText("License evidence: CC BY 4.0");
     await expect(inspector).toContainText("crossref · inspection depth 1");
     await expect(inspector).toContainText("Direct connections");
-    await expect(inspector).toContainText("On the Soul · cites");
+    // D-21-8/D-21-9 (Phase 22.3 residual): `seedWorkWithGraphData`'s "cites"
+    // edge carries `evidence.category: "explicit_reference"`, so its
+    // Direct-connections entry must show the SAME `CATEGORY_META` label the
+    // annotation sidebars render for that category ("Explicit reference"),
+    // not the raw `edgeType` string ("cites") the inspector used to render
+    // here. `selectedLink`'s own detail view (glyph + label + qualitative
+    // confidence band, via the identical `categoryMetaFor` lookup) is the
+    // other half of this fix, but it is only ever reachable through the 3D
+    // scene's WebGL `onLinkClick` raycast — not deterministically
+    // E2E-assertable (same documented limitation as every other WebGL
+    // internal in this codebase, see `graphSceneScaling.test.ts`'s header
+    // comment); its pure lookup logic is proven instead by
+    // `annotationMeta.test.ts`.
+    await expect(inspector).toContainText("On the Soul · Explicit reference");
+    await expect(inspector).not.toContainText("On the Soul · cites");
     await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toHaveAttribute("data-selected", "true");
   });
 
