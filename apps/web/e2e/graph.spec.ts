@@ -630,8 +630,15 @@ test.describe("Visualization graph", () => {
     await page.goto(`/works/${workId}/graph?layout=explore`);
 
     // The state legend on the graph page should include "Uploaded work" as a label
-    // for the primary state (uploaded works). Use first() to avoid strict mode issues.
-    await expect(page.getByText("Uploaded work").first()).toBeVisible();
+    // for the primary state (uploaded works). D-23-14's reorder moved the
+    // canvas + collapsed "Accessible node browser" <details> ABOVE this
+    // legend in DOM order; that closed <details> also renders a
+    // "primary"-state table row carrying the same STATE_META label, so a
+    // bare getByText().first() now matches that hidden duplicate instead of
+    // the visible legend span further down the page. Filter to visible
+    // elements to target the legend specifically (the legend itself is
+    // unchanged and still visible — this is a locator fix, not a UI fix).
+    await expect(page.getByText("Uploaded work").filter({ visible: true }).first()).toBeVisible();
   });
 
   // Phase 21.6 (D-21-2): selecting a node persistently focuses it — one-hop
