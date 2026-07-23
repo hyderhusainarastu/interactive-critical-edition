@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { estimateEmbeddingCostUsd, type EmbeddingResult } from "@ice/ai-adapters";
 
+// Sub-phase 22.9 (plan §3): the Conversational Competency Designation pure
+// module — self-report detector, level vocabulary, prompt/schema/validator.
+// Kept as a separate file (unlike this file's own Socratic primitives) so
+// the two features stay independently reviewable; re-exported here so every
+// caller still imports from `@ice/rag`.
+export * from "./competency";
+
 export const RAG_MAX_CHARS_PER_CHUNK = 1_400;
 export const RAG_MAX_CHUNKS_PER_DOCUMENT = 256;
 export const RAG_MAX_AUTOMATIC_EMBEDDINGS = 32;
