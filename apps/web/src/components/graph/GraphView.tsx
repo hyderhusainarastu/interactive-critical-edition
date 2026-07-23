@@ -571,7 +571,11 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           {/* Phase 22.8: layout mode toggle — Roadmap is the default view on
               every Visualization page; `?layout=explore` returns to the
               force-directed map (feature plan §2.1/§2.3). */}
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          {/* `data-dense-controls`: Phase 23.2 touch-target-audit test hook
+              (accessibility-sweep.spec.ts) — this layout-mode/roadmap-scope
+              row is compact secondary chrome, not a primary reading/nav
+              control; see that spec's docblock for the full rationale. */}
+          <div data-dense-controls="graph-layout-toolbar" className="mb-4 flex flex-wrap items-center gap-2 text-sm">
             <div role="group" aria-label="Layout" className="flex gap-1">
               <button
                 type="button"
@@ -1107,9 +1111,29 @@ function RoadmapForPopover({
   isWholeLibrary: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // D-23-x: brought to the same Escape-to-close + trigger-focus-restoration
+  // standard as every other reader-shell/graph disclosure (D-19-18/19/20,
+  // WorkPicker's split-view chooser) — this popover previously had
+  // aria-expanded/aria-controls but no keyboard dismissal at all.
+  function closePopover() {
+    setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          closePopover();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}

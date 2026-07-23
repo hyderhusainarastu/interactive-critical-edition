@@ -211,7 +211,12 @@ export function RagChatPanel({
         </div>
         <div className="flex gap-1"><button type="button" className="app-control app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
       </header>
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
+      {/* Phase 23.2 (D-23-x): a chat transcript is exactly the case
+          WAI-ARIA's `log` role exists for — new entries append over time
+          and the order is meaningful. `role="log"` already implies
+          `aria-live="polite"`; the explicit attribute is kept for clarity
+          and because this was already relied on before the role existed. */}
+      <div ref={scrollRef} role="log" className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
         <ol className="flex flex-col gap-3">{messages.map((message) => <MessageCard key={message.id} message={message} />)}</ol>
         {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} />}
@@ -259,6 +264,19 @@ function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
   const [undone, setUndone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
+  const undoneRef = useRef<HTMLLIElement>(null);
+
+  // D-23-x: a successful undo swaps this whole list item's content —
+  // including the "Undo" button the user just activated — for static text.
+  // Without this, the browser silently drops focus to <body> the instant
+  // that button unmounts, exactly the focus-loss failure mode this
+  // codebase's other Phase 19/22 disclosure fixes exist to prevent. Matches
+  // the FootnoteModal/RagChatPanel-close precedent: an effect that only
+  // ever calls `.focus()` (no `setState`), so it doesn't trip the
+  // synchronous-setState-in-effect lint rule.
+  useEffect(() => {
+    if (undone) undoneRef.current?.focus();
+  }, [undone]);
 
   async function undo() {
     if (busy) return;
@@ -276,7 +294,7 @@ function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
   }
 
   if (undone) {
-    return <li className="text-[var(--color-text-muted)]">Undone: “{notice.label}” marking removed.</li>;
+    return <li ref={undoneRef} tabIndex={-1} className="text-[var(--color-text-muted)] outline-none">Undone: “{notice.label}” marking removed.</li>;
   }
 
   return (

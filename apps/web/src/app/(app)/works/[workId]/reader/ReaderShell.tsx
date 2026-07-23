@@ -346,7 +346,13 @@ export function ReaderShell({
     <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen">
       <div className={splitWorkId ? "flex flex-1 divide-x divide-[var(--color-border)]" : "flex flex-1"}>
         <div className="min-w-0 flex-1">
-          {!readerFocus && <div ref={toolbarRevealRef} className="app-reveal flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
+          {/* `data-dense-controls`: marks this toolbar for the Phase 23.2
+              touch-target audit (accessibility-sweep.spec.ts) as an
+              accepted, reported exception — a compact secondary-action
+              toolbar row, not primary reading chrome; see that spec's
+              docblock for the full rationale. Purely a test hook, no
+              behavior/visual change. */}
+          {!readerFocus && <div ref={toolbarRevealRef} data-dense-controls="reader-toolbar" className="app-reveal flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
             <strong className="text-[var(--color-text)]">{data.title}</strong>
             {edition && (
               <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
@@ -370,20 +376,31 @@ export function ReaderShell({
                 </button>
               </div>
             )}
-            <div className="flex items-center gap-1" role="group" aria-label="Highlight color">
+            <div className="flex items-center" role="group" aria-label="Highlight color">
               {HIGHLIGHT_COLORS.map((c) => (
+                // Phase 23.2 (D-23-x): the clickable button is a full 44x44
+                // touch target; the visible color dot inside it stays the
+                // original small swatch size (`--color` set on the inner
+                // `span`, not the button itself) so the toolbar's density
+                // doesn't change — same "small visual, large hit area"
+                // pattern common for compact icon/color pickers.
                 <button
                   key={c}
                   type="button"
                   aria-label={`${c} highlight`}
                   aria-pressed={pendingColor === c}
                   onClick={() => setPendingColor(c)}
-                  className="app-control h-4 w-4 rounded-full border"
-                  style={{
-                    background: `var(--color-${c === "gold" ? "highlight" : `accent-${c}`})`,
-                    borderColor: pendingColor === c ? "var(--color-text)" : "transparent",
-                  }}
-                />
+                  className="app-control grid h-11 w-11 place-items-center rounded-full"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 rounded-full border"
+                    style={{
+                      background: `var(--color-${c === "gold" ? "highlight" : `accent-${c}`})`,
+                      borderColor: pendingColor === c ? "var(--color-text)" : "transparent",
+                    }}
+                  />
+                </button>
               ))}
             </div>
             <button

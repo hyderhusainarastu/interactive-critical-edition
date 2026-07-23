@@ -330,7 +330,10 @@ export function LibraryView({
                 type="button"
                 aria-pressed={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className="border-b-2 px-3 py-2"
+                // Phase 23.2 (D-23-x): `min-h-11` brings this reading-status
+                // tab to the 44px touch-target floor — padding-only, the
+                // filter row already has room below it.
+                className="min-h-11 border-b-2 px-3 py-2"
                 style={{
                   borderColor: tab === t.key ? "var(--color-accent-ink)" : "transparent",
                   color: tab === t.key ? "var(--color-text)" : "var(--color-text-muted)",

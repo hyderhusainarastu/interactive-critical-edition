@@ -232,12 +232,19 @@ body {
 }
 
 .app-shell-main { min-width: 0; }
+/* Phase 23.2 (accessibility completion, D-23-x): bumped from 2.2rem
+   (35.2px) to 2.75rem (44px) — this app's self-imposed touch-target floor,
+   stricter than WCAG 2.5.8 AA's 24px minimum, matching common
+   mobile-platform touch-target guidance. A single shared class, so every
+   icon-only trigger built on it (header search/preferences/nav, the RAG
+   sidebar's new-conversation/close controls, etc.) is fixed in one place
+   rather than by hand-editing each call site. */
 .app-icon-button {
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 2.2rem;
-  height: 2.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: .375rem;
   color: var(--color-text-muted);
   font-size: 1.1rem;

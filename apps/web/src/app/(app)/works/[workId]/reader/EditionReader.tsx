@@ -519,7 +519,10 @@ export function EditionReader({
 
   return (
     <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[var(--reading-measure,72ch)]">
-      {!focusMode && <div className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+      {/* `data-dense-controls`: same Phase 23.2 touch-target-audit test hook
+          as `ReaderShell.tsx`'s toolbar — this run-metadata bar (cost
+          disclosure, outline, page stepper) is compact secondary chrome. */}
+      {!focusMode && <div data-dense-controls="edition-reader-meta" className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
         <strong>Interactive reader · processed text · run v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>
         {edition.cost.breakdown.length > 0 ? (
