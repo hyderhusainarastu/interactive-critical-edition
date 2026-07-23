@@ -63,11 +63,31 @@ export interface RoadmapResult {
   hiddenItems: Array<{ bibId: string; title: string; authors: string | null; year: number | null }>;
 }
 
-export async function computeRoadmap(
+/**
+ * The DB-derived, option-independent half of the roadmap: everything down to
+ * the pre-collapse `RoadmapCandidate[]` plus the profile/override maps needed
+ * to rank them. Split out (Phase 22.7) so the multi-root roadmap-graph
+ * projection can union several roots' raw candidates and re-rank once
+ * (`mergeRoadmapsAcrossRoots`), rather than merging already-ranked, lossy
+ * `RoadmapItem`s. `computeRoadmap` below composes this with collapse + rank +
+ * per-level counts, so its public return is unchanged.
+ */
+export interface RoadmapCandidateSet {
+  rootWorkId: string;
+  /** Pre-collapse candidates (aggregate categories per target). */
+  candidates: RoadmapCandidate[];
+  /** userId-scoped understanding ratings + reading status, keyed by bibId. */
+  profile: Map<string, ProfileEntry>;
+  /** `(userId, rootWorkId)`-scoped overrides, keyed by bibId. */
+  overrideMap: Map<string, OverrideEntry>;
+  hiddenItems: Array<{ bibId: string; title: string; authors: string | null; year: number | null }>;
+  totalReached: number;
+}
+
+export async function computeRoadmapCandidates(
   userId: string,
   rootWorkId: string,
-  options: RankOptions = {},
-): Promise<RoadmapResult> {
+): Promise<RoadmapCandidateSet> {
   // 1) Reachable targets from the root work (transitive through matched works).
   const reach = (await db.execute(sql`
     WITH RECURSIVE reach AS (
@@ -100,14 +120,6 @@ export async function computeRoadmap(
     GROUP BY bib_id, category
   `)) as unknown as ReachRow[];
 
-  const emptyLevelCounts: Record<ReaderLevelFilter, number> = {
-    beginner: 0,
-    undergraduate: 0,
-    advanced: 0,
-    research: 0,
-    all: 0,
-  };
-
   // Overrides are fetched before the reach-empty check, not after, because
   // a manually added target (D-22-3 "manual add") may be the ONLY reason
   // this roadmap has anything to show at all — by definition it isn't
@@ -122,7 +134,14 @@ export async function computeRoadmap(
   const bibIds = [...new Set([...reachedIds, ...manuallyAddedIds])];
 
   if (bibIds.length === 0) {
-    return { rootWorkId, options, items: [], totalReached: 0, levelCounts: emptyLevelCounts, hiddenItems: [] };
+    return {
+      rootWorkId,
+      candidates: [],
+      profile: new Map<string, ProfileEntry>(),
+      overrideMap: new Map<string, OverrideEntry>(),
+      hiddenItems: [],
+      totalReached: 0,
+    };
   }
 
   // 2) Details + centrality + in-library flag + matched owned work (for
@@ -225,10 +244,25 @@ export async function computeRoadmap(
     };
   });
 
-  const collapsed = collapseDuplicateCandidates(candidates);
-  const items = rankRoadmap(collapsed, profile, overrideMap, options);
+  return { rootWorkId, candidates, profile, overrideMap, hiddenItems, totalReached: bibIds.length };
+}
+
+/**
+ * The full single-root roadmap: the DB-derived candidate set (above) composed
+ * with the pure duplicate-collapse, ranking, and per-level counts. Public
+ * return shape is unchanged from before the 22.7 split, so every existing
+ * consumer (`/api/works/[workId]/roadmap`, `curriculum.ts`) is unaffected.
+ */
+export async function computeRoadmap(
+  userId: string,
+  rootWorkId: string,
+  options: RankOptions = {},
+): Promise<RoadmapResult> {
+  const set = await computeRoadmapCandidates(userId, rootWorkId);
+  const collapsed = collapseDuplicateCandidates(set.candidates);
+  const items = rankRoadmap(collapsed, set.profile, set.overrideMap, options);
   const { readerLevel: _readerLevel, ...countBaseOptions } = options;
   void _readerLevel;
-  const levelCounts = countByReaderLevel(collapsed, profile, overrideMap, countBaseOptions);
-  return { rootWorkId, options, items, totalReached: bibIds.length, levelCounts, hiddenItems };
+  const levelCounts = countByReaderLevel(collapsed, set.profile, set.overrideMap, countBaseOptions);
+  return { rootWorkId, options, items, totalReached: set.totalReached, levelCounts, hiddenItems: set.hiddenItems };
 }

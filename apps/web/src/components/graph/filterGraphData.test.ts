@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { DEFAULT_GRAPH_FILTERS, filterGraphData, isDefaultFilters, type GraphData, type GraphFilters, type GraphNode } from "./types";
+import { DEFAULT_GRAPH_FILTERS, filterGraphData, isDefaultFilters, roadmapSubset, type GraphData, type GraphFilters, type GraphNode, type RoadmapAnnotation } from "./types";
 
 /**
  * Phase 21.3 regression coverage for `filterGraphData` — the ONE filtering
@@ -101,5 +101,97 @@ function filters(overrides: Partial<GraphFilters>): GraphFilters {
 assert.equal(isDefaultFilters(DEFAULT_GRAPH_FILTERS), true);
 assert.equal(isDefaultFilters(filters({ relation: "cites" })), false);
 assert.equal(isDefaultFilters({ ...DEFAULT_GRAPH_FILTERS, search: "" }), true, "an unchanged empty search string is still the default");
+
+// ============================================================================
+// Phase 22.7 (feature plan §2.2/§5 Feature A): the roadmap `stage` filter, the
+// `roadmapSubset` derivation, and the annotation-free byte-identity guarantee.
+// ============================================================================
+
+// --- byte-identity regression: the new `stage` field, at its "all" default,
+//     leaves an annotation-free payload filtered EXACTLY as before it existed.
+{
+  const result = filterGraphData(fixture, DEFAULT_GRAPH_FILTERS);
+  assert.deepEqual(result.nodes, fixture.nodes, "default filters must return every node unchanged (byte-identical)");
+  assert.deepEqual(result.links, fixture.links, "default filters must return every link unchanged (byte-identical)");
+  // stage is a no-op regardless of how it's spelled at the default.
+  assert.deepEqual(ids(filterGraphData(fixture, filters({ stage: "all" }))), ids(fixture), "stage=all is a no-op on annotation-free payloads");
+  assert.deepEqual(linkIds(filterGraphData(fixture, filters({ stage: "all" }))), linkIds(fixture));
+}
+
+function ann(overrides: Partial<RoadmapAnnotation>): RoadmapAnnotation {
+  return {
+    stage: "prerequisites",
+    tier: "essential",
+    sequence: 1,
+    known: false,
+    reason: "",
+    checkpoint: "",
+    category: "prerequisite",
+    confidence: 0.9,
+    estimatedMinutes: 600,
+    addedManually: false,
+    overridden: false,
+    rootWorkIds: ["work:1"],
+    ...overrides,
+  };
+}
+
+const roadmapFixture: GraphData = {
+  title: "Roadmap fixture",
+  stats: { works: 1, references: 2, sources: 0, concepts: 1, people: 0, missing: 0, read: 0 },
+  nodes: [
+    node({ id: "work:1", type: "work", state: "primary", uploaded: true, associatedWorkIds: ["work:1"] }),
+    node({ id: "external:bib:1", type: "reference", state: "unread", uploaded: false, associatedWorkIds: ["work:1"], roadmap: ann({ stage: "prerequisites", tier: "essential", sequence: 1 }) }),
+    node({ id: "external:bib:2", type: "reference", state: "unread", uploaded: false, associatedWorkIds: ["work:1"], roadmap: ann({ stage: "extension", tier: "optional", sequence: 2, category: "optional_extension" }) }),
+    node({ id: "concept:1", type: "concept", state: "unread", uploaded: false, associatedWorkIds: ["work:1"] }),
+  ],
+  links: [
+    { id: "la", source: "work:1", target: "external:bib:1", edgeType: "is_prerequisite_for", directed: true, associatedWorkIds: ["work:1"], category: null, confidence: 0.9 },
+    { id: "lb", source: "work:1", target: "external:bib:2", edgeType: "is_recommended_by", directed: true, associatedWorkIds: ["work:1"], category: null, confidence: 0.6 },
+    { id: "lc", source: "work:1", target: "concept:1", edgeType: "presupposes", directed: true, associatedWorkIds: ["work:1"], category: null, confidence: 0.7 },
+  ],
+};
+
+// --- stage filter: keeps only the matching stage's annotated nodes; uploaded
+//     anchors stay (D-21-10); unannotated nodes (concept) drop. ---
+{
+  const result = filterGraphData(roadmapFixture, filters({ stage: "prerequisites" }));
+  assert.deepEqual(ids(result), new Set(["work:1", "external:bib:1"]), "stage=prerequisites: anchor exempt, bib:1 matches, bib:2 (extension) + concept (no roadmap) drop");
+  assert.deepEqual(linkIds(result), new Set(["la"]), "only the edge between two visible nodes survives");
+}
+{
+  const result = filterGraphData(roadmapFixture, filters({ stage: "extension" }));
+  assert.deepEqual(ids(result), new Set(["work:1", "external:bib:2"]), "stage=extension keeps bib:2, drops bib:1 (prerequisites)");
+}
+
+// --- stage filter composes with D-21-1 edge-level relation filter unchanged ---
+{
+  const result = filterGraphData(roadmapFixture, filters({ stage: "prerequisites", relation: "is_prerequisite_for" }));
+  assert.deepEqual(ids(result), new Set(["work:1", "external:bib:1"]), "stage AND relation both narrow (AND semantics)");
+  assert.deepEqual(linkIds(result), new Set(["la"]), "D-21-1: the edge must itself match the relation, even with a stage filter active");
+}
+
+// --- an unannotated non-anchor node never survives a concrete stage filter ---
+{
+  const result = filterGraphData(roadmapFixture, filters({ stage: "core_engagement" }));
+  assert.deepEqual(ids(result), new Set(["work:1"]), "no node has the core_engagement stage; only the anchor remains");
+  assert.deepEqual(linkIds(result), new Set([]), "no visible reference/concept endpoints ⇒ no links");
+}
+
+// --- roadmapSubset: keeps annotated + uploaded, drops explore-only concepts ---
+{
+  const subset = roadmapSubset(roadmapFixture);
+  assert.deepEqual(ids(subset), new Set(["work:1", "external:bib:1", "external:bib:2"]), "roadmapSubset keeps the anchor + both annotated bibs, drops the concept (explore-only)");
+  assert.deepEqual(linkIds(subset), new Set(["la", "lb"]), "the dangling link to the dropped concept is removed");
+  assert.notEqual(subset, roadmapFixture, "roadmapSubset returns a new object");
+  assert.notEqual(subset.nodes, roadmapFixture.nodes, "roadmapSubset returns a new nodes array");
+  assert.equal(roadmapFixture.nodes.length, 4, "roadmapSubset must not mutate its input");
+}
+
+// --- roadmapSubset on an annotation-free payload keeps exactly the uploaded works ---
+{
+  const subset = roadmapSubset(fixture);
+  assert.deepEqual(ids(subset), new Set(["work:1", "work:2"]), "with no annotations, roadmapSubset keeps only the uploaded-work anchors");
+}
 
 console.log("filterGraphData.test.ts: all assertions passed");

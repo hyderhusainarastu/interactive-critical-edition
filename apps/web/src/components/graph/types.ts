@@ -1,4 +1,5 @@
-import type { RelationshipCategory } from "@ice/roadmap";
+import type { CurriculumStage } from "@ice/curriculum";
+import type { PriorityTier, RelationshipCategory } from "@ice/roadmap";
 
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
 export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
@@ -57,6 +58,50 @@ export interface GraphNode {
   provenances?: { runId: string; provider: string; inspectedAt: string | null; inspectionDepth: number }[];
   /** D/E public material is useful context, never stand-alone factual support. */
   supplementary?: boolean;
+  /** Roadmap-mode projection (plan §22.7 / feature plan §2.2). ABSENT on
+   *  explore-only payloads — this field is the only difference between an
+   *  explore payload and a roadmap payload for a given node, so every
+   *  annotation-free code path (`filterGraphData` with the default
+   *  `stage: "all"`, every existing graph consumer) is byte-identical to
+   *  before it existed. Layered on top of `buildGraph()`'s output by
+   *  `buildRoadmapGraph()` (`apps/web/src/lib/roadmapGraph.ts`), never written
+   *  to the DB and never recomputed by a consumer. Concept/person/section
+   *  nodes never carry one in v1 (the roadmap pipeline is bibliographic —
+   *  fabricating a concept's stage placement would violate the grounding
+   *  posture); they stay explore-only, see `roadmapSubset` below. */
+  roadmap?: RoadmapAnnotation;
+}
+
+/**
+ * The read-time roadmap projection attached to a node in roadmap layout mode
+ * (feature plan §2.2). Every field is derived deterministically from the pure
+ * `@ice/roadmap`/`@ice/curriculum` machinery — no new AI call, no stored
+ * snapshot — so a new upload or a changed rating is reflected on the next
+ * request. `stage`/`checkpoint` come from `stageForRelationship(category)`/
+ * `checkpointFor(category)`; `tier`/`sequence`/`known`/`reason`/`confidence`/
+ * `estimatedMinutes`/`addedManually`/`overridden` are the merged `RoadmapItem`'s
+ * own fields; `rootWorkIds` records which selected root works reached this
+ * node (multi-root provenance, `mergeRoadmapsAcrossRoots`).
+ */
+export interface RoadmapAnnotation {
+  stage: CurriculumStage;
+  tier: PriorityTier;
+  /** 1-based global reading order after the multi-root merge. */
+  sequence: number;
+  /** ≥ KNOWN_THRESHOLD or completed — existing roadmap semantics. */
+  known: boolean;
+  /** Deterministic `reasonFor()` output (no user-facing "AI" wording). */
+  reason: string;
+  /** Deterministic `checkpointFor()` reflection prompt. */
+  checkpoint: string;
+  category: RelationshipCategory;
+  confidence: number;
+  estimatedMinutes: number;
+  addedManually: boolean;
+  overridden: boolean;
+  /** Node ids (`work:<uuid>`) of the selected roadmap roots that reached this
+   *  node — empty only for the anchors it is attached to by identity. */
+  rootWorkIds: string[];
 }
 
 export interface GraphLink {
@@ -309,6 +354,13 @@ export interface GraphFilters {
   relation: string | "all";
   credibilityBand: CredibilityBand | "all";
   associatedWork: string | "all";
+  /** Roadmap-mode curriculum-stage filter (feature plan §2.2). `"all"` (the
+   *  default) is a no-op, so every explore-mode/annotation-free payload is
+   *  filtered byte-identically to before this field existed. A concrete
+   *  stage matches only annotated nodes in that stage; uploaded-work anchors
+   *  keep the D-21-10 exemption (they are attribute-filter-exempt), and
+   *  D-21-1 edge behavior is unchanged. */
+  stage: CurriculumStage | "all";
 }
 
 export type CredibilityBand = "high" | "medium" | "low" | "unknown";
@@ -329,6 +381,7 @@ export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
   relation: "all",
   credibilityBand: "all",
   associatedWork: "all",
+  stage: "all",
 };
 
 /** True when every field is still at its default — drives the "Clear all
@@ -389,7 +442,14 @@ export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWo
       (filters.authority === "all" || n.authority === filters.authority) &&
       (filters.provider === "all" || n.provider === filters.provider || n.providers?.includes(filters.provider) === true) &&
       (filters.relation === "all" || byNode.get(n.id)?.has(filters.relation) === true) &&
-      (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand)
+      (filters.credibilityBand === "all" || credibilityBandFor(n.credibilityScore) === filters.credibilityBand) &&
+      // Roadmap-mode stage filter (feature plan §2.2). The default `"all"`
+      // short-circuits to `true`, so an annotation-free payload — every
+      // explore-mode payload — is unaffected. A concrete stage keeps only
+      // nodes whose roadmap projection is in that stage (an unannotated node
+      // has no `roadmap`, so `n.roadmap?.stage` is `undefined !== <stage>`
+      // and it is hidden — correct: it has no place in a stage column).
+      (filters.stage === "all" || n.roadmap?.stage === filters.stage)
     );
   });
   const visibleIds = new Set(nodes.map((n) => n.id));
@@ -400,6 +460,32 @@ export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWo
       visibleIds.has(linkEndpointId(l.source)) &&
       visibleIds.has(linkEndpointId(l.target)) &&
       (filters.relation === "all" || l.edgeType === filters.relation),
+  );
+  return { ...data, nodes, links };
+}
+
+/**
+ * Roadmap-mode node subset (feature plan §2.2/§2.5). Keeps exactly the nodes a
+ * stage-column reading roadmap should show: every roadmap-annotated node, plus
+ * the reader's own uploaded-work anchors (roots and library). Concepts/people/
+ * sections stay explore-only in v1 — the roadmap pipeline is bibliographic, so
+ * a concept has no honestly-derived stage placement; fabricating one would
+ * violate the grounding posture, so they are simply excluded here rather than
+ * dropped into an invented column.
+ *
+ * This is an EXPORTED PURE contract function (not an inline filter in the UI)
+ * precisely so the 3D scene and the accessible table can consume the exact
+ * same derivation — `roadmapSubset(filterGraphData(data, filters, pinned))` —
+ * and stay provably identical, the same guarantee `filterGraphData` itself
+ * gives. Like `filterGraphData`, it returns a new object and never mutates its
+ * input; dangling links to trimmed nodes are dropped, so neither view can show
+ * an edge to an invisible node.
+ */
+export function roadmapSubset(data: GraphData): GraphData {
+  const nodes = data.nodes.filter((n) => n.roadmap != null || n.uploaded);
+  const visibleIds = new Set(nodes.map((n) => n.id));
+  const links = data.links.filter(
+    (l) => visibleIds.has(linkEndpointId(l.source)) && visibleIds.has(linkEndpointId(l.target)),
   );
   return { ...data, nodes, links };
 }

@@ -517,3 +517,125 @@ export function suggestReaderLevelFromCompletions(
   }
   return null;
 }
+
+/** One selected roadmap root's already-built candidates and its OWN saved
+ *  overrides. `computeRoadmap` fetches overrides scoped to `(userId, rootWorkId)`,
+ *  so overrides genuinely differ per root — which is what the multi-root
+ *  hidden semantics below depend on (feature plan §2.4). */
+export interface RootRoadmapInput {
+  rootWorkId: string;
+  candidates: RoadmapCandidate[];
+  overrides: Map<string, OverrideEntry>;
+}
+
+export interface MergedRoadmap {
+  items: RoadmapItem[];
+  /** Surviving (post-collapse) bibId → the sorted, unique root work ids that
+   *  reached it. Multi-root provenance for the graph annotation's
+   *  `rootWorkIds` (feature plan §2.2). */
+  rootWorkIdsByBib: Map<string, string[]>;
+  /** Surviving bibId → the bib ids collapsed INTO it (its `mergedBibIds`).
+   *  `RoadmapItem` only carries `mergedCount`, but the roadmap-graph
+   *  annotation join (feature plan §2.3 step (b)) has to try every folded bib
+   *  id against the graph's node ids, so the ids themselves are surfaced here. */
+  mergedBibIdsByBib: Map<string, string[]>;
+  /** The composed restore list: items hidden under EVERY reaching root
+   *  (feature plan §2.4). An item hidden under one root but reached un-hidden
+   *  by another is NOT here — it is in `items`. */
+  hiddenItems: Array<{ bibId: string; title: string; authors: string | null; year: number | null }>;
+}
+
+/**
+ * Merge several roots' roadmaps into one dependency-ordered sequence (feature
+ * plan §2.3). This is deliberately NOT a new merge algorithm: it concatenates
+ * every root's candidates and re-runs the PROVEN `collapseDuplicateCandidates`
+ * (D-22-2) + `rankRoadmap` over the union, so a work shared as a prerequisite
+ * of two selected roots collapses to one item exactly the way an edition and
+ * its review already collapse — union categories, max confidence, summed
+ * centrality, min depth, deterministic primary.
+ *
+ * The two things it adds on top of that reuse are both about provenance the
+ * single-root pipeline never needed:
+ *
+ * 1. **`rootWorkIds`** — which selected roots reached each surviving item,
+ *    aggregated over the item's own bibId and every bibId collapsed into it.
+ * 2. **Multi-root override composition (§2.4)** — overrides are stored per
+ *    `rootWorkId`, so an item hidden under root A but genuinely reached by a
+ *    selected root B still appears; only items hidden under every reaching
+ *    root go to the composed restore list. A manual tier/position pin is taken
+ *    from the first shown (root, member) pair that carries one, deterministically.
+ *
+ * Accepted trade-off (feature plan §2.5, kept honest): because the reused
+ * collapse sums centrality, a bib reached by two roots contributes its
+ * centrality twice. Centrality only breaks ranking ties (never tier), the same
+ * bib carries the same global centrality from each root, and the alternative
+ * would mean forking a second collapse — so this follows the plan's explicit
+ * "reuse, don't invent" instruction rather than special-casing it.
+ */
+export function mergeRoadmapsAcrossRoots(
+  perRoot: RootRoadmapInput[],
+  profile: Map<string, ProfileEntry>,
+  options: RankOptions = {},
+): MergedRoadmap {
+  // 1) Union the raw candidates, remembering which root produced each bibId
+  //    and that root's override for it (keyed per (root, bibId)).
+  const rootsByBib = new Map<string, Set<string>>();
+  const overrideByRootBib = new Map<string, OverrideEntry>();
+  const union: RoadmapCandidate[] = [];
+  for (const p of perRoot) {
+    for (const c of p.candidates) {
+      union.push(c);
+      const roots = rootsByBib.get(c.bibId) ?? new Set<string>();
+      roots.add(p.rootWorkId);
+      rootsByBib.set(c.bibId, roots);
+      const ov = p.overrides.get(c.bibId);
+      if (ov) overrideByRootBib.set(`${p.rootWorkId} ${c.bibId}`, ov);
+    }
+  }
+
+  // 2) Collapse across the union — the reused, proven D-22-2 merge.
+  const collapsed = collapseDuplicateCandidates(union);
+
+  // 3) Per survivor: reaching roots, composed override, provenance.
+  const rootWorkIdsByBib = new Map<string, string[]>();
+  const mergedBibIdsByBib = new Map<string, string[]>();
+  const mergedOverrides = new Map<string, OverrideEntry>();
+  for (const survivor of collapsed) {
+    const members = [survivor.bibId, ...(survivor.mergedBibIds ?? [])];
+    mergedBibIdsByBib.set(survivor.bibId, survivor.mergedBibIds ?? []);
+    const reachingRoots = new Set<string>();
+    for (const member of members) {
+      for (const root of rootsByBib.get(member) ?? []) reachingRoots.add(root);
+    }
+    rootWorkIdsByBib.set(survivor.bibId, [...reachingRoots].sort());
+
+    // Every (root, member) pair that actually occurred, with its override
+    // (an absent override reads as "not hidden, no pin").
+    const pairs: Array<{ root: string; member: string; ov: OverrideEntry }> = [];
+    for (const root of reachingRoots) {
+      for (const member of members) {
+        if (!rootsByBib.get(member)?.has(root)) continue;
+        pairs.push({ root, member, ov: overrideByRootBib.get(`${root} ${member}`) ?? {} });
+      }
+    }
+    // Hidden iff every reaching pair is explicitly hidden (§2.4). A pair with
+    // no override (or hidden:false) keeps the item shown.
+    const hidden = pairs.length > 0 && pairs.every((pr) => pr.ov.hidden === true);
+    const shownPairs = pairs
+      .filter((pr) => pr.ov.hidden !== true)
+      .sort((a, b) => a.root.localeCompare(b.root) || a.member.localeCompare(b.member));
+    const manualTier = shownPairs.find((pr) => pr.ov.manualTier)?.ov.manualTier;
+    const manualPosition = shownPairs.find((pr) => pr.ov.manualPosition != null)?.ov.manualPosition;
+    mergedOverrides.set(survivor.bibId, { hidden, manualTier, manualPosition });
+  }
+
+  // 4) Rank once over the collapsed union with the composed overrides.
+  const items = rankRoadmap(collapsed, profile, mergedOverrides, options);
+
+  // 5) Composed restore list: survivors hidden under every reaching root.
+  const hiddenItems = collapsed
+    .filter((survivor) => mergedOverrides.get(survivor.bibId)?.hidden)
+    .map((survivor) => ({ bibId: survivor.bibId, title: survivor.title, authors: survivor.authors, year: survivor.year }));
+
+  return { items, rootWorkIdsByBib, mergedBibIdsByBib, hiddenItems };
+}

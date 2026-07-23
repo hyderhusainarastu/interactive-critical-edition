@@ -5,12 +5,14 @@ import {
   countByReaderLevel,
   exactTiersForReaderLevel,
   matchesReaderLevel,
+  mergeRoadmapsAcrossRoots,
   normalizeTitleForDedup,
   rankRoadmap,
   suggestReaderLevelFromCompletions,
   type OverrideEntry,
   type ProfileEntry,
   type RoadmapCandidate,
+  type RootRoadmapInput,
 } from "./index";
 
 function cand(partial: Partial<RoadmapCandidate> & { bibId: string; title: string }): RoadmapCandidate {
@@ -286,6 +288,98 @@ describe("countByReaderLevel", () => {
       research: 3, // everything
       all: 3,
     });
+  });
+});
+
+describe("mergeRoadmapsAcrossRoots (Phase 22.7: multi-root roadmap projection)", () => {
+  const root = (rootWorkId: string, candidates: RoadmapCandidate[], overrides: Map<string, OverrideEntry> = noOverrides()): RootRoadmapInput => ({
+    rootWorkId,
+    candidates,
+    overrides,
+  });
+
+  it("collapses a prerequisite shared by two roots into ONE item, unions categories, tracks both roots", () => {
+    const kantA = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"], centrality: 2 });
+    const kantB = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["conceptual_influence"], centrality: 2 });
+    const merged = mergeRoadmapsAcrossRoots([root("work:A", [kantA]), root("work:B", [kantB])], empty());
+
+    expect(merged.items).toHaveLength(1);
+    expect(merged.items[0].bibId).toBe("kant");
+    // Unioned categories → strongest (prerequisite) drives the tier.
+    expect(merged.items[0].tier).toBe("essential");
+    expect(merged.items[0].category).toBe("prerequisite");
+    // Both selected roots are recorded as having reached it.
+    expect(merged.rootWorkIdsByBib.get("kant")).toEqual(["work:A", "work:B"]);
+  });
+
+  it("keeps genuinely distinct works from different roots, each scoped to its own root", () => {
+    const kant = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const hume = cand({ bibId: "hume", title: "A Treatise of Human Nature", categories: ["conceptual_influence"] });
+    const merged = mergeRoadmapsAcrossRoots([root("work:A", [kant]), root("work:B", [hume])], empty());
+
+    expect(merged.items.map((i) => i.bibId).sort()).toEqual(["hume", "kant"]);
+    expect(merged.rootWorkIdsByBib.get("kant")).toEqual(["work:A"]);
+    expect(merged.rootWorkIdsByBib.get("hume")).toEqual(["work:B"]);
+  });
+
+  it("chooses a deterministic primary when two roots reach the same work via different records (edition wins over review)", () => {
+    const edition = cand({ bibId: "b-edition", title: "Vice and Reason", categories: ["prerequisite"], inLibrary: true, centrality: 2, depth: 1 });
+    const review = cand({ bibId: "b-review", title: "Vice and Reason.", categories: ["secondary_scholarly_recommendation"], centrality: 1, depth: 2 });
+    const merged = mergeRoadmapsAcrossRoots([root("work:A", [edition]), root("work:B", [review])], empty());
+
+    expect(merged.items).toHaveLength(1);
+    expect(merged.items[0].bibId).toBe("b-edition"); // in-library row is the deterministic primary
+    expect(merged.mergedBibIdsByBib.get("b-edition")).toEqual(["b-review"]);
+    expect(merged.rootWorkIdsByBib.get("b-edition")).toEqual(["work:A", "work:B"]);
+  });
+
+  it("scoped-hide (§2.4): an item hidden under one root but reached un-hidden by another still appears", () => {
+    const kantA = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const kantB = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const merged = mergeRoadmapsAcrossRoots(
+      [root("work:A", [kantA], new Map([["kant", { hidden: true }]])), root("work:B", [kantB])],
+      empty(),
+    );
+    expect(merged.items.map((i) => i.bibId)).toEqual(["kant"]);
+    expect(merged.hiddenItems).toHaveLength(0);
+  });
+
+  it("scoped-hide (§2.4): an item hidden under EVERY reaching root goes to the composed restore list", () => {
+    const kantA = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const kantB = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const merged = mergeRoadmapsAcrossRoots(
+      [
+        root("work:A", [kantA], new Map([["kant", { hidden: true }]])),
+        root("work:B", [kantB], new Map([["kant", { hidden: true }]])),
+      ],
+      empty(),
+    );
+    expect(merged.items).toHaveLength(0);
+    expect(merged.hiddenItems.map((h) => h.bibId)).toEqual(["kant"]);
+    expect(merged.hiddenItems[0].title).toBe("Critique of Pure Reason");
+  });
+
+  it("applies a manual tier pin from a shown root during composition", () => {
+    const optionalA = cand({ bibId: "o", title: "Optional Extra", categories: ["optional_extension"] });
+    const merged = mergeRoadmapsAcrossRoots(
+      [root("work:A", [optionalA], new Map([["o", { manualTier: "essential" }]]))],
+      empty(),
+      { mode: "concise" }, // optional would normally be filtered out of concise mode
+    );
+    expect(merged.items.map((i) => i.bibId)).toEqual(["o"]);
+    expect(merged.items[0].tier).toBe("essential");
+    expect(merged.items[0].overridden).toBe(true);
+  });
+
+  it("respects the shared profile when ranking the merged union", () => {
+    const kant = cand({ bibId: "kant", title: "Critique of Pure Reason", categories: ["prerequisite"] });
+    const husserl = cand({ bibId: "husserl", title: "Logical Investigations", categories: ["prerequisite"] });
+    const profile = new Map<string, ProfileEntry>([["kant", { score: 80 }]]);
+    const merged = mergeRoadmapsAcrossRoots([root("work:A", [kant, husserl])], profile);
+    // Known Kant sinks below still-unknown Husserl.
+    const order = merged.items.map((i) => i.bibId);
+    expect(order.indexOf("husserl")).toBeLessThan(order.indexOf("kant"));
+    expect(merged.items.find((i) => i.bibId === "kant")!.known).toBe(true);
   });
 });
 
