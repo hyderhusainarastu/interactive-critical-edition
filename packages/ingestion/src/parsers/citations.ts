@@ -96,6 +96,101 @@ const NOTE_BOOK = new RegExp(
  *  name ("See W.F.R. Hardie…", "Cf. Broadie…"). */
 const LEADING_CUE = /^(?:see\s+also|see|cf\.?|compare|contrast|e\.g\.?,?|cited\s+in|quoted\s+in|following|so\s+also)\s+/i;
 
+/**
+ * Conservative footnote/endnote unbundling. Audited directly against a real
+ * local GROBID :8070 run over `baseline-test/AristotlesAccountoftheVicious.pdf`
+ * (the Roochnik "Vicious Man" fixture): its endnote 2 bundles two independent
+ * citations behind connective prose, no semicolon at all — "... does not
+ * 'save the phenomena,' see A. Kosman, 'Saving the Phenomena...,' ... pp.
+ * 54-72. For arguments closer to my own, see M. Nussbaum, The Fragility of
+ * Goodness (Cambridge: Cambridge University Press, 1986)." Left as one block,
+ * `extractCitationMentions` either silently drops whichever entry doesn't
+ * independently match a known citation shape (whenever its sibling in the
+ * same block DOES match — Kosman's own citation is a chapter-in-edited-
+ * volume form neither NOTE_QUOTED nor NOTE_BOOK recognizes, a genuine,
+ * separate shape gap, not itself a bundling defect) or — when NEITHER
+ * matches — falls back to treating the WHOLE block as one unresolvable,
+ * multi-author blob. See the call site in `extractCitationMentions` for
+ * what splitting first actually buys back.
+ *
+ * A candidate boundary is only a semicolon or a period, each REQUIRING a
+ * citation-introducing cue word ("see", "cf.", "compare", ...) between the
+ * boundary punctuation and the next citation-start (a capitalized-name token
+ * immediately followed by a comma, matched via `NAME`) — the period
+ * alternative additionally tolerates a short (<=60 char) connective clause
+ * before the cue, matching this fixture's own real "... pp. 54-72. For
+ * arguments closer to my own, see M. Nussbaum, ..." shape. A split is then
+ * only COMMITTED when EVERY resulting segment independently looks like a
+ * citation per the existing `looksLikeCitation` gate the reference-section
+ * parser above already trusts — "when in doubt, do not split".
+ *
+ * 23.5d repair: the semicolon alternative originally carried NO cue
+ * requirement at all (just `;\s*(?:(?:and|or)\s+)?(?=NAME,)`), on the theory
+ * that `looksLikeCitation` would catch anything it over-matched. That theory
+ * was wrong: an ordinary scholarly-discourse sentence of the shape "Name1,
+ * <capitalized appositive>, <prose>; Name2, <clause with a year>, <prose>."
+ * satisfies `looksLikeCitation` on BOTH sides — a capitalized appositive
+ * satisfies the Surname-comma-Capital shape, and a year anywhere in the
+ * second clause satisfies the year check — even though neither side is a
+ * citation at all. The gate is real but was never narrow enough to
+ * compensate for a boundary regex with no cue discipline of its own.
+ * Requiring the SAME cue-after-boundary discipline on the semicolon path
+ * that the period path already enforced closes this at the boundary itself,
+ * before the gate is ever consulted: a semicolon is only a candidate
+ * boundary when a "see"/"cf."/"compare"/... cue immediately follows it (an
+ * optional leading "and"/"or" is still tolerated). The accepted trade-off
+ * (see the adversarial tests below): a semicolon-joined citation list whose
+ * later entries carry no cue of their own — relying only on a single
+ * leading cue at the very start of the whole note — no longer splits past
+ * the first boundary. That is the conservative direction ("when in doubt,
+ * do not split"), not a regression; a genuinely cue-bearing pair ("see X;
+ * compare Y") still splits exactly as before.
+ *
+ * Requiring every segment to independently qualify (not just the two
+ * nearest the boundary) is what keeps a genuinely incomplete fragment — this
+ * fixture's own real, truncated Nussbaum clause, missing its own year
+ * entirely — from being confidently split out of a real cue-bearing
+ * boundary. A wrong split silently manufactures two bad lookup queries out
+ * of one real one, which is worse than leaving a hard-to-parse block
+ * unsplit.
+ */
+const CITATION_CUE = String.raw`(?:[Ss]ee\s+also|[Ss]ee|[Cc]f\.?|[Cc]ompare|[Cc]ontrast|[Cc]ited\s+in|[Qq]uoted\s+in|[Ff]ollowing)`;
+const SPLIT_BOUNDARY = new RegExp(
+  String.raw`;\s*(?:(?:and|or)\s+)?${CITATION_CUE}\s+(?=${NAME},)` +
+    "|" +
+    String.raw`\.\s+(?:[A-Z][^.;]{0,60}?\s+)?${CITATION_CUE}\s+(?=${NAME},)`,
+  "g",
+);
+
+/**
+ * Splits a single footnote/endnote block into independent citation entries,
+ * but ONLY at a high-confidence boundary (see doc comment above), and only
+ * when every resulting segment independently looks like a citation. Returns
+ * the original (whitespace-flattened) text as a single-element array
+ * whenever no boundary is found, or whenever committing to a detected
+ * boundary would produce even one segment that doesn't itself look like a
+ * citation.
+ */
+export function splitNoteEntries(text: string): string[] {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (!flat) return [flat];
+
+  const matches = [...flat.matchAll(SPLIT_BOUNDARY)];
+  if (matches.length === 0) return [flat];
+
+  const segments: string[] = [];
+  let cursor = 0;
+  for (const m of matches) {
+    if (m.index === undefined) continue;
+    segments.push(flat.slice(cursor, m.index).trim());
+    cursor = m.index + m[0].length;
+  }
+  segments.push(flat.slice(cursor).trim());
+
+  const allValid = segments.length > 1 && segments.every((segment) => looksLikeCitation(segment));
+  return allValid ? segments : [flat];
+}
+
 function cleanQuery(entry: string): string {
   return entry
     .replace(/^\s*\[?\(?\d{1,3}\)?[.):\]]\s*/, "") // leading "1." / "[1]" / "(1)"
@@ -276,6 +371,39 @@ export function extractCitationMentions(
       continue;
     }
 
+    if (source.sourceType === "footnote" || source.sourceType === "endnote") {
+      // Split a bundled note into independent entries FIRST (see
+      // `splitNoteEntries`'s doc comment for the exact fixture this fixes and
+      // the guards against a wrong split), then run the same regex-pass +
+      // low-confidence-fallback logic per entry that a single-citation block
+      // already got, scoped to that entry's own text, not the whole
+      // (possibly multi-citation) block, so one entry's fallback text never
+      // absorbs a sibling entry's.
+      const segments = splitNoteEntries(source.text);
+      for (const segment of segments) {
+        if (mentions.length >= max) break;
+        const rawCandidates = extractCitations(segment, Math.max(1, max - mentions.length));
+        const segmentCandidates = rawCandidates.filter((candidate) => candidate.kind === "reference");
+        const seen = new Set<string>();
+        for (const candidate of segmentCandidates) {
+          const key = `${candidate.text}\u0000${candidate.query}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          add(source, candidate);
+        }
+
+        // A structural footnote/endnote entry is itself evidence even when it
+        // lacks a four-digit year or uses a catalog style the generic
+        // heuristic does not recognize. Never manufacture metadata: preserve
+        // it verbatim as a low-confidence lookup candidate instead.
+        if (segmentCandidates.length === 0) {
+          const query = cleanQuery(segment);
+          if (query.length >= 8) add(source, { text: segment.trim(), query, kind: "reference" });
+        }
+      }
+      continue;
+    }
+
     const rawCandidates = extractCitations(source.text, Math.max(1, max - mentions.length));
     const candidates = source.sourceType === "inline"
       ? rawCandidates.filter((candidate) => candidate.kind === "inline")
@@ -286,15 +414,6 @@ export function extractCitationMentions(
       if (seen.has(key)) continue;
       seen.add(key);
       add(source, candidate);
-    }
-
-    // A structural bibliography/reference block is itself evidence even when
-    // it lacks a four-digit year or uses a catalog style the generic heuristic
-    // does not recognize. Never manufacture metadata: preserve it verbatim as
-    // a low-confidence lookup candidate instead.
-    if ((source.sourceType === "footnote" || source.sourceType === "endnote") && candidates.length === 0) {
-      const query = cleanQuery(source.text);
-      if (query.length >= 8) add(source, { text: source.text.trim(), query, kind: "reference" });
     }
 
     if (source.sourceType === "inline") {

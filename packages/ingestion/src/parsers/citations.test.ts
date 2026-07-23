@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractCitationMentions, extractCitations } from "./citations";
+import { extractCitationMentions, extractCitations, splitNoteEntries } from "./citations";
 
 const WITH_BIBLIOGRAPHY = `The Question of Being
 
@@ -195,5 +195,196 @@ describe("structurally anchored citation mentions", () => {
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({ sourceType: "bibliography", text: "A. Unknown, A Work the catalog does not contain." });
     expect(found[0].anchor).toMatchObject({ textBlockId: "bib-unresolved", pageIndex: 22 });
+  });
+});
+
+describe("footnote unbundling (real strings audited from the baseline_test fixture)", () => {
+  // Extracted verbatim (whitespace-flattened) from a real local GROBID
+  // :8070 run against baseline-test/AristotlesAccountoftheVicious.pdf's TEI,
+  // endnote 2: two independent citations (Kosman, then Nussbaum) joined by
+  // connective prose, no semicolon at all. GROBID does not segment this
+  // document's "NOTES" section as <note> elements (it lands as ordinary body
+  // prose), but the bundling failure mode reproduced here is independent of
+  // that and belongs squarely to the citation/apparatus parsing layer: a
+  // multi-citation footnote/endnote block handed to `extractCitationMentions`
+  // with `sourceType: "footnote"`/`"endnote"` exhibits it regardless of how
+  // the block was segmented upstream.
+  const KOSMAN_CLAUSE =
+    'For an argument that, at least in what became the standard sense of the phrase, Aristotelian science does not "save the phenomena," see A. Kosman, "Saving the Phenomena: Realism and Instrumentalism in Aristotle\'s Theory of Science," in Aristotle and Contemporary Science, ed. D. Sfendoni-Mentzou (New York: Peter Lang Publishing, 2000), pp. 54-72.';
+  const NUSSBAUM_CLAUSE_COMPLETE =
+    "For arguments closer to my own, see M. Nussbaum, The Fragility of Goodness (Cambridge: Cambridge University Press, 1986).";
+  // The actual GROBID/PDF extraction genuinely truncates endnotes 3-20 in this
+  // fixture (an unrelated, upstream `packages/ingestion` extraction gap, out
+  // of scope here) — the real Nussbaum clause never reaches its own year or
+  // closing parenthesis.
+  const NUSSBAUM_CLAUSE_REAL_TRUNCATED = "For arguments closer to my own, see M. Nussbaum, The Fragility of Goodness (Cambridge: Cambridge";
+
+  it("Kosman's citation alone does not match either note-citation regex (a real, independent shape gap — a chapter-in-edited-volume citation with a quoted title AND a full descriptive imprint parenthetical, not a bundling defect)", () => {
+    // Documents the honest audit finding: unbundling this note does not, by
+    // itself, rescue Kosman — recorded so this isn't mistaken for a splitter
+    // bug later.
+    expect(extractCitations(KOSMAN_CLAUSE)).toEqual([]);
+  });
+
+  it("splits the real endnote 2 into two segments when both halves are complete (hypothetical: no upstream truncation)", () => {
+    const bundled = `${KOSMAN_CLAUSE} ${NUSSBAUM_CLAUSE_COMPLETE}`;
+    const segments = splitNoteEntries(bundled);
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toContain("Kosman");
+    expect(segments[1]).toContain("Nussbaum");
+  });
+
+  it("recovers Kosman as its own low-confidence mention once split out, instead of being silently dropped because Nussbaum's half matches the regex", () => {
+    const bundled = `${KOSMAN_CLAUSE} ${NUSSBAUM_CLAUSE_COMPLETE}`;
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: bundled, textBlockId: "note-2", pageIndex: 14, blockOrder: 3, marker: "2" },
+    ]);
+    expect(found.some((m) => m.text.includes("Kosman"))).toBe(true);
+    expect(found.some((m) => /Nussbaum/.test(m.query) && /1986/.test(m.query))).toBe(true);
+    // Neither entry is a merged blob containing both authors.
+    for (const m of found) {
+      expect(m.text.includes("Kosman") && m.text.includes("Nussbaum")).toBe(false);
+    }
+  });
+
+  it("declines to split the REAL truncated endnote 2 (Nussbaum's fragment carries no year and is not itself citation-shaped) — conservative, not a regression", () => {
+    const bundledReal = `${KOSMAN_CLAUSE} ${NUSSBAUM_CLAUSE_REAL_TRUNCATED}`;
+    expect(splitNoteEntries(bundledReal)).toEqual([bundledReal]);
+    // Falls back to the pre-existing single-blob behavior rather than
+    // fabricating a confident split out of an incomplete fragment.
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: bundledReal, textBlockId: "note-2", pageIndex: 14, blockOrder: 3, marker: "2" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0].text).toContain("Kosman");
+    expect(found[0].text).toContain("Nussbaum");
+  });
+});
+
+describe("footnote unbundling (synthetic, targeting the fallback path directly)", () => {
+  it("gives each half of a semicolon-joined bundled note its own low-confidence mention instead of one merged blob", () => {
+    // Neither half matches NOTE_QUOTED/NOTE_BOOK on its own (no parenthesised
+    // year), but each independently carries a bare year and is therefore
+    // citation-shaped enough to split confidently. Post-23.5d the semicolon
+    // boundary itself requires a citation cue immediately after it ("see
+    // also"), not just a bare "and" — see the cue-discipline repair tests
+    // below for the case this distinction exists to fix.
+    const bundled = "Compare the treatment in Smith, Ancient Ethics Revisited 1972; see also Jones, Modern Commentary 1980.";
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: bundled, textBlockId: "note-9", pageIndex: 1, blockOrder: 1, marker: "9" },
+    ]);
+    expect(found).toHaveLength(2);
+    expect(found.some((m) => m.text.includes("Smith") && !m.text.includes("Jones"))).toBe(true);
+    expect(found.some((m) => m.text.includes("Jones") && !m.text.includes("Smith"))).toBe(true);
+  });
+
+  it("splits two complete, independently-regex-matching citations joined by a semicolon into exactly two mentions (no duplication)", () => {
+    // Post-23.5d: "and David Charles" alone no longer qualifies as a boundary
+    // (no cue), so this fixture now carries its own "see also" cue on the
+    // second half rather than relying only on the leading "See" at the start.
+    const bundled =
+      "See W.F.R. Hardie, Aristotle's Ethical Theory (Oxford: Oxford University Press, 1980); see also David Charles, Aristotle's Philosophy of Action (London: Duckworth, 1984).";
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: bundled, textBlockId: "note-3", pageIndex: 5, blockOrder: 2, marker: "3" },
+    ]);
+    const hardie = found.filter((m) => /Hardie/.test(m.query));
+    const charles = found.filter((m) => /Charles/.test(m.query));
+    expect(hardie).toHaveLength(1);
+    expect(charles).toHaveLength(1);
+    expect(found).toHaveLength(2);
+  });
+});
+
+describe("footnote unbundling — adversarial non-split cases", () => {
+  it("does not split a semicolon that falls inside a quoted title", () => {
+    const text = 'See A. Kosman, "Saving the Phenomena; Realism and Instrumentalism," Journal of Philosophy 80 (1990), pp. 1-20.';
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("does not split an 'op. cit.' reference", () => {
+    const text = "See Broadie, op. cit., p. 45; see also Annas, op. cit., ch. 2.";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("does not split a semicolon-separated page-range list", () => {
+    const text = "Sarah Broadie, Ethics with Aristotle (Oxford: Oxford University Press, 1991), pp. 54-72; 88-91; 103-110.";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("does not split ordinary connective prose that merely follows a citation-cue verb ('see also X, who ...')", () => {
+    // "Broadie, who argues" starts with a capitalized surname + comma, which
+    // satisfies the boundary regex's citation-START signal, but the resulting
+    // half is not itself citation-shaped (no year, next word not capitalized)
+    // — this is exactly the case the looksLikeCitation gate exists to catch.
+    const text = "The point is discussed at length; see also Broadie, who argues instead that virtue is a mean.";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("does not split plain prose with no citation-cue verb at all", () => {
+    const text = "The argument fails for a simple reason. Aristotle, however, thought otherwise about akrasia.";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("returns the input unchanged when there is nothing to split", () => {
+    const text = "Sarah Broadie, Ethics with Aristotle (Oxford: Oxford University Press, 1991).";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+});
+
+describe("footnote unbundling — 23.5d cue-discipline repair (semicolon boundary now requires a citation cue)", () => {
+  // The verifier's rejection of the first 23.5d fix: SPLIT_BOUNDARY's
+  // semicolon alternative had no citation-cue requirement (unlike the period
+  // alternative, which already required one), and `looksLikeCitation` alone
+  // is too permissive to compensate — a capitalized appositive satisfies its
+  // Surname-comma-Capital shape, and a year anywhere in the second clause
+  // satisfies its year check, even when neither half is a citation. The
+  // exact adversarial string reported by the verifier is not reproduced
+  // verbatim here (it was not carried into this task's prompt as literal
+  // text); the case below is modeled directly on the verifier's own
+  // description of its shape: "Name1, <capitalized appositive>, <prose>;
+  // Name2, <clause with a year>, <prose>."
+  it("does not split ordinary scholarly-discourse prose shaped like 'Name1, <capitalized appositive>, <prose>; Name2, <clause with a year>, <prose>.' (the verifier's adversarial construction)", () => {
+    const text =
+      "Barnes, A Careful Reader of the Nicomachean Ethics, insists that courage is a mean; Owen, A Historian of Greek Philosophy Writing in 1961, offers a similar reading of the same passage.";
+    // Sanity check on the construction itself: both halves would satisfy the
+    // permissive `looksLikeCitation` gate on their own (capitalized
+    // appositive on the left, an embedded year on the right), which is
+    // exactly why the fix has to live in the boundary regex, not the gate.
+    expect(text.split(";")[0].trim()).toMatch(/^[A-Z][A-Za-z.'-]+,\s+[A-Z]/);
+    expect(text.split(";")[1]).toMatch(/\b(19|20)\d{2}\b/);
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("does not split appositive-with-embedded-year prose lacking any citation cue (a second case in the same class)", () => {
+    const text =
+      "Barnes, A Scholar Active Since 1975, argues that courage is a mean; Owen, A Reader of the Same Passage, offers a similar view of the text.";
+    expect(splitNoteEntries(text)).toEqual([text]);
+  });
+
+  it("still splits a genuinely cue-bearing 'see X; compare Y' citation pair (both sides carry their own cue)", () => {
+    const text =
+      "See A. Kosman, Saving the Phenomena (New York: Peter Lang, 2000); compare M. Nussbaum, The Fragility of Goodness (Cambridge: Cambridge University Press, 1986).";
+    const segments = splitNoteEntries(text);
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toContain("Kosman");
+    expect(segments[1]).toContain("Nussbaum");
+
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text, textBlockId: "note-cue-pair", pageIndex: 1, blockOrder: 1, marker: "cue" },
+    ]);
+    expect(found.some((m) => /Kosman/.test(m.query))).toBe(true);
+    expect(found.some((m) => /Nussbaum/.test(m.query) && /1986/.test(m.query))).toBe(true);
+  });
+
+  it("confirms 'see' remains a recognized CITATION_CUE and the real endnote-2 Kosman+Nussbaum case (period boundary, unaffected by the semicolon fix) still splits", () => {
+    const KOSMAN_CLAUSE =
+      'For an argument that, at least in what became the standard sense of the phrase, Aristotelian science does not "save the phenomena," see A. Kosman, "Saving the Phenomena: Realism and Instrumentalism in Aristotle\'s Theory of Science," in Aristotle and Contemporary Science, ed. D. Sfendoni-Mentzou (New York: Peter Lang Publishing, 2000), pp. 54-72.';
+    const NUSSBAUM_CLAUSE_COMPLETE =
+      "For arguments closer to my own, see M. Nussbaum, The Fragility of Goodness (Cambridge: Cambridge University Press, 1986).";
+    const bundled = `${KOSMAN_CLAUSE} ${NUSSBAUM_CLAUSE_COMPLETE}`;
+    const segments = splitNoteEntries(bundled);
+    expect(segments).toHaveLength(2);
+    expect(segments[0]).toContain("Kosman");
+    expect(segments[1]).toContain("Nussbaum");
   });
 });
