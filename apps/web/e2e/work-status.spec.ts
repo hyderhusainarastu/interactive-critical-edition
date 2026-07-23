@@ -60,10 +60,35 @@ test.describe("Work status controls (Phase 19)", () => {
     await expect(page.locator('input[name="authorName"]')).toHaveValue("Detected Author");
 
     await page.locator('input[name="title"]').fill("Confirmed Title");
+    // This is the first point in the whole CI-safe E2E run where the
+    // confirm route's happy path executes (security.spec.ts's confirm
+    // check is a cross-user 404 that never reaches this code), so it's
+    // also the first call to enqueueAnalyzeWork()/getQueue() — pg-boss's
+    // one-time schema creation plus four sequential createQueue() calls
+    // (packages/db/src/queue.ts) run synchronously inside this awaited
+    // POST. Waiting on the real response (rather than a bare
+    // button-click-then-assert) pins the test to the actual completing
+    // network event instead of racing it.
+    const confirmResponse = page.waitForResponse(
+      (response) => response.url().includes(`/api/works/${workId}/confirm`) && response.request().method() === "POST",
+    );
     await page.getByRole("button", { name: "Confirm and add to library" }).click();
+    await confirmResponse;
 
     await expect(page.getByText("Ready", { exact: true })).toBeVisible();
-    await expect(page.getByText("Confirmed Title")).toBeVisible();
+    // "Confirmed Title" only appears once router.refresh() (fired by
+    // WorkStatusPanel's handleConfirm after the POST above) completes its
+    // own, separate RSC round trip and re-renders the Server Component
+    // <h1> with the newly-saved work.title — WorkStatusPanel's own client
+    // state only tracks status, not title, so this is never satisfied by
+    // local state alone. CI observed the whole flow (POST + refresh) take
+    // 6.3s/6.6s under runner load, just over the bare 5s default; this is
+    // a real, reproducible network-bound latency (confirmed locally by
+    // hitting the same cold-pg-boss-init confirm path against a real
+    // production build), not a functional regression, so the fix is
+    // headroom on the assertion that actually depends on it rather than a
+    // weaker assertion.
+    await expect(page.getByText("Confirmed Title")).toBeVisible({ timeout: 15_000 });
 
     const [row] = await db.select({ status: documents.processingStatus }).from(documents).where(eq(documents.id, documentId));
     expect(row.status).toBe("ready");
