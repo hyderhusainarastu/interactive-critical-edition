@@ -22,6 +22,7 @@ import {
   edgeRelationLabel,
   nodeScaleForDistance,
 } from "./graphSceneScaling";
+import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
 
 // Relative node size by kind — work is the anchor, concepts next, then
 // references, with sections (a per-work outline, often numerous) smallest.
@@ -152,6 +153,7 @@ export function KnowledgeGraph3D({
   onLinkClick,
   pinnedWorkIds = [],
   selectedNodeId,
+  emphasis = EMPTY_FOCUS_EMPHASIS,
   resetSignal = 0,
   isFullscreen = false,
 }: {
@@ -160,6 +162,14 @@ export function KnowledgeGraph3D({
   onLinkClick?: (link: GraphLink) => void;
   pinnedWorkIds?: readonly string[];
   selectedNodeId?: string | null;
+  /** Phase 21.6 (D-21-2): the selection-focus decision, computed ONCE by
+   *  `GraphView` from the shared filtered `GraphData` + `selectedNodeId` +
+   *  the active focus mode (`graphFocus.ts`'s `computeFocusEmphasis`) — not
+   *  recomputed here, so the 3D scene and the accessible table can never
+   *  disagree about which nodes are "in focus." This component only unions
+   *  it with its own local `hoverNode` state below (hover ADDS emphasis on
+   *  top, it never replaces the selection-driven set). */
+  emphasis?: FocusEmphasis;
   /** Incremented by the stage control; keeps reset independent from selection. */
   resetSignal?: number;
   isFullscreen?: boolean;
@@ -281,23 +291,39 @@ export function KnowledgeGraph3D({
     };
   }, [data, pinnedWorkIds]);
 
-  // Neighbor adjacency for the hover highlight, built once per data change
-  // rather than per hover event.
-  const neighborsByNode = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const l of data.links) {
-      const s = endpointId(l.source);
-      const t = endpointId(l.target);
-      (map.get(s) ?? map.set(s, new Set()).get(s)!).add(t);
-      (map.get(t) ?? map.set(t, new Set()).get(t)!).add(s);
-    }
-    return map;
-  }, [data.links]);
+  // Neighbor adjacency, built once per data change rather than per hover
+  // event — shared with `graphFocus.ts`'s selection-focus computation
+  // rather than a second, locally-reimplemented adjacency map.
+  const neighborsByNode = useMemo(() => buildNodeAdjacency(data.links), [data.links]);
 
+  // D-21-2: `emphasis` (the SELECTION-driven focus, computed by the parent
+  // from shared props — never force-layout internals) is the base; hover
+  // only ever ADDS to it, never replaces it, so a selection's fade persists
+  // exactly as-is when the pointer moves away from the selected node. When
+  // nothing is selected (`emphasis` is empty), this degrades to the
+  // pre-existing hover-only behavior. `null` (not an empty Set) is the
+  // "no highlight active at all" signal `nodeColor`/`linkColor` below key
+  // off, preserving their existing contract unchanged.
+  const hasSelectionFocus = emphasis.emphasizedNodeIds.size > 0;
   const highlightNodeIds = useMemo(() => {
-    if (!hoverNode) return null;
-    return new Set([hoverNode.id, ...(neighborsByNode.get(hoverNode.id) ?? [])]);
-  }, [hoverNode, neighborsByNode]);
+    if (!hasSelectionFocus && !hoverNode) return null;
+    const ids = new Set(hasSelectionFocus ? emphasis.emphasizedNodeIds : []);
+    if (hoverNode) {
+      ids.add(hoverNode.id);
+      for (const neighbor of neighborsByNode.get(hoverNode.id) ?? []) ids.add(neighbor);
+    }
+    return ids;
+  }, [hasSelectionFocus, emphasis, hoverNode, neighborsByNode]);
+  const highlightLinkIds = useMemo(() => {
+    if (!hasSelectionFocus && !hoverNode) return null;
+    const ids = new Set(hasSelectionFocus ? emphasis.emphasizedLinkIds : []);
+    if (hoverNode) {
+      for (const l of data.links) {
+        if (endpointId(l.source) === hoverNode.id || endpointId(l.target) === hoverNode.id) ids.add(l.id);
+      }
+    }
+    return ids;
+  }, [hasSelectionFocus, emphasis, hoverNode, data.links]);
   const effectsEnabled = motionAllowed && data.nodes.length <= 140;
 
   // D-21-5: depends ONLY on `typeColors` — never `selectedNodeId`/
@@ -423,13 +449,14 @@ export function KnowledgeGraph3D({
     });
   }, [selectedNodeId, pinnedWorkIds, nodeSceneScale]);
 
-  // D-21-4/D-21-5 (edge side): hover-connected width emphasis and edge-label
-  // reveal/scale, both applied by mutating the already-created line mesh +
-  // label sprite rather than through any accessor's dependency surface.
-  // Same `scene().traverse()` read-back as `applyNodeAccents` above, for
-  // the same reason (no exposed `graphData()`); `sourceId`/`targetId` were
-  // captured into the sprite's own `userData` at creation time so the
-  // hover-connected check needs no link-array lookup at all.
+  // D-21-4/D-21-5 (edge side): selection-and-hover-connected width emphasis
+  // and edge-label reveal/scale, both applied by mutating the already-
+  // created line mesh + label sprite rather than through any accessor's
+  // dependency surface. Same `scene().traverse()` read-back as
+  // `applyNodeAccents` above, for the same reason (no exposed
+  // `graphData()`); `linkId` was captured into the sprite's own `userData`
+  // at creation time so this needs no link-array lookup, just a Set check
+  // against `highlightLinkIds` (D-21-2's selection+hover union — see above).
   const applyLinkAccents = useCallback(() => {
     const graph = fgRef.current;
     if (!graph) return;
@@ -438,7 +465,7 @@ export function KnowledgeGraph3D({
       if (!stash.linkId || !stash.baseScale) return;
       const sprite = object as THREE.Sprite;
       const lineMesh = sprite.parent?.children?.[0] as THREE.Mesh | undefined;
-      const connected = hoverNode ? stash.sourceId === hoverNode.id || stash.targetId === hoverNode.id : false;
+      const connected = highlightLinkIds ? highlightLinkIds.has(stash.linkId) : false;
       const widthFactor = (connected ? LINK_HOVER_WIDTH_FACTOR : 1) * nodeSceneScale.nodeScaleFactor;
       if (lineMesh?.scale) lineMesh.scale.set(widthFactor, widthFactor, lineMesh.scale.z);
       const visible = edgeLabelVisible(cameraDistance, connected);
@@ -448,7 +475,7 @@ export function KnowledgeGraph3D({
         sprite.scale.set(stash.baseScale.x * factor, stash.baseScale.y * factor, 1);
       }
     });
-  }, [hoverNode, nodeSceneScale, cameraDistance]);
+  }, [highlightLinkIds, nodeSceneScale, cameraDistance]);
 
   // Both accent passes run once immediately (in case objects already exist)
   // and once more next frame (to catch objects the library hasn't finished
@@ -470,6 +497,52 @@ export function KnowledgeGraph3D({
     if (!resetSignal) return;
     (fgRef.current as ForceGraphMethods | undefined)?.cameraPosition({ x: 0, y: 0, z: 260 }, { x: 0, y: 0, z: 0 }, effectsEnabled ? 450 : 0);
   }, [effectsEnabled, resetSignal]);
+
+  // D-21-2 (requirement 1): camera framing is centralized HERE, keyed on
+  // the `selectedNodeId` PROP rather than the scene's own click event — a
+  // selection made via the accessible table, keyboard prev/next, or a
+  // restored `?selected=` URL param frames the camera exactly like a direct
+  // 3D click, and only ONE damped transition ever fires per actual
+  // selection change (the click handler below no longer computes its own
+  // camera position at all, so there is never a duplicate transition for a
+  // scene click specifically). Reads the node's live simulated position via
+  // the same `scene().traverse()` read-back `applyNodeAccents` already uses
+  // (no exposed `graphData()` — see that function's own doc comment) rather
+  // than the click event's own `x/y/z`, which a non-click selection source
+  // never has.
+  const focusCameraOnSelection = useCallback(() => {
+    const graph = fgRef.current;
+    if (!graph || !selectedNodeId) return false;
+    // `target` is intentionally read back with an explicit cast rather than
+    // relying on TypeScript to narrow it after the `!target` check below —
+    // it's reassigned inside `traverse`'s nested callback, which TS's
+    // control-flow analysis can't see through, and narrows the "found" case
+    // to `never` instead of the actual object type without the cast.
+    let target: { x: number; y: number; z: number } | null = null;
+    graph.scene().traverse((object) => {
+      if (target) return;
+      const stash = object.userData as NodeGroupUserData;
+      if (stash.nodeId === selectedNodeId) target = { x: object.position.x, y: object.position.y, z: object.position.z };
+    });
+    if (!target) return false;
+    const position = target as { x: number; y: number; z: number };
+    const distance = 120;
+    const ratio = position.x === 0 && position.y === 0 && position.z === 0 ? 1 : 1 + distance / Math.hypot(position.x, position.y, position.z || 1);
+    graph.cameraPosition({ x: position.x * ratio, y: position.y * ratio, z: position.z * ratio }, position, effectsEnabled ? 700 : 0);
+    return true;
+  }, [selectedNodeId, effectsEnabled]);
+
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    // The selected node's 3D object may not exist in the scene yet on the
+    // very first render after a selection (e.g. a restored `?selected=` id
+    // resolving before the library has finished mounting objects for the
+    // current `graphData`) — same immediate-plus-next-frame retry as
+    // `applyNodeAccents`/`applyLinkAccents` above, never a per-frame loop.
+    if (focusCameraOnSelection()) return;
+    const raf = requestAnimationFrame(focusCameraOnSelection);
+    return () => cancelAnimationFrame(raf);
+  }, [selectedNodeId, focusCameraOnSelection]);
 
   return (
     <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[520px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
@@ -502,9 +575,8 @@ export function KnowledgeGraph3D({
           linkColor={(l: object) => {
             const link = l as GraphLink;
             const family = edgeFamilyFor(link.edgeType, link.category);
-            if (!hoverNode) return linkColors[family];
-            const connected = endpointId(link.source) === hoverNode.id || endpointId(link.target) === hoverNode.id;
-            return connected ? linkColors[family] : "rgba(120,110,90,0.08)";
+            if (!highlightLinkIds) return linkColors[family];
+            return highlightLinkIds.has(link.id) ? linkColors[family] : "rgba(120,110,90,0.08)";
           }}
           linkWidth={linkWidth}
           linkThreeObject={linkThreeObject as never}
@@ -524,23 +596,7 @@ export function KnowledgeGraph3D({
           showNavInfo={false}
           showPointerCursor={() => true}
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}
-          onNodeClick={(n: object) => {
-            const node = n as GraphNode & { x?: number; y?: number; z?: number };
-            // Fly the camera toward the clicked node rather than snapping to
-            // it, still restrained (a single damped transition, no forced
-            // auto-rotation, no repeated motion — plan §19/§35.2).
-            const distance = 120;
-            const nx = node.x ?? 0;
-            const ny = node.y ?? 0;
-            const nz = node.z ?? 0;
-            const ratio = nz === 0 && nx === 0 && ny === 0 ? 1 : 1 + distance / Math.hypot(nx, ny, nz || 1);
-            (fgRef.current as ForceGraphMethods | undefined)?.cameraPosition(
-              { x: nx * ratio, y: ny * ratio, z: nz * ratio },
-              { x: nx, y: ny, z: nz },
-              effectsEnabled ? 700 : 0,
-            );
-            onNodeClick(node);
-          }}
+          onNodeClick={(n: object) => onNodeClick(n as GraphNode)}
           onLinkClick={(link: object) => onLinkClick?.(link as GraphLink)}
         />
       )}

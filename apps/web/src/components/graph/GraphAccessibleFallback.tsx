@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode } from "./types";
+import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type NodeEmphasisState } from "./graphFocus";
 
 /**
  * The mandatory non-3D fallback (plan §20): the identical node/edge data
@@ -12,6 +13,18 @@ import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode }
  * not independently in each); `data` here is already filtered. Sorting
  * stays local since it's a display concern the 3D scene has no equivalent
  * of, not something the two views need to agree on.
+ *
+ * Phase 21.6 (D-21-2): `emphasis` is the SAME `FocusEmphasis` value
+ * `GraphView` computed once and handed to the 3D scene — this component has
+ * no hover concept at all, so its `data-emphasis` attribute is a pure,
+ * WebGL-independent proxy for the selection-focus behavior (the 3D canvas's
+ * own fade is WebGL material state, not DOM-assertable). Also carries the
+ * selection-parity keyboard controls: a focused row's arrow keys walk to
+ * its previous/next connected node (`onPreviousConnected`/`onNextConnected`,
+ * driven by `GraphView`'s `stepConnectedNode`), and Escape clears focus —
+ * matching the same key bindings `GraphView`'s own document-level listener
+ * uses, so the behavior is identical whether focus starts inside this table
+ * or anywhere else on the page.
  */
 type SortKey = "label" | "state" | "type" | "connections";
 
@@ -19,11 +32,34 @@ export function GraphAccessibleFallback({
   data,
   selectedNodeId,
   onNodeClick,
+  emphasis = EMPTY_FOCUS_EMPHASIS,
+  onNextConnected,
+  onPreviousConnected,
+  onClearFocus,
 }: {
   data: GraphData;
   selectedNodeId?: string | null;
   onNodeClick?: (node: GraphNode) => void;
+  emphasis?: FocusEmphasis;
+  onNextConnected?: () => void;
+  onPreviousConnected?: () => void;
+  onClearFocus?: () => void;
 }) {
+  // Roving-focus support for keyboard nav: when `selectedNodeId` changes
+  // WHILE focus is already inside this table (i.e. the change came from a
+  // prev/next keypress, or from clicking a different row), move DOM focus
+  // to the newly selected row's own button so cycling stays continuous
+  // instead of leaving focus behind on a row that's no longer selected.
+  // Never steals focus if it changed for a reason unrelated to this table
+  // (a 3D-scene click, say) while focus was elsewhere on the page.
+  const rowButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  useEffect(() => {
+    if (!selectedNodeId) return;
+    const active = document.activeElement;
+    const isRowButtonFocused = active instanceof HTMLButtonElement && [...rowButtonRefs.current.values()].includes(active);
+    if (!isRowButtonFocused) return;
+    rowButtonRefs.current.get(selectedNodeId)?.focus();
+  }, [selectedNodeId]);
   const [sortKey, setSortKey] = useState<SortKey>("state");
   const [asc, setAsc] = useState(true);
 
@@ -87,7 +123,21 @@ export function GraphAccessibleFallback({
         </thead>
         <tbody>
           {rows.map((n) => (
-            <NodeRow key={n.id} node={n} connections={connections.get(n.id) ?? []} selected={selectedNodeId === n.id} onNodeClick={onNodeClick} />
+            <NodeRow
+              key={n.id}
+              node={n}
+              connections={connections.get(n.id) ?? []}
+              selected={selectedNodeId === n.id}
+              emphasisState={emphasisStateForNode(n.id, selectedNodeId, emphasis)}
+              onNodeClick={onNodeClick}
+              onNextConnected={onNextConnected}
+              onPreviousConnected={onPreviousConnected}
+              onClearFocus={onClearFocus}
+              buttonRef={(el) => {
+                if (el) rowButtonRefs.current.set(n.id, el);
+                else rowButtonRefs.current.delete(n.id);
+              }}
+            />
           ))}
         </tbody>
       </table>
@@ -122,24 +172,61 @@ function NodeRow({
   node,
   connections,
   selected,
+  emphasisState,
   onNodeClick,
+  onNextConnected,
+  onPreviousConnected,
+  onClearFocus,
+  buttonRef,
 }: {
   node: GraphData["nodes"][number];
   connections: string[];
   selected: boolean;
+  emphasisState: NodeEmphasisState;
   onNodeClick?: (node: GraphNode) => void;
+  onNextConnected?: () => void;
+  onPreviousConnected?: () => void;
+  onClearFocus?: () => void;
+  buttonRef?: (element: HTMLButtonElement | null) => void;
 }) {
   const meta = STATE_META[node.state];
+  // Phase 21.6 keyboard parity: ArrowRight/ArrowDown step to the next
+  // connected node, ArrowLeft/ArrowUp to the previous, Escape clears focus
+  // entirely — the same three actions available via the visible controls
+  // above the table, bound here so a keyboard user never has to leave the
+  // row they're already on to reach them.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      if (!onNextConnected) return;
+      event.preventDefault();
+      onNextConnected();
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      if (!onPreviousConnected) return;
+      event.preventDefault();
+      onPreviousConnected();
+    } else if (event.key === "Escape") {
+      if (!onClearFocus) return;
+      event.preventDefault();
+      onClearFocus();
+    }
+  }
   return (
     <tr
       data-graph-node={node.id}
       data-selected={selected ? "true" : "false"}
+      data-emphasis={emphasisState}
       aria-current={selected ? "true" : undefined}
       onClick={() => onNodeClick?.(node)}
-      className={`cursor-pointer border-b border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""}`}
+      className={`cursor-pointer border-b border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""} ${emphasisState === "dimmed" ? "opacity-50" : ""}`}
     >
       <td className="py-2 pr-4">
-        <button type="button" onClick={(event) => { event.stopPropagation(); onNodeClick?.(node); }} className="font-medium text-[var(--color-text)] underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]">
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={(event) => { event.stopPropagation(); onNodeClick?.(node); }}
+          onKeyDown={handleKeyDown}
+          className="font-medium text-[var(--color-text)] underline-offset-2 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]"
+        >
           {node.label}
           {node.year ? <span className="text-[var(--color-text-muted)]"> ({node.year})</span> : null}
         </button>

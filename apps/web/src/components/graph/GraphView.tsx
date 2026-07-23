@@ -24,6 +24,15 @@ import {
   type GraphNode,
   type NodeType,
 } from "./types";
+import {
+  computeFocusEmphasis,
+  connectedNodeIds,
+  DEFAULT_FOCUS_MODE,
+  EMPTY_FOCUS_EMPHASIS,
+  FOCUS_MODE_LABEL,
+  FOCUS_MODES,
+  type FocusMode,
+} from "./graphFocus";
 
 // WebGL + three.js — client only, so pull it in dynamically with SSR off.
 const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => m.KnowledgeGraph3D), {
@@ -33,6 +42,14 @@ const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => 
 
 const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork"] as const;
 const PINNED_WORK_PARAM = "pinnedWork";
+// Phase 21.6 (D-21-2): selection and focus-mode round-trip through the URL
+// like the filters above, but are deliberately NOT part of `FILTER_KEYS` —
+// "Clear all filters" narrows/widens which nodes exist, selection/focus-mode
+// only change how the ALREADY-shown set is emphasized, so clearing filters
+// must never also drop a focused selection (mirrors why `pinnedWork` is its
+// own param rather than a filter field).
+const SELECTED_PARAM = "selected";
+const FOCUS_MODE_PARAM = "focusMode";
 
 function filtersFromParams(params: URLSearchParams): GraphFilters {
   const next = { ...DEFAULT_GRAPH_FILTERS };
@@ -57,7 +74,6 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
 export function GraphView({ endpoint, backHref, backLabel, enableExpansion = false }: { endpoint: string; backHref: string; backLabel: string; enableExpansion?: boolean }) {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<GraphNode | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
@@ -67,6 +83,21 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<GraphFilters>(() => filtersFromParams(searchParams));
   const [pinnedWorkIds, setPinnedWorkIds] = useState<string[]>(() => searchParams.getAll(PINNED_WORK_PARAM).filter((id) => id.startsWith("work:")));
+  // Phase 21.6 (D-21-2): `selectedId` (not a node object) is the real state,
+  // initialized synchronously from the URL exactly like `filters`/
+  // `pinnedWorkIds` above — no restoring effect is needed, `selected` below
+  // is simply derived once `data` arrives. `navAnchorId`/`navIndex` back the
+  // prev/next-connected-node keyboard walk (`stepConnectedNode` below): the
+  // anchor stays fixed across repeated steps so cycling through one node's
+  // connections is stable, and resets to the newly selected id whenever
+  // selection changes for any OTHER reason (click, table row, URL restore).
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get(SELECTED_PARAM));
+  const [navAnchorId, setNavAnchorId] = useState<string | null>(() => searchParams.get(SELECTED_PARAM));
+  const [navIndex, setNavIndex] = useState(-1);
+  const [focusMode, setFocusModeState] = useState<FocusMode>(() => {
+    const raw = searchParams.get(FOCUS_MODE_PARAM);
+    return raw && (FOCUS_MODES as readonly string[]).includes(raw) ? (raw as FocusMode) : DEFAULT_FOCUS_MODE;
+  });
   const graphWorkspaceRef = useRef<HTMLDivElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -115,10 +146,48 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  const onNodeClick = useCallback((node: GraphNode) => {
-    setSelected(node);
-    setSelectedLink(null);
-  }, []);
+  // Phase 21.6 (D-21-2): the ONE place selection changes for an explicit
+  // reason (a click on a node — 3D scene, table row, or the inspector's own
+  // "Direct connections" list). Resets the nav anchor/index so a fresh
+  // keyboard walk always starts from whatever was just explicitly picked,
+  // and round-trips the selection through the URL the same way
+  // `updateFilter`/`togglePinnedWork` already do (`selected=<nodeId>`).
+  // `node: null` is how focus is cleared (see `clearFocus` below).
+  const selectNode = useCallback(
+    (node: GraphNode | null) => {
+      setSelectedId(node?.id ?? null);
+      setSelectedLink(null);
+      setNavAnchorId(node?.id ?? null);
+      setNavIndex(-1);
+      const params = new URLSearchParams(searchParams.toString());
+      if (node) params.set(SELECTED_PARAM, node.id);
+      else params.delete(SELECTED_PARAM);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const onNodeClick = useCallback((node: GraphNode) => selectNode(node), [selectNode]);
+
+  // A clear route to reset (requirement 1's "clear reset"): both Escape
+  // (wired below) and a persistently visible "Clear focus" control call
+  // this. Clears the LINK selection too — Escape/the button are a single
+  // "stop focusing on anything" action, not two separate ones a user would
+  // need to trigger independently.
+  const clearFocus = useCallback(() => selectNode(null), [selectNode]);
+
+  const setFocusMode = useCallback(
+    (mode: FocusMode) => {
+      setFocusModeState(mode);
+      const params = new URLSearchParams(searchParams.toString());
+      if (mode === DEFAULT_FOCUS_MODE) params.delete(FOCUS_MODE_PARAM);
+      else params.set(FOCUS_MODE_PARAM, mode);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -157,6 +226,82 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   }
 
   const filtered = useMemo(() => (data ? filterGraphData(data, filters, pinnedWorkIds) : null), [data, filters, pinnedWorkIds]);
+
+  // Derived, not stored — `selectedId` (a plain string, URL-synced above) is
+  // the real state; `selected` just looks it up in the CURRENTLY filtered
+  // set each render, so a filter that scopes the selected node out of view
+  // makes `selected` naturally become `null` with no extra bookkeeping.
+  const selected = useMemo(
+    () => (filtered && selectedId ? filtered.nodes.find((node) => node.id === selectedId) ?? null : null),
+    [filtered, selectedId],
+  );
+
+  // Phase 21.6 (D-21-2): computed ONCE here, from the shared filtered
+  // `GraphData` + `selectedId` + `focusMode` — never inside either child —
+  // so the 3D scene and the accessible table can never disagree about which
+  // nodes are in focus (`KnowledgeGraph3D` additionally unions this with its
+  // own local hover state before rendering; the table has no hover concept
+  // and uses this value directly for its `data-emphasis` attribute).
+  const focusEmphasis = useMemo(
+    () => (filtered ? computeFocusEmphasis(filtered, selectedId, focusMode) : EMPTY_FOCUS_EMPHASIS),
+    [filtered, selectedId, focusMode],
+  );
+
+  // Prev/next-connected-node keyboard walk: steps through `navAnchorId`'s
+  // own one-hop neighbors in the deterministic order `connectedNodeIds`
+  // defines, wrapping in either direction. The anchor itself never changes
+  // here (only `selectNode` changes it) — repeated presses keep cycling the
+  // SAME neighbor list rather than wandering deeper into the graph one hop
+  // at a time, which would make "previous" undoing a "next" impossible to
+  // reason about. A no-op when the anchor has no connections at all.
+  const stepConnectedNode = useCallback(
+    (direction: 1 | -1) => {
+      if (!filtered || !navAnchorId) return;
+      const neighbors = connectedNodeIds(filtered, navAnchorId);
+      if (neighbors.length === 0) return;
+      const nextIndex = navIndex === -1 ? (direction === 1 ? 0 : neighbors.length - 1) : (navIndex + direction + neighbors.length) % neighbors.length;
+      const nextId = neighbors[nextIndex];
+      const node = filtered.nodes.find((n) => n.id === nextId);
+      if (!node) return;
+      setNavIndex(nextIndex);
+      setSelectedId(node.id);
+      setSelectedLink(null);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set(SELECTED_PARAM, node.id);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [filtered, navAnchorId, navIndex, pathname, router, searchParams],
+  );
+
+  // Escape clears focus (requirement 1's "clear reset") from anywhere on
+  // the page — except while genuinely fullscreen, where Escape is already
+  // the browser's own native "exit fullscreen" key and the two behaviors
+  // must not race for the same keypress. Focus is never moved to a
+  // transient overlay by selection in the first place (the inspector is
+  // always-present chrome, not a dialog), so clearing naturally leaves
+  // keyboard focus exactly where it already was — nothing to "restore" that
+  // was ever taken away.
+  // Also skipped while a text input/textarea/select has focus (e.g. the
+  // Search filter box): Escape there belongs to the field's own semantics
+  // (browsers already let it discard an in-progress edit / a `<select>`
+  // close its open dropdown), and this page-level handler must not steal
+  // that keypress to clear an unrelated graph selection.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (!selectedId && !selectedLink) return;
+      if (document.fullscreenElement) return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement) {
+        const tag = active.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || active.isContentEditable) return;
+      }
+      clearFocus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedId, selectedLink, clearFocus]);
 
   // Filter option lists come from the FULL data, not the filtered set, so
   // choosing one filter never hides the options for another.
@@ -426,22 +571,58 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               >
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <p className="text-[var(--color-text-muted)]">Select a labeled node to focus it; drag to orbit and scroll to zoom.</p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Phase 21.6 (D-21-2): a render-level emphasis mode over
+                        the SAME filtered data both views already share —
+                        never a second data derivation. "Focus selected" is
+                        the default (one-hop neighbors full emphasis, the
+                        rest fade); "Expand one hop" widens the emphasized
+                        set by one more hop; "Full graph" turns fading off
+                        entirely regardless of selection. */}
+                    <div role="group" aria-label="Focus mode" className="flex gap-1">
+                      {FOCUS_MODES.map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setFocusMode(mode)}
+                          aria-pressed={focusMode === mode}
+                          className={`rounded border border-[var(--color-border)] px-2 py-1 ${focusMode === mode ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                        >
+                          {FOCUS_MODE_LABEL[mode]}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearFocus}
+                      disabled={!selected && !selectedLink}
+                      className="rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Clear focus
+                    </button>
                     <button type="button" onClick={() => setResetSignal((value) => value + 1)} className="rounded border border-[var(--color-border)] px-2 py-1">Reset view</button>
                     <button ref={fullscreenButtonRef} type="button" onClick={toggleFullscreen} aria-pressed={isFullscreen} className="rounded border border-[var(--color-border)] px-2 py-1">{isFullscreen ? "Exit fullscreen" : "Fullscreen"}</button>
                     <button type="button" onClick={exportPng} className="rounded border border-[var(--color-border)] px-2 py-1">Export PNG</button>
                   </div>
                 </div>
                 <div className={`${isFullscreen ? "grid h-[calc(100vh-4.5rem)] min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_20rem]" : "grid gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]"}`}>
-                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} resetSignal={resetSignal} isFullscreen={isFullscreen} />
-                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={() => setSelected(null)} onCloseLink={() => setSelectedLink(null)} />
+                  <KnowledgeGraph3D data={filtered} onNodeClick={onNodeClick} onLinkClick={setSelectedLink} pinnedWorkIds={pinnedWorkIds} selectedNodeId={selected?.id} emphasis={focusEmphasis} resetSignal={resetSignal} isFullscreen={isFullscreen} />
+                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} />
                 </div>
               </section>
               <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
                 <summary className="cursor-pointer text-sm font-medium">Accessible node browser</summary>
-                <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace.</p>
+                <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace. Use the arrow keys on a focused row to move to its previous/next connected node; Escape clears the current focus.</p>
                 <div className="mt-2 overflow-x-auto">
-                  <GraphAccessibleFallback data={filtered} selectedNodeId={selected?.id} onNodeClick={onNodeClick} />
+                  <GraphAccessibleFallback
+                    data={filtered}
+                    selectedNodeId={selected?.id}
+                    onNodeClick={onNodeClick}
+                    emphasis={focusEmphasis}
+                    onNextConnected={() => stepConnectedNode(1)}
+                    onPreviousConnected={() => stepConnectedNode(-1)}
+                    onClearFocus={clearFocus}
+                  />
                 </div>
               </details>
             </div>

@@ -619,4 +619,210 @@ test.describe("Visualization graph", () => {
     // for the primary state (uploaded works). Use first() to avoid strict mode issues.
     await expect(page.getByText("Uploaded work").first()).toBeVisible();
   });
+
+  // Phase 21.6 (D-21-2): selecting a node persistently focuses it — one-hop
+  // neighbors stay emphasized, everything else fades — driven by SELECTION
+  // state, not hover, so the effect survives the pointer moving away. The
+  // default seed's own shape gives us a real "dimmed" case for free: `bib`
+  // (Physics) has exactly one neighbor (`work`, via "cites"); `concept` and
+  // `section` are each one hop from `work` but NOT connected to `bib` at
+  // all, so selecting `bib` proves fade actually excludes something rather
+  // than merely leaving everything lit.
+  test("selecting a node keeps one-hop neighbors emphasized and fades the rest, persisting after the pointer moves elsewhere (D-21-2)", async ({ page }) => {
+    const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    const workRow = page.locator(`[data-graph-node="work:${workId}"]`);
+    const conceptRow = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    const sectionRow = page.locator(`[data-graph-node="section:${sectionBlockId}"]`);
+
+    // Nothing selected yet: no focus effect is active anywhere.
+    await expect(bibRow).toHaveAttribute("data-emphasis", "none");
+
+    await bibRow.getByRole("button", { name: /Physics/ }).click();
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await expect(bibRow).toHaveAttribute("data-emphasis", "selected");
+    await expect(workRow).toHaveAttribute("data-emphasis", "neighbor");
+    await expect(conceptRow).toHaveAttribute("data-emphasis", "dimmed");
+    await expect(sectionRow).toHaveAttribute("data-emphasis", "dimmed");
+
+    // The dim persists once the pointer moves well away from the selection
+    // — this is what actually proves the fix (D-21-2's literal defect was
+    // that the old hover-driven fade vanished the instant the mouse left
+    // the clicked node).
+    await page.mouse.move(5, 5);
+    await page.mouse.move(650, 400);
+    await expect(conceptRow).toHaveAttribute("data-emphasis", "dimmed");
+    await expect(sectionRow).toHaveAttribute("data-emphasis", "dimmed");
+    await expect(bibRow).toHaveAttribute("data-emphasis", "selected");
+  });
+
+  test("the focus-mode toggle changes exactly which nodes are emphasized over the same shared node/edge set", async ({ page }) => {
+    const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    const conceptRow = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    const sectionRow = page.locator(`[data-graph-node="section:${sectionBlockId}"]`);
+
+    await bibRow.getByRole("button", { name: /Physics/ }).click();
+    await expect(conceptRow).toHaveAttribute("data-emphasis", "dimmed");
+
+    // Default mode is "Focus selected" — assert it's marked pressed.
+    await expect(page.getByRole("button", { name: "Focus selected" })).toHaveAttribute("aria-pressed", "true");
+
+    await page.getByRole("button", { name: "Expand one hop" }).click();
+    await expect(page).toHaveURL(/focusMode=expand/);
+    await expect(page.getByRole("button", { name: "Expand one hop" })).toHaveAttribute("aria-pressed", "true");
+    // Two hops from bib reaches concept/section via work — nothing left dimmed.
+    await expect(conceptRow).toHaveAttribute("data-emphasis", "neighbor");
+    await expect(sectionRow).toHaveAttribute("data-emphasis", "neighbor");
+
+    await page.getByRole("button", { name: "Full graph" }).click();
+    await expect(page).toHaveURL(/focusMode=full/);
+    // Fading is off entirely, even for the literally-selected node — but the
+    // node is still marked selected, since that's a separate signal.
+    await expect(bibRow).toHaveAttribute("data-emphasis", "none");
+    await expect(conceptRow).toHaveAttribute("data-emphasis", "none");
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+
+    // Same exact node/edge SET throughout — the mode only changes emphasis,
+    // it never forks the underlying filtered data.
+    await expect(page.getByText("1 references · 0 sources · 1 concepts")).toBeVisible();
+
+    // Reload restores the exact same mode from the URL.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Full graph" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Escape clears focus and restores keyboard focus; a visible Clear focus control does the same (D-21-2)", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    const bibButton = bibRow.getByRole("button", { name: /Physics/ });
+
+    // "Clear focus" is honestly disabled when there is nothing to clear.
+    const clearFocusButton = page.getByRole("button", { name: "Clear focus" });
+    await expect(clearFocusButton).toBeDisabled();
+
+    await bibButton.click();
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await expect(page).toHaveURL(new RegExp(`selected=external%3Abib%3A${bibId}`));
+    await expect(clearFocusButton).toBeEnabled();
+
+    await page.keyboard.press("Escape");
+    await expect(bibRow).toHaveAttribute("data-selected", "false");
+    await expect(bibRow).toHaveAttribute("data-emphasis", "none");
+    await expect(page).not.toHaveURL(/selected=/);
+    // Selection never moved focus to a transient overlay, so clearing it
+    // leaves keyboard focus exactly where it already was.
+    await expect(bibButton).toBeFocused();
+    await expect(clearFocusButton).toBeDisabled();
+
+    // The visible control does the same thing.
+    await bibButton.click();
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await clearFocusButton.click();
+    await expect(bibRow).toHaveAttribute("data-selected", "false");
+    await expect(page).not.toHaveURL(/selected=/);
+  });
+
+  test("Escape while typing in the Search filter edits the field, not the graph selection", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    const bibButton = bibRow.getByRole("button", { name: /Physics/ });
+
+    await bibButton.click();
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await expect(page).toHaveURL(new RegExp(`selected=external%3Abib%3A${bibId}`));
+
+    const searchInput = page.getByRole("textbox", { name: "Search" });
+    await searchInput.fill("Phys");
+    await searchInput.press("Escape");
+
+    // The input's own Escape semantics win — the graph selection survives.
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await expect(page).toHaveURL(new RegExp(`selected=external%3Abib%3A${bibId}`));
+  });
+
+  test("prev/next-connected-node keyboard navigation moves selection by exact node id in both directions (D-21-2)", async ({ page }) => {
+    const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    const workRow = page.locator(`[data-graph-node="work:${workId}"]`);
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    const conceptRow = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    const sectionRow = page.locator(`[data-graph-node="section:${sectionBlockId}"]`);
+
+    // `work`'s three neighbors sorted by label: "Book II…" < "Hylomorphism"
+    // < "Physics" — the deterministic order `connectedNodeIds` defines.
+    await workRow.getByRole("button", { name: /On the Soul/ }).click();
+    await expect(workRow).toHaveAttribute("data-selected", "true");
+
+    await page.keyboard.press("ArrowDown");
+    await expect(sectionRow).toHaveAttribute("data-selected", "true");
+    await expect(page).toHaveURL(new RegExp(`selected=section%3A${sectionBlockId}`));
+
+    await page.keyboard.press("ArrowDown");
+    await expect(conceptRow).toHaveAttribute("data-selected", "true");
+
+    await page.keyboard.press("ArrowDown");
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+
+    // Wraps back to the first neighbor in the order.
+    await page.keyboard.press("ArrowDown");
+    await expect(sectionRow).toHaveAttribute("data-selected", "true");
+
+    // Re-select work and walk backward: "previous" starts at the LAST
+    // neighbor in the order (the opposite end from "next"'s first pick).
+    await workRow.getByRole("button", { name: /On the Soul/ }).click();
+    await page.keyboard.press("ArrowUp");
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+    await page.keyboard.press("ArrowUp");
+    await expect(conceptRow).toHaveAttribute("data-selected", "true");
+    await page.keyboard.press("ArrowUp");
+    await expect(sectionRow).toHaveAttribute("data-selected", "true");
+  });
+
+  test("selecting a node does not clear active filters, and clearing filters does not clear a selection", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+
+    await page.getByLabel("Kind").selectOption("reference");
+    await expect(page).toHaveURL(/type=reference/);
+
+    await page.getByText("Accessible node browser").click();
+    const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
+    await bibRow.getByRole("button", { name: /Physics/ }).click();
+    await expect(page).toHaveURL(/type=reference/);
+    await expect(page).toHaveURL(/selected=/);
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+
+    await page.getByRole("button", { name: "Clear all filters" }).click();
+    await expect(page).not.toHaveURL(/type=/);
+    // The selection survived the filter reset — it's an orthogonal concern.
+    await expect(page).toHaveURL(/selected=/);
+    await expect(bibRow).toHaveAttribute("data-selected", "true");
+  });
 });
