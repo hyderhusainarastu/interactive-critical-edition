@@ -174,7 +174,7 @@ export default async function AdminPage() {
     <div className="mx-auto max-w-4xl px-6 py-10">
       <h1 className="font-serif text-2xl font-semibold text-[var(--color-text)]">Admin</h1>
       <p className="mb-6 text-sm text-[var(--color-text-muted)]">
-        Platform health and AI spend. Read-only aggregates — no user content is shown here.
+        Platform health and automated-analysis spend. Read-only aggregates — no user content is shown here.
       </p>
 
       <section className="mb-8">
@@ -189,7 +189,7 @@ export default async function AdminPage() {
 
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-          AI usage &amp; cost
+          Model usage &amp; cost
         </h2>
         <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Stat label="Total calls" value={totalCalls} />
@@ -197,7 +197,7 @@ export default async function AdminPage() {
           <Stat label="Models used" value={usageByModel.length} />
         </div>
         {usageByModel.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)]">No AI calls logged yet.</p>
+          <p className="text-sm text-[var(--color-text-muted)]">No model calls logged yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">

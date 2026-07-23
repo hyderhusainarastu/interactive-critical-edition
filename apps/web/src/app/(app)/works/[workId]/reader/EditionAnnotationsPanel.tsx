@@ -175,7 +175,7 @@ export function EditionAnnotationsPanel({
             <>
               <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation type</span><select value={filters.annotationType} onChange={(event) => onFiltersChange({ ...filters, annotationType: event.target.value as EditionReaderFilters["annotationType"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All types</option>{annotationTypes.map((type) => <option key={type} value={type}>{PASSAGE_TYPE_LABEL[type]}</option>)}</select></label>
               <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Relationship</span><select value={filters.relationship} onChange={(event) => onFiltersChange({ ...filters, relationship: event.target.value as EditionReaderFilters["relationship"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All relationships</option>{relationships.map((relationship) => <option key={relationship} value={relationship}>{CATEGORY_META[relationship].label}</option>)}</select></label>
-              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation source</span><select value={filters.provenance} onChange={(event) => onFiltersChange({ ...filters, provenance: event.target.value as EditionReaderFilters["provenance"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">AI and user</option><option value="ai">AI annotations</option><option value="user">User annotations</option></select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation source</span><select value={filters.provenance} onChange={(event) => onFiltersChange({ ...filters, provenance: event.target.value as EditionReaderFilters["provenance"] })} className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All annotations</option><option value="ai">Automated annotations</option><option value="user">User annotations</option></select></label>
               <div className="flex justify-end gap-2"><button type="button" onClick={onPreviousAnnotation} disabled={!onPreviousAnnotation} className="underline disabled:opacity-40">Previous</button><button type="button" onClick={onNextAnnotation} disabled={!onNextAnnotation} className="underline disabled:opacity-40">Next</button></div>
             </>
           )}
@@ -215,9 +215,9 @@ function NotesTab({
   return (
     <div className="flex flex-col gap-5 px-3 py-3">
       {edition.generatedNotes.length > 0 && (
-        <section aria-label="AI-generated critical notes">
+        <section aria-label="Generated critical notes">
           <h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-            AI-generated critical notes
+            Generated critical notes
           </h3>
           <p className="px-1 text-[0.68rem] text-[var(--color-text-muted)]">
             Generated research aids, not settled scholarship. A dashed in-text marker means the note was quote-matched on read, not DB-anchored.
@@ -351,7 +351,7 @@ function CriticalNoteCard({
             </p>
           )}
           <p className="mt-1.5 text-[0.72rem] text-[var(--color-text-muted)]">
-            Source: {src?.title ?? "Document research run"} · confidence {Math.round(note.confidence * 100)}% · provenance: AI-generated, evidence-grounded
+            Source: {src?.title ?? "Document research run"} · confidence {Math.round(note.confidence * 100)}% · provenance: System-generated, evidence-grounded
           </p>
           {note.claims.length > 0 && (
             <ul className="mt-2 flex flex-col gap-2">

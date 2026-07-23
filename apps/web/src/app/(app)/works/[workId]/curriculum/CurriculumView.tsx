@@ -116,7 +116,7 @@ export function CurriculumView({
       <p className="mb-5 max-w-2xl text-sm text-[var(--color-text-muted)]">
         A staged study guide built from this work&rsquo;s Library recommendations — prerequisites first, then the
         work itself and what surrounds it. Choose a route for how far to go; completed items stay listed for review
-        rather than disappearing. An AI-assisted aid; verify against the sources.
+        rather than disappearing. An automated study aid; verify against the sources.
       </p>
 
       <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">

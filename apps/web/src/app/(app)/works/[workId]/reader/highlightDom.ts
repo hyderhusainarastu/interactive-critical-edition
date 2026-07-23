@@ -171,7 +171,7 @@ export function applyAnnotationMarkers(
     marker.className = `reader-annotation-marker${a.markerKind === "matched-note" ? " reader-annotation-marker-matched" : ""}`;
     marker.style.setProperty("--reader-annotation-color", `var(${a.colorVar})`);
     marker.textContent = a.glyph;
-    marker.setAttribute("aria-label", a.ariaLabel ?? "AI annotation — open details");
+    marker.setAttribute("aria-label", a.ariaLabel ?? "Automated annotation — open details");
     node.parentNode?.insertBefore(marker, insertionPoint);
   }
 }

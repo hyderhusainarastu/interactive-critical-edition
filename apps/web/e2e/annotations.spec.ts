@@ -92,7 +92,7 @@ test.describe("Scholarly analysis (Phase 4)", () => {
     await expect(firstCard.getByText(/%$/)).toBeVisible(); // "…· 60%"
 
     // The disclaimer is present (plan §12).
-    await expect(page.getByText(/AI-assisted research aid/)).toBeVisible();
+    await expect(page.getByText(/Automated research aid/)).toBeVisible();
 
     // Capture the card's id so we can find the *same* annotation after a
     // reload (order is stable, but assert on identity, not position).

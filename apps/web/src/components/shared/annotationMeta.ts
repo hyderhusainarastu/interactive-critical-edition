@@ -103,7 +103,7 @@ export const CATEGORY_META: Record<RelationshipCategory, CategoryMeta> = {
     gloss: "Worthwhile follow-up, not essential.",
   },
   ai_inferred: {
-    label: "AI-inferred",
+    label: "Inferred connection",
     glyph: "∴",
     colorVar: "--color-accent-umber",
     gloss: "A plausible but uncertain inferred connection.",

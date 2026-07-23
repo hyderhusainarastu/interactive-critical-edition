@@ -32,7 +32,7 @@ const RELATIONSHIP_LABEL: Record<string, string> = {
   interpretive_aid: "Interpretive aid",
   parallel_comparison: "Parallel / comparison",
   optional_extension: "Optional extension",
-  ai_inferred: "AI-inferred",
+  ai_inferred: "Inferred connection",
 };
 
 const READER_LEVEL_LABEL: Record<string, string> = {

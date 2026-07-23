@@ -191,8 +191,8 @@ export function RoadmapView({
       <h1 className="mb-1 font-serif text-2xl font-semibold text-[var(--color-text)]">Reading roadmap</h1>
       <p className="mb-5 max-w-2xl text-sm text-[var(--color-text-muted)]">
         A dependency-ordered, priority-ranked plan built from this work&rsquo;s references and your knowledge profile.
-        Rate what you already know or hide items — the order updates to match. An AI-assisted aid; verify against the
-        sources.
+        Rate what you already know or hide items — the order updates to match. An automated ranking aid; verify against
+        the sources.
       </p>
 
       {/* Controls */}

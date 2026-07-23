@@ -77,13 +77,13 @@ export function AnnotationsPanel({
           <AnalysisBadge status={analysisStatus} />
         </div>
         <p className="mt-1.5 rounded-md bg-[color-mix(in_srgb,var(--color-accent-umber)_10%,transparent)] px-2 py-1 text-[0.72rem] leading-snug text-[var(--color-text-muted)]">
-          AI-assisted research aid — every claim below carries a confidence and its source. Verify against the primary
+          Automated research aid — every claim below carries a confidence and its source. Verify against the primary
           text before relying on it.
         </p>
         {anyHeuristic && (
           <p className="mt-1.5 text-[0.72rem] leading-snug text-[var(--color-accent-burgundy)]">
-            No AI model is configured, so these were produced by a deterministic fallback. Add an API key for real
-            classification.
+            No classification model is configured, so these were produced by a deterministic rule-based fallback. Add
+            a provider key for model-backed classification.
           </p>
         )}
       </div>
@@ -308,7 +308,7 @@ function AnnotationCard({
       )}
 
       <p className="mt-2 text-[0.68rem] text-[var(--color-text-muted)]">
-        {a.createdBy === "user" ? "Edited by you" : a.isHeuristic ? "Heuristic (no AI key)" : `Model: ${a.modelUsed}`}
+        {a.createdBy === "user" ? "Edited by you" : a.isHeuristic ? "Rule-based fallback (no model key configured)" : `Model: ${a.modelUsed}`}
         {" · "}
         {VERIFICATION_LABELS[a.verificationStatus]}
       </p>

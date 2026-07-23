@@ -67,8 +67,8 @@ test("authorial notes stay distinct from AI-generated ones", async ({ page }) =>
 
   await page.getByRole("button", { name: /^Notes/i }).click();
   // The machine's editorial commentary, which must never be mistaken for it.
-  await expect(sidebar.getByRole("region", { name: /AI-generated critical notes/i })).toContainText(/reason subordinated to antecedent inclination/i);
-  await expect(sidebar.getByRole("region", { name: /AI-generated critical notes/i })).not.toContainText(/Adapted from Aquinas/i);
+  await expect(sidebar.getByRole("region", { name: /Generated critical notes/i })).toContainText(/reason subordinated to antecedent inclination/i);
+  await expect(sidebar.getByRole("region", { name: /Generated critical notes/i })).not.toContainText(/Adapted from Aquinas/i);
 });
 
 test("a generated claim exposes supporting AND contradicting evidence", async ({ page }) => {
@@ -165,7 +165,7 @@ test("research cost is disclosed to the reader, with a per-module breakdown (Pha
 
   // The total is a <summary> — the per-stage breakdown is collapsed by
   // default and only in the DOM/visible once expanded.
-  await edition.getByText(/AI cost/).click();
+  await edition.getByText(/Analysis cost/).click();
   await expect(edition).toContainText("research-discovery");
   await expect(edition).toContainText("$0.0300");
   await expect(edition).toContainText("classification");

@@ -177,7 +177,7 @@ export function AuthorityBadge({ authority }: { authority: Authority | null }) {
 }
 
 export function ClaimTypeBadge({ type }: { type: EditionClaim["claimType"] }) {
-  const label = type === "factual" ? "factual" : type === "inferred" ? "AI-inferred" : "interpretive";
+  const label = type === "factual" ? "factual" : type === "inferred" ? "inferred" : "interpretive";
   return <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs text-[var(--color-text-muted)]">{label}</span>;
 }
 
@@ -276,7 +276,7 @@ function InlineEvidenceMeta({
   const source = resource?.title ?? `Document passage${note.textBlockId ? " (anchored)" : ""}`;
   return (
     <p className="mt-1 text-[0.68rem] leading-snug text-[var(--color-text-muted)]">
-      Source: {source} · confidence {Math.round(note.confidence * 100)}% · provenance: {note.createdBy === "system" ? "AI-generated, evidence-grounded" : note.createdBy}
+      Source: {source} · confidence {Math.round(note.confidence * 100)}% · provenance: {note.createdBy === "system" ? "System-generated, evidence-grounded" : note.createdBy}
     </p>
   );
 }
@@ -524,7 +524,7 @@ export function EditionReader({
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>
         {edition.cost.breakdown.length > 0 ? (
           <details className="text-[var(--color-text-muted)]">
-            <summary className="cursor-pointer">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
+            <summary className="cursor-pointer">Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
             <ul className="mt-1 flex flex-col gap-0.5 text-xs">
               {edition.cost.breakdown.map((b, i) => (
                 <li key={i} className="flex justify-between gap-3">
@@ -535,7 +535,7 @@ export function EditionReader({
             </ul>
           </details>
         ) : (
-          <span className="text-[var(--color-text-muted)]">AI cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
+          <span className="text-[var(--color-text-muted)]">Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
         )}
         {/* `degraded` is set only when the run crossed its cost soft cap
          *  (see `overSoftCap()` in apps/worker/src/analyze.ts) — it never

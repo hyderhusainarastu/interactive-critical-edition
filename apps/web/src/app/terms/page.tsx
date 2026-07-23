@@ -20,7 +20,7 @@ export default function TermsPage() {
 
         <div className="mt-8 flex flex-col gap-6 text-[var(--color-text)]">
           <Section title="A research aid, not a source of truth">
-            The service generates AI-assisted annotations, relationship classifications, and reading roadmaps to help
+            The service generates automated annotations, relationship classifications, and reading roadmaps to help
             you understand difficult texts. These are aids for your own reading and judgment — not authoritative
             scholarship, and not a substitute for the primary sources. Accuracy is not guaranteed; always verify.
           </Section>
