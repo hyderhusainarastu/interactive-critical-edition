@@ -10,9 +10,9 @@
   "updated": "2026-07-23",
   "current": {
     "phase": 23,
-    "headline": "Phase 23.5 floors2 postmortem \u2014 P1 crash (conflict-guard ranked inserts + episode-scoped cost-ledger) and P2 specific-group cap, both fixed locally and committed (e48cb1a / 624b9ae). Production canary pending full 23.5 numeric-floors gate. Register: 100 findings (97 fixed, 1 partial, 2 open-scheduled). Ready for Phase 23.5 production rollout.",
-    "summary": "Phase 23.5 floors2 postmortem complete: D-23-1 (P1 crash fix: onConflictDoNothing guard on ranked-loop, per-run cost-ledger with episode-scoped seeding), D-23-2 (P2 specific-group cap: 2x maxFullInspections bound). Two integration tests + four unit tests all green locally. Roochnik verification: both fixes proven working. Register updated: 100 total (97 fixed + D-23-1/2), 1 partial (D-19-6), 2 open (D-22-22/23). Production canary pending full 23.5 numeric-floors re-measure gate (existing $1/$5 caps).",
-    "nextAction": "Phase 23.5 production canary (cost verification + full numeric-floors re-measure on Roochnik) then Phase 23.3-23.8 parallel lanes. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
+    "headline": "Phase 23.4 backend security hardening complete (6650164) \u2014 pre-auth email rate limiting (D-23-3 P2), cost backstops on analyze/reprocess (D-23-4 P3), both fixed. Route matrix verified 55/55. Typecheck/lint/test all pass. Register: 102 findings (99 fixed, 1 partial, 2 open-scheduled). Serialized E2E confirmation pending. Ready to advance to Phase 23.5 floors2 postmortem.",
+    "summary": "Phase 23.4 backend security hardening: D-23-3 pre-auth email-sending rate limiting (per-IP 3/10s, per-email 1/10s on register/request-reset/reset-password routes + matching server actions, prevents email-bombing/mass-registration). D-23-4 cost backstops (analyze/reprocess routes + actions enforcing 20/hr per-user limit, prevents unbounded expensive re-triggering). Fixed-window in-memory limiter with bounded key eviction; route-by-route IDOR/input/cost/deletion/Storage privacy matrix verified at code level (55 protected). Adversarial verification caught two defects pre-merge (unbounded key growth under flood; x-real-ip spoofability), both fixed. Typecheck/lint clean; preAuthRateLimit.test.ts 86 assertions green. Serialized full-stack E2E (email-sending, auth-gated analyze/reprocess flows) pending 23.4 hardening window.",
+    "nextAction": "Phase 23.5 floors2 postmortem production canary (D-23-1/2 cost-ledger + specific-group cap verification). Phases 23.3-23.8 in parallel lanes per owner directive. Phase 24 gates on Phase 23.5 numeric-floors confirmation."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-23",
-    "total": 100,
+    "total": 102,
     "bySeverity": {
       "P0": 0,
       "P1": 28,
-      "P2": 50,
+      "P2": 52,
       "P3": 22
     },
     "byStatus": {
-      "fixed": 97,
+      "fixed": 99,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
       "open": 2
     },
-    "note": "Zero P0. 97 fixed (Phases 19-23.5 complete; D-23-1/2 floors2 postmortem P1/P2 both fixed locally e48cb1a/624b9ae). 1 partial (D-19-6 live-pipeline-timing documented open limitation). 2 open-scheduled: D-22-22 (roadmap.spec.ts pipeline-timing E2E), D-22-23 (Parmenides quote-match). 2 new Phase 23.5 entries: D-23-1 (P1 crash fix: onConflictDoNothing ranked-loop insert + episode-scoped cost-ledger seeding), D-23-2 (P2 specific-group cap: 2x maxFullInspections). Defect counts: P1 28, P2 50, P3 22. Phase 23.5 production canary pending full numeric-floors re-measure gate (existing $1/$5 caps honored)."
+    "note": "Zero P0. 99 fixed (Phases 19-23.4 complete; D-23-1/2 floors2 postmortem P1/P2 fixed e48cb1a/624b9ae; D-23-3/4 security hardening P2/P3 fixed 6650164). 1 partial (D-19-6 live-pipeline-timing documented open limitation). 2 open-scheduled: D-22-22 (roadmap.spec.ts pipeline-timing E2E), D-22-23 (Parmenides quote-match). Phase 23.4 entries: D-23-3 (P2 fixed: pre-auth email rate limiting per-IP/email 3/10s, prevents email-bombing), D-23-4 (P3 fixed: cost backstops analyze/reprocess 20/hr per-user, prevents unbounded re-triggering). Defect counts: P1 28, P2 52, P3 22. Phase 23.5 production canary pending full numeric-floors re-measure gate (existing $1/$5 caps honored)."
   },
   "phases": [
     {
@@ -769,9 +769,9 @@
         {
           "id": "23.4",
           "title": "Backend and security hardening",
-          "state": "planned",
+          "state": "complete",
           "model": "opus",
-          "summary": "Auth/session, IDOR matrix, input validation, rate limits, idempotency, cost caps, Storage privacy, deletion propagation, and owner-scope verification across RAG/graph/Writer."
+          "summary": "Auth/session, IDOR matrix, input validation, rate limits, idempotency, cost caps, Storage privacy, deletion propagation, and owner-scope verification across RAG/graph/Writer. Pre-auth email-sending rate limiting (D-23-3 P2 fixed: per-IP + per-email 3/10s limits prevent email-bombing); cost backstops on analyze/reprocess (D-23-4 P3 fixed: 20/hr per-user cap prevents unbounded expensive re-triggering). Route-by-route security matrix verified (55 protected, 0 unprotected). Adversarial verification: two defects found+fixed pre-merge (key growth, IP spoofability). Typecheck/lint/test all green. Serialized E2E confirmation pending."
         },
         {
           "id": "23.5",
