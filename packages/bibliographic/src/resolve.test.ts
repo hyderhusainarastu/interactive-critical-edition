@@ -6,6 +6,22 @@ function fakeSource(name: ResolvedRecord["source"], record: ResolvedRecord | nul
   return { name, search: vi.fn(async () => record) };
 }
 
+/**
+ * A fake source that, unlike `fakeSource`/`trackedSource` above, actually
+ * runs the query through `bestTitleMatch` against a small candidate list —
+ * the same shape every real adapter (`openlibrary.ts`, `crossref.ts`, ...)
+ * uses. A source that returns a fixed record regardless of what `query`
+ * says can never demonstrate that a corrupted query fails to resolve; this
+ * one can, since it genuinely rejects a candidate the query's own text
+ * doesn't sufficiently overlap.
+ */
+function matchingSource(name: ResolvedRecord["source"], candidates: readonly ResolvedRecord[]): BibliographicSource {
+  return {
+    name,
+    search: vi.fn(async (query: string) => bestTitleMatch(query, candidates, (r) => r.title)),
+  };
+}
+
 /** A fake source that also records its own name into a shared call-order log,
  *  so ordering (not just which one eventually matched) can be asserted. */
 function trackedSource(
@@ -298,6 +314,76 @@ describe("resolveCitation — D-20-81 provider ordering by citation form", () =>
     });
 
     expect(r?.title).toBe("Aristotle's Ethics");
+    expect(log).toEqual(["openlibrary"]);
+    expect(crossref.search).not.toHaveBeenCalled();
+    expect(openalex.search).not.toHaveBeenCalled();
+  });
+
+  // D-20-84: on the real baseline_test Roochnik "Vicious Man" fixture,
+  // GROBID's own biblStruct segmentation fused the ADJACENT Brickhouse
+  // journal-article citation into the Liddell & Scott lexicon entry through
+  // two distinct channels — its <note> residual field carried Brickhouse's
+  // essay title verbatim, and its own <author> field carried a bare
+  // ("Brickhouse", no forename) echo of Brickhouse's name. Both are fixed in
+  // `@ice/ingestion`'s `parseTei` (see grobid.test.ts's D-20-84 fixtures).
+  // These two tests use `matchingSource`, which runs the query through the
+  // real `bestTitleMatch` guard (unlike `fakeSource`/`trackedSource` above,
+  // which return a fixed record regardless of query content) — so they
+  // demonstrate the actual resolution outcome, not just provider ordering.
+  const liddellScott: ResolvedRecord = {
+    source: "openlibrary",
+    externalId: "/works/OL2W",
+    title: "Liddell and Scott's Greek-English Lexicon",
+    authors: "Henry George Liddell, Robert Scott",
+    year: 1940,
+    doi: null,
+    url: "https://openlibrary.org/works/OL2W",
+    accessStatus: "metadata_only",
+    raw: {},
+  };
+
+  it("fails to resolve the pre-fix, fully-contaminated Liddell & Scott query (both channels present)", async () => {
+    // Both contamination channels present: the <note>-field essay title AND
+    // the bare-surname author bleed — the actual query text this citation
+    // would have produced before ANY part of D-20-84 was fixed.
+    const query =
+      "These translations are all found in the standard Greek-English Lexicon of Brickhouse Liddell and Scott 18 Does Aristotle Have a Consistent Account of Vice? 20";
+    const r = await resolveCitation(query, {
+      sources: [
+        matchingSource("crossref", []),
+        matchingSource("openalex", []),
+        matchingSource("openlibrary", [liddellScott]),
+        matchingSource("googlebooks", []),
+      ],
+    });
+    // The real candidate exists in the catalogue, but the query is too
+    // polluted with the wrong work's words for `bestTitleMatch` to accept it
+    // — exactly the "unresolvable regardless of provider order" defect.
+    expect(r).toBeNull();
+  });
+
+  it("resolves the post-fix (contamination-free) Liddell & Scott lexicon query via the book-catalogue order", async () => {
+    const log: ResolvedRecord["source"][] = [];
+    const crossref = trackedSource("crossref", null, log);
+    const openalex = trackedSource("openalex", null, log);
+    const openlibrary: BibliographicSource = {
+      name: "openlibrary",
+      search: vi.fn(async (query: string) => {
+        log.push("openlibrary");
+        return bestTitleMatch(query, [liddellScott], (r) => r.title);
+      }),
+    };
+    const googlebooks = trackedSource("googlebooks", null, log);
+
+    // The actual query text `@ice/ingestion`'s fixed `parseTei` now produces
+    // for this same real citation — no Brickhouse title, no Brickhouse
+    // author, no double-year date artifact.
+    const query = "These translations are all found in the standard Greek-English Lexicon of Liddell and Scott 18 20";
+    const r = await resolveCitation(query, { sources: [crossref, openalex, openlibrary, googlebooks] });
+
+    expect(r?.title).toBe("Liddell and Scott's Greek-English Lexicon");
+    // "Greek-English"/"Lexicon" route this through the book-catalogue order,
+    // same as the clean equivalent citation form already covered above.
     expect(log).toEqual(["openlibrary"]);
     expect(crossref.search).not.toHaveBeenCalled();
     expect(openalex.search).not.toHaveBeenCalled();
