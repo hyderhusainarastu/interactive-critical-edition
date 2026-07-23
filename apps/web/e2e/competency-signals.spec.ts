@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { competencySignals, concepts, conceptMastery, db, graphEdges, understandingRatings } from "@ice/db";
 import { and, eq } from "drizzle-orm";
@@ -168,5 +169,33 @@ test.describe("Sub-phase 22.9b conversational competency designation", () => {
     await expect(chat.getByText(/Undone:.*Vice and Reason/)).toBeVisible();
     const restored = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, userId), eq(understandingRatings.workId, workId)));
     expect(restored).toHaveLength(0);
+  });
+
+  /**
+   * Phase 22.6 gate axe extension: the competency notice area — a NEW Phase
+   * 22.9b surface (confidence/basis disclosure inside the global Ask Library
+   * panel) with no prior automated accessibility coverage anywhere in the
+   * suite. Scanned here with the notice both collapsed (as it first renders)
+   * and expanded (its "Your words: …" quote disclosure), inside the same
+   * real reader-panel dialog the tests above already drive.
+   */
+  test("the competency notice area meets WCAG 2A/2AA, collapsed and expanded", async ({ page }) => {
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+    await chat.getByLabel("Ask a question about your Library").fill("I've never heard of Akrasia.");
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat.getByText("Library companion").last()).toBeVisible();
+
+    const notice = chat.getByRole("button", { name: /Noted:.*Akrasia.*unfamiliar/i });
+    await expect(notice).toBeVisible();
+    await page.waitForTimeout(300);
+    const collapsed = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(collapsed.violations).toEqual([]);
+
+    await notice.click();
+    await expect(chat.getByText(/Your words:.*I've never heard of Akrasia/)).toBeVisible();
+    await page.waitForTimeout(300);
+    const expanded = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(expanded.violations).toEqual([]);
   });
 });

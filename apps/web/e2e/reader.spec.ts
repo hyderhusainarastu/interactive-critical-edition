@@ -249,16 +249,20 @@ test.describe("Reader (Phase 3)", () => {
     await login(page);
     const workId = await uploadAndConfirm(page, filePath, "Edition Test");
     await page.goto(`/works/${workId}/reader`);
-    // Phase 11.5 made "Published edition" (the immutable original source)
-    // the default view whenever an edition exists — the reverse of this
-    // test's original assumption that the processed/paragraph view came
-    // first. Assert the real default, then round-trip the toggle both ways
-    // to confirm neither view destroys the other.
-    await expect(page.getByRole("region", { name: "Published edition — original source text" })).toBeVisible();
-    await page.getByRole("button", { name: "Interactive reader" }).click();
-    await expect(page.locator('[data-paragraph-index="0"]')).toBeVisible();
+    // Phase 16 (e3c1f4f) made the interactive reader (the rich,
+    // processed/annotated critical-edition view, EditionReader) the default
+    // view whenever an edition exists, and relabeled the immutable original
+    // source as "Published edition" — the opposite pairing of terms from
+    // Phase 11.5's original naming, but the one this app has consistently
+    // shipped and tested since (edition.spec.ts's beforeEach asserts this
+    // same default across all 24 of its tests). Assert the real default,
+    // then round-trip the toggle both ways to confirm neither view destroys
+    // the other.
+    await expect(page.getByRole("region", { name: "Interactive reader — processed text" })).toBeVisible();
     await page.getByRole("button", { name: "Published edition" }).click();
     await expect(page.getByRole("region", { name: "Published edition — original source text" })).toBeVisible();
+    await page.getByRole("button", { name: "Interactive reader" }).click();
+    await expect(page.getByRole("region", { name: "Interactive reader — processed text" })).toBeVisible();
   });
 
 });

@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { db, documents, findPendingExtractJobs, getQueue, processingRuns, QUEUE_EXTRACT_TEXT, works } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { expect, test } from "@playwright/test";
@@ -353,5 +354,72 @@ test.describe("Work status controls (Phase 19)", () => {
     // Follow the link to the detail page and verify "Upload source text" is present.
     await titleLink.click();
     await expect(page.getByRole("heading", { name: "Upload source text" })).toBeVisible();
+  });
+
+  /**
+   * Phase 22.6 gate axe extension: this whole file had no automated
+   * accessibility coverage before — the reprocess/status surfaces
+   * (metadata-confirm form, live stage sequence, failed-with-retry, and the
+   * stalled-recovery banner) are all NEW Phase 19/20.5 UI with only
+   * functional (not accessibility) assertions above. Each state is scanned
+   * once here, reusing the same `seedWorkInStatus` fixtures the functional
+   * tests above already established as faithful to the real `WorkStatusPanel`
+   * states, without touching any existing assertion.
+   */
+  test("needs_review metadata-confirm form meets WCAG 2A/2AA", async ({ page }) => {
+    const { workId } = await seedWorkInStatus(userId, "needs_review", {
+      title: "Axe Needs Review Work",
+      extractedTitle: "Detected Axe Title",
+      extractedAuthor: "Detected Axe Author",
+    });
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("Confirm or correct the detected metadata")).toBeVisible();
+    await page.waitForTimeout(300);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("the live processing stage-sequence view meets WCAG 2A/2AA", async ({ page }) => {
+    const { workId } = await seedWorkInStatus(userId, "processing", {
+      title: "Axe Processing Work",
+      processingRun: { pipelineVersion: "v2", stage: "research-discovery", runStatus: "running" },
+    });
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("Processing… — this page updates automatically.")).toBeVisible();
+    await page.waitForTimeout(300);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("the failed state with its retry control meets WCAG 2A/2AA", async ({ page }) => {
+    const { workId } = await seedWorkInStatus(userId, "failed", {
+      title: "Axe Failed Work",
+      processingError: "No extractable text found. OCR was unavailable or produced no text.",
+    });
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("Processing failed")).toBeVisible();
+    await page.waitForTimeout(300);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("the stalled-processing recovery banner meets WCAG 2A/2AA", async ({ page }) => {
+    const { workId, documentId } = await seedWorkInStatus(userId, "processing", {
+      title: "Axe Stalled Work",
+      processingRun: { pipelineVersion: "v2", stage: "research-discovery", runStatus: "running" },
+    });
+    await db
+      .update(processingRuns)
+      .set({ updatedAt: new Date(Date.now() - 30 * 60_000) })
+      .where(eq(processingRuns.documentId, documentId));
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("Processing appears to have stalled")).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(300);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });

@@ -158,4 +158,58 @@ test.describe("Accessibility sweep (Phase 19.8)", () => {
     await expect(page.getByRole("heading", { name: "Ask your Library", level: 1 })).toBeVisible();
     expect((await scan(page)).violations).toEqual([]);
   });
+
+  /**
+   * Phase 22.6 gate axe extension: the pre-existing "roadmap and per-work
+   * graph" test above already loads `/works/[workId]/graph` in its default
+   * layout (Phase 22.8: roadmap is the default view, absent from the URL —
+   * see `GraphView.tsx`'s `layoutModeFromParams`), but only in its
+   * collapsed/closed state — the "Roadmap for" popover, the accessible
+   * node-browser table, and the inspector's "Why this, here" disclosure are
+   * all closed by default and were never scanned open. This test drives the
+   * SAME roadmap layout into its expanded states (progress strip visible,
+   * popover open, a roadmap-annotated node selected with its disclosure
+   * expanded) so axe actually exercises those new Phase 22.7/22.8 surfaces,
+   * not just their closed shell.
+   */
+  test("Visualization roadmap layout — expanded controls (Roadmap-for popover, progress strip, why-this-here disclosure)", async ({ page }) => {
+    // Two independent seeded works (own bib/concept pairs, no edge between
+    // them) on the GLOBAL /graph, so selecting one leaves the other's node(s)
+    // provably unconnected and therefore dimmed by the default "Focus
+    // selected" focus mode (`graphFocus.ts`) — deterministically, from this
+    // test's own fixtures, not dependent on what earlier tests in this file
+    // happened to leave in this user's library.
+    await seedWorkWithGraphData(userId, { title: "Roadmap Layout Axe Sweep Work A" });
+    await seedWorkWithGraphData(userId, { title: "Roadmap Layout Axe Sweep Work B" });
+    await login(page);
+    await page.goto("/graph");
+    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+
+    // Roadmap is the default layout mode; wait for the progress strip (only
+    // rendered once at least one roadmap-annotated node is present).
+    await expect(page.locator("[data-graph-roadmap-progress]")).toBeVisible();
+
+    // Open the "Roadmap for" root-work popover, then close it again — it's an
+    // absolutely-positioned overlay that would otherwise intercept clicks
+    // meant for the controls beneath it (e.g. the progress strip's own
+    // "Next up: Physics" button, whose accessible name also matches "Physics").
+    const roadmapForButton = page.getByRole("button", { name: /^Roadmap for/ });
+    await roadmapForButton.click();
+    await expect(page.locator("#roadmap-for-popover")).toBeVisible();
+    await roadmapForButton.click();
+    await expect(page.locator("#roadmap-for-popover")).toHaveCount(0);
+
+    // Open the accessible node browser and select the cited "Physics" node
+    // (scoped to its table row, not the progress strip's "Next up: Physics"
+    // button, which shares the same accessible-name substring) to populate
+    // the inspector, then expand its roadmap disclosure.
+    await page.getByText("Accessible node browser").click();
+    await page.locator("[data-graph-node]").filter({ hasText: "Physics" }).getByRole("button").first().click();
+    const disclosure = page.locator("[data-graph-roadmap-disclosure] summary");
+    await expect(disclosure).toBeVisible();
+    await disclosure.click();
+    await expect(page.locator("[data-graph-roadmap-disclosure]")).toContainText("Why this, here");
+
+    expect((await scan(page)).violations).toEqual([]);
+  });
 });
