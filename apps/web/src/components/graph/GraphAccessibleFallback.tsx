@@ -266,7 +266,7 @@ function NodeRow({
       data-emphasis={emphasisState}
       aria-current={selected ? "true" : undefined}
       onClick={() => onNodeClick?.(node)}
-      className={`cursor-pointer border-b border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""} ${emphasisState === "dimmed" ? "opacity-50" : ""}`}
+      className={`cursor-pointer border-b border-[var(--color-border)] align-top transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""}`}
     >
       <td className="py-2 pr-4">
         <button

@@ -31,6 +31,16 @@
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
 
+  /* Graph accessible-table "dimmed" row text (Phase 21.6 focus-mode
+     contrast fix): a dedicated warm gray, distinctly lighter than
+     --color-text/--color-text-muted so a de-emphasized row still reads as
+     de-emphasized, but computed to clear 4.5:1 against --color-surface
+     (the table's actual background) with real headroom (~4.6:1) rather
+     than reusing opacity, which blends every color toward the background
+     and can fall below AA on any of them. See the dimmed-row rule near the
+     end of this file for how it's applied. */
+  --color-graph-dim-text: #726a5c; /* ~4.6:1 on --color-surface #f1eee6 */
+
   --color-focus-ring: #2e4057;
   /* Keep native UI (scrollbars, form controls) light too, so a dark-mode
      OS doesn't render dark inputs against the bone-white page. */
@@ -51,6 +61,7 @@
   --color-highlight: #e0bb4d;
   --color-credibility-critical: #ff6b5e;
   --color-credibility-warning: #f0a94e;
+  --color-graph-dim-text: #968e7c; /* ~4.6:1 on dark --color-surface #2b2620 */
   --color-focus-ring: #8fa8c9;
 }
 
@@ -67,6 +78,7 @@
   --color-highlight: #c9a227;
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
+  --color-graph-dim-text: #726a5c; /* ~4.6:1 on --color-surface #f1eee6 */
   --color-focus-ring: #2e4057;
 }
 
@@ -286,4 +298,27 @@ body {
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;
+}
+
+/* Phase 21.6 focus-mode contrast fix: the accessible graph table
+   (GraphAccessibleFallback.tsx) used to dim out-of-focus rows with a plain
+   `opacity-50` on the <tr>, which blends EVERY color in the row — title,
+   muted secondary text, status badge — toward the surface background and
+   measured well under the 4.5:1 AA floor (axe: 2.45-3.08:1). Text no
+   longer gets faded at all; instead every dimmed row's text switches to
+   `--color-graph-dim-text`, a color chosen to still read as visibly
+   de-emphasized (distinctly lighter than --color-text/--color-text-muted)
+   while clearing 4.5:1 with headroom against --color-surface in both
+   themes (see the token comment above). The universal descendant selector
+   is deliberate: it needs to out-specificity every Tailwind
+   `text-[var(--color-*)]` utility class inside the row (title button,
+   year/authors spans, type/status/connections cells) without hand-editing
+   each one, and — since it sets only `color`, never `background` — it
+   leaves the decorative status-dot swatch (an inline `style` background)
+   untouched, which is fine: the text label beside it always carries the
+   same status information redundantly. `data-emphasis="dimmed"` itself is
+   untouched (graphFocus.ts/graph.spec.ts still assert it) — only what CSS
+   does with it changed. */
+tr[data-emphasis="dimmed"] * {
+  color: var(--color-graph-dim-text);
 }
