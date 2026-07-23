@@ -18,6 +18,7 @@ import {
   termVariants,
 } from "@ice/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { detectUntranscribableSpans } from "@ice/ingestion";
 import { getRunCostBreakdown } from "./cost";
 
 /**
@@ -236,7 +237,16 @@ export async function getPublishedEdition(documentId: string) {
     },
     cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote, breakdown: costBreakdown },
     pages: editionPages,
-    blocks: blocks.map((block) => ({ ...block, pageIndex: pageIndexById.get(block.pageId) ?? 0 })),
+    // D-23-9: untranscribable spans are recomputed deterministically on read
+    // (same precedent as `matchNoteToBlock`) — the stored block text is never
+    // altered, and no fabricated marker is persisted. The garbled bytes were
+    // proven to originate in the source PDF's corrupted font encoding, so the
+    // reader labels them honestly instead of rendering them as prose.
+    blocks: blocks.map((block) => ({
+      ...block,
+      pageIndex: pageIndexById.get(block.pageId) ?? 0,
+      untranscribableSpans: detectUntranscribableSpans(block.text),
+    })),
     authorialNotes: legacyAuthorialNotes.map((note) => ({
       id: note.id,
       marker: note.marker,

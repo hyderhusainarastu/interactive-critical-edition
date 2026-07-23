@@ -103,7 +103,19 @@ export interface EditionPayload {
     breakdown: Array<{ stage: string | null; task: string; costUsd: number; calls: number; promptTokens: number; completionTokens: number }>;
   };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
-  blocks: Array<{ id: string; pageId: string; pageIndex: number; blockOrder: number; kind: string; marker: string | null; text: string }>;
+  blocks: Array<{
+    id: string;
+    pageId: string;
+    pageIndex: number;
+    blockOrder: number;
+    kind: string;
+    marker: string | null;
+    text: string;
+    /** D-23-9: deterministic, recomputed-on-read offsets of source-scan
+     * garbage (corrupted font encoding in the source PDF). Optional so an
+     * older cached payload shape still renders — absent means "none". */
+    untranscribableSpans?: Array<{ start: number; end: number; reason: string }>;
+  }>;
   authorialNotes: Array<{ id: string; marker: string; text: string; pageAnchor: unknown }>;
   authorApparatus: Array<{ id: string; textBlockId: string | null; kind: "footnote" | "endnote" | "bibliography_entry" | "citation_block"; marker: string | null; text: string; scope: unknown }>;
   terms: Array<{
@@ -243,13 +255,30 @@ export function ClaimView({ claim }: { claim: EditionClaim }) {
   );
 }
 
+/** One honest, subtle marker for a span the source scan's corrupted font
+ * encoding made untranscribable (D-23-9). Labeled and accessible — not a
+ * scary error, and never presented as if it were readable text. */
+function UntranscribableMarker() {
+  return (
+    <span
+      data-untranscribable
+      className="mx-0.5 rounded-sm border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-1 text-[0.7rem] text-[var(--color-text-muted)]"
+      title="This span could not be transcribed: the source PDF's embedded font encoding is corrupted here, so these characters have no recoverable text. This is a limitation of the source scan, not of the processed edition."
+      aria-label="Untranscribable span in the source scan"
+    >
+      untranscribable in source
+    </span>
+  );
+}
+
 function renderVerifiedTerms(
   text: string,
   blockId: string,
   terms: EditionPayload["terms"],
   scriptDisplay: "original" | "transliteration",
+  untranscribableSpans: Array<{ start: number; end: number }> = [],
 ) {
-  const occurrences = terms
+  const termSegments = terms
     .filter((term) => term.verificationStatus === "verified")
     .flatMap((term) => term.occurrences.map((occurrence) => ({ term, ...occurrence })))
     .filter((occurrence) => occurrence.textBlockId === blockId)
@@ -259,27 +288,42 @@ function renderVerifiedTerms(
       && occurrence.endOffset > occurrence.startOffset
       && text.slice(occurrence.startOffset, occurrence.endOffset) === occurrence.term.originalScript
     ))
-    .sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
+    .map((occurrence) => ({ kind: "term" as const, start: occurrence.startOffset, end: occurrence.endOffset, occurrence }));
+
+  // D-23-9: untranscribable source-scan spans join the same single ordered
+  // walk as verified terms, so the two segmentations can never overlap or
+  // double-render. Bounds are re-validated defensively against this text.
+  const untranscribableSegments = untranscribableSpans
+    .filter((span) => span.start >= 0 && span.end <= text.length && span.end > span.start)
+    .map((span) => ({ kind: "untranscribable" as const, start: span.start, end: span.end }));
+
+  const segments = [...termSegments, ...untranscribableSegments]
+    .sort((left, right) => left.start - right.start || left.end - right.end);
 
   const nodes: ReactNode[] = [];
   let offset = 0;
-  for (const occurrence of occurrences) {
-    if (occurrence.startOffset < offset) continue;
-    if (occurrence.startOffset > offset) nodes.push(text.slice(offset, occurrence.startOffset));
-    const displayed = scriptDisplay === "transliteration" ? occurrence.term.transliteration : occurrence.term.originalScript;
-    nodes.push(
-      <span
-        key={occurrence.id}
-        data-verified-term={occurrence.term.id}
-        lang={occurrence.term.language}
-        dir={occurrence.term.direction === "rtl" ? "rtl" : "ltr"}
-        className="rounded-sm bg-[color-mix(in_srgb,var(--color-accent-ink)_12%,transparent)] px-0.5 text-[var(--color-accent-ink)]"
-        title={scriptDisplay === "transliteration" ? occurrence.term.originalScript : occurrence.term.transliteration}
-      >
-        {displayed}
-      </span>,
-    );
-    offset = occurrence.endOffset;
+  for (const segment of segments) {
+    if (segment.start < offset) continue;
+    if (segment.start > offset) nodes.push(text.slice(offset, segment.start));
+    if (segment.kind === "untranscribable") {
+      nodes.push(<UntranscribableMarker key={`untranscribable-${segment.start}`} />);
+    } else {
+      const { occurrence } = segment;
+      const displayed = scriptDisplay === "transliteration" ? occurrence.term.transliteration : occurrence.term.originalScript;
+      nodes.push(
+        <span
+          key={occurrence.id}
+          data-verified-term={occurrence.term.id}
+          lang={occurrence.term.language}
+          dir={occurrence.term.direction === "rtl" ? "rtl" : "ltr"}
+          className="rounded-sm bg-[color-mix(in_srgb,var(--color-accent-ink)_12%,transparent)] px-0.5 text-[var(--color-accent-ink)]"
+          title={scriptDisplay === "transliteration" ? occurrence.term.originalScript : occurrence.term.transliteration}
+        >
+          {displayed}
+        </span>,
+      );
+    }
+    offset = segment.end;
   }
   if (offset < text.length) nodes.push(text.slice(offset));
   return nodes.length ? nodes : text;
@@ -626,7 +670,7 @@ export function EditionReader({
             if (element) blockRefs.current.set(block.id, element);
             else blockRefs.current.delete(block.id);
           };
-          const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay);
+          const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay, block.untranscribableSpans ?? []);
           const noteForBlock = passageAnnotationsByBlock.get(block.id) ?? [];
           const resourceById = new Map(edition.resources.map((resource) => [resource.id, resource]));
           const inlineNotes = noteForBlock.map((note) => (

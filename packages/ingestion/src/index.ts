@@ -6,6 +6,11 @@ import { sanitizeExtractedText } from "./sanitizeText";
 export type { ParsedDocument, ParsedPage, ParsedBlock } from "./parsers/pdf";
 export { mergePageTexts, processedTextFromPages } from "./parsers/pdf";
 export { sanitizeExtractedText } from "./sanitizeText";
+export {
+  detectUntranscribableSpans,
+  type UntranscribableSpan,
+  type UntranscribableReason,
+} from "./untranscribable";
 export { parseTei, type GrobidResult, type GrobidBlock, type GrobidBbox } from "./parsers/grobid";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export {
