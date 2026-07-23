@@ -261,6 +261,14 @@ export const documents = pgTable("document", {
   // Phase 4 scholarly-analysis state (independent of processingStatus).
   analysisStatus: analysisStatusEnum("analysis_status").notNull().default("not_started"),
   analysisError: text("analysis_error"),
+  /**
+   * Phase 20.8 (D-20-52): set once, at POST /api/works/[workId]/confirm — the
+   * durable fact of a real user metadata confirmation, distinct from the
+   * mutable `processingStatus` proxy the worker's `autoReady` used to rely on
+   * alone (a run merely reaching "published" once is not the same fact as
+   * "the user confirmed this"). Nullable/additive; never cleared once set.
+   */
+  confirmedAt: timestamp("confirmed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [

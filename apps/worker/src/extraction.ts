@@ -193,6 +193,7 @@ export async function handleEditionExtraction(documentId: string) {
     workId: documents.workId,
     userId: documents.userId,
     processingStatus: documents.processingStatus,
+    confirmedAt: documents.confirmedAt,
   }).from(documents).where(eq(documents.id, documentId)).limit(1);
   if (!doc) throw new Error(`Document ${documentId} not found`);
 
@@ -312,27 +313,23 @@ export async function handleEditionExtraction(documentId: string) {
     // through metadata review just because the new extractor has lower title
     // confidence. The user-approved work metadata is stronger evidence.
     //
-    // Phase 20.5 (D-20-52): "was ready" must survive an intervening failure.
-    // A failed attempt sets processingStatus to "failed", so on the RETRY the
-    // ready evidence was gone and a confirmed work bounced back through
-    // metadata review (caught red by the retry-after-failure integration
-    // test). A prior PUBLISHED run while the document sits in a
-    // failure/recovery state ("failed"/"processing") is the durable stand-in:
-    // that edition already carries served metadata, and re-review after a
-    // transient failure is exactly the regression the comment above forbids.
-    // Known narrow trade-off (no schema change allowed this wave): a
-    // never-confirmed needs_review work that is reprocessed, fails, and then
-    // succeeds also auto-readies off its published prior run — a
-    // `documents.confirmed_at` column is the precise durable fix.
-    const [priorPublished] = await db
-      .select({ id: processingRuns.id })
-      .from(processingRuns)
-      .where(sql`${processingRuns.documentId} = ${documentId} and ${processingRuns.isPublished} = true and ${processingRuns.id} <> ${run.id}`)
-      .limit(1);
+    // Phase 20.8 (D-20-52 durable fix): "was confirmed" must survive an
+    // intervening failure. A failed attempt sets processingStatus to
+    // "failed", so on the RETRY the mutable-status proxy (was this document
+    // "ready" right before this run?) is already gone. The prior fix used
+    // "a published run exists" as a stand-in for "the user confirmed this",
+    // but that stand-in over-fired: a never-confirmed needs_review work that
+    // is reprocessed, fails, and then succeeds would also auto-ready off its
+    // own published-once run. `documents.confirmed_at` (set once, only by
+    // POST /api/works/[workId]/confirm) is the precise fact — a direct read
+    // of "did the user actually confirm this document", not a proxy for it.
+    // `processingStatus === "ready"` is kept alongside it for documents that
+    // predate this column (confirmedAt null but currently in steady-state
+    // "ready").
     const autoReady =
       (parsed.metadataConfidence >= 0.9 && Boolean(parsed.detectedTitle)) ||
       doc.processingStatus === "ready" ||
-      (Boolean(priorPublished) && (doc.processingStatus === "failed" || doc.processingStatus === "processing"));
+      Boolean(doc.confirmedAt);
     if (phase12FeatureEnabled("libraryIdentity")) {
       await db.update(documents).set({ contentHash: sha256(buffer), updatedAt: new Date() }).where(eq(documents.id, documentId));
     }

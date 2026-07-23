@@ -90,6 +90,44 @@ async function seedReadyDocWithPublishedRun() {
     fileSize: 100,
     processingStatus: "ready",
     extractedText: "The old, previously published body text.",
+    // Phase 20.8 (D-20-52 durable fix): this fixture represents a document
+    // that reached "ready" through a real user confirmation (the realistic
+    // case for anything with a prior published run), so it must carry
+    // confirmedAt like a real confirmed document would — the whole point of
+    // the durable fix is that this flag, not the mutable processingStatus,
+    // is what must survive an intervening reprocess failure.
+    confirmedAt: new Date(),
+  }).returning({ id: documents.id });
+  const [publishedRun] = await db.insert(processingRuns).values({
+    documentId: document.id,
+    version: 1,
+    pipelineVersion: "v2",
+    status: "complete",
+    stage: "published",
+    structureState: "limited",
+    isPublished: true,
+  }).returning({ id: processingRuns.id });
+  return { userId: user.id, workId: work.id, documentId: document.id, publishedRunId: publishedRun.id };
+}
+
+// Phase 20.8 (D-20-52 durable fix): a work that was NEVER user-confirmed —
+// still sitting in needs_review after its first (low-confidence, text/plain)
+// extraction published — has confirmedAt null, unlike the seed above.
+async function seedNeverConfirmedNeedsReviewDocWithPublishedRun() {
+  const fixtureTag = crypto.randomUUID();
+  const [user] = await db.insert(users).values({ email: `extraction-20-8-${fixtureTag}@example.com` }).returning({ id: users.id });
+  cleanup.userIds.push(user.id);
+  const [work] = await db.insert(works).values({ userId: user.id, title: `Never Confirmed Fixture Work ${fixtureTag}`, authorName: "Fixture Author" }).returning({ id: works.id });
+  const [document] = await db.insert(documents).values({
+    userId: user.id,
+    workId: work.id,
+    storagePath: `fixtures/${work.id}/reprocess.txt`,
+    originalFilename: "reprocess.txt",
+    mimeType: "text/plain",
+    fileSize: 100,
+    processingStatus: "needs_review",
+    extractedText: "The old, previously published body text.",
+    confirmedAt: null,
   }).returning({ id: documents.id });
   const [publishedRun] = await db.insert(processingRuns).values({
     documentId: document.id,
@@ -158,14 +196,17 @@ describe.skipIf(!hasDb)("edition reprocess reliability (integration)", () => {
     expect(pageRows.every((page) => page.runId === published[0].id)).toBe(true);
 
     const [doc] = await db
-      .select({ status: documents.processingStatus, error: documents.processingError, text: documents.extractedText })
+      .select({ status: documents.processingStatus, error: documents.processingError, text: documents.extractedText, confirmedAt: documents.confirmedAt })
       .from(documents)
       .where(eq(documents.id, seeded.documentId));
     // A reprocess of an already-confirmed work must not send it back through
-    // metadata review (autoReady via prior "ready" status).
+    // metadata review (autoReady via prior confirmation).
     expect(doc.status).toBe("ready");
     expect(doc.error).toBeNull();
     expect(doc.text).toContain("Fresh reprocessed body text");
+    // D-20-52 durable fix: confirmedAt is untouched by a reprocess — it is
+    // set once, only by the confirm route, never re-derived here.
+    expect(doc.confirmedAt).not.toBeNull();
   });
 
   it("a Storage read failure fails ONLY the new run: last good edition stays published and the reason is user-visible", async () => {
@@ -252,5 +293,31 @@ describe.skipIf(!hasDb)("edition reprocess reliability (integration)", () => {
     const [doc] = await db.select({ status: documents.processingStatus, error: documents.processingError }).from(documents).where(eq(documents.id, seeded.documentId));
     expect(doc.status).toBe("ready");
     expect(doc.error).toBeNull();
+  });
+
+  it("D-20-52 durable fix: a NEVER-confirmed needs_review work that fails then succeeds a reprocess stays needs_review, not auto-ready", async () => {
+    const seeded = await seedNeverConfirmedNeedsReviewDocWithPublishedRun();
+    // Same fail-then-retry-success shape as the "ready" case above, but this
+    // document was never user-confirmed (confirmedAt null) — only its first
+    // low-confidence run ever got published. Before the durable confirmedAt
+    // fix, "a published run exists" was used as a stand-in for "the user
+    // confirmed this" and over-fired here, silently skipping metadata review
+    // on the retry (the exact residual gap this DDL closes).
+    ingestionMock.downloadDocumentFile
+      .mockRejectedValueOnce(new Error("Storage download failed: transient"))
+      .mockResolvedValue(Buffer.from(FRESH_BODY, "utf8"));
+    mockHealthyResearch();
+
+    await expect(handleEditionExtraction(seeded.documentId)).rejects.toThrow("transient");
+    await handleEditionExtraction(seeded.documentId);
+    await collectIdentity(seeded.workId);
+
+    const [doc] = await db
+      .select({ status: documents.processingStatus, error: documents.processingError, confirmedAt: documents.confirmedAt })
+      .from(documents)
+      .where(eq(documents.id, seeded.documentId));
+    expect(doc.status).toBe("needs_review"); // NOT auto-readied — never confirmed
+    expect(doc.error).toBeNull();
+    expect(doc.confirmedAt).toBeNull(); // still never confirmed
   });
 });

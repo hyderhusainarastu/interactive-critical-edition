@@ -45,7 +45,16 @@ export async function POST(
 
   const readied = await db
     .update(documents)
-    .set({ processingStatus: "ready", analysisStatus: "not_started", updatedAt: new Date() })
+    .set({
+      processingStatus: "ready",
+      analysisStatus: "not_started",
+      // D-20-52: the durable fact of a real user confirmation, distinct from
+      // the mutable processingStatus proxy the worker's autoReady used to
+      // rely on alone. Set once; idempotent on a later reprocess-triggered
+      // re-confirmation (only needs to be non-null, not track which one).
+      confirmedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(
       and(eq(documents.workId, workId), eq(documents.processingStatus, "needs_review")),
     )

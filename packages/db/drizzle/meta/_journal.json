@@ -239,6 +239,13 @@
       "when": 1784767808359,
       "tag": "0033_thankful_thunderbolts",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784775838145,
+      "tag": "0034_lively_slyde",
+      "breakpoints": true
     }
   ]
 }
