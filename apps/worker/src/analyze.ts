@@ -688,7 +688,11 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
   let record: CitationMatch | null = null;
   let bibId: string | null = null;
   try {
-    const live = await resolveCitation(citation.normalizedQuery);
+    // D-20-81: rawText carries book-form signal (publisher/press/edition
+    // words) that cleanQuery deliberately strips from normalizedQuery
+    // upstream; resolveCitation still only ever looks UP against the
+    // cleaned query, rawText is used solely to pick the provider order.
+    const live = await resolveCitation(citation.normalizedQuery, { rawText: citation.rawText });
     if (live) {
       record = live;
       bibId = await findOrCreateBibRecord(live);
@@ -874,7 +878,8 @@ export async function analyzeWork(documentId: string): Promise<void> {
 
     await mapWithConcurrency(candidates, ANALYSIS_CONCURRENCY, async (candidate) => {
       // --- Stage 1: resolve against real bibliographic sources ---
-      const record = await resolveCitation(candidate.query);
+      // D-20-81: see the analogous rawText note in resolveCitationMetadata.
+      const record = await resolveCitation(candidate.query, { rawText: candidate.text });
       const bibId = record ? await getBibId(record) : null;
 
       await db.insert(citations).values({

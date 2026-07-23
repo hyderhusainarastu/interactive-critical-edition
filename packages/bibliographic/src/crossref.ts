@@ -1,4 +1,4 @@
-import { titleOverlap, type BibliographicSource, type ResolvedRecord } from "./types";
+import { bestTitleMatch, type BibliographicSource, type ResolvedRecord } from "./types";
 
 interface CrossrefItem {
   DOI?: string;
@@ -7,6 +7,13 @@ interface CrossrefItem {
   issued?: { "date-parts"?: number[][] };
   URL?: string;
 }
+
+// D-20-81 (D-20-68's "single-hit fragility" finding): a query built from a
+// noisy, sometimes OCR-garbled full citation can rank its true match a row
+// or two below Crossref's own #1 pick. Inspecting a small top-N window and
+// keeping the BEST-overlap candidate (still gated by the same threshold —
+// see `bestTitleMatch`) recovers that runner-up without weakening the guard.
+const CANDIDATE_ROWS = 5;
 
 /**
  * Crossref (plan §6): DOI-backed scholarly metadata. Uses the polite
@@ -18,7 +25,7 @@ export class CrossrefSource implements BibliographicSource {
 
   async search(query: string, signal?: AbortSignal): Promise<ResolvedRecord | null> {
     const email = process.env.CROSSREF_POLITE_POOL_EMAIL;
-    const params = new URLSearchParams({ "query.bibliographic": query, rows: "1" });
+    const params = new URLSearchParams({ "query.bibliographic": query, rows: String(CANDIDATE_ROWS) });
     if (email) params.set("mailto", email);
 
     const res = await fetch(`https://api.crossref.org/works?${params}`, {
@@ -28,11 +35,11 @@ export class CrossrefSource implements BibliographicSource {
     if (!res.ok) return null;
 
     const data = (await res.json()) as { message?: { items?: CrossrefItem[] } };
-    const item = data.message?.items?.[0];
-    if (!item?.title?.[0]) return null;
+    const items = data.message?.items ?? [];
+    const item = bestTitleMatch(query, items, (it) => it.title?.[0]);
+    if (!item) return null;
 
-    const title = item.title[0];
-    if (titleOverlap(query, title) < 0.34) return null;
+    const title = item.title![0];
 
     const authors =
       item.author

@@ -1,4 +1,4 @@
-import { titleOverlap, type BibliographicSource, type ResolvedRecord } from "./types";
+import { bestTitleMatch, type BibliographicSource, type ResolvedRecord } from "./types";
 
 interface OpenAlexWork {
   id?: string;
@@ -11,6 +11,10 @@ interface OpenAlexWork {
   primary_location?: { landing_page_url?: string };
 }
 
+// Same D-20-81 rationale as Crossref's CANDIDATE_ROWS: don't trust the top
+// hit alone for a noisy full-citation query.
+const CANDIDATE_ROWS = 5;
+
 /**
  * OpenAlex (plan §6, primary source): CC0 works/authors/concepts data,
  * no key. Polite pool via OPENALEX_POLITE_POOL_EMAIL. Good coverage of
@@ -21,18 +25,18 @@ export class OpenAlexSource implements BibliographicSource {
 
   async search(query: string, signal?: AbortSignal): Promise<ResolvedRecord | null> {
     const email = process.env.OPENALEX_POLITE_POOL_EMAIL;
-    const params = new URLSearchParams({ search: query, per_page: "1" });
+    const params = new URLSearchParams({ search: query, per_page: String(CANDIDATE_ROWS) });
     if (email) params.set("mailto", email);
 
     const res = await fetch(`https://api.openalex.org/works?${params}`, { signal });
     if (!res.ok) return null;
 
     const data = (await res.json()) as { results?: OpenAlexWork[] };
-    const work = data.results?.[0];
-    const title = work?.title ?? work?.display_name;
-    if (!work || !title) return null;
+    const items = data.results ?? [];
+    const work = bestTitleMatch(query, items, (w) => w.title ?? w.display_name);
+    if (!work) return null;
 
-    if (titleOverlap(query, title) < 0.34) return null;
+    const title = (work.title ?? work.display_name)!;
 
     const authors =
       work.authorships
