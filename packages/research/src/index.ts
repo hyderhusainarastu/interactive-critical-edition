@@ -32,3 +32,9 @@ export * from "./mastery";
 export * from "./cache";
 export * from "./adapters";
 export * from "./openAccess";
+// Floors-capability-proposal §2.2: pure selection of which accepted
+// candidates get a full-inspection slot, decoupled from acceptance itself.
+export * from "./selection";
+// Floors-capability-proposal §2.3: the citation-resolution → research_resource
+// bridge's pure row-construction (no DB), shared with apps/worker's call site.
+export * from "./citationBridge";

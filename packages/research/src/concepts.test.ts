@@ -164,6 +164,21 @@ describe("synthesizeConcepts", () => {
     expect(out.concepts).toHaveLength(3);
   });
 
+  it("requests a proportionally larger completion budget when maxConcepts is raised (floors §4)", async () => {
+    const caller: StructuredCaller = {
+      available: true,
+      call: vi.fn(async (p) => ({ data: p.validate({ concepts: [] }), promptTokens: 0, completionTokens: 0, model: "m" })),
+    };
+    await synthesizeConcepts(caller, { primary: { title: "Ethics" }, textSample: TEXT_SAMPLE, model: "m" });
+    const defaultCall = (caller.call as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(defaultCall.maxOutputTokens).toBe(2200);
+
+    await synthesizeConcepts(caller, { primary: { title: "Ethics" }, textSample: TEXT_SAMPLE, model: "m", maxConcepts: 16 });
+    const raisedCall = (caller.call as ReturnType<typeof vi.fn>).mock.calls[1][0];
+    expect(raisedCall.maxOutputTokens).toBeGreaterThanOrEqual(2800);
+    expect(raisedCall.maxOutputTokens).toBeLessThanOrEqual(3000);
+  });
+
   it("falls back to an empty result on a thrown/malformed model response", async () => {
     const caller: StructuredCaller = { available: true, call: vi.fn(async () => { throw new Error("bad model output"); }) };
     const out = await synthesizeConcepts(caller, { primary: { title: "Ethics" }, textSample: TEXT_SAMPLE, model: "m" });

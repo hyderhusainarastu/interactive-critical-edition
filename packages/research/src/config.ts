@@ -14,6 +14,14 @@ export const RESEARCH_LIMITS = {
   costHardCapUsd: Number(process.env.RESEARCH_COST_HARD_CAP ?? 5),
   /** Max explicit-citation candidates parsed from the document. */
   maxCitationCandidates: 300,
+  /** How many of the document's OWN citations may get a dedicated discovery
+   *  lookup (one search per cited work, not one for the whole lane). Single
+   *  source of truth for this ceiling: it used to be re-imposed at three
+   *  separate, lower layers upstream of where a deployment could actually
+   *  raise it (`synthesize.ts`'s heuristic-lane slice, its model-input
+   *  slice, and its per-lane query caps all silently capped at 10-20 before
+   *  this value was ever consulted) — floors-capability-proposal §2.1. */
+  maxCitationLookups: Number(process.env.RESEARCH_MAX_CITATION_LOOKUPS ?? 30),
   /** Max resources collected before dedup across all providers. */
   maxResourcesPreDedup: 750,
   /** Reference-graph traversal depth from the primary work. */

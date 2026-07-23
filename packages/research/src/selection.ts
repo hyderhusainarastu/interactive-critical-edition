@@ -1,0 +1,68 @@
+import type { CandidateAssessment } from "./relevance";
+
+/**
+ * Full-inspection selection (floors-capability-proposal §2.2). Extracted as a
+ * pure function — no DB, no adapters — so the exact fixture the audit
+ * described (dozens of legitimately-accepted but interchangeable primary-text
+ * editions crowding out a specifically-grounded secondary source) is a plain
+ * Vitest unit, not something that needs a live run to exercise.
+ *
+ * Background: `assessCandidate` (relevance.ts) accepts a candidate as an
+ * explicit citation via three different disjuncts of varying specificity
+ * (`RelevanceSignals.explicitCitationSource`) — a resolved citation's own key,
+ * a match against the document's own reference-list text, or (built for
+ * Phase 11.7's Nicomachean-Ethics-as-prerequisite fix) a mere title-phrase
+ * appearing anywhere in the document's prose. That third path is legitimate
+ * for acceptance, but it also means EVERY discovered edition/translation of a
+ * heavily-referenced primary text independently qualifies — and previously,
+ * sorting purely by authority let a 41st DOI-bearing edition out-rank a real,
+ * specifically-grounded secondary source for one of the scarce
+ * `maxFullInspections` slots.
+ *
+ * This module changes ONLY which already-accepted candidates get a full
+ * inspection slot. It never touches acceptance itself (relevance.ts's
+ * ACCEPT_CONFIDENCE/REJECT_CONFIDENCE/core-concept rules are untouched).
+ */
+
+/** True when a candidate's explicit-citation grounding is the document's own
+ *  reference-list evidence (a resolved key or a matched citation-text entry)
+ *  rather than the broader title-phrase-in-prose rule. */
+export function isSpecificallyGroundedCitation(assessment: CandidateAssessment): boolean {
+  const source = assessment.signals.explicitCitationSource;
+  return source === "key" || source === "citation_text";
+}
+
+export interface RankableCandidate {
+  assessment: CandidateAssessment;
+  /** Already-classified authority band (e.g. `classifyAuthority(r)`), kept
+   *  generic here (not importing `credibility.ts`'s `SourceAuthority`) so this
+   *  module stays decoupled from anything but the relevance signals it
+   *  actually reads. */
+  authority: string;
+}
+
+/**
+ * Select which ACCEPTED candidates get a full (content-level) inspection,
+ * bounded by `maxFullInspections`.
+ *
+ * Candidates specifically grounded in the document's own citation evidence
+ * are NEVER truncated out by this budget — they are naturally bounded
+ * upstream by how many real citations the document has (`maxCitationCandidates`,
+ * already 300), which is a real ceiling, just a much higher one. Everything
+ * else is ranked by authority, exactly as before, and fills whatever budget
+ * remains after the specifically-grounded group is seated.
+ */
+export function selectForFullInspection<T extends RankableCandidate>(
+  accepted: readonly T[],
+  authorityOrder: Record<string, number>,
+  maxFullInspections: number,
+): T[] {
+  const specific: T[] = [];
+  const generic: T[] = [];
+  for (const item of accepted) {
+    (isSpecificallyGroundedCitation(item.assessment) ? specific : generic).push(item);
+  }
+  generic.sort((a, b) => authorityOrder[a.authority] - authorityOrder[b.authority]);
+  const remaining = Math.max(0, maxFullInspections - specific.length);
+  return [...specific, ...generic.slice(0, remaining)];
+}

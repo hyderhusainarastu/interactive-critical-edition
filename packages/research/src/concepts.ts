@@ -154,6 +154,12 @@ export async function synthesizeConcepts(
   if (!caller.available || input.textSample.trim().length === 0) return empty();
 
   const maxConcepts = input.maxConcepts ?? 10;
+  // Scales with maxConcepts so a raised cap (e.g. 16, floors-capability-
+  // proposal §4) actually has the completion budget to fill it — the entry
+  // schema is verbose enough (summary + evidence sentences per concept) that
+  // the old flat 2200 was sized for ~10 entries specifically, not a ceiling
+  // that happens to also work for more.
+  const maxOutputTokens = Math.max(2200, 2200 + (maxConcepts - 10) * 115);
 
   try {
     const r = await caller.call({
@@ -161,7 +167,7 @@ export async function synthesizeConcepts(
       schemaName: "extracted_concepts",
       schema: CONCEPT_SCHEMA,
       safetyIdentifier: input.safetyIdentifier,
-      maxOutputTokens: 2200,
+      maxOutputTokens,
       system:
         `You identify the concepts, doctrines, people, traditions and debates a scholarly work requires or ` +
         `discusses — the vocabulary a reader would need a glossary or a diagnostic quiz for. Emit at most ` +

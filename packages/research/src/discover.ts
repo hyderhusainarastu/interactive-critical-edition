@@ -99,8 +99,11 @@ export function providersForLane(lane: QueryLane): ReadonlySet<ProviderName> {
 }
 
 /** How many of a document's own citations get an individual catalogue lookup.
- *  Bounded so a reference-heavy work cannot fan out without limit. */
-const MAX_CITATION_LOOKUPS = Number(process.env.RESEARCH_MAX_CITATION_LOOKUPS ?? 30);
+ *  Bounded so a reference-heavy work cannot fan out without limit. Sourced
+ *  from `RESEARCH_LIMITS` (not a second local env read) so this stays the
+ *  ONE ceiling — see `RESEARCH_LIMITS.maxCitationLookups`'s own doc comment
+ *  for why that matters (floors-capability-proposal §2.1). */
+const MAX_CITATION_LOOKUPS = RESEARCH_LIMITS.maxCitationLookups;
 
 /** A discovery round scoped to one lane. */
 export interface LaneRound {

@@ -133,6 +133,23 @@ export interface RelevanceSignals {
   matchedTerms: string[];
   groundingSignals: GroundingSignal[];
   isExplicitCitation: boolean;
+  /**
+   * WHICH of the three disjuncts made `isExplicitCitation` true, in
+   * priority order (floors-capability-proposal §2.2). `"key"` and
+   * `"citation_text"` are grounded in the document's OWN reference-list
+   * data (a resolved citation's normalized key, or a raw reference entry
+   * matched by `matchesCitationText`) — the most specific evidence a source
+   * belongs. `"title_phrase"` is the broader `matchesDocumentTitlePhrase`
+   * rule (built for Phase 11.7's Nicomachean-Ethics-as-prerequisite fix):
+   * true whenever the candidate's short canonical title merely appears
+   * somewhere in the document's own prose, which every edition/translation
+   * of a heavily-referenced primary text satisfies identically. Downstream
+   * selection (not this gate) uses this to stop a flood of interchangeable
+   * primary-text editions from crowding out a specifically-grounded
+   * secondary source for a scarce full-inspection slot — acceptance itself
+   * is unchanged either way.
+   */
+  explicitCitationSource: "key" | "citation_text" | "title_phrase" | null;
   authorCollision: boolean;
   givenNameCollision: boolean;
   /** True when the indexed venue looks off-discipline. Advisory ONLY — it
@@ -474,10 +491,18 @@ export function assessCandidate(
     !surnameHit && candidateGivens.some((g) => targetSurnames.has(g)) && candidate.authors.length > 0;
   const authorCollision = laneTargetsAuthor && !surnameHit && candidate.authors.length > 0;
 
-  const isExplicitCitation =
-    Boolean(key && identity.explicitCitationKeys.has(key)) ||
-    matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames, candidate.year) ||
-    (lane === "explicit_citation" && matchesDocumentTitlePhrase(candidateTerms, identity.documentTextForExplicitTitleMatch));
+  const explicitCitationKeyMatch = Boolean(key && identity.explicitCitationKeys.has(key));
+  const explicitCitationTextMatch = matchesCitationText(candidateTerms, identity.explicitCitationTexts, candidateSurnames, candidate.year);
+  const explicitCitationTitlePhraseMatch =
+    lane === "explicit_citation" && matchesDocumentTitlePhrase(candidateTerms, identity.documentTextForExplicitTitleMatch);
+  const isExplicitCitation = explicitCitationKeyMatch || explicitCitationTextMatch || explicitCitationTitlePhraseMatch;
+  const explicitCitationSource: RelevanceSignals["explicitCitationSource"] = explicitCitationKeyMatch
+    ? "key"
+    : explicitCitationTextMatch
+      ? "citation_text"
+      : explicitCitationTitlePhraseMatch
+        ? "title_phrase"
+        : null;
   const inCitationGraph = Boolean(key && identity.citationGraphKeys?.has(key));
   const citedAuthorHit = candidateSurnames.some((s) => identity.citedAuthorSurnames.has(s));
 
@@ -497,6 +522,7 @@ export function assessCandidate(
     matchedTerms,
     groundingSignals: grounding,
     isExplicitCitation,
+    explicitCitationSource,
     authorCollision,
     givenNameCollision,
     venueLooksOffDiscipline,

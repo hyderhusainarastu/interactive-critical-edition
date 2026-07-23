@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { RESEARCH_LIMITS } from "./config";
 import { generateLaneQueries, gradeClaims, heuristicLaneQueries, heuristicNote, quoteIsGrounded, synthesizeNote, type StructuredCaller } from "./synthesize";
 import type { RawResource } from "./types";
 
@@ -246,5 +247,76 @@ describe("lane query merge — the document's own citations always survive", () 
     expect(lane!.queries.some((q) => q.includes("works cited by"))).toBe(true);
     // Document-derived queries come first.
     expect(lane!.queries[0]).toContain("Annas");
+  });
+});
+
+describe("explicit-citation query cap (floors-capability-proposal §2.1)", () => {
+  // A document with more distinct footnoted works than the OLD hard-coded
+  // ceilings (10 in heuristicLaneQueries, 20 into the model, 12/16 in the
+  // per-lane normalize/merge caps) — but still comfortably under the shared
+  // 30-default `RESEARCH_LIMITS.maxCitationLookups`. Every one of these is a
+  // well-formed, distinct citation text; none should be silently dropped
+  // before ever reaching a discovery lookup.
+  const manyCitations = Array.from({ length: 25 }, (_, i) => `Author${i}, "Work ${i}," Journal ${i} (19${50 + i}).`);
+
+  it("heuristicLaneQueries keeps every citation up to the shared cap, not the old 10-item ceiling", () => {
+    const lanes = heuristicLaneQueries({ title: "Vice and Reason", author: "Terence Irwin" }, manyCitations);
+    const citationLane = lanes.find((l) => l.lane === "explicit_citation");
+    expect(citationLane).toBeDefined();
+    expect(citationLane!.queries).toHaveLength(Math.min(manyCitations.length, RESEARCH_LIMITS.maxCitationLookups));
+    expect(citationLane!.queries.length).toBeGreaterThan(10);
+  });
+
+  it("falls back to the full-cap deterministic lanes (no model) with more than 16 citations surviving", async () => {
+    const caller = { available: false, call: async () => { throw new Error("unused"); } };
+    const r = await generateLaneQueries(caller as never, {
+      primary: { title: "Vice and Reason", author: "Terence Irwin" },
+      citationTexts: manyCitations,
+      model: "m",
+    });
+    const citationLane = r.lanes.find((l) => l.lane === "explicit_citation");
+    expect(citationLane!.queries.length).toBeGreaterThan(16);
+  });
+
+  it("keeps more than the old 16-item merge cap when the model ALSO emits explicit-citation queries", async () => {
+    const caller = {
+      available: true,
+      call: async (p: { validate: (parsed: unknown) => unknown }) => ({
+        data: p.validate({ lanes: [{ lane: "explicit_citation", queries: ["one extra model-authored query"] }] }),
+        promptTokens: 1,
+        completionTokens: 1,
+        model: "m",
+      }),
+    };
+    const r = await generateLaneQueries(caller as never, {
+      primary: { title: "Vice and Reason", author: "Terence Irwin" },
+      citationTexts: manyCitations,
+      model: "m",
+    });
+    const citationLane = r.lanes.find((l) => l.lane === "explicit_citation");
+    // 25 document citations + 1 model query, deduplicated, must not be cut
+    // back down to the old merge cap of 16.
+    expect(citationLane!.queries.length).toBeGreaterThan(16);
+    expect(citationLane!.queries).toContain("one extra model-authored query");
+  });
+
+  it("does NOT widen a generic exploratory lane's merge cap past its existing 16", async () => {
+    const manyModelQueries = Array.from({ length: 25 }, (_, i) => `scholarly debate query ${i}`);
+    const caller = {
+      available: true,
+      call: async (p: { validate: (parsed: unknown) => unknown }) => ({
+        data: p.validate({ lanes: [{ lane: "scholarly_debate", queries: manyModelQueries }] }),
+        promptTokens: 1,
+        completionTokens: 1,
+        model: "m",
+      }),
+    };
+    const r = await generateLaneQueries(caller as never, {
+      primary: { title: "Vice and Reason", author: "Terence Irwin" },
+      citationTexts: [],
+      model: "m",
+    });
+    const debateLane = r.lanes.find((l) => l.lane === "scholarly_debate");
+    expect(debateLane!.queries.length).toBeLessThanOrEqual(16);
   });
 });

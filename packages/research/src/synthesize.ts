@@ -1,6 +1,20 @@
+import { RESEARCH_LIMITS } from "./config";
 import type { LaneRound } from "./discover";
 import { QUERY_LANES, type QueryLane } from "./relevance";
 import type { RawResource } from "./types";
+
+/** Per-lane query cap for everything OTHER than the document's own explicit
+ *  citations, where a generous ceiling is deliberately not extended — those
+ *  lanes are exploratory rephrasings of one question, not a fan-out over a
+ *  bounded list of named works. `explicit_citation` alone uses the shared,
+ *  env-overridable `RESEARCH_LIMITS.maxCitationLookups` ceiling so raising it
+ *  actually raises the REAL binding cap end to end (floors-capability-
+ *  proposal §2.1), not just an inner layer two steps upstream of it. */
+const GENERIC_LANE_QUERY_CAP = 12;
+const GENERIC_LANE_MERGE_CAP = 16;
+function laneQueryCap(lane: QueryLane, base: number): number {
+  return lane === "explicit_citation" ? RESEARCH_LIMITS.maxCitationLookups : base;
+}
 
 /**
  * LLM-backed research steps (plan §33), decoupled from the vendor via
@@ -53,12 +67,19 @@ export function heuristicLaneQueries(
   const topic = [title, ...concepts.slice(0, 3)].filter(Boolean).join(" ");
 
   const rounds: LaneRound[] = [];
-  const add = (lane: LaneRound["lane"], queries: (string | false)[]) => {
+  const add = (lane: LaneRound["lane"], queries: (string | false)[], cap = GENERIC_LANE_QUERY_CAP) => {
     const clean = [...new Set(queries.filter((q): q is string => Boolean(q && q.trim().length > 3)))];
-    if (clean.length) rounds.push({ lane, queries: clean.slice(0, 12) });
+    if (clean.length) rounds.push({ lane, queries: clean.slice(0, cap) });
   };
 
-  add("explicit_citation", citationTexts.map((c) => c.replace(/\s+/g, " ").trim().slice(0, 90)).filter((c) => c.length > 6).slice(0, 10));
+  // Every well-formed extracted citation earns its own dedicated lookup, up
+  // to the shared `maxCitationLookups` ceiling — not the generic per-lane cap
+  // every other (exploratory) lane uses.
+  add(
+    "explicit_citation",
+    citationTexts.map((c) => c.replace(/\s+/g, " ").trim().slice(0, 90)).filter((c) => c.length > 6).slice(0, RESEARCH_LIMITS.maxCitationLookups),
+    RESEARCH_LIMITS.maxCitationLookups,
+  );
   add("scholarly_debate", [title, byAuthor, `${title} criticism`, `${title} secondary literature`, `${title} interpretation`]);
   add("author_corpus", [author && `${author} works`, author && `${author} bibliography`]);
   add("reception_citation", [`works citing ${byAuthor}`, `${title} reception`, `${title} response to`]);
@@ -110,7 +131,7 @@ function normalizeLaneRounds(parsed: unknown): LaneRound[] {
       .filter((q): q is string => typeof q === "string")
       .map((q) => q.replace(/\s+/g, " ").trim())
       .filter((q) => q.length > 3)
-      .slice(0, 12);
+      .slice(0, laneQueryCap(lane as QueryLane, GENERIC_LANE_QUERY_CAP));
     if (!qs.length) continue;
     seen.add(lane);
     clean.push({ lane: lane as LaneRound["lane"], queries: qs });
@@ -154,7 +175,11 @@ export async function generateLaneQueries(
         title: input.primary.title,
         author: input.primary.author ?? null,
         concepts: (input.concepts ?? []).slice(0, 12),
-        citations: input.citationTexts.slice(0, 20),
+        // The model must be able to see every well-formed extracted citation
+        // it could plausibly write a query for, up to the same shared
+        // ceiling the rest of this lane uses — a citation the model never
+        // sees can never earn a query (floors-capability-proposal §2.1).
+        citations: input.citationTexts.slice(0, RESEARCH_LIMITS.maxCitationLookups),
       }),
       validate: normalizeLaneRounds,
     });
@@ -170,8 +195,10 @@ export async function generateLaneQueries(
     for (const l of r.data) {
       const existing = byLane.get(l.lane);
       // Document-derived queries come first and are always kept; model queries
-      // extend them rather than replacing them.
-      byLane.set(l.lane, existing ? [...new Set([...existing, ...l.queries])].slice(0, 16) : l.queries);
+      // extend them rather than replacing them. The merged list keeps the
+      // same per-lane cap as everywhere else in this file — generous for
+      // explicit_citation, unchanged for every exploratory lane.
+      byLane.set(l.lane, existing ? [...new Set([...existing, ...l.queries])].slice(0, laneQueryCap(l.lane, GENERIC_LANE_MERGE_CAP)) : l.queries);
     }
     const merged: LaneRound[] = [...byLane.entries()].map(([lane, queries]) => ({ lane, queries }));
     return { lanes: merged, promptTokens: r.promptTokens, completionTokens: r.completionTokens, usedModel: true };

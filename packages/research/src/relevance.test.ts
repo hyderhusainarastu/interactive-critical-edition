@@ -128,6 +128,9 @@ describe("relevance gate — genuinely relevant scholarship is accepted", () => 
     expect(a.verdict).toBe("accepted");
     expect(a.confidence).toBe(1);
     expect(a.reasons).toContain("explicit_citation_match");
+    // Grounded by the resolved citation's own normalized key — the most
+    // specific of the three explicit-citation signals (floors §2.2).
+    expect(a.signals.explicitCitationSource).toBe("key");
 
     // Prove it is the citation doing the work: strip the citation evidence and
     // the same record no longer qualifies on its own merits.
@@ -639,6 +642,9 @@ describe("relevance gate — short distinctive canonical titles in citation entr
     expect(a.signals.isExplicitCitation).toBe(true);
     expect(a.reasons).toContain("explicit_citation_match");
     expect(a.verdict).toBe("accepted");
+    // Grounded in the document's own reference entry, not a bare body-text
+    // phrase match.
+    expect(a.signals.explicitCitationSource).toBe("citation_text");
   });
 
   it("accepts a concise canonical title from the explicit-citation query without accepting articles merely about it", () => {
@@ -659,11 +665,18 @@ describe("relevance gate — short distinctive canonical titles in citation entr
 
     expect(canonical.signals.isExplicitCitation).toBe(true);
     expect(canonical.verdict).toBe("accepted");
+    expect(canonical.signals.explicitCitationSource).toBe("citation_text");
     expect(commentary.signals.isExplicitCitation).toBe(false);
     expect(commentary.verdict).not.toBe("accepted");
   });
 
-  it("accepts a concise canonical title when the explicit-citation lane finds an exact document phrase", () => {
+  it("accepts a concise canonical title when the explicit-citation lane finds an exact document phrase, but records the WEAKER title-phrase grounding", () => {
+    // Regression fixture for floors-capability-proposal §2.2: this is the
+    // "41st Nicomachean Ethics edition" case — no reference-list entry at
+    // all, grounded only by the title appearing somewhere in the paper's
+    // own prose. `isExplicitCitation` stays true (acceptance is unchanged),
+    // but `explicitCitationSource` must record the weaker path so selection
+    // (not the gate) can tell it apart from a genuinely cited edition.
     const withText: WorkIdentity = {
       ...irwin,
       explicitCitationTexts: [],
@@ -683,7 +696,14 @@ describe("relevance gate — short distinctive canonical titles in citation entr
 
     expect(canonical.signals.isExplicitCitation).toBe(true);
     expect(canonical.verdict).toBe("accepted");
+    expect(canonical.signals.explicitCitationSource).toBe("title_phrase");
     expect(commentary.signals.isExplicitCitation).toBe(false);
     expect(commentary.verdict).not.toBe("accepted");
+  });
+
+  it("records no explicit-citation source for a candidate that isn't one", () => {
+    const a = assessCandidate(R({ title: "Aristotle on Vice", authors: ["Jozef Müller"] }), irwin, "scholarly_debate");
+    expect(a.signals.isExplicitCitation).toBe(false);
+    expect(a.signals.explicitCitationSource).toBeNull();
   });
 });

@@ -86,6 +86,9 @@ import {
   type SourceAuthority,
   findOpenAccessEvidence,
   retrieveOpenAccessText,
+  selectForFullInspection,
+  buildCitationBridgeResource,
+  shouldBridgeCitationToResearchResource,
 } from "@ice/research";
 import { and, eq, isNotNull, ne, sql } from "drizzle-orm";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
@@ -576,6 +579,17 @@ async function applyResolvedCitation(input: {
   sourceAnchor: RawCitation["anchor"];
   record: CitationMatch;
   bibId: string;
+  /**
+   * Floors-capability-proposal §2.3 bridge: set ONLY when this resolution
+   * came from the independent citation-resolution pathway (a live lookup or
+   * catalogue-match reuse) and is genuinely not yet reflected in this run's
+   * own `research_resource` rows — i.e. `resolveCitationMetadata`'s call,
+   * never `linkCitationsToRunDiscoveries`'s (whose match is, by
+   * construction, already a `research_resource` row in this exact run).
+   * Left undefined/null, no bridge row is written — the pre-existing
+   * behavior for every other caller.
+   */
+  bridgeRunId?: string | null;
 }): Promise<void> {
   const { citationId, workId, workIdentityId, userId, record, bibId } = input;
   const [link] = await db
@@ -647,6 +661,30 @@ async function applyResolvedCitation(input: {
       createdBy: "system",
     });
   }
+
+  // Floors-capability-proposal §2.3: this citation resolved through the
+  // independent citation-resolution pathway, not this run's own
+  // discovery/acceptance loop — bridge it into `research_resource`, the ONLY
+  // table the direct-source-floor gate counts, using ONLY data already
+  // verified above (no new lookup, no new AI cost). `onConflictDoNothing`
+  // covers the (unlikely but real) race against that same run's own
+  // discovery loop independently finding and inserting the identical
+  // resource: whichever writer commits first wins, the other is a safe no-op
+  // rather than a unique-constraint crash, and either way a
+  // `research_resource` row ends up present, which is the only thing this
+  // bridge exists to guarantee.
+  if (input.bridgeRunId && shouldBridgeCitationToResearchResource(input.sourceType)) {
+    const bridged = buildCitationBridgeResource({
+      runId: input.bridgeRunId,
+      citationId,
+      bibId,
+      match: record,
+    });
+    await db
+      .insert(researchResources)
+      .values(bridged)
+      .onConflictDoNothing({ target: [researchResources.runId, researchResources.normalizedKey] });
+  }
 }
 
 /**
@@ -659,6 +697,7 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
     .select({
       id: citations.id,
       documentId: citations.documentId,
+      processingRunId: citations.processingRunId,
       rawText: citations.rawText,
       normalizedQuery: citations.normalizedQuery,
       sourceType: citations.sourceType,
@@ -725,6 +764,13 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
     sourceAnchor: citation.sourceAnchor as RawCitation["anchor"],
     record,
     bibId,
+    // This IS the citation-resolution pathway (§2.3) — a live lookup or
+    // catalogue-match reuse, not a same-run research_resource reuse — so it
+    // gets bridged. `processingRunId` is null only for a legacy v1 citation
+    // (which never enqueues this job in the first place, see
+    // `enqueueCitationMetadataResolution`'s only call site), so this is
+    // effectively always set for anything that reaches here.
+    bridgeRunId: citation.processingRunId,
   });
 }
 
@@ -799,6 +845,10 @@ export async function linkCitationsToRunDiscoveries(documentId: string, runId: s
         accessStatus: bibRow.accessStatus,
       },
       bibId: match.bibRecordId,
+      // Deliberately NOT bridged (no `bridgeRunId`): `match` came FROM this
+      // exact run's own `researchResources` query above, so a
+      // `research_resource` row already exists for it — bridging again would
+      // be pure redundancy (§2.3's bridge is only for the OTHER pathway).
     });
   }
 }
@@ -1447,13 +1497,22 @@ export async function analyzeEditionRun(input: {
   await setStage("research-discovery", "concepts-people-debates");
   let extractedConceptLabels: string[] = [];
   if (isModernPipeline) {
-    const CONCEPT_EXTRACTION_COST_ESTIMATE = 0.01;
+    // Floors-capability-proposal §4: raised from the 10/doc default to 16 —
+    // comfortable headroom above the gold-eval baseline's 8 required
+    // concepts without inviting low-value padding from its ~40-entry full
+    // inventory. Bounded, cheap raise ($0.0005-0.002/run via concepts.ts's
+    // proportional `maxOutputTokens`), and the ONLY concept-cap change in
+    // scope here — the proposal's paired sampling fix (a distributed text
+    // sample instead of the current first-6000-characters slice) is a
+    // separate, larger change and is deliberately deferred, not implemented.
+    const CONCEPT_EXTRACTION_COST_ESTIMATE = 0.012;
     if (canAfford(budget, CONCEPT_EXTRACTION_COST_ESTIMATE)) {
       const synthesizedConcepts = await synthesizeConcepts(responses, {
         primary: { title: resolvedTitle, author: resolvedAuthorName },
         textSample: input.text,
         model: cheapModel,
         safetyIdentifier,
+        maxConcepts: 16,
       });
       if (synthesizedConcepts.usedModel) {
         logUsage(
@@ -1671,13 +1730,23 @@ export async function analyzeEditionRun(input: {
 
   await setStage("classification", "creator-verification");
 
-  // Highest-authority first, capped by the full-inspection budget. Only
-  // ACCEPTED candidates get here — nothing quarantined or rejected is ever
-  // scored, projected, or shown.
-  const ranked = acceptedResources
-    .map(({ r, assessment }) => ({ r, assessment, authority: classifyAuthority(r) }))
-    .sort((a, b) => AUTHORITY_ORDER[a.authority] - AUTHORITY_ORDER[b.authority])
-    .slice(0, RESEARCH_LIMITS.maxFullInspections);
+  // Selection for the full-inspection budget (floors-capability-proposal
+  // §2.2): candidates whose explicit-citation grounding is the document's OWN
+  // reference-list evidence (a resolved key or a matched citation-text entry)
+  // are never competed out by authority alone — otherwise a flood of
+  // interchangeable, high-authority primary-text editions (all legitimately
+  // accepted via the broader title-phrase rule) can crowd out a real,
+  // lower-authority secondary source for one of the scarce
+  // `maxFullInspections` slots. Everything else is still ranked by authority,
+  // exactly as before, and fills whatever budget remains. Only ACCEPTED
+  // candidates get here — nothing quarantined or rejected is ever scored,
+  // projected, or shown; this changes WHICH accepted candidates are
+  // inspected, never what gets accepted (relevance.ts is untouched).
+  const ranked = selectForFullInspection(
+    acceptedResources.map(({ r, assessment }) => ({ r, assessment, authority: classifyAuthority(r) })),
+    AUTHORITY_ORDER,
+    RESEARCH_LIMITS.maxFullInspections,
+  );
   // Full text is never an input to the paid research stages. It is a bounded
   // post-discovery retrieval only for records whose provider metadata carries
   // an explicit approved license, so this cannot expand the existing $1/$5 AI
