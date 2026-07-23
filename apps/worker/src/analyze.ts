@@ -91,6 +91,7 @@ import {
   shouldBridgeCitationToResearchResource,
 } from "@ice/research";
 import { and, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+import { buildStructuralCitationSources } from "./citationSources";
 import { conservativeInfluenceClassification, verifyCreatorFromProviderMetadata } from "./v3";
 import { compactWorkSignal, persistV4WorkSignals } from "./v4";
 
@@ -1497,36 +1498,12 @@ export async function analyzeEditionRun(input: {
   // Stage 1 (cheap, deterministic): source-aware citation mentions seed the
   // query set. Apparatus stays out of processed body text, but it is a
   // first-class extraction input with its own anchor and provenance.
-  const structuralCitationSources: CitationSourceInput[] = [
-    ...(input.bodyBlocks ?? []).map((block) => ({
-      sourceType: "inline" as const,
-      text: block.text,
-      textBlockId: block.id,
-      pageIndex: block.pageIndex ?? null,
-      blockOrder: block.blockOrder ?? null,
-      parserConfidence: 0.82,
-    })),
-    ...(input.apparatus ?? []).flatMap((entry): CitationSourceInput[] => {
-      const sourceType = entry.kind === "bibliography_entry"
-        ? "bibliography"
-        : entry.kind === "footnote"
-          ? "footnote"
-          : entry.kind === "endnote"
-            ? "endnote"
-            : null;
-      if (!sourceType) return [];
-      const scope = entry.scope as { pageIndex?: number; blockOrder?: number };
-      return [{
-        sourceType,
-        text: entry.text,
-        textBlockId: entry.textBlockId,
-        pageIndex: scope.pageIndex ?? null,
-        blockOrder: scope.blockOrder ?? null,
-        marker: entry.marker,
-        parserConfidence: entry.source === "structure" ? 0.98 : 0.65,
-      }];
-    }),
-  ];
+  // (D-20-91: assembly — including the recovered-endnote exclusion — lives
+  // in `citationSources.ts` as a pure, DB-free function.)
+  const structuralCitationSources: CitationSourceInput[] = buildStructuralCitationSources({
+    bodyBlocks: input.bodyBlocks,
+    apparatus: input.apparatus,
+  });
   const citationCandidates = structuralCitationSources.length
     ? extractCitationMentions(structuralCitationSources, RESEARCH_LIMITS.maxCitationCandidates)
     : extractCitations(input.text, RESEARCH_LIMITS.maxCitationCandidates);

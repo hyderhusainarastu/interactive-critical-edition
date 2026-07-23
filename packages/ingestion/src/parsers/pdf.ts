@@ -1,4 +1,5 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
+import { recoverTruncatedEndnotes } from "./endnoteRecovery";
 import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
 
@@ -7,6 +8,12 @@ export interface ParsedBlock {
   text: string;
   marker?: string;
   bbox?: GrobidBbox | null;
+  /** D-20-89: true only for an endnote block this module supplied from the
+   *  document's own text layer because GROBID's structural output omitted
+   *  it — never for a block GROBID itself produced. Downstream code uses
+   *  this to label provenance honestly (never presented as GROBID/
+   *  layout-aware structure) rather than to change what the block contains. */
+  recovered?: boolean;
 }
 
 export interface ParsedPage {
@@ -135,6 +142,35 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
         if (page) page.blocks.push({ kind: block.kind, text: block.text, marker: block.marker, bbox: block.bbox });
       }
       text = processedTextFromPages(pages);
+
+      // D-20-89: GROBID's body/note segmentation can miss a numbered
+      // endnotes list entirely (confirmed: zero `place="end"` notes on a
+      // real fixture whose endnotes are fully present and well-formed in
+      // the plain text layer). Recover only the marker numbers GROBID's own
+      // structural output didn't already produce, from the SAME text layer
+      // already extracted above (unaffected by the block replacement just
+      // above — only `.blocks` was replaced, `.text` still holds the raw
+      // per-page unpdf/OCR text). Recovered blocks are `endnote` kind, so
+      // `processedTextFromPages` (already computed above) already and
+      // automatically excludes them from the reader body transcript — this
+      // can only add addressable apparatus, never duplicate into prose.
+      const structuredMarkers = new Set<number>();
+      for (const page of pages) {
+        for (const block of page.blocks) {
+          if (block.kind !== "footnote" && block.kind !== "endnote") continue;
+          const n = block.marker ? Number(block.marker) : NaN;
+          if (Number.isInteger(n)) structuredMarkers.add(n);
+        }
+      }
+      const recovered = recoverTruncatedEndnotes({
+        pageTexts: pages.map((page) => page.text),
+        structuredMarkers,
+      });
+      for (const entry of recovered) {
+        const index = Math.min(Math.max(entry.pageIndex, 0), Math.max(0, pages.length - 1));
+        const page = pages[index];
+        if (page) page.blocks.push({ kind: "endnote", text: entry.text, marker: entry.marker, recovered: true });
+      }
     }
   }
 
