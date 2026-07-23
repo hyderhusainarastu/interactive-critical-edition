@@ -491,7 +491,7 @@ function AnnotationsTab({
           </ul>
         )}
       </section>
-      {selected && <section aria-label="Annotation detail"><h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Detail</h3><ul className="mt-1.5"><PassageAnnotationCard note={selected} active resourceById={resourceById} onMutate={onMutate} /></ul></section>}
+      {selected && <section aria-label="Annotation detail"><h3 className="px-1 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Detail</h3><ul className="mt-1.5"><PassageAnnotationCard note={selected} active activationId={activeId} resourceById={resourceById} onMutate={onMutate} /></ul></section>}
     </div>
   );
 }
@@ -525,11 +525,19 @@ function PassageStatusButton({
 function PassageAnnotationCard({
   note,
   active,
+  activationId,
   resourceById,
   onMutate,
 }: {
   note: ReviewablePassage;
   active: boolean;
+  /** The reader-shell `activeId` — non-null ONLY after a real user selection
+   *  (marker click, index click, Prev/Next), never on initial page load.
+   *  Gates the scroll-into-view below so it cannot fire at mount (D-23-17),
+   *  where it scrolled the filter row above the fold in narrow drawers.
+   *  Deliberately separate from `active`, which the one caller hardcodes
+   *  `true` to keep the detail card always expanded/bordered. */
+  activationId: string | null;
   resourceById: Map<string, EditionResource>;
   onMutate?: (id: string, patch: PassageOverride) => void;
 }) {
@@ -545,9 +553,13 @@ function PassageAnnotationCard({
   const expanded = open || active;
   const rejected = note.verificationStatus === "rejected";
 
+  // Scroll only on a user-driven activation (`activationId` matching this
+  // card), never on the always-`active` mount — see the prop doc above.
+  // `note.id` is a dep so switching between two annotations while one is
+  // already activated still re-scrolls to the newly selected card.
   useEffect(() => {
-    if (active) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [active]);
+    if (active && activationId === note.id) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [active, activationId, note.id]);
   // Keep the edit draft in step with the server value when it changes under us.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
