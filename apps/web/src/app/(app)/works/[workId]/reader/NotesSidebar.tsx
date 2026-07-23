@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useScrollReveal } from "@/hooks/useScrollReveal";
 import type { BookmarkRecord, HighlightRecord, NoteRecord } from "./types";
 
 function positionLabel(p: BookmarkRecord["position"]) {
@@ -28,10 +27,26 @@ export function NotesSidebar({
   pendingHighlightIds?: string[];
 }) {
   const [draft, setDraft] = useState("");
-  const revealRef = useScrollReveal<HTMLElement>();
 
+  // D-22-xx: no `.app-reveal` scroll-entrance here — this panel is a fixed
+  // reader-shell sidebar, always inside the initial viewport at mount, not
+  // below-the-fold content a reader scrolls down to find. `.app-reveal`'s
+  // one-shot opacity fade (globals.css's `.28s` `app-scroll-reveal`
+  // keyframe) was added site-wide in Phase 22.6 (c5dc42b) for genuine
+  // scroll-into-view showcases; applied here it just replayed on every
+  // reader page load with no UX benefit, and the whole subtree's dip
+  // through low opacity during that fade is what an axe color-contrast
+  // scan can catch mid-flight if it samples before the animation settles
+  // (the same class of transient-render false-report as D-19-8, just from
+  // a different animation). Confirmed empirically: an axe probe at a range
+  // of settle delays reproduced contrast failures across this panel's own
+  // muted text (Highlights/Notes/Bookmarks headings and empty-state rows)
+  // that cleared once the fade finished — the resting-state token
+  // (`--color-text-muted` on `--color-surface`) computes to 8.46:1 (light)
+  // / 8.95:1 (dark), nowhere near marginal, so the token was never the
+  // defect.
   return (
-    <aside ref={revealRef} className="app-reveal w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+    <aside className="w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
       <section className="mb-6">
         <h2 className="mb-2 font-semibold text-[var(--color-text)]">Add a note</h2>
         {pendingHighlightIds.length > 0 && <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.</p>}

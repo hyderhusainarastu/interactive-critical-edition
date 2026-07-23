@@ -3,7 +3,6 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
-import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, VERIFICATION_LABELS } from "./annotationMeta";
@@ -92,7 +91,6 @@ export function EditionAnnotationsPanel({
   onSelectAnnotation?: (id: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
-  const revealRef = useScrollReveal<HTMLElement>();
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
   const anchoredNotes = edition.passageAnnotations.filter((a) => a.textBlockId !== null);
   const annotationCount = anchoredNotes.length + edition.wholeWorkGuidance.length;
@@ -114,8 +112,15 @@ export function EditionAnnotationsPanel({
     if (activeId) setTab(activeIsGeneratedNote ? "notes" : "annotations");
   }, [activeId, activeIsGeneratedNote]);
 
+  // D-22-xx: no `.app-reveal` here, same reasoning as `NotesSidebar.tsx` —
+  // this is a fixed reader-shell panel, always in the initial viewport at
+  // mount, not below-the-fold content a reader scrolls to. Confirmed via
+  // the same axe probe: this panel's own tab buttons/tab strip
+  // (`--color-text-muted`/`--color-text` on `--color-surface`, both
+  // comfortably >8:1 at rest) intermittently failed contrast only while
+  // the now-removed one-shot opacity fade was still in flight.
   return (
-    <aside ref={revealRef} aria-label="Edition sidebar" className="app-reveal w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <aside aria-label="Edition sidebar" className="w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="sticky top-0 z-10 flex gap-1 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm">
         <button
           type="button"
@@ -561,7 +566,17 @@ function PassageAnnotationCard({
         {expanded ? "Hide explanation" : "Read more"}
       </button>
       {expanded && (
-        <div className="app-panel-enter mt-1.5 border-t border-[var(--color-border)] pt-1.5 text-[0.78rem]">
+        // No `.app-panel-enter` here (D-22-xx): this component's one caller
+        // (`AnnotationsTab`'s "Detail" section) always passes `active` as a
+        // hardcoded literal `true`, so `expanded` is permanently true from
+        // this card's very first render, not a state a click transitions
+        // into — the `open` toggle above never has anything to flip. Since
+        // it is therefore always already-expanded at initial mount (never
+        // "freshly created at open time" the way `.app-panel-enter`'s own
+        // doc comment assumes for modals/drawers/popovers), the entrance
+        // fade replayed on every reader page load and was the third
+        // instance of the same transient-contrast pattern fixed above.
+        <div className="mt-1.5 border-t border-[var(--color-border)] pt-1.5 text-[0.78rem]">
           {editing ? (
             <div>
               <textarea
