@@ -55,7 +55,7 @@ function Hero() {
         </Link>
       </div>
       <p className="mt-4 text-sm text-[var(--color-text-muted)]">
-        Every AI-generated claim carries a confidence and a source. It&rsquo;s a research aid — never a
+        Every inferred claim carries a confidence and a source. It&rsquo;s a research aid — never a
         substitute for the primary text.
       </p>
     </section>
@@ -104,7 +104,7 @@ function ReaderShowcase() {
     <Showcase
       eyebrow="The reader"
       title="Annotations that show their work"
-      lead="Hover any marker and see what a passage references, why, and how sure the system is — with the exact source text that triggered it. Approve, edit, or dismiss anything. Original footnotes, AI annotations, and your own notes stay visually distinct."
+      lead="Hover any marker and see what a passage references, why, and how sure the system is — with the exact source text that triggered it. Approve, edit, or dismiss anything. Original footnotes, automated annotations, and your own notes stay visually distinct."
     >
       <figure className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-sm">
         <p className={READING_PROSE_CLASS}>
@@ -269,7 +269,7 @@ function Audiences() {
 
 function Reliability() {
   const points = [
-    { t: "Provenance on every claim", d: "AI annotations carry the model used, the prompt version, and the verbatim passage that triggered them." },
+    { t: "Provenance on every claim", d: "Every automated annotation records the classification model or rule that produced it, the prompt version, and the verbatim passage that triggered it." },
     { t: "No invented sources", d: "Bibliographic facts come only from real lookups (Crossref, OpenAlex, Open Library) — never generated. Unmatched citations stay flagged, not guessed." },
     { t: "Confidence, always shown", d: "Nothing is presented as settled scholarship. You verify against the primary text, and can correct or hide anything." },
     { t: "Your data is yours", d: "Per-user isolation throughout. Uploads are yours to delete; content is never used to train models without explicit opt-in." },

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: SITE_NAME,
   description:
-    "An AI-assisted scholarly reader: annotated critical editions and personalized reading roadmaps for difficult texts.",
+    "An automated scholarly reader: annotated critical editions and personalized reading roadmaps for difficult texts.",
 };
 
 export default function RootLayout({
