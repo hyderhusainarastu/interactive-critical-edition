@@ -600,11 +600,50 @@ function yearConflictsWithQuery(query: string, candidate: OverlapCandidate): boo
   return qYear != null && candidate.year != null && qYear !== candidate.year;
 }
 
+/**
+ * D-23-19 (floors attempt 4/5 — the wrong-work-link CLASS): a bibliographic
+ * provider indexes a book's published REVIEW/notice as its own record whose
+ * title substantially overlaps — often literally repeats — the reviewed
+ * work's title. `titleOverlap` happily accepts these, so a citation to the
+ * WORK mis-links to a review OF the work. Observed in the actual floors-run
+ * corpus: "Love and Friendship in Plato and Aristotle (review)"; a review
+ * header carried verbatim as a Crossref title, "Book Reviews … Pp. xxiii +
+ * 441, $50.00 (cloth)"; "Richmond Lattimore: The Odyssey of Homer. … Pp. 374.
+ * … Cloth, $8.95."; "Sarah Broadie and Christopher Rowe (eds) … Pp. x+468.
+ * £15.00 (Pbk)." These guards read ONLY the candidate's own title for signals
+ * that never appear in a genuine work's title — an explicit "review" marker,
+ * a pagination notice ("Pp. 374"/"Pp. x+468"), or a binding notice
+ * ("(cloth)"/"(Pbk)") — so a review notice is rejected while a same-titled
+ * monograph is untouched. Deliberately grounded in the real corpus, not
+ * speculative; deliberately omits a bare currency signal, which a legitimate
+ * title can carry ("$2.00 a Day"). */
+const REVIEW_TITLE_MARKER = /^\s*(?:book\s+)?reviews?\b|^\s*reviews?\s+of\b|^\s*review\s*:|\(\s*review\s*\)\s*$|\[\s*review\s*\]\s*$/i;
+const PAGINATION_NOTICE = /\bpp\.\s*[ivxlcdm\d]/i;
+const BINDING_NOTICE = /\((?:cloth|paper|pbk|hbk|hardback|paperback|hardcover)\)/i;
+
+function isReviewTitle(title: string): boolean {
+  return REVIEW_TITLE_MARKER.test(title) || PAGINATION_NOTICE.test(title) || BINDING_NOTICE.test(title);
+}
+
+/**
+ * A candidate is disqualified — regardless of how well its title scores —
+ * when its KNOWN year contradicts the citation's own year, or when it is a
+ * review/notice OF a work rather than the work itself. Applied on EVERY
+ * resolution path (D-23-19): the live @ice/bibliographic lookup in
+ * `resolveCitationMetadata` (which previously had NO such guard at all — the
+ * exact hole that linked "…J Annas … 1977" to A. W. Price's 1990 book), the
+ * catalogue fallback, and the same-run discovery linker (both via
+ * `bestOverlapMatch`). Precision over recall: a disqualified candidate leaves
+ * the citation unresolved, never mis-linked. */
+function disqualifiesCitationMatch(query: string, candidate: OverlapCandidate): boolean {
+  return yearConflictsWithQuery(query, candidate) || isReviewTitle(candidate.title);
+}
+
 function bestOverlapMatch<T extends OverlapCandidate>(query: string, candidates: readonly T[]): T | null {
   let best: T | null = null;
   let bestScore = 0;
   for (const candidate of candidates) {
-    if (yearConflictsWithQuery(query, candidate)) continue;
+    if (disqualifiesCitationMatch(query, candidate)) continue;
     const score = titleOverlap(query, candidate.title);
     if (score > bestScore) {
       bestScore = score;
@@ -849,7 +888,14 @@ export async function resolveCitationMetadata(citationId: string): Promise<void>
     // upstream; resolveCitation still only ever looks UP against the
     // cleaned query, rawText is used solely to pick the provider order.
     const live = await resolveCitation(citation.normalizedQuery, { rawText: citation.rawText });
-    if (live) {
+    // D-23-19: a live provider hit is accepted only if it survives the SAME
+    // corroboration guards a catalogue/discovery match must (`bestOverlapMatch`
+    // applies them; the live path previously did not). A year-conflicting or
+    // review-notice hit is vetoed here, before `findOrCreateBibRecord` ever
+    // creates a row for it, so the citation falls through to the catalogue
+    // fallback below and then to unresolved — a wrong-work link is strictly
+    // worse than staying unresolved (anti-hallucination, plan §11/§12).
+    if (live && !disqualifiesCitationMatch(citation.normalizedQuery, live)) {
       record = live;
       bibId = await findOrCreateBibRecord(live);
     }

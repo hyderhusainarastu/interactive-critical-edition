@@ -563,6 +563,163 @@ describe.skipIf(!hasDb)("D-20-68 — citation-to-candidate linking", () => {
     });
   });
 
+  /**
+   * D-23-19 — floors attempt 4/5, the WRONG-WORK-LINK CLASS. The D-23-7 tests
+   * above all mock `resolveCitation` to return `null`, so they only ever
+   * exercise the catalogue-fallback / same-run-discovery paths, where the
+   * year veto (`bestOverlapMatch`) lives. But the production mis-links came
+   * through the OTHER path: `resolveCitationMetadata` accepted a LIVE provider
+   * hit (Crossref's own top-N pick, via @ice/bibliographic's `bestTitleMatch`,
+   * gated ONLY by `titleOverlap >= 0.34`) with NO year/review corroboration at
+   * all. That is how "…J Annas … Mind 86 1977" resolved to A. W. Price's 1990
+   * "Love and Friendship in Plato and Aristotle", and how citations to works
+   * resolved to REVIEW notices of those works ("… Pp. 374 … Cloth, $8.95.",
+   * "Book Reviews … (cloth)"). These tests reproduce the live-path bypass and
+   * verify the guards now applied there.
+   */
+  describe("D-23-19 — live-lookup wrong-work / review link vetoed", () => {
+    const rawText = "Plato and Aristotle on Love and Friendship J Annas Mind 86 1977";
+    const query = rawText;
+
+    async function seedCitation(document: { id: string }, run: { id: string }) {
+      const [citation] = await db
+        .insert(citations)
+        .values({
+          documentId: document.id,
+          processingRunId: run.id,
+          rawText,
+          normalizedQuery: query,
+          sourceType: "footnote",
+          parserConfidence: 0.9,
+          resolutionState: "pending",
+          resolutionSource: "unresolved",
+        })
+        .returning({ id: citations.id });
+      return citation;
+    }
+
+    it("REJECTS a live provider hit whose year contradicts the citation year (the exact production bypass)", async () => {
+      // The live lookup returns A. W. Price's 1990 book — precisely what
+      // Crossref's own top-N ranking surfaced for this garbled 1977 query. No
+      // catalogue record is seeded, so a correctly-vetoed live hit leaves the
+      // citation honestly unresolved rather than mis-linked.
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      resolver.resolveCitation.mockResolvedValueOnce({
+        source: "crossref" as const,
+        externalId: "10.1017/s0031819100037517",
+        title: "Love and Friendship in Plato and Aristotle",
+        authors: "A. W. Price",
+        year: 1990,
+        doi: "10.1017/s0031819100037517",
+        url: "https://doi.org/10.1017/s0031819100037517",
+        accessStatus: "subscription" as const,
+        raw: {},
+      });
+      const citation = await seedCitation(document, run);
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      // A wrong-work link is strictly worse than unresolved (anti-hallucination).
+      expect(resolved.resolutionState).toBe("unresolved");
+      expect(resolved.resolvedBibId).toBeNull();
+      await purgeFixtureTitles();
+    });
+
+    it("REJECTS a live provider hit that is a REVIEW notice of the work, even when its year agrees", async () => {
+      // Same year (1977) as the citation, so the year veto cannot fire — this
+      // isolates the review-notice guard. A citation to a WORK must never link
+      // to a published review OF that work.
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      resolver.resolveCitation.mockResolvedValueOnce({
+        source: "crossref" as const,
+        externalId: "10.9999/review",
+        title: "Love and Friendship in Plato and Aristotle (review)",
+        authors: "John Bussanich",
+        year: 1977,
+        doi: "10.9999/review",
+        url: "https://doi.org/10.9999/review",
+        accessStatus: "subscription" as const,
+        raw: {},
+      });
+      const citation = await seedCitation(document, run);
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("unresolved");
+      expect(resolved.resolvedBibId).toBeNull();
+      await purgeFixtureTitles();
+    });
+
+    it("rejects the wrong-year live hit AND recovers the TRUE record from the catalogue fallback", async () => {
+      // The realistic end-to-end shape: the live lookup returns the wrong
+      // (year-conflicting) Price book, but the true Annas 1977 record already
+      // sits in the shared catalogue. The live hit is vetoed, then the
+      // catalogue fallback links the correct record.
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      const [wrong] = await db
+        .insert(bibliographicRecords)
+        .values({ source: "crossref", title: "Love and Friendship in Plato and Aristotle", authors: "A. W. Price", year: 1990, accessStatus: "subscription" })
+        .returning({ id: bibliographicRecords.id });
+      const [truth] = await db
+        .insert(bibliographicRecords)
+        .values({ source: "crossref", title: "Plato and Aristotle on Friendship and Altruism", authors: "JULIA ANNAS", year: 1977, doi: "10.1093/mind/lxxxvi.344.532", accessStatus: "subscription" })
+        .returning({ id: bibliographicRecords.id });
+
+      resolver.resolveCitation.mockResolvedValueOnce({
+        source: "crossref" as const,
+        externalId: "10.1017/s0031819100037517",
+        title: "Love and Friendship in Plato and Aristotle",
+        authors: "A. W. Price",
+        year: 1990,
+        doi: "10.1017/s0031819100037517",
+        url: "https://doi.org/10.1017/s0031819100037517",
+        accessStatus: "subscription" as const,
+        raw: {},
+      });
+      const citation = await seedCitation(document, run);
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBe(truth.id);
+      expect(resolved.resolvedBibId).not.toBe(wrong.id);
+
+      await db.delete(bibliographicRecords).where(inArray(bibliographicRecords.id, [wrong.id, truth.id]));
+      await purgeFixtureTitles();
+    });
+
+    it("regression: a clean live hit (year agrees, not a review) still resolves normally", async () => {
+      await purgeFixtureTitles();
+      const { document, run } = await seedDocument();
+      resolver.resolveCitation.mockResolvedValueOnce({
+        source: "crossref" as const,
+        externalId: "10.1093/mind/lxxxvi.344.532",
+        title: "Plato and Aristotle on Friendship and Altruism",
+        authors: "JULIA ANNAS",
+        year: 1977,
+        doi: "10.1093/mind/lxxxvi.344.532",
+        url: "https://doi.org/10.1093/mind/lxxxvi.344.532",
+        accessStatus: "subscription" as const,
+        raw: {},
+      });
+      const citation = await seedCitation(document, run);
+
+      await resolveCitationMetadata(citation.id);
+      const [resolved] = await db.select().from(citations).where(eq(citations.id, citation.id));
+
+      expect(resolved.resolutionState).toBe("resolved");
+      expect(resolved.resolvedBibId).toBeTruthy();
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, resolved.resolvedBibId!));
+      await purgeFixtureTitles();
+    });
+  });
+
   it("never re-runs a live lookup or downgrades an already-resolved citation (idempotency guard)", async () => {
     const { document, run } = await seedDocument();
     resolver.resolveCitation.mockResolvedValueOnce({
