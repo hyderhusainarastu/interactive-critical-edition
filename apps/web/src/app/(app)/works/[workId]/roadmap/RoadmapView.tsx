@@ -21,6 +21,14 @@ interface RoadmapResponse {
   items: RoadmapItem[];
   totalReached: number;
   levelCounts: Record<ReaderLevelFilter, number>;
+  hiddenItems: Array<{ bibId: string; title: string; authors: string | null; year: number | null }>;
+}
+
+interface SearchResult {
+  id: string;
+  title: string;
+  authors: string | null;
+  year: number | null;
 }
 
 const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = {
@@ -58,6 +66,13 @@ export function RoadmapView({
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
   const [maxMinutes, setMaxMinutes] = useState<string>("");
+  // Manual add (D-22-3): a progressive-disclosure search box — collapsed
+  // by default, revealed on request, matching the site-wide preference
+  // for summary-first controls (owner directive B).
+  const [showAddSearch, setShowAddSearch] = useState(false);
+  const [addQuery, setAddQuery] = useState("");
+  const [addResults, setAddResults] = useState<SearchResult[]>([]);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // Used by `mutate` to refetch after a change. Not called from the effect
   // (the set-state-in-effect rule flags calling any state-setting function
@@ -109,6 +124,54 @@ export function RoadmapView({
         body: JSON.stringify({ bibId, ...patch }),
       });
       await load(); // recompute so the change is reflected in ranking/order
+    },
+    [workId, load],
+  );
+
+  // Manual-add search (D-22-3): control -> URL query param -> matching
+  // catalog rows -> rendered result list. Debounced so it isn't a request
+  // per keystroke; a stale-response guard (`ignore`) keeps a fast-typed
+  // later query from being clobbered by an earlier one that resolves late.
+  useEffect(() => {
+    // Below the query-length threshold there is nothing to fetch; the
+    // render below already gates on the same threshold, so no reset
+    // (setState) is needed here — avoids a synchronous setState in an
+    // effect body (this codebase's own set-state-in-effect lint rule).
+    if (!showAddSearch || addQuery.trim().length < 2) return;
+    let ignore = false;
+    const timer = setTimeout(() => {
+      fetch(`/api/works/${workId}/roadmap/search?q=${encodeURIComponent(addQuery.trim())}`)
+        .then(async (res) => {
+          if (!res.ok) throw new Error("Search failed");
+          return res.json();
+        })
+        .then((d: { results: SearchResult[] }) => {
+          if (!ignore) {
+            setAddResults(d.results);
+            setAddError(null);
+          }
+        })
+        .catch((e) => {
+          if (!ignore) setAddError(e instanceof Error ? e.message : "Search failed");
+        });
+    }, 300);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [workId, showAddSearch, addQuery]);
+
+  const addManually = useCallback(
+    async (bibId: string) => {
+      await fetch(`/api/works/${workId}/roadmap/item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bibId, addedManually: true, hidden: false }),
+      });
+      setAddQuery("");
+      setAddResults([]);
+      setShowAddSearch(false);
+      await load();
     },
     [workId, load],
   );
@@ -192,6 +255,58 @@ export function RoadmapView({
         </div>
       </div>
 
+      {/* Manual add (D-22-3): collapsed by default, revealed on request. */}
+      <div className="mb-6">
+        <button
+          type="button"
+          className="text-sm underline"
+          onClick={() => setShowAddSearch((v) => !v)}
+          aria-expanded={showAddSearch}
+        >
+          {showAddSearch ? "Cancel adding a reference" : "+ Add a reference"}
+        </button>
+        {showAddSearch && (
+          <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-xs text-[var(--color-text-muted)]">
+                Search the catalog by title — this puts it in your roadmap even though nothing detected a connection
+                automatically.
+              </span>
+              <input
+                type="text"
+                value={addQuery}
+                onChange={(e) => setAddQuery(e.target.value)}
+                placeholder="Title…"
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                aria-label="Search for a reference to add"
+              />
+            </label>
+            {addError && <p className="mt-2 text-xs text-[var(--color-accent-burgundy)]">{addError}</p>}
+            {addQuery.trim().length >= 2 && addResults.length === 0 && !addError && (
+              <p className="mt-2 text-xs text-[var(--color-text-muted)]">No matches.</p>
+            )}
+            <ul className="mt-2 flex flex-col gap-1">
+              {/* Below the 2-character threshold there's nothing fresh to
+                  show, even if a longer earlier query left results in
+                  state — gate the render on the same threshold the fetch
+                  itself uses (owner directive C: control -> state -> output). */}
+              {(addQuery.trim().length >= 2 ? addResults : []).map((r) => (
+                <li key={r.id} data-search-result={r.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span>
+                    {r.title}
+                    {r.year ? ` (${r.year})` : ""}
+                    {r.authors && <span className="text-[var(--color-text-muted)]"> — {r.authors}</span>}
+                  </span>
+                  <button type="button" className="shrink-0 underline" onClick={() => addManually(r.id)}>
+                    Add
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
       {!data && !error && <p className="text-[var(--color-text-muted)]">Computing roadmap…</p>}
 
@@ -222,6 +337,30 @@ export function RoadmapView({
           </ol>
         </section>
       ))}
+
+      {/* Restore/un-hide (D-22-3): progressive disclosure — collapsed by
+          default so hidden items don't flood the page (owner directive B). */}
+      {data && data.hiddenItems.length > 0 && (
+        <details className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text)]">
+            Hidden items ({data.hiddenItems.length})
+          </summary>
+          <ul className="mt-2 flex flex-col gap-2">
+            {data.hiddenItems.map((h) => (
+              <li key={h.bibId} data-hidden-item={h.bibId} className="flex items-center justify-between gap-2 text-sm">
+                <span>
+                  {h.title}
+                  {h.year ? ` (${h.year})` : ""}
+                  {h.authors && <span className="text-[var(--color-text-muted)]"> — {h.authors}</span>}
+                </span>
+                <button type="button" className="shrink-0 underline" onClick={() => mutate(h.bibId, { hidden: false })}>
+                  Restore
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -246,7 +385,13 @@ function RoadmapCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-medium text-[var(--color-text)]">
-            {item.title}
+            {item.workId ? (
+              <Link href={`/works/${item.workId}`} className="underline">
+                {item.title}
+              </Link>
+            ) : (
+              item.title
+            )}
             {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
           </p>
           {item.authors && <p className="text-xs text-[var(--color-text-muted)]">{item.authors}</p>}
@@ -263,6 +408,11 @@ function RoadmapCard({
             {item.known && <span className="text-[var(--color-accent-green)]">· review only</span>}
             {item.overBudget && <span>· over time budget</span>}
             {item.overridden && <span>· adjusted</span>}
+            {item.mergedCount > 0 && (
+              <span title="Other editions/reviews of this same work were folded into this one item">
+                · {item.mergedCount} {item.mergedCount === 1 ? "edition" : "editions"} collapsed here
+              </span>
+            )}
           </div>
 
           {/* Controls */}
@@ -296,6 +446,29 @@ function RoadmapCard({
                 ))}
               </select>
             </label>
+            <label className="flex items-center gap-1">
+              <span className="text-[var(--color-text-muted)]">Pin position</span>
+              <input
+                type="number"
+                min={1}
+                defaultValue={item.sequence}
+                className="w-14 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+                aria-label={`Pin ${item.title} to position`}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const value = Number((e.target as HTMLInputElement).value);
+                    if (Number.isFinite(value) && value >= 1) onMutate(item.bibId, { manualPosition: value });
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = Number(e.target.value);
+                  if (Number.isFinite(value) && value >= 1) onMutate(item.bibId, { manualPosition: value });
+                }}
+              />
+            </label>
+            <button type="button" className="underline" onClick={() => onMutate(item.bibId, { manualPosition: null })}>
+              Clear pin
+            </button>
             <button type="button" className="underline" onClick={() => onMutate(item.bibId, { hidden: true })}>
               Hide
             </button>

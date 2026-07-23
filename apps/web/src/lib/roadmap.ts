@@ -1,5 +1,6 @@
 import { db, readingRecords, roadmapOverrides, understandingRatings } from "@ice/db";
 import {
+  collapseDuplicateCandidates,
   countByReaderLevel,
   rankRoadmap,
   type OverrideEntry,
@@ -43,6 +44,7 @@ interface DetailRow {
   source: string;
   in_library: boolean;
   centrality: number;
+  matched_work_id: string | null;
 }
 
 const NORM_TITLE = (col: string) => sql.raw(`regexp_replace(lower(${col}), '[^a-z0-9]', '', 'g')`);
@@ -55,6 +57,10 @@ export interface RoadmapResult {
   /** How many items each reader level (plus "all") would show for these same
    *  candidates — plan §34.4 9.4's always-visible per-level counts. */
   levelCounts: Record<ReaderLevelFilter, number>;
+  /** Targets the reader explicitly hid (plan §22.5 "restore/un-hide",
+   *  D-22-3) — kept out of `items` but listed here so the UI has something
+   *  to offer a "Restore" control for. */
+  hiddenItems: Array<{ bibId: string; title: string; authors: string | null; year: number | null }>;
 }
 
 export async function computeRoadmap(
@@ -102,13 +108,25 @@ export async function computeRoadmap(
     all: 0,
   };
 
-  if (reach.length === 0) {
-    return { rootWorkId, options, items: [], totalReached: 0, levelCounts: emptyLevelCounts };
+  // Overrides are fetched before the reach-empty check, not after, because
+  // a manually added target (D-22-3 "manual add") may be the ONLY reason
+  // this roadmap has anything to show at all — by definition it isn't
+  // reached by the graph traversal above.
+  const overrides = await db
+    .select()
+    .from(roadmapOverrides)
+    .where(and(eq(roadmapOverrides.userId, userId), eq(roadmapOverrides.rootWorkId, rootWorkId)));
+  const manuallyAddedIds = overrides.filter((o) => o.addedManually).map((o) => o.bibId);
+
+  const reachedIds = [...new Set(reach.map((r) => r.bib_id))];
+  const bibIds = [...new Set([...reachedIds, ...manuallyAddedIds])];
+
+  if (bibIds.length === 0) {
+    return { rootWorkId, options, items: [], totalReached: 0, levelCounts: emptyLevelCounts, hiddenItems: [] };
   }
 
-  const bibIds = [...new Set(reach.map((r) => r.bib_id))];
-
-  // 2) Details + centrality + in-library flag for those targets.
+  // 2) Details + centrality + in-library flag + matched owned work (for
+  // direct navigation, D-22-4) for those targets.
   const details = (await db.execute(sql`
     SELECT br.id, br.title, br.authors, br.year, br.doi, br.access_status, br.source,
       EXISTS (
@@ -120,14 +138,21 @@ export async function computeRoadmap(
         SELECT COUNT(DISTINCT ge.source_id)::int FROM graph_edge ge
         WHERE ge.user_id = ${userId} AND ge.source_type = 'work'
           AND ge.target_type = 'bibliographic_record' AND ge.target_id = br.id
-      ) AS centrality
+      ) AS centrality,
+      (
+        SELECT w.id FROM work w
+        WHERE w.user_id = ${userId} AND w.deleted_at IS NULL
+          AND ${NORM_TITLE("w.title")} = ${NORM_TITLE("br.title")}
+        ORDER BY w.created_at ASC
+        LIMIT 1
+      ) AS matched_work_id
     FROM bibliographic_record br
     WHERE br.id IN ${bibIds}
   `)) as unknown as DetailRow[];
   const detailById = new Map(details.map((d) => [d.id, d]));
 
-  // 3) User profile (ratings + reading status) and overrides for these targets.
-  const [ratings, records, overrides] = await Promise.all([
+  // 3) User profile (ratings + reading status) for these targets.
+  const [ratings, records] = await Promise.all([
     db
       .select({ bibId: understandingRatings.bibId, score: understandingRatings.score })
       .from(understandingRatings)
@@ -136,10 +161,6 @@ export async function computeRoadmap(
       .select({ bibId: readingRecords.bibId, status: readingRecords.status })
       .from(readingRecords)
       .where(eq(readingRecords.userId, userId)),
-    db
-      .select()
-      .from(roadmapOverrides)
-      .where(and(eq(roadmapOverrides.userId, userId), eq(roadmapOverrides.rootWorkId, rootWorkId))),
   ]);
 
   const profile = new Map<string, ProfileEntry>();
@@ -154,6 +175,16 @@ export async function computeRoadmap(
       manualPosition: o.manualPosition ?? undefined,
     });
   }
+
+  // A target the reader explicitly hid (D-22-3 "restore/un-hide") — kept
+  // out of the ranked items, but listed separately with just enough detail
+  // (title/authors/year) for a "Restore" control to identify it.
+  const hiddenItems = bibIds
+    .filter((id) => overrideMap.get(id)?.hidden)
+    .map((id) => {
+      const d = detailById.get(id);
+      return { bibId: id, title: d?.title ?? "Untitled", authors: d?.authors ?? null, year: d?.year ?? null };
+    });
 
   // 4) Build candidates (aggregate categories per target) and rank.
   const catsByBib = new Map<string, RelationshipCategory[]>();
@@ -174,20 +205,30 @@ export async function computeRoadmap(
       title: d?.title ?? "Untitled",
       authors: d?.authors ?? null,
       year: d?.year ?? null,
+      // A manually added target the traversal never reached has no
+      // detected category — fall back to "ai_inferred" (the existing
+      // unclassified default this function already used for any
+      // no-category case) rather than implying evidence that doesn't exist.
       categories: catsByBib.get(id) ?? ["ai_inferred"],
       confidence: confByBib.get(id) ?? 0.5,
-      centrality: d?.centrality ?? 1,
-      depth: depthByBib.get(id) ?? 1,
+      centrality: d?.centrality ?? 0,
+      // Same reasoning: a target with no reach entry wasn't found at any
+      // depth, so it gets a large depth rather than the misleading "1" a
+      // directly-referenced target would have.
+      depth: depthByBib.get(id) ?? 99,
       // No DOI (or an Open Library record) reads as a book; a DOI reads as
       // an article — a rough length signal for the time estimate.
       isBook: !d?.doi || d?.source === "openlibrary",
       inLibrary: d?.in_library ?? false,
+      addedManually: manuallyAddedIds.includes(id),
+      workId: d?.matched_work_id ?? null,
     };
   });
 
-  const items = rankRoadmap(candidates, profile, overrideMap, options);
+  const collapsed = collapseDuplicateCandidates(candidates);
+  const items = rankRoadmap(collapsed, profile, overrideMap, options);
   const { readerLevel: _readerLevel, ...countBaseOptions } = options;
   void _readerLevel;
-  const levelCounts = countByReaderLevel(candidates, profile, overrideMap, countBaseOptions);
-  return { rootWorkId, options, items, totalReached: bibIds.length, levelCounts };
+  const levelCounts = countByReaderLevel(collapsed, profile, overrideMap, countBaseOptions);
+  return { rootWorkId, options, items, totalReached: bibIds.length, levelCounts, hiddenItems };
 }

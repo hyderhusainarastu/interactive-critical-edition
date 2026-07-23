@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 import { writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { bibliographicRecords, db } from "@ice/db";
+import { eq } from "drizzle-orm";
 import { createVerifiedTestUser, deleteTestUser, uploadAndConfirmViaUI } from "./helpers";
 
 /**
@@ -79,6 +81,57 @@ test.describe("Roadmap & knowledge graph (Phase 5)", () => {
     for (let i = 0; i < 10; i++) await page.keyboard.press("ArrowRight"); // → 100
     await slider.dispatchEvent("mouseup");
     await expect(page.getByText("review only").first()).toBeVisible({ timeout: 10000 });
+
+    // --- D-22-3: hide → restore (control -> state -> output, exact bibId) ---
+    const firstItemBibId = await firstItem.getAttribute("data-roadmap-item");
+    expect(firstItemBibId).toBeTruthy();
+    await firstItem.getByRole("button", { name: "Hide" }).click();
+    await expect(page.locator(`[data-roadmap-item="${firstItemBibId}"]`)).toHaveCount(0);
+    const hiddenSummary = page.getByText(/Hidden items \(\d+\)/);
+    await expect(hiddenSummary).toBeVisible({ timeout: 10000 });
+    await hiddenSummary.click(); // open the <details> disclosure
+    const hiddenRow = page.locator(`[data-hidden-item="${firstItemBibId}"]`);
+    await expect(hiddenRow).toBeVisible();
+    await hiddenRow.getByRole("button", { name: "Restore" }).click();
+    await expect(page.locator(`[data-roadmap-item="${firstItemBibId}"]`)).toBeVisible({ timeout: 10000 });
+
+    // --- D-22-3: manual reorder (position-input control) ---
+    const restoredItem = page.locator(`[data-roadmap-item="${firstItemBibId}"]`);
+    const positionInput = restoredItem.getByLabel(/Pin .* to position/);
+    await positionInput.fill("1");
+    await positionInput.press("Enter");
+    // `toHaveAttribute` retries until the mutate → reload round trip lands,
+    // rather than a fixed sleep (see docs/PROJECT-LOG.md's caution against
+    // timing-based E2E assertions).
+    await expect(page.locator("[data-roadmap-item]").first()).toHaveAttribute("data-roadmap-item", firstItemBibId!, {
+      timeout: 10000,
+    });
+
+    // --- D-22-3: manual add (search the shared catalog → add → appears as
+    // a roadmap item), verified with an exact-ID assertion (owner directive
+    // C: control [search text] -> state [addResults] -> output [rendered
+    // result + added roadmap item], not just "something appeared"). Seeds a
+    // catalog row this work's traversal never reached, via direct DB access
+    // (same precedent as other specs' `@ice/db` fixture seeding).
+    const manualTitle = `Zzz Manually Added Fixture ${Date.now()}`;
+    const [manualRecord] = await db
+      .insert(bibliographicRecords)
+      .values({ source: "unresolved", title: manualTitle, accessStatus: "metadata_only" })
+      .returning({ id: bibliographicRecords.id });
+    try {
+      await page.getByRole("button", { name: "+ Add a reference" }).click();
+      await page.getByLabel("Search for a reference to add").fill("Zzz Manually Added Fixture");
+      const resultRow = page.locator(`[data-search-result="${manualRecord.id}"]`);
+      await expect(resultRow).toBeVisible({ timeout: 10000 });
+      await expect(resultRow).toContainText(manualTitle);
+      await resultRow.getByRole("button", { name: "Add" }).click();
+      const addedItem = page.locator(`[data-roadmap-item="${manualRecord.id}"]`);
+      await expect(addedItem).toBeVisible({ timeout: 10000 });
+      await expect(addedItem).toContainText("Added by you, not detected automatically");
+    } finally {
+      // Cascades the roadmap_override row too (onDelete: cascade).
+      await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, manualRecord.id));
+    }
 
     // --- Visualization: accessible table (default) ---
     // Phase 11.8 renamed this surface from "Knowledge graph" to

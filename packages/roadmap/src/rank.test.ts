@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   KNOWN_THRESHOLD,
+  collapseDuplicateCandidates,
   countByReaderLevel,
   exactTiersForReaderLevel,
   matchesReaderLevel,
+  normalizeTitleForDedup,
   rankRoadmap,
   suggestReaderLevelFromCompletions,
   type OverrideEntry,
@@ -181,6 +183,92 @@ describe("rankRoadmap — modes, filters, overrides", () => {
     const items = rankRoadmap([contextual, essential], empty(), noOverrides(), { readerLevel: "research" });
     expect(items.map((i) => i.sequence)).toEqual([1, 2]);
     expect(items[0].bibId).toBe("e"); // essential first
+  });
+});
+
+describe("normalizeTitleForDedup", () => {
+  it("collapses case and punctuation so the same work titled differently matches", () => {
+    expect(normalizeTitleForDedup("Vice and Reason")).toBe(normalizeTitleForDedup("Vice and Reason."));
+    expect(normalizeTitleForDedup("Critique of Pure Reason (1781)")).toBe(
+      normalizeTitleForDedup("Critique of Pure Reason 1781"),
+    );
+  });
+
+  it("does not treat two different empty/blank titles as the same key (fallback must not merge them)", () => {
+    expect(normalizeTitleForDedup("")).toBe("");
+  });
+});
+
+describe("collapseDuplicateCandidates (D-22-2: duplicate collapse)", () => {
+  it("merges two catalog rows for the same work (an edition + a review of it) into one candidate", () => {
+    const primaryEdition = cand({
+      bibId: "book-2001-edition",
+      title: "Vice and Reason",
+      categories: ["prerequisite"],
+      confidence: 0.7,
+      centrality: 2,
+      depth: 1,
+      inLibrary: true,
+    });
+    const reviewRecord = cand({
+      bibId: "review-of-book",
+      title: "Vice and Reason.", // same work, trailing punctuation difference
+      categories: ["secondary_scholarly_recommendation"],
+      confidence: 0.9,
+      centrality: 1,
+      depth: 2,
+      inLibrary: false,
+    });
+
+    const collapsed = collapseDuplicateCandidates([primaryEdition, reviewRecord]);
+    expect(collapsed).toHaveLength(1);
+    const merged = collapsed[0];
+    // The in-library row wins as the surfaced identity (matches the
+    // Reader/Library's own precedent of preferring an owned work).
+    expect(merged.bibId).toBe("book-2001-edition");
+    expect(merged.mergedBibIds).toEqual(["review-of-book"]);
+    // Categories from both rows are preserved (union), confidence/centrality
+    // reflect the combined evidence rather than only the primary's own.
+    expect(merged.categories.sort()).toEqual(["prerequisite", "secondary_scholarly_recommendation"]);
+    expect(merged.confidence).toBe(0.9);
+    expect(merged.centrality).toBe(3);
+
+    // Feeding the collapsed candidates through the real ranker proves the
+    // roadmap itself now shows exactly one item, not two, for this work.
+    const items = rankRoadmap(collapsed, empty(), noOverrides());
+    expect(items).toHaveLength(1);
+    expect(items[0].bibId).toBe("book-2001-edition");
+    expect(items[0].mergedCount).toBe(1);
+  });
+
+  it("leaves distinct works alone (no false-positive merging)", () => {
+    const kant = cand({ bibId: "kant", title: "Critique of Pure Reason" });
+    const husserl = cand({ bibId: "husserl", title: "Logical Investigations" });
+    const collapsed = collapseDuplicateCandidates([kant, husserl]);
+    expect(collapsed.map((c) => c.bibId).sort()).toEqual(["husserl", "kant"]);
+    expect(collapsed.every((c) => (c.mergedBibIds ?? []).length === 0)).toBe(true);
+  });
+
+  it("never merges two records that both have a blank/untitled title into one item", () => {
+    const a = cand({ bibId: "a", title: "" });
+    const b = cand({ bibId: "b", title: "" });
+    const collapsed = collapseDuplicateCandidates([a, b]);
+    expect(collapsed).toHaveLength(2);
+  });
+});
+
+describe("rankRoadmap — manually added items surface distinctly (D-22-3: manual add)", () => {
+  it("marks a manually added candidate and explains it was added by the reader, not detected", () => {
+    const manual = cand({
+      bibId: "manual-1",
+      title: "A Reader-Chosen Reference",
+      categories: [],
+      addedManually: true,
+    });
+    const items = rankRoadmap([manual], empty(), noOverrides(), { readerLevel: "all" });
+    expect(items).toHaveLength(1);
+    expect(items[0].addedManually).toBe(true);
+    expect(items[0].reason).toMatch(/added by you/i);
   });
 });
 

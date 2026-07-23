@@ -32,6 +32,10 @@ const schema = z.object({
     .nullable()
     .optional(),
   manualPosition: z.number().int().min(1).nullable().optional(),
+  /** Set true only from the roadmap's "add a reference" search (D-22-3
+   *  "manual add") — marks this target as one the reader pulled in
+   *  themselves rather than one the traversal reached. */
+  addedManually: z.boolean().optional(),
 });
 
 export async function POST(
@@ -96,8 +100,13 @@ export async function POST(
     }
   }
 
-  // --- manual override (hide / tier / position) ---
-  if (b.hidden !== undefined || b.manualTier !== undefined || b.manualPosition !== undefined) {
+  // --- manual override (hide / tier / position / added-manually) ---
+  if (
+    b.hidden !== undefined ||
+    b.manualTier !== undefined ||
+    b.manualPosition !== undefined ||
+    b.addedManually !== undefined
+  ) {
     const [existing] = await db
       .select()
       .from(roadmapOverrides)
@@ -114,6 +123,7 @@ export async function POST(
       ...(b.hidden !== undefined ? { hidden: b.hidden } : {}),
       ...(b.manualTier !== undefined ? { manualTier: b.manualTier } : {}),
       ...(b.manualPosition !== undefined ? { manualPosition: b.manualPosition } : {}),
+      ...(b.addedManually !== undefined ? { addedManually: b.addedManually } : {}),
       updatedAt: new Date(),
     };
 
@@ -136,6 +146,7 @@ export async function POST(
         hidden: b.hidden ?? false,
         manualTier: b.manualTier ?? null,
         manualPosition: b.manualPosition ?? null,
+        addedManually: b.addedManually ?? false,
       });
     }
   }

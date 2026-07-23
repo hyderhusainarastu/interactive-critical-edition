@@ -95,6 +95,18 @@ export interface RoadmapCandidate {
   /** True if this target corresponds to a work already in the user's
    *  library (not a "missing link"). */
   inLibrary: boolean;
+  /** Other catalog rows collapsed into this one by `collapseDuplicateCandidates`
+   *  (D-22-2) — different editions/reviews/reprints the traversal reached
+   *  as separate `bibliographic_record` rows but which name the same work.
+   *  Populated by the collapse step, not by the caller. */
+  mergedBibIds?: string[];
+  /** True when the reader explicitly pulled this target in via the
+   *  roadmap's "add a reference" search (plan §22.5 "manual add"), rather
+   *  than the traversal reaching it through a classified edge. */
+  addedManually?: boolean;
+  /** The caller's own owned work matching this target by title, if any —
+   *  lets the roadmap link straight to that work/Reader (D-22-4). */
+  workId?: string | null;
 }
 
 export interface ProfileEntry {
@@ -174,12 +186,94 @@ export interface RoadmapItem {
   /** Short human-readable "why this, here" line. */
   reason: string;
   overBudget: boolean;
+  /** How many other catalog rows (editions/reviews/reprints of the same
+   *  work) were folded into this one item (D-22-2). 0 when this target had
+   *  no duplicates. */
+  mergedCount: number;
+  /** True when the reader added this target manually rather than the
+   *  traversal reaching it (D-22-3). */
+  addedManually: boolean;
+  /** The reader's own owned work matching this target, if any — lets the
+   *  UI link straight to it (D-22-4). */
+  workId: string | null;
 }
 
 /** Rough reading-time estimate — books longer than articles. Approximate
  *  by design (we rarely know true page counts); surfaced as an estimate. */
 function estimateMinutes(c: RoadmapCandidate): number {
   return c.isBook ? 600 : 75;
+}
+
+/**
+ * Same normalization the DB-side traversal already uses to match a
+ * `bibliographic_record` title against an owned `work.title`
+ * (`apps/web/src/lib/roadmap.ts`'s `NORM_TITLE`) — lowercase, strip
+ * everything but letters/digits. Kept here as a pure, unit-testable
+ * function so `collapseDuplicateCandidates` doesn't have to duplicate SQL
+ * logic to decide two candidates name the same work.
+ */
+export function normalizeTitleForDedup(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Duplicate collapse (D-22-2, plan §22.5): the roadmap traversal reaches
+ * `bibliographic_record` rows, and a single cited work can resolve to
+ * several of those rows (the book itself, a review of it, a second
+ * edition) — each would otherwise surface as its own roadmap item. This
+ * groups candidates by normalized title and merges each group into one
+ * candidate, so "duplicate collapse" holds at the level this older,
+ * `bibliographic_record`-based pipeline can actually support (title
+ * matching), the same honest-about-the-data posture the DB traversal
+ * itself already takes for work-to-work transitivity.
+ *
+ * The surviving candidate per group ("primary") is chosen deterministically
+ * — prefer one already in the reader's library, then the shallowest reach,
+ * then the highest centrality, then a stable bibId tiebreak — so repeated
+ * requests over the same data always pick the same primary. Categories are
+ * unioned and confidence/centrality reflect the combined evidence, so
+ * nothing the traversal found is silently dropped, only de-duplicated.
+ *
+ * A blank/untitled title never merges with another blank title (each
+ * empty-title candidate gets its own synthetic group key), since an empty
+ * normalized title is not evidence two records are the same work.
+ */
+export function collapseDuplicateCandidates(candidates: RoadmapCandidate[]): RoadmapCandidate[] {
+  const groups = new Map<string, RoadmapCandidate[]>();
+  for (const c of candidates) {
+    const normalized = normalizeTitleForDedup(c.title);
+    const key = normalized.length > 0 ? normalized : `__untitled__${c.bibId}`;
+    const list = groups.get(key) ?? [];
+    list.push(c);
+    groups.set(key, list);
+  }
+
+  const result: RoadmapCandidate[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      result.push({ ...group[0], mergedBibIds: group[0].mergedBibIds ?? [] });
+      continue;
+    }
+    const sorted = [...group].sort((a, b) => {
+      if (a.inLibrary !== b.inLibrary) return a.inLibrary ? -1 : 1;
+      if (a.depth !== b.depth) return a.depth - b.depth;
+      if (b.centrality !== a.centrality) return b.centrality - a.centrality;
+      return a.bibId.localeCompare(b.bibId);
+    });
+    const [primary, ...rest] = sorted;
+    result.push({
+      ...primary,
+      categories: [...new Set(group.flatMap((g) => g.categories))],
+      confidence: Math.max(...group.map((g) => g.confidence)),
+      centrality: group.reduce((sum, g) => sum + g.centrality, 0),
+      depth: Math.min(...group.map((g) => g.depth)),
+      inLibrary: group.some((g) => g.inLibrary),
+      addedManually: group.some((g) => g.addedManually),
+      workId: primary.workId ?? group.find((g) => g.workId)?.workId ?? null,
+      mergedBibIds: [...rest.map((g) => g.bibId), ...rest.flatMap((g) => g.mergedBibIds ?? [])],
+    });
+  }
+  return result;
 }
 
 function strongestCategory(categories: RelationshipCategory[]): RelationshipCategory {
@@ -293,6 +387,12 @@ export function rankRoadmap(
     const pe = profile.get(c.bibId) ?? {};
     const known = (pe.score ?? 0) >= KNOWN_THRESHOLD || pe.status === "completed";
 
+    // A manually added target wasn't reached by any classified edge, so the
+    // category-based reason ("Directly cited...") isn't actually true of
+    // it — say plainly that the reader chose it instead (D-22-3).
+    let reason = reasonFor(category, c.centrality, known);
+    if (c.addedManually) reason = `Added by you, not detected automatically. ${reason}`;
+
     items.push({
       bibId: c.bibId,
       title: c.title,
@@ -308,8 +408,11 @@ export function rankRoadmap(
       status: pe.status,
       inLibrary: c.inLibrary,
       overridden: Boolean(ov.manualTier || ov.manualPosition),
-      reason: reasonFor(category, c.centrality, known),
+      reason,
       overBudget: false,
+      mergedCount: (c.mergedBibIds ?? []).length,
+      addedManually: Boolean(c.addedManually),
+      workId: c.workId ?? null,
       _manualPosition: ov.manualPosition,
     });
   }
