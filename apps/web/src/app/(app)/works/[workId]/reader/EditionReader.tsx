@@ -166,6 +166,25 @@ export const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
   research: "Research",
 };
 
+export interface OutlineItem {
+  id: string;
+  label: string;
+  pageIndex: number;
+  level: 1 | 2;
+}
+
+/** Title/header blocks, in reading order — the reader's persistent outline
+ * rail (`ReaderOutlineSidebar.tsx`, D-23-51) and this component's own
+ * jump-to-block navigation (`activeBlockId`) both derive from this same
+ * pure computation, so the two can never disagree about what the document's
+ * sections are. */
+export function computeOutline(blocks: EditionPayload["blocks"]): OutlineItem[] {
+  return blocks
+    .filter((block) => block.kind === "title" || block.kind === "header")
+    .sort((a, b) => a.pageIndex - b.pageIndex || a.blockOrder - b.blockOrder)
+    .map((block) => ({ id: block.id, label: block.text, pageIndex: block.pageIndex, level: block.kind === "title" ? 1 : 2 }));
+}
+
 export function AuthorityBadge({ authority }: { authority: Authority | null }) {
   if (!authority) return null;
   const color = authority === "A" || authority === "B" ? "var(--color-accent-green)" : authority === "C" ? "var(--color-accent-ink)" : "var(--color-border)";
@@ -327,7 +346,6 @@ export function EditionReader({
   onCreateHighlight,
   onCreateLinkedNote,
   onLinkExistingNote,
-  isPhase12Reader = false,
   activeBlockId = null,
 }: {
   edition: EditionPayload;
@@ -341,7 +359,6 @@ export function EditionReader({
   onCreateHighlight?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<string | undefined>;
   onCreateLinkedNote?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
   onLinkExistingNote?: (noteId: string, anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
-  isPhase12Reader?: boolean;
   /** A sidebar apparatus/index selection can jump to a real source block. */
   activeBlockId?: string | null;
 }) {
@@ -351,12 +368,6 @@ export function EditionReader({
   const page = edition.pages[pageIndex];
   const orderedBlocks = useMemo(
     () => [...edition.blocks].sort((a, b) => a.pageIndex - b.pageIndex || a.blockOrder - b.blockOrder),
-    [edition.blocks],
-  );
-  const outline = useMemo(
-    () => edition.blocks
-      .filter((block) => block.kind === "title" || block.kind === "header")
-      .map((block) => ({ id: block.id, label: block.text, pageIndex: block.pageIndex, level: block.kind === "title" ? 1 : 2 })),
     [edition.blocks],
   );
   const passageAnnotationsByBlock = useMemo(() => {
@@ -545,14 +556,6 @@ export function EditionReader({
          *  means anything else, so the default tooltip names the cause
          *  rather than a generic "stopped early". */}
         {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
-        {isPhase12Reader && outline.length > 0 && (
-          <details className="relative">
-            <summary className="cursor-pointer">Outline</summary>
-            <nav aria-label="Document outline" className="absolute left-0 top-6 z-20 max-h-64 w-64 overflow-y-auto rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-2 shadow-lg">
-              {outline.map((item) => <button key={item.id} type="button" onClick={() => { setPageIndex(item.pageIndex); window.requestAnimationFrame(() => blockRefs.current.get(item.id)?.scrollIntoView({ block: "start", behavior: "smooth" })); }} className={`block w-full rounded px-2 py-1 text-left text-xs hover:bg-[var(--color-surface)] ${item.level === 2 ? "pl-4" : "font-medium"}`}>{item.label}</button>)}
-            </nav>
-          </details>
-        )}
         {page && (
           <>
             <span className="ml-auto">Page {page.pageIndex + 1} / {edition.pages.length}</span>

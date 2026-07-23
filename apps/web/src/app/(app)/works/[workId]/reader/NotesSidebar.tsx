@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
 import type { BookmarkRecord, HighlightRecord, NoteRecord } from "./types";
 
 function positionLabel(p: BookmarkRecord["position"]) {
@@ -16,6 +17,7 @@ export function NotesSidebar({
   onDeleteNote,
   onDeleteBookmark,
   pendingHighlightIds = [],
+  onClose,
 }: {
   highlights: HighlightRecord[];
   notes: NoteRecord[];
@@ -25,6 +27,10 @@ export function NotesSidebar({
   onDeleteNote: (id: string) => void;
   onDeleteBookmark: (id: string) => void;
   pendingHighlightIds?: string[];
+  /** Present only so this panel can be shown as a narrow-viewport dialog
+   *  (`ReaderSidebarFrame`) — at wide widths it stays an always-open sticky
+   *  rail and this is unused. */
+  onClose: () => void;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -46,7 +52,8 @@ export function NotesSidebar({
   // / 8.95:1 (dark), nowhere near marginal, so the token was never the
   // defect.
   return (
-    <aside className="w-72 shrink-0 border-l border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+    <ReaderSidebarFrame label="Notes and highlights" widthClassName="w-72" onClose={onClose}>
+    <aside aria-label="Notes and highlights" className="border-s border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
       <section className="mb-6">
         <h2 className="mb-2 font-semibold text-[var(--color-text)]">Add a note</h2>
         {pendingHighlightIds.length > 0 && <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.</p>}
@@ -138,5 +145,6 @@ export function NotesSidebar({
         </ul>
       </section>
     </aside>
+    </ReaderSidebarFrame>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { CategoryGlyph } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, confidenceLabel, VERIFICATION_LABELS } from "./annotationMeta";
+import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
 import type { AnalysisStatus, AnnotationRecord, RelationshipCategory, VerificationStatus } from "./types";
 
 type SortKey = "confidence" | "category" | "verification";
@@ -30,6 +30,7 @@ export function AnnotationsPanel({
   activeId,
   onUpdate,
   onReanalyze,
+  onClose,
 }: {
   annotations: AnnotationRecord[];
   analysisStatus: AnalysisStatus;
@@ -37,13 +38,16 @@ export function AnnotationsPanel({
   activeId: string | null;
   onUpdate: (id: string, patch: Partial<Pick<AnnotationRecord, "verificationStatus" | "hidden" | "explanation">>) => void;
   onReanalyze: () => void;
+  /** Present only so this panel can be shown as a narrow-viewport dialog
+   *  (`ReaderSidebarFrame`) — at wide widths it stays an always-open sticky
+   *  rail and this is unused. */
+  onClose: () => void;
 }) {
   const [showHidden, setShowHidden] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<RelationshipCategory | "">("");
   const [verificationFilter, setVerificationFilter] = useState<VerificationStatus | "">("");
   const [sort, setSort] = useState<SortKey>("confidence");
-  const revealRef = useScrollReveal<HTMLElement>();
 
   // Categories/statuses actually present, derived from the full set (not the
   // filtered one) so option lists don't shrink as filters narrow the list.
@@ -71,8 +75,13 @@ export function AnnotationsPanel({
 
   const anyHeuristic = annotations.some((a) => a.isHeuristic);
 
+  // No `.app-reveal` here (matches the D-22-xx rationale already applied to
+  // `NotesSidebar.tsx`/`EditionAnnotationsPanel.tsx`): this is now a fixed
+  // reader-shell rail (`ReaderSidebarFrame`), always in the initial
+  // viewport at mount, not below-the-fold content a reader scrolls down to.
   return (
-    <aside ref={revealRef} className="app-reveal w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
+    <ReaderSidebarFrame label="Scholarly analysis" widthClassName="w-80" onClose={onClose}>
+    <aside aria-label="Scholarly analysis" className="border-s border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--color-text)]">Scholarly analysis</h2>
@@ -196,6 +205,7 @@ export function AnnotationsPanel({
         </ul>
       )}
     </aside>
+    </ReaderSidebarFrame>
   );
 }
 

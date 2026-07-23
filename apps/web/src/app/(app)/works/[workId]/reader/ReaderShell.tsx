@@ -17,9 +17,11 @@ import { PdfReader } from "./PdfReader";
 import { OriginalTextReader } from "./OriginalTextReader";
 import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
-import { EditionReader, type EditionPayload } from "./EditionReader";
+import { EditionReader, computeOutline, type EditionPayload } from "./EditionReader";
 import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
+import { ReaderOutlineSidebar } from "./ReaderOutlineSidebar";
 import { RagChatPanel } from "./RagChatPanel";
+import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -56,8 +58,16 @@ export function ReaderShell({
   const [error, setError] = useState<string | null>(null);
   const [pendingColor, setPendingColor] = useState<HighlightColor>("gold");
   const [activeFootnote, setActiveFootnote] = useState<FootnoteRecord | null>(null);
-  const [showNotes, setShowNotes] = useState(true);
-  const [showAnalysis, setShowAnalysis] = useState(true);
+  // D-23-51: at wide viewports the outline/analysis/notes rails are always-
+  // open sticky columns (matches this app's existing default-open toolbar
+  // toggles); at narrow viewports they're the drawer/dialog pattern instead
+  // — three panels shouldn't all slam open over the reading text on a phone
+  // on first load, so the initial value is seeded from the real viewport
+  // width at mount rather than hardcoded `true` for every screen size.
+  const narrow = useNarrowViewport();
+  const [showNotes, setShowNotes] = useState(() => !narrow);
+  const [showAnalysis, setShowAnalysis] = useState(() => !narrow);
+  const [showOutline, setShowOutline] = useState(() => !narrow);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
   const [editionReaderLevel, setEditionReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
@@ -81,6 +91,14 @@ export function ReaderShell({
   // on close, unlike every other reader-shell disclosure).
   const ragTriggerRef = useRef<HTMLButtonElement>(null);
   const ragPanelId = useId();
+  // Same trigger-focus-restoration pattern, applied to the reader's own
+  // outline/analysis/notes rails (D-23-51) — only exercised when a rail is
+  // shown as a narrow-viewport dialog (`ReaderSidebarFrame`); at wide
+  // viewports these are always-open sticky columns with no close control to
+  // restore focus to.
+  const outlineTriggerRef = useRef<HTMLButtonElement>(null);
+  const analysisTriggerRef = useRef<HTMLButtonElement>(null);
+  const notesTriggerRef = useRef<HTMLButtonElement>(null);
   const toolbarRevealRef = useScrollReveal<HTMLDivElement>();
   const loadingRevealRef = useScrollReveal<HTMLParagraphElement>();
 
@@ -107,6 +125,25 @@ export function ReaderShell({
       ignore = true;
     };
   }, [workId]);
+
+  // D-23-51: a rail's `showX` boolean means two different things depending
+  // on viewport — "always-open sticky column" (wide) vs. "drawer is open"
+  // (narrow) — so if the window is resized (or rotated) from wide to narrow
+  // while a rail was open, leaving `showX` untouched would make it snap
+  // straight into an unrequested full-screen drawer instead of the closed
+  // state a narrow reader always starts from. A one-shot sync off the
+  // narrow-transition external signal, not a derived value (the reader must
+  // still be free to open a drawer afterward without this fighting it) —
+  // same precedent as `EditionAnnotationsPanel`'s activeId-driven tab sync.
+  const wasNarrowRef = useRef(narrow);
+  useEffect(() => {
+    if (narrow && !wasNarrowRef.current) {
+      setShowOutline(false);
+      setShowAnalysis(false);
+      setShowNotes(false);
+    }
+    wasNarrowRef.current = narrow;
+  }, [narrow]);
 
   const savePosition = useCallback(
     (position: Position) => {
@@ -290,6 +327,21 @@ export function ReaderShell({
     window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
   }, []);
 
+  const closeOutline = useCallback(() => {
+    setShowOutline(false);
+    window.requestAnimationFrame(() => outlineTriggerRef.current?.focus());
+  }, []);
+
+  const closeAnalysisPanel = useCallback(() => {
+    setShowAnalysis(false);
+    window.requestAnimationFrame(() => analysisTriggerRef.current?.focus());
+  }, []);
+
+  const closeNotesPanel = useCallback(() => {
+    setShowNotes(false);
+    window.requestAnimationFrame(() => notesTriggerRef.current?.focus());
+  }, []);
+
   const approveTerm = useCallback(async (termId: string) => {
     await jsonFetch(`/api/works/${workId}/reader/terms/${termId}`, {
       method: "PATCH",
@@ -317,6 +369,11 @@ export function ReaderShell({
     };
   }, [edition, editionFilters, editionLevelMode, editionReaderLevel, enablePhase12Identity, enablePhase12Reader]);
 
+  // D-23-51: the same pure computation `EditionReader`'s own jump-to-block
+  // navigation uses, so the persistent outline rail and the reader's
+  // internal navigation can never disagree about section boundaries.
+  const outline = useMemo(() => (visibleEdition ? computeOutline(visibleEdition.blocks) : []), [visibleEdition]);
+
   const visibleAnnotationIds = useMemo(() => visibleEdition?.passageAnnotations.map((annotation) => annotation.id) ?? [], [visibleEdition]);
   const moveAnnotation = useCallback((direction: -1 | 1) => {
     if (!visibleAnnotationIds.length) return;
@@ -342,17 +399,32 @@ export function ReaderShell({
   // :root[data-reading-width]) instead of a second, disagreeing
   // --reader-line-width scale that used to live only in this component.
 
+  const showOutlineRail = !readerFocus && effectiveShowInteractive && outline.length > 0;
+
   return (
-    <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen">
-      <div className={splitWorkId ? "flex flex-1 divide-x divide-[var(--color-border)]" : "flex flex-1"}>
+    <div data-reading-mode={readerFocus ? "focus" : undefined} className="flex min-h-screen items-start">
+      {showOutlineRail && showOutline && (
+        <ReaderOutlineSidebar
+          items={outline}
+          onSelect={(blockId) => setActiveReaderBlockId(blockId)}
+          onClose={closeOutline}
+        />
+      )}
+
+      <div className={splitWorkId ? "flex min-w-0 flex-1 divide-x divide-[var(--color-border)]" : "flex min-w-0 flex-1"}>
         <div className="min-w-0 flex-1">
           {/* `data-dense-controls`: marks this toolbar for the Phase 23.2
               touch-target audit (accessibility-sweep.spec.ts) as an
               accepted, reported exception — a compact secondary-action
               toolbar row, not primary reading chrome; see that spec's
               docblock for the full rationale. Purely a test hook, no
-              behavior/visual change. */}
-          {!readerFocus && <div ref={toolbarRevealRef} data-dense-controls="reader-toolbar" className="app-reveal flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] px-4 py-2 text-sm">
+              behavior/visual change.
+              D-23-51: sticky (not just a plain border-b row) so its
+              add-note/add-annotation entry points (Analysis, Notes,
+              Outline, Ask Library, + Bookmark) stay reachable at any scroll
+              depth, on every viewport — the toggle buttons are also each
+              rail's ONLY way to reopen it once closed on a narrow screen. */}
+          {!readerFocus && <div ref={toolbarRevealRef} data-dense-controls="reader-toolbar" className="app-reveal sticky top-14 z-20 flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm">
             <strong className="text-[var(--color-text)]">{data.title}</strong>
             {edition && (
               <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
@@ -422,9 +494,21 @@ export function ReaderShell({
                 onClear={() => setSplitWorkId(null)}
               />
             )}
+            {showOutlineRail && (
+              <button
+                ref={outlineTriggerRef}
+                type="button"
+                className="app-control ml-auto"
+                onClick={() => setShowOutline((v) => !v)}
+                aria-pressed={showOutline}
+              >
+                {showOutline ? "Hide outline" : "Outline"}
+              </button>
+            )}
             <button
+              ref={analysisTriggerRef}
               type="button"
-              className="app-control ml-auto"
+              className={showOutlineRail ? "app-control" : "app-control ml-auto"}
               onClick={() => setShowAnalysis((v) => !v)}
               aria-pressed={showAnalysis}
             >
@@ -435,7 +519,7 @@ export function ReaderShell({
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
                   ` (${data.annotations.filter((a) => !a.hidden).length})`}
             </button>
-            <button type="button" className="app-control" onClick={() => setShowNotes((v) => !v)}>
+            <button ref={notesTriggerRef} type="button" className="app-control" onClick={() => setShowNotes((v) => !v)} aria-pressed={showNotes}>
               {showNotes ? "Hide notes" : "Notes"}
             </button>
             {enablePhase18Rag && !embedded && (
@@ -458,7 +542,7 @@ export function ReaderShell({
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
           >
-            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} isPhase12Reader={enablePhase12Reader} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
+            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
               data.fileUrl ? (
                 <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
                   fileUrl={data.fileUrl}
@@ -529,6 +613,8 @@ export function ReaderShell({
             onNextAnnotation={() => moveAnnotation(1)}
             onApproveTerm={enablePhase12Reader ? (termId) => void approveTerm(termId) : undefined}
             onSelectAnnotation={openAnnotation}
+            onClose={closeAnalysisPanel}
+            flushTop={readerFocus}
           />
         ) : (
           <AnnotationsPanel
@@ -538,6 +624,7 @@ export function ReaderShell({
             activeId={activeAnnotationId}
             onUpdate={updateAnnotation}
             onReanalyze={reanalyze}
+            onClose={closeAnalysisPanel}
           />
         )
       )}
@@ -552,6 +639,7 @@ export function ReaderShell({
           onDeleteNote={deleteNote}
           onDeleteBookmark={deleteBookmark}
           pendingHighlightIds={pendingNoteHighlightIds}
+          onClose={closeNotesPanel}
         />
       )}
 

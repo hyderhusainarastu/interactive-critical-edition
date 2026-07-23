@@ -19,6 +19,7 @@ import {
   type PassageAnnotationType,
 } from "./EditionReader";
 import { matchNoteToBlock } from "./matchNoteToBlock";
+import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
 import type { RelationshipCategory, VerificationStatus } from "./types";
 
 type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources";
@@ -74,6 +75,8 @@ export function EditionAnnotationsPanel({
   onNextAnnotation,
   onApproveTerm,
   onSelectAnnotation,
+  onClose,
+  flushTop = false,
 }: {
   edition: EditionWithReview;
   activeId: string | null;
@@ -89,6 +92,13 @@ export function EditionAnnotationsPanel({
   onNextAnnotation?: () => void;
   onApproveTerm?: (termId: string) => void;
   onSelectAnnotation?: (id: string) => void;
+  /** Present only so this panel can be shown as a narrow-viewport dialog
+   *  (`ReaderSidebarFrame`) — at wide widths it stays an always-open sticky
+   *  rail and this is unused. */
+  onClose: () => void;
+  /** True when the reader's distraction-reduced focus mode hides the app
+   *  header — see `ReaderSidebarFrame`'s own doc comment. */
+  flushTop?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
@@ -120,8 +130,14 @@ export function EditionAnnotationsPanel({
   // comfortably >8:1 at rest) intermittently failed contrast only while
   // the now-removed one-shot opacity fade was still in flight.
   return (
-    <aside aria-label="Edition sidebar" className="w-80 shrink-0 overflow-y-auto border-l border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="sticky top-0 z-10 flex gap-1 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm">
+    <ReaderSidebarFrame label="Edition sidebar" widthClassName="w-80" onClose={onClose} flushTop={flushTop}>
+    <aside aria-label="Edition sidebar" className="border-s border-[var(--color-border)] bg-[var(--color-surface)]">
+      {/* D-23-51 polish: the five tabs don't reliably fit a 320–360px rail
+          (pre-existing — this sidebar was already `w-80` on desktop before
+          this task's layout change); `overflow-x-auto` lets the strip
+          scroll horizontally instead of silently clipping "Sources" off the
+          visible edge, at any width from 320px up. */}
+      <div className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm [&>button]:shrink-0">
         <button
           type="button"
           aria-pressed={tab === "annotations"}
@@ -201,6 +217,7 @@ export function EditionAnnotationsPanel({
         <SourcesTab edition={edition} />
       )}
     </aside>
+    </ReaderSidebarFrame>
   );
 }
 
