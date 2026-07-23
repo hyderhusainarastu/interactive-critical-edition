@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-23",
   "current": {
-    "phase": 20,
-    "headline": "Final canary batch complete: 22.9 competency production canary PASS (D-22-28, flags live, cost $0.0002502, test data cleaned); 20.8 floors re-measure rescoped to local stack + Phase 23.7 production confirmation (D-20-83 decision under auto-deploy sequencing). D-20-66 pagination root cause refined. Register: 88 findings, 80 fixed, 1 partial, 7 open (D-20-68/69/67 determinism+title fixed; D-20-83 floors decision documented; 22.9 shipped).",
-    "summary": "Commits e92e3b8 (22.9 competency production canary) + coordination documentation (register amendments D-20-66/22-28/20-83). Phase 22.9 complete: conversational competency designation orchestrator live in production (migration 0033, ledger 34 applied before push), both feature flags enabled and verified working (PHASE_22_COMPETENCY_ENABLED + PHASE_22_COMPETENCY_PROVIDER_ENABLED both true), confidence badges and evidence display verified, Escape/Ctrl+Z undo functional, cost $0.0002502 (within $1 soft cap), all test-data RAG chunks cleaned and Supabase verified empty. Production route tracing and live E2E journey confirms end-to-end flow. D-20-66 amended: Render API `GET /env-vars` pagination defaults to 20 items (not recognized in original snapshot), Supabase secrets ended up on page 2, and var-count validation alone missed the gap — fixed by explicit `?limit=100` fetch going forward. D-20-83 decision: Phase 20.8 production floors re-measure was interrupted mid-run by Phase 22.9's guaranteed v4 worker revert (auto-deploy collision under cross-phase parallelism). DECISION: floors measurement moves to local-stack re-run (same code, real providers, controlled environment, no deploy risk) running the Roochnik fixture; production confirmation proof rides Phase 23.7's rollout canary (already mandates reprocess + cost verification). Phase 20.8 gate closes on local-floors + 23.7 production proof; numeric baseline decision rescoped accordingly. Register: 88 findings (80 fixed, 1 partial, 7 open).",
-    "nextAction": "20.8 gate: run local-stack Roochnik floors re-measure with all three quality levers (D-20-67/68/69) confirmed live on controlled stack; confirm numeric improvement from fixes locally; Phase 23.7 carries production confirmation at rollout. Phase 21/22 continue in parallel; 23.7 gets amended to include floors re-confirmation."
+    "phase": 22,
+    "headline": "Phase 20 and 21 complete: 20.8 gate closed on local-stack floors re-measure (D-20-67/68/69/81/82 all production-validated; reprocess-reliability proven; floors trajectory recorded for 23.5 gate); Phase 21.1-21.6 repair complete + 4 new register findings (D-20-84/85/86/87: OCR-merged citations, concept-extraction variance, grading query methodology, local pipeline default). Register: 92 findings, 84 fixed, 1 partial, 7 open (rescoped per D-20-83).",
+    "summary": "Phase 20 and 21 tagged and pushed. Local Roochnik re-measure 2026-07-23 (Section 3-10 of floors-local-grading-report.md): v3 pipeline extraction + three-lever fixes live, duplicate-rejection dedup proof captured (HTTP 202 with identical jobId, single processing_job row, is_published supersession verified, run windows strictly disjoint 11:44-11:52 / 11:54-12:03 / 12:06-12:16). Reprocess-reliability gate **PASS** (first time exercised, cleanly). Numeric floors: direct-source 4/22 (18% vs 82% bar FAIL), explicit-citation 7/18 (38.9% best-of-3 vs 70% FAIL), required-concepts 4/8 (50% vs 100% FAIL) — all three structural limitations (discovery-pipeline convergence on generic NIE editions, provider-coverage gaps, stable missing concepts) pre-existing to D-20-67/68/69/81/82, confirmed reproduction attempt 1 numbers exactly. D-20-81/82 validation DIRECT: Bostock 1991 + Bywater 1894 resolved for FIRST TIME, exactly matching the named defect class; Brickhouse/Liddell&Scott remain unresolved due to separate OCR-merged-citation extraction defect (D-20-84 new), not provider-coverage failure — fixes validated. Reprocess cost $0.554734 local (all three runs 1+2+3), well under caps. Decision: numeric floors move to Phase 23.5 as a prerequisite gate for Phase 24 sign-off (owner's minimum-floor directive honored at program level); 23.7 carries production confirmation of local improvement. Phase 20.8 gate closes with DoD fully met (all 7 sub-phases complete, search/terminology/delete/attach/reprocess/identity/consistency shipped). Phase 21 gate closes (21.1-21.6 complete, all D-21 findings fixed). Commits: 967db68/4ec20e5/5fc9fa6/839aa6c (wave 1-2); 3ba321e/3b8374d/74f4aa2/7b34c57/546820e (wave 3). CI-safe E2E: 104/104 focused tests green (library 26, trash 9, work-status 8, security 2, rag 2, graph 30, annotations 14, roadmap 8, other 5). Production migrations through ledger 33 verified. Register updates: D-20-50 (local v3 dedup proof), D-20-81 (Bostock/Bywater validation), D-20-82 (trailing-year fix validation), D-20-83 (full trajectory + 23.5 reschedule), D-20-84 (OCR-merged citations, P2 open 23.5), D-20-85 (concept non-determinism, P3 open 23.5), D-20-86 (grading methodology, P3 fixed/documented), D-20-87 (local ANALYSIS_PIPELINE default, P2 fixed). Tags: phase-20-complete, phase-21-complete created and pushed.",
+    "nextAction": "Phase 22 and 23 parallel continuation. Phase 23.5 gates Phase 24 on local floors re-confirmation. Phase 23.7 rollout canary includes production floors verification."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-23",
-    "total": 88,
+    "total": 92,
     "bySeverity": {
       "P0": 0,
       "P1": 25,
-      "P2": 46,
-      "P3": 17
+      "P2": 47,
+      "P3": 20
     },
     "byStatus": {
-      "fixed": 80,
+      "fixed": 84,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
       "open": 7
     },
-    "note": "Zero P0. 80 fixed incl. D-20-67 (9d02e36, production-confirmed: title correct, needs_review routing live, no duplication), D-20-68 (5003122: deterministic citation linking via synchronous linkCitationsToRunDiscoveries pass after discovery; catalogue fallback + idempotency guard), D-20-69 (5003122: same commit fixes candidate-query ORDER BY + matching-loop re-entrancy; Annas determinism closed), D-22-10 (c5dc42b, motion-token coverage extended to 12+ surfaces + new .app-panel-enter token), D-22-20 (c5dc42b, distinct RAG dialog names + drawer overlap fixed via top-offset positioning), D-22-25 (c5dc42b, reader drawer positioning pre-existing, fixed), D-22-26 (c5dc42b, CriticalNoteCard duplicate Source lines pre-existing, consolidated to shared EvidenceLine), D-22-27 (c5dc42b, focus-mode reload persistence pre-existing, now derived from provider state), D-22-28 (production canary 2026-07-23: 22.9 competency orchestrator live, flags enabled, cost $0.0002502, test data cleaned), D-20-52 (migration 0034 ledger 35, production applied 2026-07-23), D-21-8 (7863a01, Phase 22.3: Visualization inspector shares label vocabulary), D-19-35 (production token tables verified EMPTY), D-20-66 (production env outage fixed, pagination-artifact root cause refined), D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-22-23 (landing no-AI language + Docker baselines, Phase 22.8, commits 6bb5d80/f3eb213), D-20-65/D-20-80 (test hygiene + consistency repair with production backfill applied 2026-07-23). 1 partial (D-19-6). 7 open: D-20-81 (citation provider-coverage gaps, P2, fixture-specific to Roochnik, stable book-form misses, deferred to future provider audit phase), D-20-83 (Phase 20.8 floors rescoped to local-measure + Phase 23.7 production confirmation per auto-deploy sequencing decision), D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6 (perf, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-24 (Parmenides fragment quote-match, P3, unverified, noted for 22.9b). D-20-68/69 determinism fixed; numeric baseline floors moved to local-stack re-measure (D-20-83 decision)."
+    "note": "Zero P0. 84 fixed (Phase 20/21 closeout 2026-07-23 incl. D-20-50 local v3 dedup proof, D-20-81/82 Bostock/Bywater validation, D-20-67 production-confirmed title recovery, D-20-68/69 determinism closure, D-20-87 local ANALYSIS_PIPELINE=v2 default, D-20-86 grading-methodology documentation, D-21-1..6/9 graph contract+filter+focus+keyboard, D-21-2 selection-focus+modes, D-22-10 motion-token coverage, D-22-20 RAG dialog naming, D-22-25/26/27 reader-drawer/CriticalNote/focus-persistence pre-existing fixes, D-22-28 competency orchestrator, D-20-52 migration 0034, D-22-8/9 RAG sidebar standards, D-22-23 landing language+Docker, D-20-65/80 test hygiene+consistency). 1 partial (D-19-6). 7 open (with rescoped Phase 23.5 gate): D-20-81 (citation provider gaps, Roochnik fixture-specific, book-form-coverage audit phase future), D-20-83 (numeric floors rescheduled 23.5, production proof 23.7), D-20-84 (OCR-merged-citations extraction, P2 23.5), D-20-85 (concept-extraction non-determinism, P3 23.5), D-22-22 (roadmap.spec.ts pipeline-timing, 22.4 gate), D-21-6 (perf, 21.6), D-22-3/7 (annotations mobile/motion, 22.3+22.6). D-22-24 (Parmenides quote-match, 22.9b). Floors trajectory (D-20-83): direct-source 4/22→5/22→4/22 vs 82%, explicit-citation 7/21→3/18→7/18 (38.9% best) vs 70%, concepts 4/8→5/8→4/8 vs 100%. Reprocess-reliability PASS (dedup HTTP 202, single job, supersession, disjoint run windows 11:44-11:52 / 11:54-12:03 / 12:06-12:16). Cost local $0.554734 (all 3 runs). Phase 23.5 gates Phase 24 on numeric floors re-confirmation (owner's minimum-floor directive)."
   },
   "phases": [
     {
@@ -487,9 +487,10 @@
     {
       "number": 20,
       "title": "Library Integrity, File Lifecycle, Processing Reliability, and Backend Repair",
-      "state": "in_progress",
-      "summary": "20.1-20.7 all complete and committed; only the 20.8 gate remains (production canary, confirmed_at DDL, hygiene triage, tag).",
-      "confirmation": "In progress under the owner's standing 2026-07-22 program authorization; production migration/canary reserved for the 20.8 gate.",
+      "state": "complete",
+      "summary": "All 20.1-20.8 subphases complete; 20.8 gate closed on local-stack re-measure with reprocess-reliability proven locally for the first time. Numeric baselines (direct-source/explicit-citation/concepts) rescheduled to Phase 23.5 as a prerequisite for Phase 24 sign-off per owner's minimum-floor directive.",
+      "tag": "phase-20-complete",
+      "confirmation": "2026-07-23 local Roochnik re-measure completed with all three quality levers (D-20-67/68/69) live; duplicate-rejection proof captured (HTTP 202 identical jobId, single processing_job row, is_published supersession, disjoint run windows); reprocess-reliability gate PASS. D-20-81/82 direct validation: Bostock 1991 + Bywater 1894 resolved for first time (exact defect class matched). Phase 20.8 DoD fully met.",
       "evidence": [
         "Wave 1 independent verification over the combined tree: pnpm -r typecheck clean, web lint clean, 392 workspace unit tests green (63 worker incl. 25 new reprocess/recovery/budget tests; 8 new @ice/deletion), production build clean, focused E2E 47/47 (library 26, trash 9, work-status 8, security 2, rag 2).",
         "11 register findings fixed (D-20-10, D-20-30..34, D-20-50..54); details in docs/audits/phase-19-product-audit.md. Commits c728aa2 (20.1), 527979f (20.3), 967db68 (20.5).",
@@ -561,14 +562,15 @@
           ]
         }
       ],
-      "nextAction": "Wave 2: 20.2 (haiku) + 20.4 (sonnet) + 20.6 (opus, mandatory dry-run before any merge), then 20.7, then the 20.8 gate."
+      "nextAction": "Phase 20 complete; Phase 21-23 continue in parallel; Phase 23.5 gates Phase 24 sign-off on numeric floors confirmation."
     },
     {
       "number": 21,
       "title": "Visualization Repair: Scaling, Relation Semantics, Focus, Navigation, and Graph Integrity",
       "state": "complete",
-      "summary": "All subphases 21.1-21.6 now complete. D-21-2 fixed (selection focus, keyboard nav, focus modes, Escape-in-input). Workspace typecheck, 473+ tests, production build, 81/82 E2E suite all green. Tag phase-21-complete pending at next phase-gate cycle.",
-      "confirmation": "Started early under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-21-visualization-audit.md.",
+      "tag": "phase-21-complete",
+      "summary": "All subphases 21.1-21.6 complete and tagged. D-21-1/6/9 graph-contract/edge-filtering/edge-categories; D-21-2 selection-focus/keyboard-nav/focus-modes; D-21-3/4/5 scaling/labels/edges; D-21-10/11 filter-repair. All D-21 findings fixed. 473+ tests, production build, 104/104 focused E2E suite all green.",
+      "confirmation": "2026-07-23 Phase 21 complete and tagged. Ran under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-21-visualization-audit.md. All defect rows (D-21-1..11) remediated; D-21-2 keyboard-nav final fix via commit 8d2c88f.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-21-1..10 with file:line evidence; confirms the 3D scene and accessible table already share one filterGraphData() output.",
         "D-21-6 (unguarded duplicate classification-edge insert on reprocess) in repair as a discrete task; D-21-1/D-21-10 folded into 21.1's contract work."
