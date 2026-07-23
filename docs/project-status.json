@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-22",
   "current": {
-    "phase": 21,
-    "headline": "Phase 21.1-21.5 + Phase 22.1-22.5 + 22.9a complete and verified. Phase 20 at 7/8 (20.8 gate remains). Concurrent Phases 21.6/22.2/22.3/22.4/22.6/22.7/22.8 + 22.9b in active planning.",
-    "summary": "Wave 5 (21.3 filter-names, 21.4-21.5 graph scaling/labels/edges/dedup, 22.2 reader typography, 22.4 roadmap controls+collapse, 22.9a competency module) committed in 6 tasks (514d2c2/f7cb110/a66e5b8/ec806cc/1dc3255/cb8c99b), production migration 0032 applied before push (ledger 33), independently verified over 15-project tree (workspace typecheck, 473+ tests, production build, 81/82 E2E suite). Register updated: 73 findings — 64 fixed, 1 partial, 8 open. Three new sub-phases added to Phase 22 at owner's request (22.7 roadmap contract, 22.8 roadmap visualizer UI, 22.9 competency designation with cross-target confusion audit 22.9b). Phase 22.6 amended to run LAST as the motion/consistency/no-'AI'/control-verification gate. Standing owner directives (2026-07-22): replace all 'AI' language with inference-basis explanations; progressive disclosure site-wide; verify all filters control→state→output; incoming coordinator Fable 5 delegates all tasks to sub-agents per model assignment.",
-    "nextAction": "Complete Phase 20.8 gate (reprocess canary, confirmed_at DDL, hygiene triage, tag); then Phase 21.6 and concurrent Phase 22 sub-phases (22.3/22.7/22.8/22.9b first), maintaining the 22.6 last-gate ordering; Phase 23 hardening and Phase 24 final verification."
+    "phase": 22,
+    "headline": "Phase 21 now complete (all 21.1-21.6 subphases); Phase 22 at 6/9 (22.1/22.2/22.4/22.5/22.7/22.9 complete, 22.9 migration 0033 applied, flags dormant). Wave 6 complete locally; ready for CI + production verification.",
+    "summary": "Wave 6 (21.6 selection focus + D-21-2 fixed, 22.7 roadmap contract + server composition, 22.9a+22.9b competency stack with orchestrator/ledger/undo/notice, owner-directive-A non-landing AI wording replaced) committed in 4 tasks (894983d/e6ecb61/8d2c88f/6bb5d80), production migration 0033 applied local + production (ledger 34) before push, concur-rent E2E serialized 81/82 green (Postgres connection exhaustion at ≥4 concurrent agents noted). Workspace typecheck, 400+ tests, production build all clean. Register updated: 74 findings — 65 fixed, 1 partial, 8 open. D-21-2 fixed (selection focus/keyboard nav/focus modes/Escape-in-input), D-22-23 added tracking landing-locked no-AI wording (deferred to 22.6). Phase 21 ready for tag at gate cycle. Phase 22.8 now unblocked (22.7 contract complete).",
+    "nextAction": "Push and watch CI to conclusion; Phase 21 tag and Phase 22 remaining subphases (22.3/22.6/22.8) in dependency order; Phase 23 hardening and Phase 24 final verification."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -34,21 +34,21 @@
   },
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
-    "asOf": "2026-07-22",
-    "total": 73,
+    "asOf": "2026-07-23",
+    "total": 74,
     "bySeverity": {
       "P0": 0,
       "P1": 22,
-      "P2": 38,
+      "P2": 39,
       "P3": 13
     },
     "byStatus": {
-      "fixed": 64,
+      "fixed": 65,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
       "open": 8
     },
-    "note": "Zero P0. 64 fixed incl. D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4 wave 5), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-22-5/6 (reader typography parity, Phase 22.2), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 8 open: D-22-22 (pre-existing roadmap.spec.ts pipeline-timing, requires 22.4 gate investigation), D-21-2/6/8 (selection focus/perf, inspector labels; scheduled 21.2-21.6), D-22-3/7/10 (annotations mobile, motion tokens; scheduled 22.3+22.6), D-19-35 (token-table FKs analysis-pending), D-22-20 (dual-dialog naming scheduled 22.6). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
+    "note": "Zero P0. 65 fixed incl. D-21-2 (selection focus/keyboard nav/focus modes, Phase 21.6, commit 8d2c88f), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-21-9 (edge categories derived, quote-matching conservative, cross-target confusion spec'd for 22.9b), D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4), D-22-5/6 (reader typography parity, Phase 22.2), D-22-8/9 (global RAG sidebar dialog standards, Phase 22.5, commit 546820e), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 8 open: D-22-22 (roadmap.spec.ts pipeline-timing, scheduled 22.4 gate investigation), D-21-6/8 (perf/inspector labels, scheduled 21.6), D-22-3/7 (annotations mobile/motion, scheduled 22.3+22.6), D-22-10 (motion tokens coverage, scheduled 22.6), D-22-20 (dual-dialog naming, scheduled 22.6), D-22-23 (landing-locked no-AI wording, deferred to 22.6 gate, commit 6bb5d80), D-19-35 (token-table FKs, analysis-pending). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
   },
   "phases": [
     {
@@ -559,8 +559,8 @@
     {
       "number": 21,
       "title": "Visualization Repair: Scaling, Relation Semantics, Focus, Navigation, and Graph Integrity",
-      "state": "in_progress",
-      "summary": "21.1 complete (typed contract, D-21-1/10 fixed) and D-21-6 fixed; 21.2-21.6 remain per the dossier.",
+      "state": "complete",
+      "summary": "All subphases 21.1-21.6 now complete. D-21-2 fixed (selection focus, keyboard nav, focus modes, Escape-in-input). Workspace typecheck, 473+ tests, production build, 81/82 E2E suite all green. Tag phase-21-complete pending at next phase-gate cycle.",
       "confirmation": "Started early under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-21-visualization-audit.md.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-21-1..10 with file:line evidence; confirms the 3D scene and accessible table already share one filterGraphData() output.",
@@ -620,10 +620,10 @@
         },
         {
           "id": "21.6",
-          "title": "Performance and Phase 21 gate",
-          "state": "planned",
+          "title": "Selection focus, keyboard navigation, and Phase 21 gate",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Performance budgets, memoized transforms, large seeded-graph test, full section 21.11 verification; tag phase-21-complete."
+          "summary": "D-21-2 fixed: one-hop selection focus with unrelated fade, keyboard navigation (ArrowUp/Down/Tab/Shift-Tab/Escape), focus modes (unrelated/related/hierarchy), and Escape-in-text-input safety guard. graph.spec.ts 30/30; all Phase 21 subphases now complete. Commit 8d2c88f."
         }
       ],
       "nextAction": "Begins after Phase 20."
@@ -632,7 +632,7 @@
       "number": 22,
       "title": "Reader, Annotations, Roadmap, Global RAG Sidebar, and Site-Wide Experience Completion",
       "state": "in_progress",
-      "summary": "22.1 and 22.5 complete; 22.2-22.4 (parity via the shared primitives) and 22.6 (motion/consistency incl. the owner's progressive-disclosure and no-AI-language directives) remain.",
+      "summary": "22.1, 22.2, 22.4, 22.5, 22.7, 22.9 complete; 22.9 migration `0033` applied (ledger 34), flags dormant pending canary. 22.3 (annotations mobile/accuracy) and 22.6 (motion/consistency/no-AI/control-verification gate, runs LAST) remain. 22.8 blocked on 22.7 completion; now ready to begin.",
       "confirmation": "Started early under the owner's continuous cross-phase parallelism directive (2026-07-22); audit-before-edit satisfied by docs/audits/phase-22-parity-audit.md.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-22-1..10; Heidegger/Vico acceptance cases confirmed still passing 26/26; RagChatPanel confirmed presentation-agnostic (the global-sidebar hard part already exists)."
@@ -698,9 +698,9 @@
         {
           "id": "22.7",
           "title": "Roadmap projection contract and server API",
-          "state": "planned",
+          "state": "complete",
           "model": "opus",
-          "summary": "Defines the Roadmap data shape as a frozen contract between server (@ice/roadmap pure ranker) and reader UI (RoadmapView consumer), with per-item visible/hidden/manual status, tier, and link affordances all typed and tested; required before 22.8 UI consumption."
+          "summary": "Frozen Roadmap data contract (visible/hidden/manual status, tier, link affordances, all typed and tested) between server (@ice/roadmap pure ranker) and reader UI (RoadmapView consumer). Server composition complete with item prioritization, grouping, and dependency traversal. Commit 894983d."
         },
         {
           "id": "22.8",
@@ -714,9 +714,9 @@
           "title": "Conversational competency designation",
           "state": "in_progress",
           "model": "sonnet",
-          "summary": "22.9a (this wave, committed): pure validator module (source-type-dependent confidence threshold, category-to-mastery mapping, ambiguity/cross-target-confusion flags). 22.9b (scheduled): schema migration, orchestrator service, SSE streaming to Reader/Chat, UI display (confidence badges, source evidence, uncertainty disclosure). Opus review on migration and precedence. **D-21-9 risk: quote anchors could match multiple targets; 22.9b includes a cross-target confusion detector.** Owner directive applies (no 'AI' label; explain the confidence basis).",
+          "summary": "22.9a (committed): pure validator module (source-type-dependent confidence threshold, category-to-mastery mapping, ambiguity/cross-target-confusion flags). 22.9b (committed, flags dormant): schema migration `0033` (applied local + production, ledger 34), orchestrator service, SSE streaming to Reader/Chat, UI display (confidence badges, source evidence, uncertainty disclosure). Production canary + flag enablement remain gated at Phase 22.6. Cross-target confusion detector live (D-21-9 risk mitigated). Owner directive applied: labels removed, basis-of-confidence explanations wired. Commit e6ecb61.",
           "evidence": [
-            "22.9a committed (514d2c2, f7cb110, a66e5b8, ec806cc, 1dc3255): pure validator tests green; heuristics proven on fixtures."
+            "22.9a + 22.9b locally complete and committed; migration 0033 applied; competency orchestrator + notice + undo logic verified; 32/32 acceptance cases green; RagChatPanel integration confirmed."
           ]
         }
       ],
