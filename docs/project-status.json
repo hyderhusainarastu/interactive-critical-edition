@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-22",
   "current": {
-    "phase": 20,
-    "headline": "Wind-down complete: Phase 20 at 7/8 (only the 20.8 gate remains), Phase 21 contract + D-21-6 landed, Phase 22 primitives + global RAG sidebar landed; handoff to a fresh coordinator next",
-    "summary": "Wave 3 (20.7 consistency, 21.1 typed graph contract, D-21-6 supersession fix, 22.1 shared primitives with 3x Docker pixel-proof + landing-contract wired into CI, 22.5 global Ask Library sidebar) is complete, independently verified over the combined tree (15-project typecheck, 400+ package tests, worker 76/76, consistency 62/62, build clean, 104/104 focused E2E across 11 specs with zero reruns), committed per task (3ba321e/3b8374d/74f4aa2/7b34c57/546820e), and pushed. Register: 72 findings — 51 fixed, 1 partial, 20 open (15 dossier rows scheduled to Phases 21/22 plus 5 hygiene P3s: D-20-65, D-19-35, D-20-80 repair-ready, D-21-11, D-22-20). Owner directives recorded 2026-07-22 for the continuing program: no user-facing 'AI' language anywhere (explain each inference's basis instead — a display-language change, not a provenance rollback), progressive disclosure across the site (expanding boxes; no text flooding), all filters verified control->state->output site-wide, phases amended where these aren't yet covered; and the incoming coordinator (Fable 5) is a moderator ONLY — every task including git/checklist/log updates is delegated to sub-agents on the cheapest fitting model. A local-only baseline-test/ gold fixture (Roochnik ARISTOTLE-ROOCHNIK-VICIOUS-001, gitignored — copyrighted PDF) is the next acceptance test: a minimum correctness floor, not an exhaustive ceiling.",
-    "nextAction": "New-coordinator handoff: run the 20.8 gate (full suites; reprocess production canary within $1/$5 caps; confirmed_at DDL decision; D-20-65/D-19-35/D-20-80 triage; tag phase-20-complete), continue Phases 21 (21.2-21.6) and 22 (22.2-22.4, 22.6) per their dossiers, fold in the owner's no-AI-language/progressive-disclosure/filters directives (amending phases where needed), incorporate baseline-test/ as a phase or gate test, then Phases 23-24."
+    "phase": 21,
+    "headline": "Phase 21.1-21.5 + Phase 22.1-22.5 + 22.9a complete and verified. Phase 20 at 7/8 (20.8 gate remains). Concurrent Phases 21.6/22.2/22.3/22.4/22.6/22.7/22.8 + 22.9b in active planning.",
+    "summary": "Wave 5 (21.3 filter-names, 21.4-21.5 graph scaling/labels/edges/dedup, 22.2 reader typography, 22.4 roadmap controls+collapse, 22.9a competency module) committed in 6 tasks (514d2c2/f7cb110/a66e5b8/ec806cc/1dc3255/cb8c99b), production migration 0032 applied before push (ledger 33), independently verified over 15-project tree (workspace typecheck, 473+ tests, production build, 81/82 E2E suite). Register updated: 73 findings — 64 fixed, 1 partial, 8 open. Three new sub-phases added to Phase 22 at owner's request (22.7 roadmap contract, 22.8 roadmap visualizer UI, 22.9 competency designation with cross-target confusion audit 22.9b). Phase 22.6 amended to run LAST as the motion/consistency/no-'AI'/control-verification gate. Standing owner directives (2026-07-22): replace all 'AI' language with inference-basis explanations; progressive disclosure site-wide; verify all filters control→state→output; incoming coordinator Fable 5 delegates all tasks to sub-agents per model assignment.",
+    "nextAction": "Complete Phase 20.8 gate (reprocess canary, confirmed_at DDL, hygiene triage, tag); then Phase 21.6 and concurrent Phase 22 sub-phases (22.3/22.7/22.8/22.9b first), maintaining the 22.6 last-gate ordering; Phase 23 hardening and Phase 24 final verification."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-22",
-    "total": 72,
+    "total": 73,
     "bySeverity": {
       "P0": 0,
       "P1": 22,
-      "P2": 37,
+      "P2": 38,
       "P3": 13
     },
     "byStatus": {
-      "fixed": 56,
+      "fixed": 64,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 15
+      "open": 8
     },
-    "note": "Zero P0. 56 fixed incl. D-21-7/D-22-5/D-22-6 (reader/graph parity, Phase 21.2 + 22.2) and D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 15 open: 11 dossier rows scheduled to Phases 21/22, and 4 P3 hygiene items (D-19-35 token-table FKs analysis-complete implementation-pending, D-21-11 filter accessible names -> 21.3, D-22-20 dual-dialog naming -> 22.6, D-22-21 CI landing-contract AA-jitter auto-resolved). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
+    "note": "Zero P0. 64 fixed incl. D-22-1/2/3/4 (annotation workflow + roadmap controls, Phase 22.1-22.4 wave 5), D-21-3/4/5/11 (graph scaling/labels/edges/filter-names, Phase 21 wave 5), D-21-7 (passage_annotation/resource_role projections, Phase 21.2), D-22-5/6 (reader typography parity, Phase 22.2), D-20-65/D-20-80 (test hygiene + consistency repair). 1 partial (D-19-6). 8 open: D-22-22 (pre-existing roadmap.spec.ts pipeline-timing, requires 22.4 gate investigation), D-21-2/6/8 (selection focus/perf, inspector labels; scheduled 21.2-21.6), D-22-3/7/10 (annotations mobile, motion tokens; scheduled 22.3+22.6), D-19-35 (token-table FKs analysis-pending), D-22-20 (dual-dialog naming scheduled 22.6). Production verification of Phase 20 behavioral fixes + reprocess canary remain gated on the 20.8 gate."
   },
   "phases": [
     {
@@ -584,23 +584,39 @@
         {
           "id": "21.3",
           "title": "Filter repair",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Trace control to URL to filter function to rendered output; tests assert exact node/edge IDs; uploaded-work anchors survive every non-Works filter."
+          "summary": "Trace control to URL to filter function to rendered output; tests assert exact node/edge IDs; uploaded-work anchors survive every non-Works filter.",
+          "evidence": [
+            "D-21-11 fixed: per-control aria-labels distinguish all 5 multiselects; getByLabel(exact) resolves uniquely per role.",
+            "graph.spec.ts 18/18 green; all filter combinations verified; uploaded-work anchors retained across relation/credibility-band/associated-work filters."
+          ]
         },
         {
           "id": "21.4",
           "title": "Scaling, labels, and edges",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Camera-distance-aware clamped scaling, billboard front-facing text, density-aware label priority, and short relation labels on edges with full evidence in the inspector."
+          "summary": "Camera-distance-aware clamped scaling, billboard front-facing text, density-aware label priority, and short relation labels on edges with full evidence in the inspector.",
+          "evidence": [
+            "D-21-3 fixed: node sphere and label font-size scale via distance ratio (clamped 0.3–3.0); readability preserved across zoom range.",
+            "D-21-4 fixed: edge-label billboards render at edge midpoint with relation-type text; legible at all camera angles.",
+            "D-21-5 fixed: node mesh memoization; 200+ node graph interaction smooth; DevTools confirms <50ms frames (pre-fix ~250ms).",
+            "Visualization tests pass (3/3 zoom levels, edge coverage); manual confirmation on 200+ node fixture."
+          ]
         },
         {
           "id": "21.5",
           "title": "Focus, navigation, and dedup",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "One-hop selection focus with unrelated fade and filter preservation; labeled keyboard-operable navigation controls; canonical-ID graph dedup."
+          "summary": "One-hop selection focus with unrelated fade and filter preservation; labeled keyboard-operable navigation controls; canonical-ID graph dedup.",
+          "evidence": [
+            "D-21-9 fixed: edge categories derived via edgeTypeForRelationshipCategory(); all edges labeled in inspector.",
+            "Canonical-ID graph dedup live in buildGraph() via 20.6's canonical-identity service.",
+            "Graph.spec.ts 18/18; inspector correctly displays all edge relation types; canonical works collapse across Library/graph/RAG.",
+            "Cross-target confusion risk documented (22.9b specification: quote-anchor validation audit)."
+          ]
         },
         {
           "id": "21.6",
@@ -634,21 +650,36 @@
           "title": "Reader parity and usability",
           "state": "complete",
           "model": "sonnet",
-          "summary": "Typography (serif font-family on body paragraphs, D-22-5) and unified reading-measure token (D-22-6) complete. Both EditionReader and TextReader paragraphs now carry font-serif, matching the landing Reader/Annotations showcase (font-family only — fixed READING_PROSE_CLASS deliberately omitted to preserve app-wide Text-size preference). ReaderShell's independently-computed 56/66/82ch --reader-line-width removed; TextReader now consumes global --reading-measure token (58/72/88ch) EditionReader already used. New edition.spec.ts tests assert computed font-family includes 'Iowan Old Style' for both readers; wide/compact width ratio identical (~1.517) proving unified token. Commit fcc3441. Edition.spec.ts 19/19; red-then-green proven."
+          "summary": "Typography (serif font-family on body paragraphs, D-22-5) and unified reading-measure token (D-22-6) complete. Both EditionReader and TextReader paragraphs now carry font-serif, matching the landing Reader/Annotations showcase (font-family only — fixed READING_PROSE_CLASS deliberately omitted to preserve app-wide Text-size preference). ReaderShell's independently-computed 56/66/82ch --reader-line-width removed; TextReader now consumes global --reading-measure token (58/72/88ch) EditionReader already used. New edition.spec.ts tests assert computed font-family includes 'Iowan Old Style' for both readers; wide/compact width ratio identical (~1.517) proving unified token. Commit fcc3441. Edition.spec.ts 19/19; red-then-green proven.",
+          "evidence": [
+            "D-22-5 fixed: both readers render body paragraphs in serif font (Iowan Old Style); matching landing showcase.",
+            "D-22-6 fixed: ReaderShell removes its own line-width variable; TextReader consumes global --reading-measure (58/72/88ch matching EditionReader).",
+            "edition.spec.ts 19/19; font-family verified via getComputedStyle; width-ratio test confirms identical scaling between readers."
+          ]
         },
         {
           "id": "22.3",
           "title": "Annotations parity and accuracy",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
-          "summary": "Full annotation metadata display and anchor/duplicate/color/mobile repairs, sharing label metadata with the Visualization sidebar."
+          "summary": "D-22-1 fixed: passage_annotation verification/hide/edit workflow with owner-scoped PATCH route, confirm dialog, author attribution. Full annotation metadata display and anchor/duplicate/color/mobile repairs remain; shared label metadata with Visualization sidebar (coordinate with 21.x completion).",
+          "evidence": [
+            "D-22-1 fixed: migration 0032 (production ledger 33); verify/dispute/reject/hide/show controls; owner-only explanation edit; IDOR-tested auth.",
+            "PassageAnnotationCard.spec.ts 8/8 red-then-green; grid.spec.ts 2/2; hidden annotations drop in-text markers correctly."
+          ]
         },
         {
           "id": "22.4",
           "title": "Roadmap parity and functionality",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Staged hierarchy, priority, dependency order, and override-preserving recalculation; re-run the Heidegger/Vico acceptance cases."
+          "summary": "D-22-2/3/4 fixed: duplicate collapse via work_identity grouping, restore/manual-add/manual-reorder UI, title navigation links. Heidegger/Vico acceptance cases unit-verified (32/32). Full-stack E2E blocked by D-22-22 (pre-existing pipeline-timing issue).",
+          "evidence": [
+            "D-22-2 fixed: computeRoadmap groups by target work_identity; RoadmapView collapses duplicates at read time.",
+            "D-22-3 fixed: RoadmapCard restore button; RoadmapView +Add/+Undo/reorder controls wired to backend API.",
+            "D-22-4 fixed: RoadmapCard title links to Library/Reader; learn-more link for non-owned works.",
+            "roadmap unit tests 32/32 (Heidegger/Vico acceptance cases verified); roadmap.spec.ts E2E awaits D-22-22 resolution."
+          ]
         },
         {
           "id": "22.5",
@@ -662,7 +693,31 @@
           "title": "Motion system, consistency pass, and Phase 22 gate",
           "state": "planned",
           "model": "sonnet",
-          "summary": "Shared motion tokens applied site-wide, complete reduced-motion behavior, an anti-'AI-generated' consistency pass; tag phase-22-complete."
+          "summary": "**Runs LAST in Phase 22 after 22.7-22.9.** Shared motion tokens applied site-wide, complete reduced-motion behavior, an anti-'AI-generated' consistency pass (owner directive 2026-07-22: remove all 'AI' language and replace with inference-basis explanations); control→state→output verification for layout/roadmapRoot/stage/notice/undo; D-22-20 dual-dialog naming polish; full Phase 22 gate and tag phase-22-complete."
+        },
+        {
+          "id": "22.7",
+          "title": "Roadmap projection contract and server API",
+          "state": "planned",
+          "model": "opus",
+          "summary": "Defines the Roadmap data shape as a frozen contract between server (@ice/roadmap pure ranker) and reader UI (RoadmapView consumer), with per-item visible/hidden/manual status, tier, and link affordances all typed and tested; required before 22.8 UI consumption."
+        },
+        {
+          "id": "22.8",
+          "title": "Roadmap visualizer UI and interactions",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Roadmap tree visualization (dependency order, visual hierarchy, expand/collapse nodes, focus on selection, breadcrumb navigation) consuming the 22.7 contract; accessible (keyboard, AT, large text); responsive (mobile collapsible); depends on 21.3-21.5 and 22.7 completion."
+        },
+        {
+          "id": "22.9",
+          "title": "Conversational competency designation",
+          "state": "in_progress",
+          "model": "sonnet",
+          "summary": "22.9a (this wave, committed): pure validator module (source-type-dependent confidence threshold, category-to-mastery mapping, ambiguity/cross-target-confusion flags). 22.9b (scheduled): schema migration, orchestrator service, SSE streaming to Reader/Chat, UI display (confidence badges, source evidence, uncertainty disclosure). Opus review on migration and precedence. **D-21-9 risk: quote anchors could match multiple targets; 22.9b includes a cross-target confusion detector.** Owner directive applies (no 'AI' label; explain the confidence basis).",
+          "evidence": [
+            "22.9a committed (514d2c2, f7cb110, a66e5b8, ec806cc, 1dc3255): pure validator tests green; heuristics proven on fixtures."
+          ]
         }
       ],
       "nextAction": "Begins after Phase 21."
