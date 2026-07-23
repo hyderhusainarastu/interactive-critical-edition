@@ -46,12 +46,30 @@ export interface RankableCandidate {
  * bounded by `maxFullInspections`.
  *
  * Candidates specifically grounded in the document's own citation evidence
- * are NEVER truncated out by this budget — they are naturally bounded
- * upstream by how many real citations the document has (`maxCitationCandidates`,
- * already 300), which is a real ceiling, just a much higher one. Everything
- * else is ranked by authority, exactly as before, and fills whatever budget
- * remains after the specifically-grounded group is seated.
+ * are effectively never competed out by the generic authority sort — they
+ * are naturally bounded upstream by how many real citations the document has
+ * (`maxCitationCandidates`, already 300), which is a real ceiling, just a
+ * much higher one. Everything else is ranked by authority, exactly as
+ * before, and fills whatever budget remains after the specifically-grounded
+ * group is seated.
+ *
+ * Defense-in-depth (floors2 crash follow-up, §5 item 3): the specific group
+ * itself is capped at `maxFullInspections * SPECIFIC_GROUP_CAP_MULTIPLIER`.
+ * This did not cause the floors2 production incident — that run's specific
+ * group (175) was well within this ceiling (240 at the default 120 budget)
+ * — but an uncapped specific group is still an unbounded-in-practice full-
+ * inspection pass for a genuinely pathological document (hundreds of
+ * citation-grounded hits). Past the cap, the specific group is ranked by
+ * authority and truncated exactly the way the generic group already is —
+ * note that once the specific group alone reaches the cap (2x the base
+ * budget), `remaining` below is mathematically always 0, so an overflowing
+ * specific group necessarily crowds out the entire generic group too, same
+ * as it already could pre-cap; the cap's job is only to stop the specific
+ * group's own size from growing without bound, not to change how it
+ * competes with generic once it does overflow.
  */
+const SPECIFIC_GROUP_CAP_MULTIPLIER = 2;
+
 export function selectForFullInspection<T extends RankableCandidate>(
   accepted: readonly T[],
   authorityOrder: Record<string, number>,
@@ -62,7 +80,13 @@ export function selectForFullInspection<T extends RankableCandidate>(
   for (const item of accepted) {
     (isSpecificallyGroundedCitation(item.assessment) ? specific : generic).push(item);
   }
+  // Ranked by authority so a cap, when it bites, drops the WEAKEST specific
+  // candidates first — the same treatment the generic group already gets.
+  specific.sort((a, b) => authorityOrder[a.authority] - authorityOrder[b.authority]);
+  const specificCap = maxFullInspections * SPECIFIC_GROUP_CAP_MULTIPLIER;
+  const seatedSpecific = specific.slice(0, specificCap);
+
   generic.sort((a, b) => authorityOrder[a.authority] - authorityOrder[b.authority]);
-  const remaining = Math.max(0, maxFullInspections - specific.length);
-  return [...specific, ...generic.slice(0, remaining)];
+  const remaining = Math.max(0, maxFullInspections - seatedSpecific.length);
+  return [...seatedSpecific, ...generic.slice(0, remaining)];
 }

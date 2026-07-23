@@ -88,9 +88,10 @@ describe("selectForFullInspection — the Nicomachean-Ethics-edition-flood fixtu
     expect(genericPortion.every((r) => r.authority === "A")).toBe(true);
   });
 
-  it("never truncates the specific group even when it alone exceeds maxFullInspections", () => {
+  it("does not truncate the specific group below the 2x-budget defense-in-depth cap", () => {
     const hugeSpecificGroup = Array.from({ length: 200 }, (_, i) => candidate(`specific-${i}`, "E", "citation_text"));
     const ranked = selectForFullInspection([...hugeSpecificGroup, ...neEditions], AUTHORITY_ORDER, 120);
+    // 200 is below the 240 (120 * 2) cap, so every specific candidate still survives.
     expect(ranked.length).toBeGreaterThanOrEqual(200);
     for (const item of hugeSpecificGroup) expect(ranked.some((r) => r.id === item.id)).toBe(true);
   });
@@ -99,5 +100,43 @@ describe("selectForFullInspection — the Nicomachean-Ethics-edition-flood fixtu
     const plain = [candidate("a", "C", null), candidate("b", "A", null), candidate("c", "B", null)];
     const ranked = selectForFullInspection(plain, AUTHORITY_ORDER, 120);
     expect(ranked.map((r) => r.id)).toEqual(["b", "c", "a"]);
+  });
+});
+
+describe("selectForFullInspection — specific-group cap (floors2 crash follow-up, §5 item 3)", () => {
+  // A genuinely pathological document: 250 specifically-grounded candidates
+  // at a 120 budget (cap = 240). This is NOT the floors2 incident's own
+  // shape (that run had 175, well under 240) — it is the case the cap
+  // exists to bound for a WORSE future document, per the report's own
+  // recommendation to keep the two findings independent.
+  const maxFullInspections = 120;
+  const specificCap = maxFullInspections * 2;
+
+  it("caps the specific group at maxFullInspections * 2 once it overflows", () => {
+    const hugeSpecificGroup = Array.from({ length: 250 }, (_, i) => candidate(`specific-${i}`, "E", "citation_text"));
+    const ranked = selectForFullInspection(hugeSpecificGroup, AUTHORITY_ORDER, maxFullInspections);
+    expect(ranked.length).toBe(specificCap);
+  });
+
+  it("keeps the highest-authority specific candidates and drops the weakest ones when the cap bites", () => {
+    // 100 high-authority (A) + 200 low-authority (E) specifically-grounded
+    // candidates — 300 total, well past the 240 cap.
+    const highAuthority = Array.from({ length: 100 }, (_, i) => candidate(`hi-${i}`, "A", "citation_text"));
+    const lowAuthority = Array.from({ length: 200 }, (_, i) => candidate(`lo-${i}`, "E", "citation_text"));
+    const ranked = selectForFullInspection([...lowAuthority, ...highAuthority], AUTHORITY_ORDER, maxFullInspections);
+    expect(ranked.length).toBe(specificCap);
+    const rankedIds = new Set(ranked.map((r) => r.id));
+    for (const item of highAuthority) expect(rankedIds.has(item.id)).toBe(true);
+    // Only 140 of the 200 low-authority items fit after the 100 high-authority ones.
+    const survivingLow = lowAuthority.filter((item) => rankedIds.has(item.id));
+    expect(survivingLow).toHaveLength(specificCap - highAuthority.length);
+  });
+
+  it("crowds out the entire generic group once the specific group alone reaches the cap", () => {
+    const hugeSpecificGroup = Array.from({ length: 300 }, (_, i) => candidate(`specific-${i}`, "E", "citation_text"));
+    const genericGroup = [candidate("generic-a", "A", null)];
+    const ranked = selectForFullInspection([...hugeSpecificGroup, ...genericGroup], AUTHORITY_ORDER, maxFullInspections);
+    expect(ranked.length).toBe(specificCap);
+    expect(ranked.some((r) => r.id === "generic-a")).toBe(false);
   });
 });
