@@ -68,9 +68,9 @@ test.describe("Visualization graph", () => {
     expect(navLabels.indexOf("Visualization")).toBeLessThan(navLabels.indexOf("Works"));
 
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByLabel("Relationship color legend")).toContainText("Citation / reference");
-    await expect(page.getByLabel("Relationship color legend")).toContainText("Prerequisite");
-    await expect(page.getByLabel("Relationship color legend")).toContainText("Structure");
+    await expect(page.getByLabel("Edge color legend")).toContainText("Citation / reference");
+    await expect(page.getByLabel("Edge color legend")).toContainText("Prerequisite");
+    await expect(page.getByLabel("Edge color legend")).toContainText("Structure");
   });
 
   test("the Kind filter persists in the URL and narrows the table to one node type", async ({ page }) => {
@@ -105,11 +105,11 @@ test.describe("Visualization graph", () => {
     await page.goto(`/works/${workId}/graph?type=concept`);
     // 2 = the matching concept + the uploaded-work anchor (D-21-10).
     await expect(page.getByText("2 of 4 shown")).toBeVisible();
-    await expect(page.getByLabel("Accessible relationship browser")).toBeVisible();
+    await expect(page.getByLabel("Accessible graph browser")).toBeVisible();
     await expect(page.getByRole("table")).toHaveCount(0);
     await page.getByText("Accessible node browser").click();
     await expect(page.getByRole("table")).toBeVisible();
-    await expect(page.getByLabel("3D relationship graph")).toBeVisible();
+    await expect(page.getByLabel("3D graph canvas")).toBeVisible();
     await expect(page.getByRole("button", { name: "3D" })).toHaveCount(0);
   });
 
@@ -148,6 +148,156 @@ test.describe("Visualization graph", () => {
     await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="external:bib:${first.bibId}"]`)).toBeVisible();
     await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
+
+    // Deep-linked filter state restores identically after a reload — exact
+    // node IDs, not just the select's checkbox/value state (owner directive C).
+    await page.reload();
+    await expect(page.getByLabel("Associated work")).toHaveValue(`work:${first.workId}`);
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="work:${first.workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="external:bib:${first.bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="work:${second.workId}"]`)).toHaveCount(0);
+  });
+
+  test("the Search filter narrows by label/authors/kind, persists in the URL, and survives a reload", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
+
+    await page.getByLabel("Search", { exact: true }).fill("Physics");
+    await expect(page).toHaveURL(/[?&]search=Physics/);
+    // The bib record titled "Physics" matches; the concept and the section
+    // do not. The uploaded work stays visible as the graph's anchor
+    // (D-21-10) even though its own title doesn't match the search term.
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Search", { exact: true })).toHaveValue("Physics");
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+  });
+
+  test("the Reading status control narrows the table to one state and survives a reload", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    // The seeded bib record is not itself an owned work, so it renders as
+    // "missing" (referenced, not acquired); the seeded concept has no
+    // understanding rating, so it renders as "unread".
+    await page.getByLabel("Reading status").selectOption("missing");
+    await expect(page).toHaveURL(/[?&]state=missing/);
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Reading status")).toHaveValue("missing");
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+  });
+
+  test("the Authority filter narrows to one authority band and survives a reload", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    await page.getByLabel("Authority").selectOption("A");
+    await expect(page).toHaveURL(/[?&]authority=A/);
+    // Only the bib record carries an authority grade; the concept does not.
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Authority")).toHaveValue("A");
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+  });
+
+  test("the Provider filter narrows to one discovering provider and survives a reload", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await page.getByText("Accessible node browser").click();
+
+    await page.getByLabel("Provider").selectOption("crossref");
+    await expect(page).toHaveURL(/[?&]provider=crossref/);
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Provider")).toHaveValue("crossref");
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toHaveCount(0);
+  });
+
+  test("Clear all filters resets every filter, stays URL-synced, and restores the unfiltered node/edge set", async ({ page }) => {
+    const { workId, bibId, conceptId, sectionBlockId } = await seedWorkWithGraphData(userId);
+
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+
+    const clearButton = page.getByRole("button", { name: "Clear all filters" });
+    // Nothing to clear yet — the control is honestly disabled at the
+    // all-default state rather than silently doing nothing on click.
+    await expect(clearButton).toBeDisabled();
+
+    // Stack several DIFFERENT filter fields at once (search + type + relation
+    // + authority + credibility) to prove Clear all resets every one of
+    // them, not just the last one touched.
+    await page.getByLabel("Search", { exact: true }).fill("Physics");
+    await page.getByLabel("Kind").selectOption("reference");
+    await page.getByLabel("Relation").selectOption("cites");
+    await page.getByLabel("Authority").selectOption("A");
+    await page.getByLabel("Credibility").selectOption("high");
+    await expect(page).toHaveURL(/search=Physics/);
+    await expect(page).toHaveURL(/type=reference/);
+    await expect(page).toHaveURL(/relation=cites/);
+    await expect(page).toHaveURL(/authority=A/);
+    await expect(page).toHaveURL(/credibilityBand=high/);
+
+    await expect(clearButton).toBeEnabled();
+    await clearButton.click();
+
+    // URL-synced: every filter param is gone, none silently left behind.
+    await expect(page).not.toHaveURL(/search=/);
+    await expect(page).not.toHaveURL(/[?&]type=/);
+    await expect(page).not.toHaveURL(/relation=/);
+    await expect(page).not.toHaveURL(/authority=/);
+    await expect(page).not.toHaveURL(/credibilityBand=/);
+
+    // Every control visibly reflects the reset, and the button is disabled
+    // again at the all-default state.
+    await expect(page.getByLabel("Search", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Kind")).toHaveValue("all");
+    await expect(page.getByLabel("Relation")).toHaveValue("all");
+    await expect(page.getByLabel("Authority")).toHaveValue("all");
+    await expect(page.getByLabel("Credibility")).toHaveValue("all");
+    await expect(clearButton).toBeDisabled();
+
+    // Exact node/edge set is restored — not just checkbox/select state.
+    await page.getByText("Accessible node browser").click();
+    await expect(page.locator(`[data-graph-node="work:${workId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="concept:${conceptId}"]`)).toBeVisible();
+    await expect(page.locator(`[data-graph-node="section:${sectionBlockId}"]`)).toBeVisible();
+    await expect(page.getByText("1 references · 0 sources · 1 concepts")).toBeVisible();
   });
 
   test("a table row and a graph selection share the bounded provenance inspector", async ({ page }) => {
@@ -273,16 +423,22 @@ test.describe("Visualization graph", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/graph?relation=cites`);
+
+    // D-21-11 regression: this used to be a 4-way substring collision
+    // ("Relation" matched the select's own label plus the "Relationship
+    // color legend" / "3D relationship graph" / "Accessible relationship
+    // browser" landmarks, forcing a `label`-locator workaround here). The
+    // three landmarks are now named without the colliding substring, so
+    // getByLabel("Relation") must resolve to exactly the one select.
+    await expect(page.getByLabel("Relation")).toHaveCount(1);
+
     await page.getByText("Accessible node browser").click();
     const bibRow = page.locator(`[data-graph-node="external:bib:${bibId}"]`);
     await expect(bibRow).toBeVisible();
     await expect(bibRow).toContainText("cites");
     await expect(bibRow).not.toContainText("influences");
 
-    // getByLabel("Relation") is ambiguous here (it substring-matches the
-    // "Relationship color legend" / "3D relationship graph" regions), so
-    // target the select through its own <label> element.
-    await page.locator("label", { hasText: "Relation" }).locator("select").selectOption("influences");
+    await page.getByLabel("Relation").selectOption("influences");
     await expect(bibRow).toContainText("influences");
     await expect(bibRow).not.toContainText("cites");
   });
@@ -435,8 +591,8 @@ test.describe("Visualization graph", () => {
     // other graph.spec.ts test) now appear, derived automatically from
     // `edgeFamilyFor()` — no separate legend wiring was needed.
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByLabel("Relationship color legend")).toContainText("Prerequisite");
-    await expect(page.getByLabel("Relationship color legend")).toContainText("Opposition");
+    await expect(page.getByLabel("Edge color legend")).toContainText("Prerequisite");
+    await expect(page.getByLabel("Edge color legend")).toContainText("Opposition");
 
     // Owner directive C: verify the pre-existing relation filter's
     // control -> URL/state -> filter function -> rendered output for these
@@ -448,7 +604,7 @@ test.describe("Visualization graph", () => {
     await expect(bibRow).toContainText("is prerequisite for");
     await expect(bibRow).not.toContainText("disagrees with");
 
-    await page.locator("label", { hasText: "Relation" }).locator("select").selectOption("disagrees_with");
+    await page.getByLabel("Relation").selectOption("disagrees_with");
     await expect(bibRow).toContainText("disagrees with");
     await expect(bibRow).not.toContainText("is prerequisite for");
   });

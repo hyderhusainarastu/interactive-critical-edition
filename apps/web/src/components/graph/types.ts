@@ -280,6 +280,26 @@ export function edgeTypesByNode(data: Pick<GraphData, "links">): Map<string, Set
   return map;
 }
 
+/**
+ * Multi-filter semantics (Phase 21.3 / plan §21.3 "OR/AND semantics"
+ * requirement, documented rather than invented): every field here is a
+ * SINGLE-select control today — `search`/`state`/`type`/`authority`/
+ * `provider`/`relation`/`credibilityBand`/`associatedWork` each hold exactly
+ * one active value or `"all"`. Across DIFFERENT fields, `filterGraphData`
+ * combines them with AND (a node must satisfy every active field's
+ * predicate — see the `&&`-chain in `filterGraphData` below); there is no
+ * OR between, say, an active `state` filter and an active `type` filter.
+ * WITHIN one field there is only ever one selectable value at a time, so
+ * there is no multi-value OR/AND to display in the UI — the plan's
+ * "multiple relation filters have defined OR/AND semantics" line presumes a
+ * multi-select control (e.g. a checkbox group for `relation`) that does not
+ * exist yet. If a future sub-phase adds multi-select to any of these
+ * fields, that field's own values should combine with OR (matches any of
+ * the selected values) while still AND-ing against every other field —
+ * consistent with how filter combination normally reads to users — and the
+ * UI should say so explicitly next to that control; until then, this
+ * comment is the documented decision, not a placeholder.
+ */
 export interface GraphFilters {
   search: string;
   state: NodeState | "all";
@@ -310,6 +330,15 @@ export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
   credibilityBand: "all",
   associatedWork: "all",
 };
+
+/** True when every field is still at its default — drives the "Clear all
+ *  filters" control's disabled state (nothing to clear) and lets tests
+ *  assert the cleared state without re-deriving the field list themselves. */
+export function isDefaultFilters(filters: GraphFilters): boolean {
+  return (Object.keys(DEFAULT_GRAPH_FILTERS) as (keyof GraphFilters)[]).every(
+    (key) => filters[key] === DEFAULT_GRAPH_FILTERS[key],
+  );
+}
 
 export function credibilityBandFor(score: number | null | undefined): CredibilityBand {
   if (score == null) return "unknown";

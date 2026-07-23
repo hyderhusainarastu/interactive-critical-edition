@@ -17,6 +17,7 @@ import {
   credibilityBandFor,
   edgeFamilyFor,
   filterGraphData,
+  isDefaultFilters,
   type GraphData,
   type GraphFilters,
   type GraphLink,
@@ -101,6 +102,18 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     },
     [filters, pathname, router, searchParams],
   );
+
+  // Phase 21.3: a single control that resets every filter field at once and
+  // stays URL-synced, same round-trip pattern as `updateFilter` above.
+  // Deliberately does not touch `pinnedWork` — pinning anchors a work in
+  // place, it is not itself one of the `FILTER_KEYS` fields being cleared.
+  const clearAllFilters = useCallback(() => {
+    setFilters(DEFAULT_GRAPH_FILTERS);
+    const params = new URLSearchParams(searchParams.toString());
+    for (const k of FILTER_KEYS) params.delete(k);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const onNodeClick = useCallback((node: GraphNode) => {
     setSelected(node);
@@ -207,7 +220,14 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               {data.stats.missing} missing · {data.stats.read} read
             </span>
           </div>
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" aria-label="Relationship color legend">
+          {/* D-21-11: this landmark's aria-label used to be "Relationship
+              color legend", which substring-collided with the "Relation"
+              select label, the "3D relationship graph" scene region, and
+              the "Accessible relationship browser" disclosure (getByLabel
+              matched all four for the single string "Relation"). Renamed
+              here and at the two other sites below so every accessible
+              name on this page is unambiguous. */}
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" aria-label="Edge color legend">
             {[...new Set(data.links.map((link) => edgeFamilyFor(link.edgeType, link.category)))]
               .sort((a, b) => EDGE_FAMILY_ORDER.indexOf(a) - EDGE_FAMILY_ORDER.indexOf(b))
               .map((family) => (
@@ -234,7 +254,12 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               />
             </label>
             <label className="flex items-center gap-1">
-              <span className="text-[var(--color-text-muted)]">Filter</span>
+              {/* D-21-11: was the bare, ambiguous "Filter" — that substring
+                  also matches the new "Clear all filters" button's
+                  accessible name below, so this control gets its own
+                  specific name (it filters by NodeState/reading status,
+                  not by relation, kind, or anything else on this page). */}
+              <span className="text-[var(--color-text-muted)]">Reading status</span>
               <select
                 value={filters.state}
                 onChange={(e) => updateFilter("state", e.target.value)}
@@ -357,6 +382,16 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               </label>
             )}
 
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              disabled={isDefaultFilters(filters)}
+              aria-label="Clear all filters"
+              className="rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Clear all filters
+            </button>
+
             <span className="ml-auto text-xs text-[var(--color-text-muted)]">
               {filtered.nodes.length} of {data.nodes.length} shown
             </span>
@@ -386,7 +421,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               <section
                 ref={graphWorkspaceRef}
                 className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
-                aria-label="3D relationship graph"
+                aria-label="3D graph canvas"
                 data-graph-stage
               >
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -402,7 +437,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                   <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={() => setSelected(null)} onCloseLink={() => setSelectedLink(null)} />
                 </div>
               </section>
-              <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible relationship browser">
+              <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
                 <summary className="cursor-pointer text-sm font-medium">Accessible node browser</summary>
                 <p className="mt-2 text-xs text-[var(--color-text-muted)]">Keyboard-operable table of the same filtered graph data. It is available as an alternative browser without dominating the visual workspace.</p>
                 <div className="mt-2 overflow-x-auto">
