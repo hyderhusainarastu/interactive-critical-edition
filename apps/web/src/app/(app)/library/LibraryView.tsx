@@ -75,6 +75,34 @@ const ATTACHED_ROLE_LABEL: Record<string, string> = {
 };
 const AUTHORITY_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
+/** Decorative, aria-hidden source-type glyph for the row icon roundel
+ *  (UI-overhaul spec §3.1) — the type itself stays announced via the
+ *  existing `SOURCE_TYPE_LABEL` text, so this never carries meaning alone. */
+const SOURCE_TYPE_GLYPH: Record<string, string> = {
+  article: "§",
+  book: "◆",
+  webpage: "§",
+  video: "▶",
+  social_post: "#",
+  dataset: "◧",
+  "unresolved-citation": "?",
+};
+
+/** Shared uppercase field-label treatment for the filter row (spec §3.1's
+ *  `.library-filters label` mapping), factored out since five-plus labels
+ *  repeat it identically. */
+const FIELD_LABEL_CLASS = "text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]";
+
+/** Same three-band thresholds `CredibilityMeter` already uses (0.7/0.4),
+ *  reused here only to color the authority-grade circle so it never
+ *  invents a fourth color scheme alongside the meter it sits next to. */
+function gradeAccent(score: number | null | undefined): string {
+  if (score == null) return "var(--color-text-muted)";
+  if (score >= 0.7) return "var(--color-accent-green)";
+  if (score >= 0.4) return "var(--color-credibility-warning)";
+  return "var(--color-credibility-critical)";
+}
+
 function matchesTab(item: LibraryItem, tab: Tab): boolean {
   if (tab === "all") return true;
   if (tab === "to_read") return item.readingStatus === null || item.readingStatus === "planned";
@@ -328,7 +356,7 @@ export function LibraryView({
               </>
             ) : <p className="mt-1 text-sm text-[var(--color-text-muted)]">Showing recommendations across all uploaded works.</p>}
           </section>
-          <div role="group" aria-label="Reading status filter" className="mb-4 flex flex-wrap gap-2 border-b border-[var(--color-border)] text-sm">
+          <div role="group" aria-label="Reading status filter" className="mb-4 flex flex-wrap gap-1 border-b border-[var(--color-border)] text-sm">
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -338,11 +366,13 @@ export function LibraryView({
                 // Phase 23.2 (D-23-x): `min-h-11` brings this reading-status
                 // tab to the 44px touch-target floor — padding-only, the
                 // filter row already has room below it.
-                className="min-h-11 border-b-2 px-3 py-2"
+                // UI-overhaul spec §3.1: underline-style tab treatment
+                // (`.library-tabs button`) — same DOM/aria, styling only.
+                className="min-h-11 border-b-2 px-3.5 py-2.5 text-[9px] uppercase tracking-[0.08em]"
                 style={{
-                  borderColor: tab === t.key ? "var(--color-accent-ink)" : "transparent",
+                  borderColor: tab === t.key ? "var(--color-text)" : "transparent",
                   color: tab === t.key ? "var(--color-text)" : "var(--color-text-muted)",
-                  fontWeight: tab === t.key ? 600 : 400,
+                  fontWeight: tab === t.key ? 800 : 400,
                 }}
               >
                 {t.label} ({tabCounts[t.key]})
@@ -350,9 +380,9 @@ export function LibraryView({
             ))}
           </div>
 
-          <div ref={controlsRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+          <div ref={controlsRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-3 text-sm">
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Search library</span>
+              <span className={FIELD_LABEL_CLASS}>Search library</span>
               <div className="flex items-center gap-1">
                 <input
                   type="search"
@@ -375,7 +405,7 @@ export function LibraryView({
               </div>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Focus</span>
+              <span className={FIELD_LABEL_CLASS}>Focus</span>
               <select
                 value={workId}
                 onChange={(e) => selectFocus(e.target.value)}
@@ -391,7 +421,7 @@ export function LibraryView({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Relationship</span>
+              <span className={FIELD_LABEL_CLASS}>Relationship</span>
               <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {relationships.map((r) => (
@@ -402,7 +432,7 @@ export function LibraryView({
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Source type</span>
+              <span className={FIELD_LABEL_CLASS}>Source type</span>
               <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {resourceTypes.map((t) => (
@@ -414,10 +444,10 @@ export function LibraryView({
             </label>
             {readerLevelSignal ? (
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--color-text-muted)]">
+                <span className={FIELD_LABEL_CLASS}>
                   Reader level
                   {readerLevel !== "all" && (
-                    <span className="ml-1 text-[var(--color-text-muted)]">
+                    <span className="ml-1 text-[var(--color-text-muted)] normal-case tracking-normal">
                       ({enablePhase12Identity && levelMode === "exact" ? "exact tags, plus universal material" : "selected level and foundations"})
                     </span>
                   )}
@@ -441,7 +471,7 @@ export function LibraryView({
               // offering the control here would be a lie by omission. Say so
               // instead of a select that visibly does nothing.
               <div className="flex max-w-[16rem] flex-col gap-1">
-                <span className="text-xs text-[var(--color-text-muted)]">Reader level</span>
+                <span className={FIELD_LABEL_CLASS}>Reader level</span>
                 <p
                   role="note"
                   aria-label="Reader level filtering is not available"
@@ -453,7 +483,7 @@ export function LibraryView({
             )}
             {enablePhase12Identity && readerLevelSignal && readerLevel !== "all" && (
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
+                <span className={FIELD_LABEL_CLASS}>Level match</span>
                 <select
                   value={levelMode}
                   onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
@@ -465,7 +495,7 @@ export function LibraryView({
               </label>
             )}
             <label className="flex flex-col gap-1">
-              <span className="text-xs text-[var(--color-text-muted)]">Sort</span>
+              <span className={FIELD_LABEL_CLASS}>Sort</span>
               <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="relevance">Most relevant and credible</option>
                 <option value="title">Title A–Z</option>
@@ -488,11 +518,29 @@ export function LibraryView({
             </p>
           )}
 
-          <ul className="flex flex-col gap-2">
-              {visible.map((item) => (
-              <LibraryRow key={item.id} item={item} focusMetric={workId ? item.focusMetrics.find((metric) => metric.workId === workId) ?? null : null} onSetStatus={setReadingStatus} />
-            ))}
-          </ul>
+          {visible.length > 0 && (
+            // UI-overhaul spec §3.1: a decorative, non-semantic table-head
+            // strip sits above the real `<ul>/<li>` list rather than
+            // converting the rows to `role="table"`/`role="cell"` — the
+            // `<li>` rows keep native list semantics (`getByRole("listitem")`
+            // in library.spec.ts) while sighted readers see a table look.
+            <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+              <div
+                aria-hidden="true"
+                className="hidden grid-cols-[1.65fr_.65fr_.55fr_.4fr] gap-3 bg-[var(--color-surface-strong)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--color-surface-strong-fg-soft)] sm:grid sm:px-4"
+              >
+                <span>Source &amp; reason</span>
+                <span>Relationship</span>
+                <span>Credibility</span>
+                <span>Reading state</span>
+              </div>
+              <ul className="flex flex-col">
+                {visible.map((item) => (
+                  <LibraryRow key={item.id} item={item} focusMetric={workId ? item.focusMetrics.find((metric) => metric.workId === workId) ?? null : null} onSetStatus={setReadingStatus} />
+                ))}
+              </ul>
+            </div>
+          )}
         </>
       )}
     </div>
@@ -513,122 +561,131 @@ function LibraryRow({
   const credibility = focusMetric?.credibility ?? item.credibility;
   const readerLevel = focusMetric?.readerLevel ?? item.readerLevel;
   return (
-    <li data-library-item={item.id} className="app-control rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 hover:bg-[var(--color-surface)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-[var(--color-text)]">
-            {item.url ? (
-              <a href={item.url} target="_blank" rel="noreferrer" className="underline">
-                {item.title}
-              </a>
-            ) : (
-              // Structural-only addition (Phase 20.4): links to the new
-              // Library entry detail page (source-text attach lives there).
-              // Deliberately not touching this row's other label strings —
-              // those are Phase 20.2's scope.
-              <Link href={`/library/${item.id}`} className="underline">
-                {item.title}
-              </Link>
-            )}
-            {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
-          </p>
-          {item.authors.length > 0 && <p className="text-xs text-[var(--color-text-muted)]">{item.authors.join(", ")}</p>}
-          {rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{rationale}</p>}
-
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-text-muted)]">
-            <span>{RELATIONSHIP_LABEL[relationship] ?? relationship}</span>
-            {focusMetric && <><span>·</span><span>Relationship relevance {Math.round(focusMetric.relevance * 100)}%</span></>}
-            <span>·</span>
-            <span>{SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</span>
-            {credibility?.authority && (
-              <>
-                <span>·</span>
-                <span>Authority {credibility.authority.toUpperCase()}</span>
-              </>
-            )}
-            {credibility?.score != null && (
-              <>
-                <span>·</span>
-                <CredibilityMeter score={credibility.score} />
-              </>
-            )}
-            <span>·</span>
-            <span>{item.peerReviewed === true ? "Peer-reviewed" : item.peerReviewed === false ? "Not peer-reviewed" : "Peer review unverified"}</span>
-            {item.creatorVerification && (
-              <>
-                <span>·</span>
-                <span>{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</span>
-              </>
-            )}
-            {readerLevel && (
-              <>
-                <span>·</span>
-                <span>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</span>
-              </>
-            )}
-          </div>
-
-          {item.recommendedFor.length > 0 && (
-            <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
-              {item.recommendedFor.map((w) => (
-                <Link key={w.workId} href={`/works/${w.workId}`} className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-                  {w.title}
+    <li
+      data-library-item={item.id}
+      className="app-control border-t border-[var(--color-border)] bg-[var(--color-background)] px-3 py-3 first:border-t-0 hover:bg-[var(--color-surface)] sm:px-4"
+    >
+      {/* UI-overhaul spec §3.1: `.library-row`'s four visual columns
+       *  (source & reason / relationship / credibility / reading state),
+       *  lined up under the decorative head strip above. Native list
+       *  semantics are unaffected — this is a grid *inside* the `<li>`,
+       *  not a role change on it. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.65fr_.65fr_.55fr_.4fr] sm:items-start">
+        <div className="flex min-w-0 gap-2.5">
+          <span
+            aria-hidden="true"
+            className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full border border-[var(--color-border)] font-serif text-[11px] text-[var(--color-text-muted)]"
+          >
+            {SOURCE_TYPE_GLYPH[item.resourceType] ?? "§"}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium text-[var(--color-text)]">
+              {item.url ? (
+                <a href={item.url} target="_blank" rel="noreferrer" className="underline">
+                  {item.title}
+                </a>
+              ) : (
+                // Structural-only addition (Phase 20.4): links to the new
+                // Library entry detail page (source-text attach lives there).
+                // Deliberately not touching this row's other label strings —
+                // those are Phase 20.2's scope.
+                <Link href={`/library/${item.id}`} className="underline">
+                  {item.title}
                 </Link>
-              ))}
-            </div>
-          )}
+              )}
+              {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
+            </p>
+            {item.authors.length > 0 && <p className="text-xs text-[var(--color-text-muted)]">{item.authors.join(", ")}</p>}
+            {rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{rationale}</p>}
 
-          {(item.attached ?? []).length > 0 && (
-            <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Related records for ${item.title}`}>
-              <p className="font-medium text-[var(--color-text)]">Related records of this work</p>
-              <ul className="mt-1 list-disc pl-4">
-                {item.attached.map((attached) => (
-                  <li key={attached.id} data-attached-record={attached.id}>
-                    {ATTACHED_ROLE_LABEL[attached.role] ?? attached.role}
-                    {": "}
-                    {attached.url ? (
-                      <a href={attached.url} target="_blank" rel="noreferrer" className="underline">
-                        {attached.title}
-                      </a>
-                    ) : (
-                      attached.title
-                    )}
-                    {attached.year ? ` (${attached.year})` : null}
-                  </li>
+            {item.recommendedFor.length > 0 && (
+              <div className="mt-1.5 flex flex-wrap gap-1 text-xs">
+                {item.recommendedFor.map((w) => (
+                  <Link key={w.workId} href={`/works/${w.workId}`} className="rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                    {w.title}
+                  </Link>
                 ))}
-              </ul>
-            </div>
-          )}
+              </div>
+            )}
 
-          {item.citationProvenance.length > 0 && (
-            <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Citation provenance for ${item.title}`}>
-              <p className="font-medium text-[var(--color-text)]">Cited in this upload</p>
-              <ul className="mt-1 list-disc pl-4">
-                {item.citationProvenance.map((provenance) => (
-                  <li key={`${provenance.source}:${provenance.location}:${provenance.resolutionState}`}>
-                    {provenance.source} · {provenance.location} · {provenance.resolutionState === "resolved" ? "Resolved" : provenance.resolutionState === "pending" ? "Resolving bibliographic metadata" : "Needs bibliographic resolution"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            {(item.attached ?? []).length > 0 && (
+              <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Related records for ${item.title}`}>
+                <p className="font-medium text-[var(--color-text)]">Related records of this work</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {item.attached.map((attached) => (
+                    <li key={attached.id} data-attached-record={attached.id}>
+                      {ATTACHED_ROLE_LABEL[attached.role] ?? attached.role}
+                      {": "}
+                      {attached.url ? (
+                        <a href={attached.url} target="_blank" rel="noreferrer" className="underline">
+                          {attached.title}
+                        </a>
+                      ) : (
+                        attached.title
+                      )}
+                      {attached.year ? ` (${attached.year})` : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          <div className="mt-2 flex items-center gap-2 text-xs">
-            <span className="text-[var(--color-text-muted)]">Status</span>
-            <select
-              value={item.readingStatus ?? ""}
-              onChange={(e) => onSetStatus(item.id, (e.target.value || null) as (typeof READING_STATUSES)[number] | null)}
-              className="app-control rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
-              aria-label={`Reading status of ${item.title}`}
-            >
-              <option value="">To read</option>
-              {READING_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+            {item.citationProvenance.length > 0 && (
+              <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-[var(--color-text-muted)]" aria-label={`Citation provenance for ${item.title}`}>
+                <p className="font-medium text-[var(--color-text)]">Cited in this upload</p>
+                <ul className="mt-1 list-disc pl-4">
+                  {item.citationProvenance.map((provenance) => (
+                    <li key={`${provenance.source}:${provenance.location}:${provenance.resolutionState}`}>
+                      {provenance.source} · {provenance.location} · {provenance.resolutionState === "resolved" ? "Resolved" : provenance.resolutionState === "pending" ? "Resolving bibliographic metadata" : "Needs bibliographic resolution"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="min-w-0 text-xs text-[var(--color-text-muted)]">
+          <p className="text-sm font-medium text-[var(--color-text)]">{RELATIONSHIP_LABEL[relationship] ?? relationship}</p>
+          <p>{SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</p>
+          {focusMetric && <p className="mt-1">Relationship relevance {Math.round(focusMetric.relevance * 100)}%</p>}
+        </div>
+
+        <div className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">
+          {credibility?.authority && (
+            <span
+              role="img"
+              aria-label={`Authority ${credibility.authority.toUpperCase()}`}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 font-serif text-sm font-semibold"
+              style={{ borderColor: gradeAccent(credibility.score), color: gradeAccent(credibility.score) }}
+            >
+              <span aria-hidden="true">{credibility.authority.toUpperCase()}</span>
+            </span>
+          )}
+          <div className="min-w-0">
+            {credibility?.score != null && <p className="font-semibold text-[var(--color-text)]">{Math.round(credibility.score * 100)}/100</p>}
+            <p>{item.peerReviewed === true ? "Peer-reviewed" : item.peerReviewed === false ? "Not peer-reviewed" : "Peer review unverified"}</p>
+            {credibility?.score != null && <CredibilityMeter score={credibility.score} className="mt-1" />}
+            {item.creatorVerification && <p className="mt-1">{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</p>}
+            {readerLevel && <p>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</p>}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs sm:flex-col sm:items-start">
+          <span className="text-[var(--color-text-muted)]">Status</span>
+          <select
+            value={item.readingStatus ?? ""}
+            onChange={(e) => onSetStatus(item.id, (e.target.value || null) as (typeof READING_STATUSES)[number] | null)}
+            className="app-control rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
+            aria-label={`Reading status of ${item.title}`}
+          >
+            <option value="">To read</option>
+            {READING_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
     </li>
