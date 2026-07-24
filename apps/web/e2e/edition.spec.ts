@@ -247,21 +247,24 @@ test("reading width preference changes the interactive reader's actual content w
 });
 
 test("reading passage body text uses the serif reading typeface, matching the landing depiction, in both the interactive reader and the original-text view (Phase 22.2, D-22-5)", async ({ page }) => {
-  // The landing Reader/Annotations showcase (`page.tsx`'s ReaderShowcase, via
-  // `READING_PROSE_CLASS` in `components/shared/typography.ts`) depicts body
-  // prose in a serif stack headed by "Iowan Old Style" — that name only
-  // ever appears in `--font-serif`, never in body's own sans-first stack
-  // (`--font-sans, Georgia, serif`), so asserting on it (not a bare
-  // "serif" substring) actually distinguishes the two font stacks rather
-  // than passing on the generic fallback every element already inherits.
+  // `globals.css`'s `--font-serif` token (the theme-foundation restyle,
+  // 1223c67, moved it to `Georgia, "Times New Roman", serif`) is what these
+  // paragraphs' `font-serif` class resolves to; asserting the token-derived
+  // value keeps this from re-breaking on the next legitimate font-stack
+  // change. Anchored at the *start* of the computed value (not a bare
+  // "contains Georgia") because body's own sans-first stack
+  // (`var(--font-sans), Georgia, serif`) also lists Georgia as a fallback —
+  // a bare substring match would pass even for a non-serif element that
+  // inherited the body font, which isn't what this test is proving. Only
+  // an element that actually resolved `--font-serif` puts Georgia first.
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
   const editionParagraph = edition.locator("p", { hasText: "Vicious people act on decision" }).first();
-  await expect(editionParagraph).toHaveCSS("font-family", /Iowan Old Style/);
+  await expect(editionParagraph).toHaveCSS("font-family", /^Georgia\b/);
 
   await page.getByRole("button", { name: "Published edition" }).click();
   const original = page.getByRole("region", { name: /published edition.*original source text/i });
   const originalParagraph = original.locator("p", { hasText: "Vicious people act on decision" }).first();
-  await expect(originalParagraph).toHaveCSS("font-family", /Iowan Old Style/);
+  await expect(originalParagraph).toHaveCSS("font-family", /^Georgia\b/);
 });
 
 test("reading width preference scales the original-text view by the identical compact->wide ratio as the interactive reader, proving both derive from the same --reading-measure token (Phase 22.2, D-22-6)", async ({ page }) => {

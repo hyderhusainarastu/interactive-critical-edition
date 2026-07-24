@@ -63,7 +63,14 @@ test.describe("Visualization graph", () => {
     const { workId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    const navLabels = await page.locator("header nav a").allInnerTexts();
+    // Scoped to the primary-nav landmark (not just "header nav a") so this
+    // stays unambiguous now that AppFooter also renders a `nav`, and reads
+    // `textContent` (`allTextContents`) rather than `allInnerTexts` — the
+    // shell restyle (1223c67) added CSS `text-transform: uppercase` to nav
+    // links, which `innerText` reflects (rendering-derived) but
+    // `textContent` does not, so this keeps asserting the underlying label
+    // text rather than its visual casing.
+    const navLabels = await page.getByRole("navigation", { name: "Primary navigation" }).locator("a").allTextContents();
     expect(navLabels).toEqual(expect.arrayContaining(["Visualization", "Works", "Library"]));
     expect(navLabels.indexOf("Visualization")).toBeLessThan(navLabels.indexOf("Works"));
 
