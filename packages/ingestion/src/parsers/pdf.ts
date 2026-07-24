@@ -1,5 +1,6 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
-import { stripBoilerplateLines } from "./boilerplate";
+import { collectBoilerplateLines, isEntirelyBoilerplate, normalizeBoilerplateCandidate, stripBoilerplateAtBoundaries, stripBoilerplateLines } from "./boilerplate";
+import { recoverLeadingBodyProse } from "./bodyRecovery";
 import { recoverTruncatedEndnotes } from "./endnoteRecovery";
 import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
@@ -36,11 +37,23 @@ export interface ParsedDocument {
 
 /** Build the reader/analysis transcript only from prose-bearing structural
  * blocks. Authorial notes and bibliography remain persisted and addressable,
- * but never get silently folded into the processed body transcript. */
+ * but never get silently folded into the processed body transcript.
+ *
+ * A caption is included only when it carries a bbox (D-24-G1): GROBID
+ * mis-segments garbled page-bottom footnote fragments as coordinate-less
+ * `<figure>` captions, which would otherwise land at the transcript start as
+ * junk. A genuine figure/table caption in a well-formed PDF carries
+ * coordinates and is still included. */
 export function processedTextFromPages(pages: readonly ParsedPage[]): string {
   return pages
     .flatMap((page) => page.blocks)
-    .filter((block) => block.kind === "title" || block.kind === "header" || block.kind === "body" || block.kind === "caption")
+    .filter(
+      (block) =>
+        block.kind === "title" ||
+        block.kind === "header" ||
+        block.kind === "body" ||
+        (block.kind === "caption" && block.bbox != null),
+    )
     .map((block) => block.text.trim())
     .filter(Boolean)
     .join("\n\n");
@@ -144,11 +157,63 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     const hasBody = structured.some((block) => block.kind === "body");
     if (hasBody) {
       for (const page of pages) page.blocks = [];
+      // D-24-G1: drop coordinate-less caption blocks (the class GROBID uses for
+      // garbled page-bottom footnote fragments it mis-reads as `<figure>`
+      // captions — least-trustworthy structural output), and carry the walk's
+      // running page forward for any other coordinate-less block instead of
+      // defaulting it to page 0, so a note/heading with no bbox is placed on
+      // the page it actually followed rather than jumping to the cover page.
+      let runningPage = 0;
       for (const block of structured) {
-        const index = Math.min(Math.max(block.pageIndex ?? 0, 0), Math.max(0, pages.length - 1));
+        if (block.kind === "caption" && block.bbox == null) continue;
+        const resolved = block.pageIndex ?? runningPage;
+        if (block.pageIndex != null) runningPage = block.pageIndex;
+        const index = Math.min(Math.max(resolved, 0), Math.max(0, pages.length - 1));
         const page = pages[index];
         if (page) page.blocks.push({ kind: block.kind, text: block.text, marker: block.marker, bbox: block.bbox });
       }
+
+      // D-24-G1: strip running headers/footers (JSTOR-style download stamps)
+      // that GROBID space-joined onto body blocks. Whole-block furniture is
+      // dropped (any kind); a footer merged onto the boundary of a real body
+      // block is stripped in place, leaving the prose. Learned from the raw
+      // per-page text layer, so this is a cross-page repetition signal, never a
+      // publisher-name match. The raw `page.text` is untouched (it still feeds
+      // endnote/footnote recovery below and the persisted page record).
+      const boilerplateKeys = collectBoilerplateLines(pages.map((page) => page.text));
+      if (boilerplateKeys.size > 0) {
+        for (const page of pages) {
+          page.blocks = page.blocks
+            .filter((block) => !isEntirelyBoilerplate(block.text, boilerplateKeys))
+            .map((block) =>
+              block.kind === "body"
+                ? { ...block, text: stripBoilerplateAtBoundaries(block.text, boilerplateKeys) }
+                : block,
+            )
+            .filter((block) => block.text.trim().length > 0);
+        }
+      }
+
+      // D-24-G1: recover a page's leading body prose GROBID skipped entirely
+      // (the drop-cap opening paragraph, and the top of a page that continues
+      // it). Conservative: only when substantial prose is unrepresented in any
+      // GROBID body block on that page, and never duplicating what GROBID did
+      // capture (see bodyRecovery.ts). Prepended so it reads before the blocks
+      // GROBID placed on that page.
+      const allBodyBlockTexts = pages.flatMap((page) => page.blocks.filter((block) => block.kind === "body").map((block) => block.text));
+      for (const page of pages) {
+        const recoveredProse = recoverLeadingBodyProse({
+          pageText: page.text,
+          pageBodyBlockTexts: page.blocks.filter((block) => block.kind === "body").map((block) => block.text),
+          allBodyBlockTexts,
+          title: detectedTitle,
+          author: detectedAuthor,
+          boilerplateKeys,
+          normalizeBoilerplate: normalizeBoilerplateCandidate,
+        });
+        if (recoveredProse) page.blocks.unshift({ kind: "body", text: recoveredProse, recovered: true });
+      }
+
       text = processedTextFromPages(pages);
 
       // D-20-89: GROBID's body/note segmentation can miss a numbered

@@ -25,6 +25,10 @@ describe("mergePageTexts (OCR reconstruction)", () => {
   });
 
   it("builds the processed transcript without authorial apparatus duplication", () => {
+    // D-24-G1: a caption is included only when it carries a bbox — a genuine,
+    // located figure/table caption. A coordinate-less caption (the class GROBID
+    // uses for garbled page-bottom footnote fragments it mis-reads as figures)
+    // is excluded, so junk never lands at the transcript start.
     const text = processedTextFromPages([
       {
         pageIndex: 0,
@@ -36,12 +40,14 @@ describe("mergePageTexts (OCR reconstruction)", () => {
           { kind: "footnote", marker: "1", text: "This is authorial apparatus." },
           { kind: "endnote", marker: "2", text: "So is this." },
           { kind: "bibliography", text: "Author, Work." },
-          { kind: "caption", text: "Figure 1. A supporting diagram." },
+          { kind: "caption", text: "Figure 1. A supporting diagram.", bbox: { page: 1, x: 0, y: 0, w: 10, h: 10 } },
+          { kind: "caption", text: "1166bl9-22. garbled footnote fragment mis-read as a figure" },
         ],
       },
     ]);
     expect(text).toContain("The body continues.");
     expect(text).toContain("Figure 1. A supporting diagram.");
+    expect(text).not.toContain("garbled footnote fragment");
     expect(text).not.toContain("This is authorial apparatus.");
     expect(text).not.toContain("Author, Work.");
   });

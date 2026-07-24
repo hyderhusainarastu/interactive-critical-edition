@@ -145,6 +145,47 @@ export function isEntirelyBoilerplate(text: string, boilerplateKeys: ReadonlySet
   return stripped.replace(/[#\s]+/g, "").length === 0;
 }
 
+/**
+ * D-23-8 (widened for the reader/analysis body path): remove a running
+ * header/footer that GROBID space-joined onto the START or END of an otherwise
+ * real body block, without touching the prose in between. GROBID collapses a
+ * page-bottom stamp ("This content downloaded from … jstor.org/terms") into
+ * one run of words at the boundary of the body `<p>` it abuts, so a
+ * line-anchored strip can't see it and `isEntirelyBoilerplate` (whole-block
+ * only) won't drop it because real prose remains.
+ *
+ * Conservative by construction: it strips the MAXIMAL leading (then trailing)
+ * run of boundary words that, taken together, `isEntirelyBoilerplate` — i.e.
+ * that normalize to nothing but learned furniture keys and placeholders. The
+ * instant a run would include a real (non-furniture) word, that test fails, so
+ * the run can never eat prose; only a boundary run made entirely of learned,
+ * cross-page-repeated furniture is removed. A window bounds the scan so it is
+ * O(window) per side rather than O(block length).
+ */
+const BOUNDARY_STRIP_WINDOW = 40;
+
+export function stripBoilerplateAtBoundaries(text: string, boilerplateKeys: ReadonlySet<string>): string {
+  if (boilerplateKeys.size === 0) return text;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return text;
+
+  // Longest leading run of words that is entirely learned furniture.
+  let leading = 0;
+  const leadCap = Math.min(BOUNDARY_STRIP_WINDOW, words.length);
+  for (let k = 1; k <= leadCap; k += 1) {
+    if (isEntirelyBoilerplate(words.slice(0, k).join(" "), boilerplateKeys)) leading = k;
+  }
+  // Longest trailing run of the REMAINING words that is entirely furniture.
+  let trailing = 0;
+  const remaining = words.length - leading;
+  const trailCap = Math.min(BOUNDARY_STRIP_WINDOW, remaining);
+  for (let k = 1; k <= trailCap; k += 1) {
+    if (isEntirelyBoilerplate(words.slice(words.length - k).join(" "), boilerplateKeys)) trailing = k;
+  }
+  if (leading === 0 && trailing === 0) return text;
+  return words.slice(leading, words.length - trailing).join(" ");
+}
+
 export function stripBoilerplateLines(pageTexts: readonly string[]): string[] {
   const boilerplate = collectBoilerplateLines(pageTexts);
   if (boilerplate.size === 0) return pageTexts.slice();

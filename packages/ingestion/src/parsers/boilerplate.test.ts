@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectBoilerplateLines, isEntirelyBoilerplate, stripBoilerplateLines } from "./boilerplate";
+import { collectBoilerplateLines, isEntirelyBoilerplate, stripBoilerplateAtBoundaries, stripBoilerplateLines } from "./boilerplate";
 
 describe("stripBoilerplateLines (D-23-8)", () => {
   it("strips a JSTOR-style running footer that varies by IP, timestamp, and page number across pages", () => {
@@ -109,5 +109,34 @@ describe("isEntirelyBoilerplate (D-23-8, GROBID apparatus path)", () => {
     // so it is NOT treated as furniture — the drop is repetition-driven, never
     // shape-driven.
     expect(isEntirelyBoilerplate("12 34 56", keys)).toBe(false);
+  });
+});
+
+describe("stripBoilerplateAtBoundaries (D-24-G1, GROBID body path)", () => {
+  const pages = [
+    ["Prose about the subject on page one.", "This content downloaded from 128.197.26.12 on Wed, 20 Aug 2014 13:16:00 PM", "All use subject to https://about.jstor.org/terms"].join("\n"),
+    ["Prose about the subject on page two.", "This content downloaded from 74.12.9.100 on Tue, 02 Feb 2024 09:15:33 UTC", "All use subject to https://about.jstor.org/terms"].join("\n"),
+    ["Prose about the subject on page three.", "This content downloaded from 10.20.30.40 on Wed, 03 Mar 2024 18:45:12 UTC", "All use subject to https://about.jstor.org/terms"].join("\n"),
+  ];
+  const keys = collectBoilerplateLines(pages);
+
+  it("strips a footer GROBID space-joined onto the START of a real body block, keeping the prose", () => {
+    const block = "This content downloaded from 74.12.9.100 on Tue, 02 Feb 2024 09:15:33 UTC All use subject to https://about.jstor.org/terms The vicious soul is described here in detail.";
+    expect(stripBoilerplateAtBoundaries(block, keys)).toBe("The vicious soul is described here in detail.");
+  });
+
+  it("strips a footer GROBID space-joined onto the END of a real body block", () => {
+    const block = "The argument reaches its conclusion in this paragraph. This content downloaded from 10.20.30.40 on Wed, 03 Mar 2024 18:45:12 UTC All use subject to https://about.jstor.org/terms";
+    expect(stripBoilerplateAtBoundaries(block, keys)).toBe("The argument reaches its conclusion in this paragraph.");
+  });
+
+  it("never removes prose from the interior of a block", () => {
+    const block = "A body paragraph with no furniture at all stays exactly as it was.";
+    expect(stripBoilerplateAtBoundaries(block, keys)).toBe(block);
+  });
+
+  it("returns the input unchanged when no boilerplate was learned", () => {
+    const block = "This content downloaded from 1.2.3.4 on Mon, 1 Jan 2001 00:00:00 UTC then some prose.";
+    expect(stripBoilerplateAtBoundaries(block, new Set())).toBe(block);
   });
 });
