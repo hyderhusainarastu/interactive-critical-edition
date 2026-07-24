@@ -31,6 +31,19 @@
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
 
+  /* Beta-badge accent. Separate from --color-credibility-warning even
+     though it started as a reuse of it: that token is tuned for
+     credibility *banding* (large meter fills and chips), where its 4.47:1
+     against the page background is fine, but BetaBadge renders 12px text
+     in it and measured 4.48:1 — under the 4.5:1 AA floor. Found 2026-07-23
+     by running the landing axe scan against production; CI could not see
+     it because BETA_TESTING_MODE is off there and on in production, so
+     the badge never renders in a CI run. Darkened here rather than
+     changing the credibility token, which has its own documented banding
+     rationale above and is used by unrelated surfaces. Remove alongside
+     isBetaTestingMode() when the beta ends. */
+  --color-beta-badge: #91540a; /* ~5.6:1 on --color-background and on the public-site paper */
+
   /* Graph accessible-table "dimmed" row text (Phase 21.6 focus-mode
      contrast fix): a dedicated warm gray, distinctly lighter than
      --color-text/--color-text-muted so a de-emphasized row still reads as
@@ -61,6 +74,7 @@
   --color-highlight: #e0bb4d;
   --color-credibility-critical: #ff6b5e;
   --color-credibility-warning: #f0a94e;
+  --color-beta-badge: #f0a94e; /* already >7:1 on the dark background */
   --color-graph-dim-text: #968e7c; /* ~4.6:1 on dark --color-surface #2b2620 */
   --color-focus-ring: #8fa8c9;
 }
@@ -78,6 +92,7 @@
   --color-highlight: #c9a227;
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
+  --color-beta-badge: #91540a;
   --color-graph-dim-text: #726a5c; /* ~4.6:1 on --color-surface #f1eee6 */
   --color-focus-ring: #2e4057;
 }

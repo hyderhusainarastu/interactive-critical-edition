@@ -15,6 +15,32 @@ import { expect, test } from "@playwright/test";
 
 const DOCUMENTATION_URL = "https://hyderhusainarastu.com/palimnote/";
 
+/** Parses `#rrggbb` or `rgb(r, g, b)` into 0-255 channels. */
+function parseColor(value: string): [number, number, number] {
+  const hex = value.trim().match(/^#([0-9a-f]{6})$/i);
+  if (hex) {
+    const n = parseInt(hex[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  const rgb = value.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
+  if (!rgb) throw new Error(`Unsupported color: ${value}`);
+  return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+}
+
+/** WCAG 2.x relative-luminance contrast ratio between two CSS colors. */
+function contrastRatio(foreground: string, background: string): number {
+  const luminance = (color: string) => {
+    const [r, g, b] = parseColor(color).map((channel) => {
+      const c = channel / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
 test.describe("Landing & policy pages (Phase 6)", () => {
   test("landing page communicates the product and has no accessibility violations", async ({ page }) => {
     await page.goto("/");
@@ -53,6 +79,25 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     if (process.env.BETA_TESTING_MODE === "true") {
       await expect(page.getByText("Beta testing").first()).toBeVisible();
     }
+
+    // ...but its COLOR must be checked either way. BETA_TESTING_MODE is off
+    // in CI and on in production, so for as long as that asymmetry exists
+    // the badge never renders in a CI run — which is exactly how a real
+    // 4.48:1 contrast failure on it reached production unnoticed (fixed
+    // 2026-07-23 via --color-beta-badge; see globals.css).
+    //
+    // Injecting a stand-in badge into the DOM does NOT work here and must
+    // not be reintroduced: `.brand-group` is inside React's hydrated tree,
+    // so a foreign child is reconciled away before axe runs, and the check
+    // silently passes on a colour that genuinely fails. Instead compute the
+    // ratio from the live token and the live page background, which is
+    // deterministic, flag-independent, and can't be undone by hydration.
+    const badgeContrast = await page.evaluate(() => {
+      const token = getComputedStyle(document.documentElement).getPropertyValue("--color-beta-badge").trim();
+      const background = getComputedStyle(document.querySelector(".pal-site")!).backgroundColor;
+      return { token, background };
+    });
+    expect(contrastRatio(badgeContrast.token, badgeContrast.background)).toBeGreaterThanOrEqual(4.5);
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations).toEqual([]);
