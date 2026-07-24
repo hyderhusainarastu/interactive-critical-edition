@@ -25,10 +25,13 @@ describe("mergePageTexts (OCR reconstruction)", () => {
   });
 
   it("builds the processed transcript without authorial apparatus duplication", () => {
-    // D-24-G1: a caption is included only when it carries a bbox — a genuine,
-    // located figure/table caption. A coordinate-less caption (the class GROBID
-    // uses for garbled page-bottom footnote fragments it mis-reads as figures)
-    // is excluded, so junk never lands at the transcript start.
+    // D-24-G1: unit test of the FILTER LOGIC — a caption is included only when
+    // it carries a bbox; a coordinate-less caption (the class GROBID uses for
+    // garbled page-bottom footnote fragments) is excluded, so junk never lands
+    // at the transcript start. In current production GROBID emits no figure
+    // coordinates (see grobid.ts), so every real caption is coordinate-less and
+    // dropped; the bbox branch is exercised here as a forward-compatible
+    // invariant, not a claim that production captions are located.
     const text = processedTextFromPages([
       {
         pageIndex: 0,

@@ -568,6 +568,15 @@ export async function processWithGrobid(buffer: Buffer): Promise<GrobidResult | 
   body.append("input", new Blob([bytes], { type: "application/pdf" }), "document.pdf");
   // Ask GROBID to emit coordinates so blocks can be page/bbox-anchored. These
   // are self-contained (no external consolidation calls).
+  //
+  // D-24-G1: `figure`/`figDesc` are deliberately OMITTED. GROBID mis-segments
+  // garbled page-bottom footnote fragments as `<figure>` captions, and
+  // requesting figure coordinates was measured locally to give those bogus
+  // captions a bbox too — a bbox does NOT distinguish a genuine caption from a
+  // garbled fragment. Since `parsers/pdf.ts` drops coordinate-less captions to
+  // remove that junk, requesting figure coordinates would reintroduce it. The
+  // accepted trade is that GENUINE figure/table captions (rare in the target
+  // scholarly corpus) are also coordinate-less and therefore also dropped.
   for (const el of ["p", "head", "note", "biblStruct", "persName", "s"]) {
     body.append("teiCoordinates", el);
   }

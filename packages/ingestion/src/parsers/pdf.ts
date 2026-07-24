@@ -43,8 +43,12 @@ export interface ParsedDocument {
  * A caption is included only when it carries a bbox (D-24-G1): GROBID
  * mis-segments garbled page-bottom footnote fragments as coordinate-less
  * `<figure>` captions, which would otherwise land at the transcript start as
- * junk. A genuine figure/table caption in a well-formed PDF carries
- * coordinates and is still included. */
+ * junk. NOTE: `parsers/grobid.ts` deliberately does not request `figure`
+ * coordinates (doing so was measured to give the garbled fragments a bbox too),
+ * so in current production ALL captions are coordinate-less and this filter
+ * therefore excludes every caption. The bbox check is a forward-compatible
+ * invariant (a truly located caption would be kept), not a genuine-vs-junk
+ * discriminator — see grobid.ts for why that trade was accepted. */
 export function processedTextFromPages(pages: readonly ParsedPage[]): string {
   return pages
     .flatMap((page) => page.blocks)
@@ -160,10 +164,14 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
       for (const page of pages) page.blocks = [];
       // D-24-G1: drop coordinate-less caption blocks (the class GROBID uses for
       // garbled page-bottom footnote fragments it mis-reads as `<figure>`
-      // captions — least-trustworthy structural output), and carry the walk's
-      // running page forward for any other coordinate-less block instead of
-      // defaulting it to page 0, so a note/heading with no bbox is placed on
-      // the page it actually followed rather than jumping to the cover page.
+      // captions), and carry the walk's running page forward for any other
+      // coordinate-less block instead of defaulting it to page 0, so a
+      // note/heading with no bbox is placed on the page it actually followed
+      // rather than jumping to the cover page. Because grobid.ts does not
+      // request `figure` coordinates (that reintroduces the junk — see there),
+      // every caption is coordinate-less today, so this currently drops ALL
+      // captions; genuine captions are rare in the target corpus and the trade
+      // is accepted.
       let runningPage = 0;
       for (const block of structured) {
         if (block.kind === "caption" && block.bbox == null) continue;
