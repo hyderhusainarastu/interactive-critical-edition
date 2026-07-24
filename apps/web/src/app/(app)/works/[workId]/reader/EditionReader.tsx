@@ -576,14 +576,19 @@ export function EditionReader({
     <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[var(--reading-measure,72ch)]">
       {/* `data-dense-controls`: same Phase 23.2 touch-target-audit test hook
           as `ReaderShell.tsx`'s toolbar — this run-metadata bar (cost
-          disclosure, outline, page stepper) is compact secondary chrome. */}
-      {!focusMode && <div data-dense-controls="edition-reader-meta" className="mb-5 flex flex-wrap items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
-        <strong>Interactive reader · processed text · run v{edition.run.version}</strong>
+          disclosure, outline, page stepper) is compact secondary chrome.
+          Landing-paradigm treatment: a hairline bottom rule instead of a
+          filled/bordered box, with the secondary facts (structure state,
+          cost) set as a small uppercase-tracked kicker line — same
+          `.reader-toolbar` convention the depiction uses for its own
+          page/tool strip. The title text itself is unchanged. */}
+      {!focusMode && <div data-dense-controls="edition-reader-meta" className="mb-6 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] pb-3 text-[0.72rem] uppercase tracking-[.06em] text-[var(--color-text-muted)]">
+        <strong className="text-sm font-medium normal-case tracking-normal text-[var(--color-text)]">Interactive reader · processed text · run v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>
         {edition.cost.breakdown.length > 0 ? (
-          <details className="text-[var(--color-text-muted)]">
+          <details>
             <summary className="cursor-pointer">Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
-            <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+            <ul className="mt-1 flex flex-col gap-0.5 normal-case tracking-normal">
               {edition.cost.breakdown.map((b, i) => (
                 <li key={i} className="flex justify-between gap-3">
                   <span>{b.stage ?? b.task}</span>
@@ -593,7 +598,7 @@ export function EditionReader({
             </ul>
           </details>
         ) : (
-          <span className="text-[var(--color-text-muted)]">Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
+          <span>Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
         )}
         {/* `degraded` is set only when the run crossed its cost soft cap
          *  (see `overSoftCap()` in apps/worker/src/analyze.ts) — it never
@@ -685,8 +690,11 @@ export function EditionReader({
           const pageStart = index === 0 || orderedBlocks.filter((candidate) => !["footnote", "endnote", "bibliography", "reference"].includes(candidate.kind))[index - 1]?.pageIndex !== block.pageIndex;
           return (
             <div key={block.id} className="relative" data-page-index={block.pageIndex}>
-              {pageStart && <p className="mb-2 text-xs text-[var(--color-text-muted)]">Source page {block.pageIndex + 1}</p>}
-              {block.kind === "title" ? <h1 {...common} className="font-serif text-3xl font-semibold">{text}</h1> : block.kind === "header" ? <h2 {...common} className="mt-4 font-serif text-xl font-semibold">{text}</h2> : block.kind === "caption" ? <figcaption {...common} className="border-l-2 border-[var(--color-border)] pl-3 text-sm italic text-[var(--color-text-muted)]">{text}</figcaption> : (
+              {pageStart && <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[.12em] text-[var(--color-text-muted)]">Source page {block.pageIndex + 1}</p>}
+              {/* Headings drop to font-normal (the depiction's own display
+                  serif is unbolded, e.g. `.demo-reader h3 { font-weight: 400 }`)
+                  — same font-serif family, no size/DOM change. */}
+              {block.kind === "title" ? <h1 {...common} className="font-serif text-3xl font-normal">{text}</h1> : block.kind === "header" ? <h2 {...common} className="mt-4 font-serif text-xl font-normal">{text}</h2> : block.kind === "caption" ? <figcaption {...common} className="border-l-2 border-[var(--color-border)] pl-3 text-sm italic text-[var(--color-text-muted)]">{text}</figcaption> : (
                 /* D-22-5 (plan §22.2): the landing depiction's reading
                  * passage is serif; only heading kinds carried `font-serif`
                  * here before, so plain body prose — the actual reading

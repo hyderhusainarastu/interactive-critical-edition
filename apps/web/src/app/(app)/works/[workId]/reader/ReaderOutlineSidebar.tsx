@@ -87,6 +87,13 @@ export function ReaderOutlineSidebar({
   return (
     <ReaderSidebarFrame label="Document outline" widthClassName="w-56" onClose={onClose}>
       <nav ref={navRef} aria-label="Document outline" className="border-e border-[var(--color-border)] bg-[var(--color-surface)] py-2">
+        {/* Small uppercase eyebrow, matching the landing depiction's
+            `.reader-nav > span` label above its section list — purely
+            decorative, additive text; the nav's own accessible name stays
+            "Document outline". */}
+        <p aria-hidden="true" className="px-3 pb-1.5 text-[0.65rem] font-semibold uppercase tracking-[.1em] text-[var(--color-text-muted)]">
+          Outline
+        </p>
         <ul className="flex flex-col">
           {items.map((item) => {
             const active = item.id === activeId;

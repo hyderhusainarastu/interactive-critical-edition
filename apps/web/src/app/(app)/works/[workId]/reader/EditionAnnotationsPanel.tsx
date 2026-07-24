@@ -136,14 +136,21 @@ export function EditionAnnotationsPanel({
           (pre-existing — this sidebar was already `w-80` on desktop before
           this task's layout change); `overflow-x-auto` lets the strip
           scroll horizontally instead of silently clipping "Sources" off the
-          visible edge, at any width from 320px up. */}
-      <div className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] p-1 text-sm [&>button]:shrink-0">
+          visible edge, at any width from 320px up.
+          Landing-paradigm underline convention (matching the reader-view
+          toggle and the depiction's own tab strips) replaces the previous
+          background-fill "pill" look — same buttons, aria-pressed states,
+          and click handlers, purely a border-bottom-2 accent swap. */}
+      <div className="sticky top-0 z-10 flex gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-surface)] px-1 text-[0.78rem] [&>button]:shrink-0">
         <button
           type="button"
           aria-pressed={tab === "annotations"}
           onClick={() => setTab("annotations")}
-          className="app-control rounded px-3 py-1.5"
-          style={{ background: tab === "annotations" ? "var(--color-background)" : "transparent" }}
+          className="app-control border-b-2 px-2.5 py-2 font-medium"
+          style={{
+            borderColor: tab === "annotations" ? "var(--color-accent-ink)" : "transparent",
+            color: tab === "annotations" ? "var(--color-text)" : "var(--color-text-muted)",
+          }}
         >
           Annotations{annotationCount > 0 ? ` (${annotationCount})` : ""}
         </button>
@@ -151,19 +158,25 @@ export function EditionAnnotationsPanel({
           type="button"
           aria-pressed={tab === "notes"}
           onClick={() => setTab("notes")}
-          className="app-control rounded px-3 py-1.5"
-          style={{ background: tab === "notes" ? "var(--color-background)" : "transparent" }}
+          className="app-control border-b-2 px-2.5 py-2 font-medium"
+          style={{
+            borderColor: tab === "notes" ? "var(--color-accent-ink)" : "transparent",
+            color: tab === "notes" ? "var(--color-text)" : "var(--color-text-muted)",
+          }}
         >
           Notes{notesCount > 0 ? ` (${notesCount})` : ""}
         </button>
-        {enablePhase12Reader && <button type="button" aria-pressed={tab === "apparatus"} onClick={() => setTab("apparatus")} className="app-control rounded px-3 py-1.5" style={{ background: tab === "apparatus" ? "var(--color-background)" : "transparent" }}>Apparatus{apparatusCount > 0 ? ` (${apparatusCount})` : ""}</button>}
-        {enablePhase12Reader && <button type="button" aria-pressed={tab === "terms"} onClick={() => setTab("terms")} className="app-control rounded px-3 py-1.5" style={{ background: tab === "terms" ? "var(--color-background)" : "transparent" }}>Terms{suggestedTerms.length > 0 ? ` (${suggestedTerms.length})` : ""}</button>}
+        {enablePhase12Reader && <button type="button" aria-pressed={tab === "apparatus"} onClick={() => setTab("apparatus")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "apparatus" ? "var(--color-accent-ink)" : "transparent", color: tab === "apparatus" ? "var(--color-text)" : "var(--color-text-muted)" }}>Apparatus{apparatusCount > 0 ? ` (${apparatusCount})` : ""}</button>}
+        {enablePhase12Reader && <button type="button" aria-pressed={tab === "terms"} onClick={() => setTab("terms")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "terms" ? "var(--color-accent-ink)" : "transparent", color: tab === "terms" ? "var(--color-text)" : "var(--color-text-muted)" }}>Terms{suggestedTerms.length > 0 ? ` (${suggestedTerms.length})` : ""}</button>}
         <button
           type="button"
           aria-pressed={tab === "sources"}
           onClick={() => setTab("sources")}
-          className="app-control rounded px-3 py-1.5"
-          style={{ background: tab === "sources" ? "var(--color-background)" : "transparent" }}
+          className="app-control border-b-2 px-2.5 py-2 font-medium"
+          style={{
+            borderColor: tab === "sources" ? "var(--color-accent-ink)" : "transparent",
+            color: tab === "sources" ? "var(--color-text)" : "var(--color-text-muted)",
+          }}
         >
           Sources{edition.works.length > 0 ? ` (${edition.works.length})` : ""}
         </button>
@@ -172,7 +185,7 @@ export function EditionAnnotationsPanel({
       {enableLevelFilter && tab === "annotations" && (
         <div className="grid grid-cols-1 gap-2 border-b border-[var(--color-border)] px-3 py-2 text-xs">
           <label className="flex items-center justify-between gap-2">
-            <span className="text-[var(--color-text-muted)]">Reader level</span>
+            <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Reader level</span>
             <select
               value={readerLevel}
               onChange={(event) => onReaderLevelChange(event.target.value as ReaderLevelFilter)}
@@ -183,7 +196,7 @@ export function EditionAnnotationsPanel({
           </label>
           {readerLevel !== "all" && (
             <label className="flex items-center justify-between gap-2">
-              <span className="text-[var(--color-text-muted)]">Level match</span>
+              <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Level match</span>
               <select
                 value={levelMode}
                 onChange={(event) => onLevelModeChange(event.target.value as ReaderLevelMatchMode)}
@@ -196,9 +209,9 @@ export function EditionAnnotationsPanel({
           )}
           {enablePhase12Reader && (
             <>
-              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation type</span><select value={filters.annotationType} onChange={(event) => onFiltersChange({ ...filters, annotationType: event.target.value as EditionReaderFilters["annotationType"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All types</option>{annotationTypes.map((type) => <option key={type} value={type}>{PASSAGE_TYPE_LABEL[type]}</option>)}</select></label>
-              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Relationship</span><select value={filters.relationship} onChange={(event) => onFiltersChange({ ...filters, relationship: event.target.value as EditionReaderFilters["relationship"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All relationships</option>{relationships.map((relationship) => <option key={relationship} value={relationship}>{CATEGORY_META[relationship].label}</option>)}</select></label>
-              <label className="flex items-center justify-between gap-2"><span className="text-[var(--color-text-muted)]">Annotation source</span><select value={filters.provenance} onChange={(event) => onFiltersChange({ ...filters, provenance: event.target.value as EditionReaderFilters["provenance"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All annotations</option><option value="ai">Automated annotations</option><option value="user">User annotations</option></select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation type</span><select value={filters.annotationType} onChange={(event) => onFiltersChange({ ...filters, annotationType: event.target.value as EditionReaderFilters["annotationType"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All types</option>{annotationTypes.map((type) => <option key={type} value={type}>{PASSAGE_TYPE_LABEL[type]}</option>)}</select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Relationship</span><select value={filters.relationship} onChange={(event) => onFiltersChange({ ...filters, relationship: event.target.value as EditionReaderFilters["relationship"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All relationships</option>{relationships.map((relationship) => <option key={relationship} value={relationship}>{CATEGORY_META[relationship].label}</option>)}</select></label>
+              <label className="flex items-center justify-between gap-2"><span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation source</span><select value={filters.provenance} onChange={(event) => onFiltersChange({ ...filters, provenance: event.target.value as EditionReaderFilters["provenance"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All annotations</option><option value="ai">Automated annotations</option><option value="user">User annotations</option></select></label>
               <div className="flex justify-end gap-2"><button type="button" onClick={onPreviousAnnotation} disabled={!onPreviousAnnotation} className="app-control underline disabled:opacity-40">Previous</button><button type="button" onClick={onNextAnnotation} disabled={!onNextAnnotation} className="app-control underline disabled:opacity-40">Next</button></div>
             </>
           )}
@@ -268,9 +281,14 @@ function NotesTab({
           <p className="px-1 text-[0.68rem] text-[var(--color-text-muted)]">
             Source-text footnotes. These remain page/sidebar-only because no block-level anchor exists.
           </p>
-          <ol className="mt-1.5 flex flex-col gap-1.5 text-sm">
+          {/* Landing-paradigm authorial-note treatment: a hairline-divided
+              list (top rule between entries) rather than a boxed card per
+              note, matching the depiction's `.authorial-note` (border-top,
+              muted body, umber-accented marker) — same content, no DOM
+              change beyond the wrapping element's own className. */}
+          <ol className="mt-1.5 flex flex-col divide-y divide-[var(--color-border)] text-sm">
             {edition.authorialNotes.map((note) => (
-              <li key={note.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-2">
+              <li key={note.id} className="px-1 py-2.5 text-[0.85rem] leading-snug text-[var(--color-text-muted)]">
                 <sup className="font-semibold text-[var(--color-accent-umber)]">{note.marker}</sup>{" "}
                 <span>{note.text}</span>
               </li>
@@ -345,8 +363,8 @@ function CriticalNoteCard({
         >
           ✣
         </span>
-        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[0.68rem] font-medium">{note.noteType.replace(/_/g, " ")}</span>
-        {matched && <span className="text-[0.68rem] text-[var(--color-text-muted)]">quote-matched</span>}
+        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide">{note.noteType.replace(/_/g, " ")}</span>
+        {matched && <span className="text-[0.65rem] uppercase tracking-wide text-[var(--color-text-muted)]">quote-matched</span>}
         {src?.credibility?.authority && <AuthorityBadge authority={src.credibility.authority} />}
         <span className="ml-auto text-[0.68rem] text-[var(--color-text-muted)]">{Math.round(note.confidence * 100)}%</span>
       </div>
@@ -575,13 +593,13 @@ function PassageAnnotationCard({
     >
       <div className="flex flex-wrap items-center gap-1.5">
         <CategoryGlyph colorVar={category.colorVar} glyph={category.glyph} className="shrink-0" />
-        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[0.68rem] font-medium">
+        <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide">
           {PASSAGE_TYPE_LABEL[note.annotationType]}
         </span>
-        {note.readerLevel && <span className="text-[0.68rem] text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
+        {note.readerLevel && <span className="text-[0.65rem] uppercase tracking-wide text-[var(--color-text-muted)]">{READER_LEVEL_LABEL[note.readerLevel]}</span>}
         {note.verificationStatus !== "unreviewed" && (
           <span
-            className="rounded border px-1.5 py-0.5 text-[0.64rem] font-medium"
+            className="rounded border px-1.5 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide"
             style={{ borderColor: `var(${category.colorVar})` }}
             data-review-status={note.verificationStatus}
           >

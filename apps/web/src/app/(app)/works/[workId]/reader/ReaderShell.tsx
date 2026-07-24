@@ -427,13 +427,20 @@ export function ReaderShell({
           {!readerFocus && <div ref={toolbarRevealRef} data-dense-controls="reader-toolbar" className="app-reveal sticky top-14 z-20 flex flex-wrap items-center gap-4 border-b border-[var(--color-border)] bg-[var(--color-background)] px-4 py-2 text-sm">
             <strong className="text-[var(--color-text)]">{data.title}</strong>
             {edition && (
-              <div className="flex items-center gap-1 rounded-md border border-[var(--color-border)] p-0.5 text-sm" role="group" aria-label="Reader view">
+              // Landing-paradigm underline convention (`.work-tabs .active`)
+              // replaces the previous filled-pill toggle — same group/button
+              // names, aria-pressed state, and click handlers, purely a
+              // border-bottom-2 accent swap instead of a background swap.
+              <div className="flex items-center gap-4" role="group" aria-label="Reader view">
                 <button
                   type="button"
                   aria-pressed={!effectiveShowInteractive}
                   onClick={() => setShowInteractive(false)}
-                  className="app-control rounded px-2.5 py-1"
-                  style={{ background: !effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
+                  className="app-control border-b-2 pb-0.5 font-medium"
+                  style={{
+                    borderColor: !effectiveShowInteractive ? "var(--color-accent-ink)" : "transparent",
+                    color: !effectiveShowInteractive ? "var(--color-text)" : "var(--color-text-muted)",
+                  }}
                 >
                   Published edition
                 </button>
@@ -441,8 +448,11 @@ export function ReaderShell({
                   type="button"
                   aria-pressed={effectiveShowInteractive}
                   onClick={() => setShowInteractive(true)}
-                  className="app-control rounded px-2.5 py-1"
-                  style={{ background: effectiveShowInteractive ? "var(--color-surface)" : "transparent" }}
+                  className="app-control border-b-2 pb-0.5 font-medium"
+                  style={{
+                    borderColor: effectiveShowInteractive ? "var(--color-accent-ink)" : "transparent",
+                    color: effectiveShowInteractive ? "var(--color-text)" : "var(--color-text-muted)",
+                  }}
                 >
                   Interactive reader
                 </button>
