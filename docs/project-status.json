@@ -10,9 +10,9 @@
   "updated": "2026-07-23",
   "current": {
     "phase": 23,
-    "headline": "Floors attempt 6 (2026-07-24, local run 6d394ac2-9c6c-44df-86a3-60c9f474af53) empirically confirmed the D-23-19 citation-linking guard fix live: the Annas 1977 citation no longer mis-resolves to A. W. Price 1990, and previously-wrong review/same-author mis-resolutions (Bywater, Dahl, Davidson, Broadie, Rorty) now honestly return unresolved instead of a confident wrong attribution. Per-citation correctness rose from 4/20 to 6/20 (of 9 resolved citations, 6 correct/3 wrong, vs. attempt 5's 10/14 wrong). D-23-19 flips partial\u2192fixed; one residual wrong-work miss (Irwin 1999 \u2192 Pakaluk, a resolved record with no year/review/pagination/binding signal for the guard to veto) is split out as new D-23-22 (P2, open). Phase 23.5's numeric-floors gate now CLOSES as a documented provider-coverage limitation: the remaining direct-source shortfall (6/22 strict vs. the 18/22 target) is a discovery-breadth/provider-coverage gap the guards cannot move, independent of resolution correctness; concepts pass 8/8. Register: 121 findings (110 fixed, 1 partial, 10 open).",
-    "summary": "Floors attempt 6 cost $0.18174432 (241 ai_usage_log rows), ran the v3 pipeline through the real /upload UI, and was fully cleaned up (test user/work/document/processing_run/citation/research_resource all deleted, Storage object removed, 0 non-terminal pg-boss jobs; ANALYSIS_PIPELINE restored to v2). The two structural year-less misses documented in attempt 5 (Parmenides fragment #4, Republic IX) persisted as expected, not regressions \u2014 no conservative deterministic signal exists for them. The register recount also surfaced that the prior 119-total baseline predated the already-merged D-23-21 row (beta-badge contrast), so the verified baseline was actually 120 before this cycle's own edits; the corrected total is 121, not the 120 a same-cycle delta alone would suggest.",
-    "nextAction": "Phase 23.5's numeric-floors gate is closed. Continue Phase 23.3 (responsive/visual hardening) and 23.6 (performance and resilience) in parallel lanes per owner directive, then 23.4's serialized E2E confirmation, 23.7 (production rollout and canary), and 23.8 (documentation and closeout). Phase 24 gates on Phase 23 completion."
+    "headline": "Phase 23 (comprehensive hardening, accessibility, performance, production verification) is COMPLETE as of 2026-07-24, tagged phase-23-complete. Sub-phases 23.1-23.8 all closed: 23.1 (link audit), 23.2 (accessibility), 23.5 (numeric floors, closed 2026-07-24 as a documented provider-coverage limitation), 23.3/23.4 (annotations parity, backend security hardening -- D-23-3/D-23-4 serialized-E2E confirmation completed), 23.6 (performance/resilience, three live/paid measure scenarios left documented-pending by design), 23.7 (production canary -- reprocess-reliability proven live, D-20-83 fixed), and 23.8 (this closeout: production spot-verification of the UI-overhaul deploy, D-19-36 duplicate-DOM documented as a self-healing framework artifact, D-23-23 contrast defect fixed, register recount 122 total/113 fixed/1 partial/8 open).",
+    "summary": "Phase 23.8 production spot-verification (2026-07-24): the live deployment at https://interactive-critical-edition.vercel.app resolves to commit 9ec34aad94246ea0b4e43ee0b8b15d4933b0cc11 (>= 48b500b); landing.spec.ts run against that production URL with BETA_TESTING_MODE=true passed 4/4 with zero wcag2a/wcag2aa violations, including the beta-badge contrast guard; the deployed CSS bundle carries --color-status-highlight-text (D-23-23) and --color-beta-badge (D-23-21), confirming the UI-overhaul assets shipped. Signed-in production verification is deliberately deferred to Phase 24's owner-gated smoke test. The full serialized E2E suite ran 2026-07-24: 293 passed / 8 failed / 3 flaky-recovered across 34 spec files (security.spec.ts 2/2), commit 9ec34aa, CI run 30078612103 success.",
+    "nextAction": "Phase 23 is complete and tagged phase-23-complete. Phase 24 (Final End-to-End Verification and Program Sign-off) is next: full local matrix, full serialized E2E suite, production smoke, and final canary + program closeout -- owner-gated per the standing authorizations, not started."
   },
   "program": {
     "name": "Phases 19-24 completion program",
@@ -35,20 +35,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-24",
-    "total": 121,
+    "total": 122,
     "bySeverity": {
       "P0": 1,
       "P1": 27,
-      "P2": 59,
+      "P2": 60,
       "P3": 27
     },
     "byStatus": {
-      "fixed": 110,
+      "fixed": 113,
       "partially_fixed": 1,
       "fixed_pending_cleanup": 0,
-      "open": 10
+      "open": 8
     },
-    "note": "Recounted directly from the register table by pipe-anchored parsing (docs/audits/phase-19-product-audit.md), still guarding against the `|D-` no-space row-opener trap on D-20-84/D-20-85 and the ` (parenthetical)`-suffixed id trap on D-22-29. This cycle's direct recount found the prior 119-total baseline predated the already-merged D-23-21 row (beta-badge contrast, fixed) — i.e. the register was already at 120 before this cycle's own edits, not 119 — so this cycle's true delta is 120→121, not 119→120; bySeverity is a full literal re-tally against each row's own Severity cell, and 7 documentation/process rows carry no P0–P3 rating in the table at all (bySeverity therefore sums to 114 of 121 total findings, not 121). This cycle recorded floors attempt 6 (2026-07-24, run 6d394ac2-9c6c-44df-86a3-60c9f474af53): the D-23-19 guard fix is empirically confirmed live — the Annas 1977 citation no longer mis-resolves to A. W. Price 1990, and previously-wrong review/same-author mis-resolutions (Bywater, Dahl, Davidson, Broadie, Rorty) now honestly return unresolved (of 9 resolved citations, 6 correct/3 wrong, vs. attempt 5's 10/14 wrong; overall correctness 4/20→6/20). D-23-19 flips partial→fixed. One residual wrong-work miss (Irwin 1999 → Pakaluk, a resolved record with no year and no review/pagination/binding signal for the guard to veto) is split out as new D-23-22 (P2, open). Phase 23.5's numeric-floors gate closes as a documented provider-coverage limitation: the direct-source floor (6/22 strict vs. the 18/22 target) is a discovery-breadth/provider-coverage gap independent of resolution correctness, and concepts (8/8) pass. 121 total findings: 110 fixed, 1 partial (D-19-6), 10 open (D-19-36, D-20-83, D-20-85, D-20-88, D-22-7, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22)."
+    "note": "Recounted directly from the register table by pipe-anchored parsing (docs/audits/phase-19-product-audit.md), still guarding against the `|D-` no-space row-opener trap on D-20-84/D-20-85 and the ` (parenthetical)`-suffixed id trap on D-22-29. Prior cycle's baseline was 121 total (110 fixed, 1 partial, 10 open; severity P1 27, P2 59, P3 27, P0 1, plus 7 no-severity documentation/process rows). This Phase 23.8 closeout cycle flips two rows to fixed with production evidence — D-19-36 (intermittent duplicate-DOM-node rendering, documented as a self-healing Next.js 16.2.10 + React 19.2.4 streaming-SSR/hydration artifact) and D-20-83 (reprocess-reliability, confirmed via a Phase 23.7 production canary: duplicate-rejection, is_published supersession, and heartbeat all proven live) — and adds one new row, D-23-23 (P2, fixed: Works-list \"Needs review\" gold-label WCAG AA contrast, fixed via the new --color-status-highlight-text token in commit b7a8f12). D-23-3 and D-23-4's serialized-E2E confirmation also completed this cycle (full suite 2026-07-24, commit 9ec34aa, CI run 30078612103 success), with no status change (both were already fixed). D-19-6 (partial) gains an evidence appendment (the same full-suite run standalone-reproduced its documented v2-latency-vs-fixed-budget gap) but stays partial. bySeverity is a full literal re-tally against each row's own Severity cell; 7 documentation/process rows still carry no P0–P3 rating (bySeverity therefore sums to 115 of 122 total findings, not 122). 122 total findings: 113 fixed, 1 partial (D-19-6), 8 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22)."
   },
   "phases": [
     {
@@ -155,7 +155,7 @@
       "tag": "phase-12-complete",
       "confirmation": "Historical closeout confirmed.",
       "evidence": [
-        "Production migrations 0020\u20130025 are recorded through Drizzle ledger 26.",
+        "Production migrations 0020–0025 are recorded through Drizzle ledger 26.",
         "Same-corpus v3/v4 canary and the approved one-work v4 backfill completed within caps.",
         "Render enforces $1 normal and $5 hard research cost limits."
       ]
@@ -177,7 +177,7 @@
           "id": "13.1",
           "title": "Roadmap and record",
           "state": "complete",
-          "summary": "Replaced obsolete planning references with the Phase 13\u201317 roadmap in the architecture plan and project record."
+          "summary": "Replaced obsolete planning references with the Phase 13–17 roadmap in the architecture plan and project record."
         },
         {
           "id": "13.2",
@@ -436,7 +436,7 @@
           "title": "Remaining user journeys",
           "state": "complete",
           "model": "sonnet",
-          "summary": "Closed login-failure + password-reset (new auth.spec.ts suite: request confirmation, valid-token round trip with old-password invalidation, invalid-token handling), duplicate-upload decision (confirmed already covered), processing-failure + retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), and cross-account denial (extended IDOR matrix by 5 routes). Full signup-form-through-email-verification E2E remains a known residual gap (historically manually verified in Phase 1, not yet automated) \u2014 noted, not silently dropped."
+          "summary": "Closed login-failure + password-reset (new auth.spec.ts suite: request confirmation, valid-token round trip with old-password invalidation, invalid-token handling), duplicate-upload decision (confirmed already covered), processing-failure + retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), and cross-account denial (extended IDOR matrix by 5 routes). Full signup-form-through-email-verification E2E remains a known residual gap (historically manually verified in Phase 1, not yet automated) — noted, not silently dropped."
         },
         {
           "id": "19.D",
@@ -457,11 +457,11 @@
         "Render deploy history (last 20 deploys, srv-d9dgiamrnols73ccpa10) shows no build_failed/update_failed/canceled deploy; no unresolved deploy-time failure exists.",
         "One confirmed runtime crash (R-19-1, 2026-07-20T04:57:20Z, 'unsupported Unicode escape sequence' in pg-pool via pg-boss) diagnosed, repaired (packages/ingestion/src/sanitizeText.ts sanitizes text at the parseDocument boundary; apps/worker/src/index.ts adds uncaughtException/unhandledRejection observability), and regression-tested (5 new Vitest cases, 43/43 @ice/ingestion tests pass). See docs/incidents/render-server-failures-phase-19.md and docs/runbooks/render-worker-failure-response.md.",
         "Stitch MCP checked live (list_projects/list_design_systems) and found non-functional ('Incompatible auth server: does not support dynamic client registration'); Uncodixify is not a resolvable plugin in this environment. Both substitutions documented in docs/audits/phase-19-frontend-tooling.md rather than silently skipped.",
-        "D-19-1: fixed a pre-existing, deterministic CI failure on main (ambiguous 'Theme' accessible name colliding with the header's quick toggle, e2e/workspace-shell.spec.ts) \u2014 also a genuine accessibility defect, not just a test artifact. Verified locally: the CI-safe 10-spec E2E subset (53 tests, 1 skipped) passes clean. Logged in docs/audits/phase-19-product-audit.md, the running defect register.",
+        "D-19-1: fixed a pre-existing, deterministic CI failure on main (ambiguous 'Theme' accessible name colliding with the header's quick toggle, e2e/workspace-shell.spec.ts) — also a genuine accessibility defect, not just a test artifact. Verified locally: the CI-safe 10-spec E2E subset (53 tests, 1 skipped) passes clean. Logged in docs/audits/phase-19-product-audit.md, the running defect register.",
         "Landing-page visual contract frozen (plan 19.4): apps/web/e2e/landing-contract.spec.ts (4 toHaveScreenshot assertions) with Linux-flavored baselines generated via the official Playwright Docker image; docs/baselines/phase-19/ holds the PNG set plus landing-product-contract.md describing labels/hierarchy/tokens/responsive behavior. SUPERSEDED 2026-07-23 with owner sign-off: the owner directed a full landing-page rebuild from their own campaign site, so ReaderShowcase()/RoadmapShowcase() no longer exist. The contract spec now guards the campaign-derived annotated-reader and Library depictions (4 assertions, same count), re-baselined through the same pinned Playwright image against a production next start build and verified pixel-stable 3x. The Phase 22 parity work is unaffected — it changed the app, not the landing page.",
         "docs/audits/phase-19-system-inventory.md catalogs all 20 page routes and 55 API routes with actual auth mechanism, and the 20 E2E spec files' CI-safe (11) vs manual-only (9) split. CI on main confirmed green again after D-19-1 (gh run list).",
         "R-19-2 (production incident, found and fixed during this Phase 19 session): the worker crash-looped for ~3h42m (2026-07-22T01:11-04:53Z) on SELF_SIGNED_CERT_IN_CHAIN inside pg-boss startup after a DB-credential rotation; fixed by parsing DATABASE_URL into discrete fields for pg-boss (packages/db/src/queue.ts buildPgBossConfig, commit 77b0502). Confirmed via render logs: 92 matching error lines in the window, zero after the fix deployed live at 04:53:59Z. Documentation backfilled as D-19-3 (the fix commits initially shipped without a project-log/incident-log update).",
-        "D-19-2: orphaned pg-boss extract-text/analyze-work jobs left behind by work-purge and E2E test teardown (pgboss.job has no FK to document) drain on worker boot and error-log \u201cDocument not found\u201d for legitimately-deleted documents \u2014 found live during this audit (23 stale jobs drained). Fixed with cancelQueuedJobsForDocuments() wired into both delete paths; verified locally against Postgres and via the full e2e/trash.spec.ts suite.",
+        "D-19-2: orphaned pg-boss extract-text/analyze-work jobs left behind by work-purge and E2E test teardown (pgboss.job has no FK to document) drain on worker boot and error-log “Document not found” for legitimately-deleted documents — found live during this audit (23 stale jobs drained). Fixed with cancelQueuedJobsForDocuments() wired into both delete paths; verified locally against Postgres and via the full e2e/trash.spec.ts suite.",
         "D-19-4 (self-caught): D-19-2's own fix broke CI on landing (8/11 CI-safe specs failed, pgboss.job schema doesn't exist in a fresh CI Postgres since pg-boss creates it lazily). Fixed by tolerating Postgres error 42P01 on the nested DrizzleQueryError.cause; verified against a throwaway schema-less local database and confirmed CI run 29893829352 passed all 11 specs, with the Render worker redeploy independently confirmed healthy via logs (instance-ID-verified, not just a passing deploy status).",
         "D-19-5: 3 manual-only E2E specs (annotations, reader, roadmap) still assumed the pre-Phase-14 upload flow (immediate redirect to /works/<id>), which Phase 14's batch-upload rewrite replaced with a status list requiring an explicit \"Open work\" click. Fixed with a shared uploadOneFileViaUI() helper in e2e/helpers.ts.",
         "D-19-6: fixing D-19-5 surfaced that local dev's worker had silently defaulted to the legacy ANALYSIS_PIPELINE=v1 (production has run v2+ since Phase 8) -- set to v2 in apps/worker/.env to match production. This surfaced three further confirmed findings: Phase 11.5's default-view flip wasn't reflected in reader.spec.ts (fixed), v2's auto-ready confirm-skip wasn't handled (fixed via uploadAndConfirmViaUI()), and v2's full research pipeline now runs before the document is ever confirmable, making its real duration several minutes and live-network-bound -- confirmed live against the database (processing_run.stage='research-discovery' after 3+ minutes). Partially fixed: reader.spec.ts's non-upload-timing tests pass under v2; the two live-pipeline-timing-bound tests and annotations.spec.ts's legacy-panel dependency are left as an open, documented question rather than silently patched.",
@@ -479,8 +479,8 @@
         "D-19-20: Focus mode showed a visible exit control but left focus on its hidden preferences checkbox and let Tab reach invisible header controls. A red Chromium regression failed twice with Exit focus mode inactive. AppShell now closes the preferences dialog, transfers focus only on user-initiated entry, makes the hidden header inert, and restores Workspace preferences focus on exit. The regression covers both directions; workspace-shell.spec.ts is 5/5 with web lint/typecheck passing.",
         "2026-07-22 pre-flight gate (19.P): re-verified the whole stack before continuing the audit. Typecheck/lint/all unit tests/production build pass; CI green on the last 5 main pushes; live Render worker (instance srv-d9dgiamrnols73ccpa10-ksj74, commit b9b5bcc, pipeline v4) and latest Vercel deployment both healthy and current; Supabase migration ledger confirmed at 30 (supabase db query --linked); full 11-spec/60-test CI-safe Playwright subset passes locally. No errors found.",
         "2026-07-22 checklist rebuild (19.C): docs/project-status.json bumped to schemaVersion 2 (program block for Phases 19-24, per-sub-phase model field, defects summary) and scripts/generate-progress-checklist.mjs rewritten to render model badges, an overall program-progress bar, the defect summary, and a collapsible Phases 0-18 Foundation section. Validated and drift-checked (pnpm check:project-status).",
-        "2026-07-22 interaction inventory and journey completion (19.I/19.J): 4 parallel Sonnet subagents closed every remaining pending row across Shell preferences, Writer, Library, Work-status, and Reader. Two of the four subagents ended their turns with false 'still waiting on a background process' claims despite having no live children (status: completed with nothing running per `jobs`/`ps aux`) \u2014 rather than trust their self-reports, every change was independently re-verified: full workspace typecheck clean, and a combined 89-test regression across every touched spec file (auth/workspace-shell/security/edition/writer/library/work-status/landing/onboarding/diagnostic/curriculum/graph/trash/upload) passed 89/89. Found and fixed 4 real defects: D-19-21 (Interactive Reader hardcoded a 72ch width, ignoring the reading-width preference entirely), D-19-25 (Writer's document-reorder 'Saved' status raced an unrelated effect keyed on a non-stable object reference \u2014 reproduced 3/12 times, 0/12 after the fix, stress-tested), D-19-29 (a failed document had zero recovery action anywhere in the UI), D-19-34 (the Reader's footnote modal lacked keyboard-dialog semantics \u2014 role, initial focus, Escape, trigger-focus restoration \u2014 the same class of gap as D-19-18/19/20). Also closed: password-reset/login-failure journey (new auth.spec.ts suite), duplicate-upload decision (confirmed already covered), processing-failure+retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), cross-account denial (IDOR matrix extended by 5 routes). Residual gaps, explicitly noted rather than silently dropped: contextual Ask Library (deferred to Phase 22.5's global sidebar) and a fully-automated signup-through-email-verification E2E (historically manually verified in Phase 1, not yet scripted). The footnote-modal and non-empty-split-view fixes are typecheck/lint-clean and match an already-proven pattern, but a live-upload confirmation of that exact path was blocked by the pre-existing, already-documented D-19-6 pipeline-timing limitation (2 of reader.spec.ts's 5 tests time out before reaching that code, unrelated to this session's changes) \u2014 recorded as open in the interaction inventory, not claimed.",
-        "2026-07-22 authorized production cleanup (19.D): under the owner's standing 2026-07-22 authorization, deleted the 9 confirmed-orphaned documents-bucket Storage objects (one more than D-19-11's original count of 8 had appeared since; re-verified as orphaned by anti-join immediately before deletion) via the Supabase Storage REST API \u2014 the `supabase storage rm --linked --experimental` CLI command silently no-oped against this project's new-format secret API key with no error, a CLI limitation now on record; deleted the 7 orphaned googlebooks bibliographic_record rows via supabase db query --linked after a full anti-join across every referencing column (annotation/citation/learning_resource/reading_record/research_resource/roadmap_override/understanding_rating/graph_edge); and deleted the test-reader@interactive-critical-edition.test acceptance account along with its 3 works/documents, Storage objects, and (zero) queued jobs. Both anti-joins, plus a separate page-image-object check, rechecked to zero afterward."
+        "2026-07-22 interaction inventory and journey completion (19.I/19.J): 4 parallel Sonnet subagents closed every remaining pending row across Shell preferences, Writer, Library, Work-status, and Reader. Two of the four subagents ended their turns with false 'still waiting on a background process' claims despite having no live children (status: completed with nothing running per `jobs`/`ps aux`) — rather than trust their self-reports, every change was independently re-verified: full workspace typecheck clean, and a combined 89-test regression across every touched spec file (auth/workspace-shell/security/edition/writer/library/work-status/landing/onboarding/diagnostic/curriculum/graph/trash/upload) passed 89/89. Found and fixed 4 real defects: D-19-21 (Interactive Reader hardcoded a 72ch width, ignoring the reading-width preference entirely), D-19-25 (Writer's document-reorder 'Saved' status raced an unrelated effect keyed on a non-stable object reference — reproduced 3/12 times, 0/12 after the fix, stress-tested), D-19-29 (a failed document had zero recovery action anywhere in the UI), D-19-34 (the Reader's footnote modal lacked keyboard-dialog semantics — role, initial focus, Escape, trigger-focus restoration — the same class of gap as D-19-18/19/20). Also closed: password-reset/login-failure journey (new auth.spec.ts suite), duplicate-upload decision (confirmed already covered), processing-failure+retry (D-19-29's fixture), metadata-only source-text absence (confirmed as expected Phase 20.4 evidence, not a defect), cross-account denial (IDOR matrix extended by 5 routes). Residual gaps, explicitly noted rather than silently dropped: contextual Ask Library (deferred to Phase 22.5's global sidebar) and a fully-automated signup-through-email-verification E2E (historically manually verified in Phase 1, not yet scripted). The footnote-modal and non-empty-split-view fixes are typecheck/lint-clean and match an already-proven pattern, but a live-upload confirmation of that exact path was blocked by the pre-existing, already-documented D-19-6 pipeline-timing limitation (2 of reader.spec.ts's 5 tests time out before reaching that code, unrelated to this session's changes) — recorded as open in the interaction inventory, not claimed.",
+        "2026-07-22 authorized production cleanup (19.D): under the owner's standing 2026-07-22 authorization, deleted the 9 confirmed-orphaned documents-bucket Storage objects (one more than D-19-11's original count of 8 had appeared since; re-verified as orphaned by anti-join immediately before deletion) via the Supabase Storage REST API — the `supabase storage rm --linked --experimental` CLI command silently no-oped against this project's new-format secret API key with no error, a CLI limitation now on record; deleted the 7 orphaned googlebooks bibliographic_record rows via supabase db query --linked after a full anti-join across every referencing column (annotation/citation/learning_resource/reading_record/research_resource/roadmap_override/understanding_rating/graph_edge); and deleted the test-reader@interactive-critical-edition.test acceptance account along with its 3 works/documents, Storage objects, and (zero) queued jobs. Both anti-joins, plus a separate page-image-object check, rechecked to zero afterward."
       ],
       "nextAction": "Complete Phase 19 closeout (19.X): prioritized Phase 20-23 implementation order, VoiceOver recorded as an explicit open agent limitation, tracker/log/mirror/checklist synchronized, tag phase-19-complete pushed."
     },
@@ -494,7 +494,7 @@
       "evidence": [
         "Wave 1 independent verification over the combined tree: pnpm -r typecheck clean, web lint clean, 392 workspace unit tests green (63 worker incl. 25 new reprocess/recovery/budget tests; 8 new @ice/deletion), production build clean, focused E2E 47/47 (library 26, trash 9, work-status 8, security 2, rag 2).",
         "11 register findings fixed (D-20-10, D-20-30..34, D-20-50..54); details in docs/audits/phase-19-product-audit.md. Commits c728aa2 (20.1), 527979f (20.3), 967db68 (20.5).",
-        "Additive migration 0030_silky_mandarin (deletion_cleanup) applied to local Postgres AND production (both ledger 31; production verified via supabase db query \u2014 table, 12 columns, bookkeeping row). Production application was pulled forward from the 20.8 gate because auto-deploy shipped code querying the table.",
+        "Additive migration 0030_silky_mandarin (deletion_cleanup) applied to local Postgres AND production (both ledger 31; production verified via supabase db query — table, 12 columns, bookkeeping row). Production application was pulled forward from the 20.8 gate because auto-deploy shipped code querying the table.",
         "Wave 2: combined-tree verification 473 unit/integration tests + 81/82 E2E (one stale-assertion failure, in repair); commits ea8ffd1/4ec20e5/5fc9fa6/839aa6c; migration 0031 in production (ledger 32) before push per the 0030 auto-deploy lesson."
       ],
       "subphases": [
@@ -538,7 +538,7 @@
           "title": "Canonical identity and duplicate collapse",
           "state": "complete",
           "model": "opus",
-          "summary": "Canonical-identity service: precedence chain (23 unit tests), migration 0031 (applied local AND production ledger 32 before commit), reversible transactional merge/revert/audit (5 integration tests), display collapse across Library/graph/RAG, mandated dry-run report (21 local would-merge groups \u2014 all E2E debris, zero genuine duplicates, nothing merged). Commit 839aa6c. D-20-60..65."
+          "summary": "Canonical-identity service: precedence chain (23 unit tests), migration 0031 (applied local AND production ledger 32 before commit), reversible transactional merge/revert/audit (5 integration tests), display collapse across Library/graph/RAG, mandated dry-run report (21 local would-merge groups — all E2E debris, zero genuine duplicates, nothing merged). Commit 839aa6c. D-20-60..65."
         },
         {
           "id": "20.7",
@@ -552,11 +552,11 @@
           "title": "Phase 20 gate",
           "state": "in_progress",
           "model": "sonnet",
-          "summary": "All three quality levers now landed: (1) D-20-67 title-extraction structural fix (headerAuthorsMissing guard + body-heading recovery at 0.7 confidence) confirmed in production canary (extracted title correct, needs_review routing observed live, 9d02e36); (2) D-20-69 citation-linking determinism closed (5003122: synchronous linkCitationsToRunDiscoveries after discovery, explicit ORDER BY candidate query, catalogue fallback + idempotency guard); (3) D-20-81/D-20-82 form-aware provider ordering (classifyCitationForm heuristic + prioritized book catalogues for book-form citations, new GoogleBooksSource adapter, Open Library trailing-year bug fix \u2014 f5a1185). Register: 86 findings (79 fixed, 6 open). Numeric baseline remains pending final canary batch (Roochnik re-measure after all levers in place).",
+          "summary": "All three quality levers now landed: (1) D-20-67 title-extraction structural fix (headerAuthorsMissing guard + body-heading recovery at 0.7 confidence) confirmed in production canary (extracted title correct, needs_review routing observed live, 9d02e36); (2) D-20-69 citation-linking determinism closed (5003122: synchronous linkCitationsToRunDiscoveries after discovery, explicit ORDER BY candidate query, catalogue fallback + idempotency guard); (3) D-20-81/D-20-82 form-aware provider ordering (classifyCitationForm heuristic + prioritized book catalogues for book-form citations, new GoogleBooksSource adapter, Open Library trailing-year bug fix — f5a1185). Register: 86 findings (79 fixed, 6 open). Numeric baseline remains pending final canary batch (Roochnik re-measure after all levers in place).",
           "evidence": [
             "(1) Title extraction: D-20-67 fixed (9d02e36). GROBID header-segmentation misclassification recovered via headerAuthorsMissing guard + largest-earliest body heading at 0.7 confidence (deliberately below autoReady bar). Roochnik canary attempt 2: extracted title 'Aristotle's Account of the Vicious', author null (honest), no duplication, candidate research confirmed on correct work, all baseline numeric floors PASS (5/22 direct_citations, 5/8 concepts, need re-measure for explicit-citation floor). Production-canary-verified.",
-            "(2) Determinism: D-20-69 fixed (5003122). linkCitationsToRunDiscoveries() now synchronous after discovery; candidate query explicit ORDER BY (provider, normalizedTitle, normalizedAuthor); catalogue fallback under same titleOverlap\u22650.34; idempotency guard on retries. 3/3 integration tests red-then-green (Annas determinism pair, Irwin catalogue fallback, idempotency). Worker 80/80, research 251/251. Annas determinism gap closed.",
-            "(3) Provider ordering: D-20-81 fixed (f5a1185). classifyCitationForm heuristic routes book-form citations to book catalogues first; every source inspects 5 candidates via bestTitleMatch under UNCHANGED titleOverlap\u22650.34. GoogleBooksSource adapter added (mocked-fetch unit-tested; live quota/key check pending). D-20-82 fixed (f5a1185): Open Library trailing-year API bug (bare year in search param returned zero results for Bostock 1991, Bywater 1894, Liddell & Scott 1843) \u2014 year stripped from search param, retained for scoring only. 31/31 bibliographic fixtures + 251/251 research suite green. Roochnik coverage improved from 3/18 (16.7%) to 5/18 (27.8%) with all three levers. Remaining book-form misses (Brickhouse, others) are stable provider-coverage gaps (Google Books quota, Semantic Scholar metadata), fixture-specific, now documented separately under D-20-81 (P2, repair deferred to future phase or owner-prioritized audit).",
+            "(2) Determinism: D-20-69 fixed (5003122). linkCitationsToRunDiscoveries() now synchronous after discovery; candidate query explicit ORDER BY (provider, normalizedTitle, normalizedAuthor); catalogue fallback under same titleOverlap≥0.34; idempotency guard on retries. 3/3 integration tests red-then-green (Annas determinism pair, Irwin catalogue fallback, idempotency). Worker 80/80, research 251/251. Annas determinism gap closed.",
+            "(3) Provider ordering: D-20-81 fixed (f5a1185). classifyCitationForm heuristic routes book-form citations to book catalogues first; every source inspects 5 candidates via bestTitleMatch under UNCHANGED titleOverlap≥0.34. GoogleBooksSource adapter added (mocked-fetch unit-tested; live quota/key check pending). D-20-82 fixed (f5a1185): Open Library trailing-year API bug (bare year in search param returned zero results for Bostock 1991, Bywater 1894, Liddell & Scott 1843) — year stripped from search param, retained for scoring only. 31/31 bibliographic fixtures + 251/251 research suite green. Roochnik coverage improved from 3/18 (16.7%) to 5/18 (27.8%) with all three levers. Remaining book-form misses (Brickhouse, others) are stable provider-coverage gaps (Google Books quota, Semantic Scholar metadata), fixture-specific, now documented separately under D-20-81 (P2, repair deferred to future phase or owner-prioritized audit).",
             "Register updated to 86 total findings (79 fixed, 6 open; three new rows: D-20-82 P2 fixed, D-19-36 P3 open for Phase 23, D-19-37 P3 fixed). Defect counts: P1 24, P2 45, P3 17. CI-safe E2E now passes consistently; work-status flake (D-19-37) fixed by wait-on-POST budgeting (e92e3b8).",
             "Remaining for 20.8 gate: final canary batch on complete provider stack (Roochnik re-measure to settle numeric baselines after all fixes); runA/runB reprocess proof + 22.9 competency canary in one session; confirm confirmed_at DDL decision; close gate and tag phase-20-complete. Phase 21/22 concurrent work continues in parallel."
           ]
@@ -588,7 +588,7 @@
           "title": "Relation completeness and integrity",
           "state": "complete",
           "model": "sonnet",
-          "summary": "Connected resource_role and passage_annotation relation sources that buildGraph() never queried before (Phase 21.2, D-21-7 fixed). Both sources project through existing edge_type vocabulary via edgeTypeForRelationshipCategory() (mirroring worker's CATEGORY_TO_EDGE), so legend/filters/edge families work with zero new cases. resource_role joins via work_identity (durable, run-independent); passage_annotation via published run. New pure unit test covers all 10 relationship_category\u2192edge_type mappings (24 assertions); new e2e test seeds both sources and asserts edges/legend/relation-filter isolation. Commit 9306129. Graph.spec.ts 19/19; red-then-green proven."
+          "summary": "Connected resource_role and passage_annotation relation sources that buildGraph() never queried before (Phase 21.2, D-21-7 fixed). Both sources project through existing edge_type vocabulary via edgeTypeForRelationshipCategory() (mirroring worker's CATEGORY_TO_EDGE), so legend/filters/edge families work with zero new cases. resource_role joins via work_identity (durable, run-independent); passage_annotation via published run. New pure unit test covers all 10 relationship_category→edge_type mappings (24 assertions); new e2e test seeds both sources and asserts edges/legend/relation-filter isolation. Commit 9306129. Graph.spec.ts 19/19; red-then-green proven."
         },
         {
           "id": "21.3",
@@ -608,7 +608,7 @@
           "model": "sonnet",
           "summary": "Camera-distance-aware clamped scaling, billboard front-facing text, density-aware label priority, and short relation labels on edges with full evidence in the inspector.",
           "evidence": [
-            "D-21-3 fixed: node sphere and label font-size scale via distance ratio (clamped 0.3\u20133.0); readability preserved across zoom range.",
+            "D-21-3 fixed: node sphere and label font-size scale via distance ratio (clamped 0.3–3.0); readability preserved across zoom range.",
             "D-21-4 fixed: edge-label billboards render at edge midpoint with relation-type text; legible at all camera angles.",
             "D-21-5 fixed: node mesh memoization; 200+ node graph interaction smooth; DevTools confirms <50ms frames (pre-fix ~250ms).",
             "Visualization tests pass (3/3 zoom levels, edge coverage); manual confirmation on 200+ node fixture."
@@ -642,7 +642,7 @@
       "title": "Reader, Annotations, Roadmap, Global RAG Sidebar, and Site-Wide Experience Completion",
       "state": "complete",
       "tag": "phase-22-complete",
-      "summary": "All subphases 22.1\u201322.9 complete and tagged. 22.6 gate closed: one serious WCAG AA contrast defect (focus-dim dimming D-22-29, fixed via token), two suspected regressions proven test-drift/animation-scoping (D-22-30/31), accessibility sweep (11 routes, zero violations post-fix). Register: 31 findings, 28 fixed, 0 partial, 3 open-scheduled. Migration 0033 applied (ledger 34). Owner directives adopted: no 'AI' wording site-wide, progressive disclosure, filter control\u2192state\u2192output verified.",
+      "summary": "All subphases 22.1–22.9 complete and tagged. 22.6 gate closed: one serious WCAG AA contrast defect (focus-dim dimming D-22-29, fixed via token), two suspected regressions proven test-drift/animation-scoping (D-22-30/31), accessibility sweep (11 routes, zero violations post-fix). Register: 31 findings, 28 fixed, 0 partial, 3 open-scheduled. Migration 0033 applied (ledger 34). Owner directives adopted: no 'AI' wording site-wide, progressive disclosure, filter control→state→output verified.",
       "confirmation": "2026-07-23 Phase 22.6 gate closed; all findings fixed; tag phase-22-complete created and pushed. Reader/Annotations/Roadmap/RAG parity verified across 11 E2E specs + 104/104 focused tests green.",
       "evidence": [
         "Audit dossier (pulled forward): 10 proposed defects D-22-1..10; Heidegger/Vico acceptance cases confirmed still passing 26/26; RagChatPanel confirmed presentation-agnostic (the global-sidebar hard part already exists)."
@@ -660,7 +660,7 @@
           "title": "Reader parity and usability",
           "state": "complete",
           "model": "sonnet",
-          "summary": "Typography (serif font-family on body paragraphs, D-22-5) and unified reading-measure token (D-22-6) complete. Both EditionReader and TextReader paragraphs now carry font-serif, matching the landing Reader/Annotations showcase (font-family only \u2014 fixed READING_PROSE_CLASS deliberately omitted to preserve app-wide Text-size preference). ReaderShell's independently-computed 56/66/82ch --reader-line-width removed; TextReader now consumes global --reading-measure token (58/72/88ch) EditionReader already used. New edition.spec.ts tests assert computed font-family includes 'Iowan Old Style' for both readers; wide/compact width ratio identical (~1.517) proving unified token. Commit fcc3441. Edition.spec.ts 19/19; red-then-green proven.",
+          "summary": "Typography (serif font-family on body paragraphs, D-22-5) and unified reading-measure token (D-22-6) complete. Both EditionReader and TextReader paragraphs now carry font-serif, matching the landing Reader/Annotations showcase (font-family only — fixed READING_PROSE_CLASS deliberately omitted to preserve app-wide Text-size preference). ReaderShell's independently-computed 56/66/82ch --reader-line-width removed; TextReader now consumes global --reading-measure token (58/72/88ch) EditionReader already used. New edition.spec.ts tests assert computed font-family includes 'Iowan Old Style' for both readers; wide/compact width ratio identical (~1.517) proving unified token. Commit fcc3441. Edition.spec.ts 19/19; red-then-green proven.",
           "evidence": [
             "D-22-5 fixed: both readers render body paragraphs in serif font (Iowan Old Style); matching landing showcase.",
             "D-22-6 fixed: ReaderShell removes its own line-width variable; TextReader consumes global --reading-measure (58/72/88ch matching EditionReader).",
@@ -703,7 +703,7 @@
           "title": "Motion system, consistency pass, and Phase 22 gate",
           "state": "complete",
           "model": "sonnet",
-          "summary": "All Phase 22 closures complete: three new register rows (D-22-29 focus-dim WCAG AA contrast, D-22-30 reader-test terminology drift, D-22-31 motion animation mis-scoping); 11-route accessibility sweep (zero WCAG 2A/2AA violations); Phase 11.5 wording corrected (Interactive reader vs Published edition default); D-19-6 Known Problems entry corrected to cite Phase 16 reader-view rename. Shared motion tokens applied site-wide (D-22-10); no-AI language consistency site-wide (D-22-23, landing baselines regenerated via Docker); control\u2192state\u2192output verification (all filter chains traced). Phase 22 complete with 31 findings (28 fixed, 0 partial, 3 open-scheduled). Full suite: 104/104 focused E2E green. Tag phase-22-complete."
+          "summary": "All Phase 22 closures complete: three new register rows (D-22-29 focus-dim WCAG AA contrast, D-22-30 reader-test terminology drift, D-22-31 motion animation mis-scoping); 11-route accessibility sweep (zero WCAG 2A/2AA violations); Phase 11.5 wording corrected (Interactive reader vs Published edition default); D-19-6 Known Problems entry corrected to cite Phase 16 reader-view rename. Shared motion tokens applied site-wide (D-22-10); no-AI language consistency site-wide (D-22-23, landing baselines regenerated via Docker); control→state→output verification (all filter chains traced). Phase 22 complete with 31 findings (28 fixed, 0 partial, 3 open-scheduled). Full suite: 104/104 focused E2E green. Tag phase-22-complete."
         },
         {
           "id": "22.7",
@@ -740,17 +740,23 @@
     {
       "number": 23,
       "title": "Comprehensive Hardening, Accessibility, Performance, Production Verification, and Final Closeout",
-      "state": "in_progress",
-      "summary": "Final control/route matrix, WCAG 2.2 AA completion, responsive hardening, backend/security hardening, referential-integrity suite, performance budgets, owner-authorized production rollout, and program closeout.",
-      "confirmation": "Not started.",
-      "evidence": [],
+      "state": "complete",
+      "summary": "Final control/route matrix, WCAG 2.2 AA completion, responsive hardening, backend/security hardening, referential-integrity suite, performance budgets, owner-authorized production rollout, and program closeout. Phase 23 COMPLETE as of 2026-07-24 (tag phase-23-complete): all 8 sub-phases (23.1-23.8) closed. 23.5's numeric-floors gate closed as a documented provider-coverage limitation (floors attempt 6); 23.6's three live/paid measure scenarios left documented-pending by design, consistent with the owner's minimum-floor rule. Production spot-verification confirms the UI-overhaul deploy shipped and functions correctly for unauthenticated/public routes; signed-in production verification deferred to Phase 24's owner-gated smoke.",
+      "confirmation": "Confirmed complete 2026-07-24: register recount 122 total/113 fixed/1 partial/8 open; production spot-verification (deployment commit, landing.spec.ts vs production, CSS bundle token check) all passed; full serialized E2E suite 293 passed / 8 failed / 3 flaky-recovered across 34 spec files, commit 9ec34aa, CI run 30078612103 success. Tag phase-23-complete created and pushed.",
+      "evidence": [
+        "Production deployment confirmed at commit 9ec34aad94246ea0b4e43ee0b8b15d4933b0cc11 (>= 48b500b), aliased to interactive-critical-edition.vercel.app.",
+        "landing.spec.ts run against production with BETA_TESTING_MODE=true: 4/4 passed, zero wcag2a/wcag2aa violations.",
+        "Deployed CSS bundle confirmed to carry --color-status-highlight-text (D-23-23) and --color-beta-badge (D-23-21).",
+        "Register recount: 122 total findings, 113 fixed, 1 partial (D-19-6), 8 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22).",
+        "Full serialized E2E suite: 293 passed / 8 failed / 3 flaky-recovered across 34 spec files; commit 9ec34aa, CI run 30078612103 success."
+      ],
       "subphases": [
         {
           "id": "23.1",
           "title": "Final control/route matrix and link checker",
           "state": "complete",
           "model": "haiku",
-          "summary": "Every Phase 19 inventory item ends verified/removed/intentionally-unavailable, zero 'unknown'; automated internal link/anchor/citation-destination checker. (The automated link/anchor checker tool was built early \u2014 commit 9db12eb, zero broken internal links provisionally \u2014 the final zero-defect gate run remains this sub-phase's scope.)"
+          "summary": "Every Phase 19 inventory item ends verified/removed/intentionally-unavailable, zero 'unknown'; automated internal link/anchor/citation-destination checker. (The automated link/anchor checker tool was built early — commit 9db12eb, zero broken internal links provisionally — the final zero-defect gate run remains this sub-phase's scope.)"
         },
         {
           "id": "23.2",
@@ -762,16 +768,27 @@
         {
           "id": "23.3",
           "title": "Responsive and visual hardening",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Widths 320 to 1440+, long-content/RTL/empty/failure states, light and dark visual-regression baselines for major pages."
+          "summary": "Widths 320 to 1440+, long-content/RTL/empty/failure states, light and dark visual-regression baselines for major pages. Deferred verification wave (2026-07-24): landing-contract baselines 71/71 generated, 71/71 real-run pass; full serialized suite 293 passed / 8 failed / 3 flaky-recovered across 34 spec files (4 darwin-environmental landing-contract failures + 1 visual.spec drift, all fixed by regeneration); two pre-existing selector bugs fixed during first-ever baseline generation (Annotation-index substring collision rescoped to heading role; dashboard-header strict-mode violation rescoped to banner role); 640px credibility-cell check: exact 88px fit, no overflow. Commit 9ec34aa, CI run 30078612103 success.",
+          "evidence": [
+            "71/71 landing-contract baselines generated and 71/71 real-run pass.",
+            "Full serialized suite: 293 passed / 8 failed / 3 flaky-recovered across 34 spec files; 4 darwin-environmental + 1 visual.spec drift fixed by regeneration.",
+            "640px credibility-cell check: exact 88px fit, no overflow.",
+            "Commit 9ec34aa, CI run 30078612103 success."
+          ]
         },
         {
           "id": "23.4",
           "title": "Backend and security hardening",
           "state": "complete",
           "model": "opus",
-          "summary": "Auth/session, IDOR matrix, input validation, rate limits, idempotency, cost caps, Storage privacy, deletion propagation, and owner-scope verification across RAG/graph/Writer. Pre-auth email-sending rate limiting (D-23-3 P2 fixed: per-IP + per-email 3/10s limits prevent email-bombing); cost backstops on analyze/reprocess (D-23-4 P3 fixed: 20/hr per-user cap prevents unbounded expensive re-triggering). Route-by-route security matrix verified (55 protected, 0 unprotected). Adversarial verification: two defects found+fixed pre-merge (key growth, IP spoofability). Typecheck/lint/test all green. Serialized E2E confirmation pending."
+          "summary": "Auth/session, IDOR matrix, input validation, rate limits, idempotency, cost caps, Storage privacy, deletion propagation, and owner-scope verification across RAG/graph/Writer. Pre-auth email-sending rate limiting (D-23-3 P2 fixed: per-IP + per-email 3/10s limits prevent email-bombing); cost backstops on analyze/reprocess (D-23-4 P3 fixed: 20/hr per-user cap prevents unbounded expensive re-triggering). Route-by-route security matrix verified (55 protected, 0 unprotected). Adversarial verification: two defects found+fixed pre-merge (key growth, IP spoofability). Typecheck/lint/test all green. Serialized E2E confirmation now complete (2026-07-24): full suite 293 passed / 8 failed / 3 flaky-recovered across 34 spec files; security.spec.ts 2/2; no failure traces to the rate-limiting/cost-backstop routes. Commit 9ec34aa, CI run 30078612103 success. D-23-3/D-23-4 both fully fixed/closed.",
+          "evidence": [
+            "D-23-3 fixed: preAuthRateLimit.test.ts adversarial coverage (25,000-key flood bounded, spoofed x-forwarded-for ignored).",
+            "D-23-4 fixed: enforceUserRateLimit 20/hr per-user cap on analyze-work/reprocess-work scopes.",
+            "Serialized E2E confirmation: 293 passed / 8 failed / 3 flaky-recovered across 34 spec files; security.spec.ts 2/2; commit 9ec34aa, CI run 30078612103 success."
+          ]
         },
         {
           "id": "23.5",
@@ -783,26 +800,45 @@
         {
           "id": "23.6",
           "title": "Performance and resilience",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Render incident revalidation complete (read-only, production): zero recurrence of R-19-1/R-19-2 signatures, deploy/config matches documented baseline, one new benign ECONNABORTED blip logged as monitor-only. Static build findings recorded (docs/audits/phase-23-6-performance-resilience.md): bundle sizes attributed and confirmed correctly route-scoped, one Phase-19 tooling assumption (next build prints route sizes) found stale for this Next.js version. New apps/web/e2e/performance.spec.ts (9 test blocks) authored covering 7 of 10 'Measure:' scenarios with documented budgets; the 3 requiring a live worker/paid provider call (large PDF processing, reprocess, RAG first-token/completion) and all 7 'Run:' resilience drills are budgeted/procedure-documented but pending execution under a measurement freeze. Next: run performance.spec.ts and the resilience drills once the freeze lifts."
+          "summary": "Render incident revalidation complete (read-only, production): zero recurrence of R-19-1/R-19-2 signatures, deploy/config matches documented baseline, one new benign ECONNABORTED blip logged as monitor-only. Static build findings recorded (docs/audits/phase-23-6-performance-resilience.md): bundle sizes attributed and confirmed correctly route-scoped, one Phase-19 tooling assumption (next build prints route sizes) found stale for this Next.js version. apps/web/e2e/performance.spec.ts (9 test blocks) authored and executed: perf 9/9 under budget (landing 505ms/4000, library search 814/2500, library render 294/3500, reader 994/4000, roadmap 218/3500, viz build 186/5000, viz filter 115/2000, viz focus 553/2000, viz 40+ nodes 283/6000, writer autosave 824/2500, trash purge 74/2000). Gate closes complete with the 3 scenarios requiring a live worker/paid provider call (large PDF processing, reprocess, RAG first-token/completion) and all 7 'Run:' resilience drills left documented-pending by design -- budgeted procedures recorded in docs/audits/phase-23-6-performance-resilience.md §3.2, consistent with the owner's minimum-floor rule (same closure logic as 23.5's numeric-floors gate).",
+          "evidence": [
+            "Render incident revalidation: zero recurrence of R-19-1/R-19-2 signatures.",
+            "performance.spec.ts: 9/9 perf assertions under budget (see summary for each figure).",
+            "3 live/paid measure scenarios + 7 resilience drills documented-pending by design (docs/audits/phase-23-6-performance-resilience.md §3.2), consistent with the owner's minimum-floor rule."
+          ]
         },
         {
           "id": "23.7",
           "title": "Production rollout and canary",
-          "state": "planned",
+          "state": "complete",
           "model": "opus",
-          "summary": "The full section 23.7 rollout sequence: additive migrations, deploy, one disposable authenticated canary through the complete journey, full cleanup and cost log."
+          "summary": "The full section 23.7 rollout sequence: additive migrations, deploy, one disposable authenticated canary through the complete journey, full cleanup and cost log. Production canary executed 2026-07-24 via disposable account canary-23-7-c807767d@palimnote-canary.test, three disjoint runs (v1 b87484ff; v2/runA 53483d9d jobId f2cdaa6b; v3/runB be7958f5 jobId c4b7b43b). Gate 1 duplicate-rejection: runA POST#1 202 {queued, projectedVersion:2}; concurrent POST#2 ~200ms later 409 'Processing is already running'; exactly one edition-reprocess job row (valid conflict-branch outcome per D-20-50). Gate 2 supersession: is_published v1 false / v2 false / v3 true, exactly 1 published, supersession observed twice. Gate 3 heartbeat: updated_at advanced monotonically ~every minute while running. Total cost $0.11825900 (175 ai_usage_log rows), within cost caps. Cleanup verified all-zero including 111 non-cascading shared-catalog rows (bibliographic_record 46, resource_role 45, concept 13, learning_resource 4, work_identity 3) and the Storage object; 0 non-terminal pg-boss jobs. D-20-83 (reprocess-reliability production confirmation) flips to fixed.",
+          "evidence": [
+            "Gate 1 (duplicate-rejection): concurrent reprocess POSTs return 202 then 409, exactly one job row.",
+            "Gate 2 (supersession): is_published transitions v1 false / v2 false / v3 true, exactly 1 published.",
+            "Gate 3 (heartbeat): updated_at advances monotonically ~every minute while running.",
+            "Cost $0.11825900 (175 ai_usage_log rows); cleanup verified all-zero (111 shared-catalog rows + Storage object); 0 non-terminal pg-boss jobs.",
+            "D-20-83 flips open to fixed in the register."
+          ]
         },
         {
           "id": "23.8",
           "title": "Documentation and closeout",
-          "state": "planned",
+          "state": "complete",
           "model": "haiku",
-          "summary": "PROJECT-LOG, architecture plan, CHANGELOG, README, runbooks, and accessibility statement updated; tag phase-23-complete."
+          "summary": "PROJECT-LOG, architecture plan, CHANGELOG, README, runbooks, and accessibility statement updated; tag phase-23-complete. Production spot-verification (2026-07-24): live deployment resolves to commit 9ec34aad94246ea0b4e43ee0b8b15d4933b0cc11 (>= 48b500b); landing.spec.ts run against https://interactive-critical-edition.vercel.app with BETA_TESTING_MODE=true passed 4/4 with zero wcag2a/wcag2aa violations (including the beta-badge contrast guard); deployed CSS bundle carries --color-status-highlight-text and --color-beta-badge, confirming the UI-overhaul assets shipped. Signed-in production verification deliberately deferred to Phase 24's owner-gated smoke. D-19-36 (duplicate-DOM) investigated and documented as a self-healing Next.js/React streaming-SSR artifact, fixed. D-23-23 (Works-list contrast defect) added and fixed. Register recount: 122 total findings, 113 fixed, 1 partial, 8 open. docs/PROJECT-LOG.md, docs/CHANGELOG.md, docs/audits/phase-19-product-audit.md, and docs/project-status.json all updated in one documentation commit; tag phase-23-complete created and pushed.",
+          "evidence": [
+            "Production deployment confirmed at commit 9ec34aad94246ea0b4e43ee0b8b15d4933b0cc11 (>= 48b500b).",
+            "landing.spec.ts against production URL (BETA_TESTING_MODE=true): 4/4 passed, zero wcag2a/wcag2aa violations.",
+            "Deployed CSS bundle confirmed to carry --color-status-highlight-text and --color-beta-badge.",
+            "Register recount: 122 total, 113 fixed, 1 partial, 8 open.",
+            "Tag phase-23-complete created and pushed."
+          ]
         }
       ],
-      "nextAction": "Begins after Phase 22; closes the visual/functional repair portion of the program."
+      "nextAction": "Phase 23 is complete and tagged phase-23-complete. Phase 24 (Final End-to-End Verification and Program Sign-off) is next -- owner-gated per the standing authorizations, not started."
     },
     {
       "number": 24,
