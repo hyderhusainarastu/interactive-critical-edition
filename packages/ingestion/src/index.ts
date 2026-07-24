@@ -25,10 +25,6 @@ export {
   type ForeignSpanAnchor,
   type MatchedForeignSpan,
 } from "./foreignText";
-export {
-  inspectPdfGlyphRecoveryCandidates,
-  type PdfGlyphRecoveryCandidate,
-} from "./pdfGlyphRecovery";
 export { parseTei, type GrobidResult, type GrobidBlock, type GrobidBbox } from "./parsers/grobid";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export {
