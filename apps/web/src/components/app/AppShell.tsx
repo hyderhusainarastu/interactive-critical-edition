@@ -35,7 +35,6 @@ export function AppShell({
   admin,
   writerEnabled,
   ragEnabled,
-  betaTestingMode = false,
   initialPreferences,
   initialReaderLevel = null,
   children,
@@ -44,7 +43,6 @@ export function AppShell({
   admin: boolean;
   writerEnabled: boolean;
   ragEnabled: boolean;
-  betaTestingMode?: boolean;
   initialPreferences: WorkspacePreferences;
   initialReaderLevel?: ReaderLevel | null;
   children: React.ReactNode;
@@ -52,13 +50,13 @@ export function AppShell({
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} betaTestingMode={betaTestingMode} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
+        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTestingMode, initialReaderLevel, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; betaTestingMode: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
+function AppShellContents({ email, admin, writerEnabled, ragEnabled, initialReaderLevel, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -148,14 +146,10 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
       {focusMode && <button ref={focusModeExitRef} type="button" className="app-control fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
       <header inert={focusMode} className={focusMode ? "sr-only" : `app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur ${headerCompact ? "header-compact" : ""}`}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
-          {betaTestingMode ? (
-            <div className="flex min-w-0 items-center gap-2">
-              <Wordmark href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]" />
-              <BetaBadge />
-            </div>
-          ) : (
+          <div className="flex min-w-0 items-center gap-2">
             <Wordmark href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]" />
-          )}
+            <BetaBadge />
+          </div>
           {/* D-23-15: the middle `minmax(0,1fr)` grid track can be narrower than
               the nav's no-wrap content at tablet widths (768–~1000px), making the
               links overflow under the controls column (theme toggle over

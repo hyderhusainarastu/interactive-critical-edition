@@ -74,24 +74,12 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     await expect(docs).toHaveAttribute("target", "_blank");
     await expect(docs).toHaveAttribute("rel", /noopener/);
 
-    // The beta badge is flag-gated; assert it only when the flag is on, so
-    // this spec is correct in CI (flag off) and in production (flag on).
-    if (process.env.BETA_TESTING_MODE === "true") {
-      await expect(page.getByText("Beta testing").first()).toBeVisible();
-    }
+    const badge = page.getByRole("link", { name: /Beta v\.5/i }).first();
+    await expect(badge).toBeVisible();
+    await expect(badge).toHaveAttribute("href", "/development");
 
-    // ...but its COLOR must be checked either way. BETA_TESTING_MODE is off
-    // in CI and on in production, so for as long as that asymmetry exists
-    // the badge never renders in a CI run — which is exactly how a real
-    // 4.48:1 contrast failure on it reached production unnoticed (fixed
-    // 2026-07-23 via --color-beta-badge; see globals.css).
-    //
-    // Injecting a stand-in badge into the DOM does NOT work here and must
-    // not be reintroduced: `.brand-group` is inside React's hydrated tree,
-    // so a foreign child is reconciled away before axe runs, and the check
-    // silently passes on a colour that genuinely fails. Instead compute the
-    // ratio from the live token and the live page background, which is
-    // deterministic, flag-independent, and can't be undone by hydration.
+    // Check the live token against the live page background independently
+    // from any local style inheritance on the badge itself.
     const badgeContrast = await page.evaluate(() => {
       const token = getComputedStyle(document.documentElement).getPropertyValue("--color-beta-badge").trim();
       const background = getComputedStyle(document.querySelector(".pal-site")!).backgroundColor;
@@ -180,6 +168,12 @@ test.describe("Landing & policy pages (Phase 6)", () => {
 
     await page.goto("/terms");
     await expect(page.getByRole("heading", { name: /Terms of use/i })).toBeVisible();
+
+    await page.goto("/development");
+    await expect(page.getByRole("heading", { level: 1, name: /A reader built in layers/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /A more expressive scholarly workspace/i })).toBeVisible();
+    await expect(page.getByText("In progress", { exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Development versions" })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations).toEqual([]);

@@ -17,6 +17,7 @@ export function SiteFooter() {
       </Link>
       <p>{SITE_NAME} is a research aid, not a substitute for reading primary sources.</p>
       <nav aria-label="Footer navigation">
+        <Link href="/development">Development</Link>
         <Link href="/privacy">Privacy</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/login">Log in</Link>

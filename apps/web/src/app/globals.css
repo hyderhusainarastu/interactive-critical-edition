@@ -456,6 +456,42 @@ body {
 @media (prefers-reduced-motion: no-preference) { .wordmark:hover .wordmark-letter { transform: translateY(-1px); } .wordmark:hover .mark-margin { animation: mark-margin-nod .42s var(--spring-gentle); } @keyframes mark-margin-nod { 50% { transform: translateX(2px); } } }
 :root[data-motion="reduced"] .wordmark-letter { transform: none !important; }
 
+.beta-badge {
+  position: relative;
+  display: inline-flex;
+  min-height: 1.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-beta-badge);
+  border-radius: 999px;
+  padding: .15rem .55rem;
+  color: var(--color-beta-badge);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  line-height: 1;
+  text-decoration: none;
+}
+.beta-badge::after {
+  position: absolute;
+  inset: -45% auto -45% -70%;
+  width: 38%;
+  background: linear-gradient(90deg, transparent, currentColor, transparent);
+  content: "";
+  opacity: .13;
+  transform: skewX(-18deg);
+}
+.beta-badge:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-beta-badge) 12%, transparent); }
+.beta-badge:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .beta-badge::after { animation: beta-badge-shimmer 4.8s ease-in-out infinite; }
+  @keyframes beta-badge-shimmer {
+    0%, 58% { left: -70%; }
+    82%, 100% { left: 145%; }
+  }
+}
+
 /* D-22-10 (plan §22.7): a second, complementary one-shot entrance for
    components that are conditionally mounted rather than scrolled into view —
    modals, drawers, and popovers (RagChatPanel, FootnoteModal,

@@ -24,6 +24,7 @@ export function AppFooter() {
         </span>
         <p className="max-w-md">Palimnote is a research aid, not a substitute for reading primary sources.</p>
         <nav className="flex items-center gap-4" aria-label="Footer navigation">
+          <Link href="/development" className="hover:text-[var(--color-text)]">Development</Link>
           <Link href="/privacy" className="hover:text-[var(--color-text)]">Privacy</Link>
           <Link href="/terms" className="hover:text-[var(--color-text)]">Terms</Link>
         </nav>

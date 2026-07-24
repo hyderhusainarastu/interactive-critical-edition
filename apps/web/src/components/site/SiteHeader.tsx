@@ -31,7 +31,7 @@ export async function SiteHeader() {
     <ScrollAwareHeader className="masthead">
       <div className="brand-group">
         <Wordmark href="/" className="brand" />
-        {betaTestingMode && <BetaBadge />}
+        <BetaBadge />
       </div>
       <nav aria-label="Primary navigation">
         <Link className="nav" data-sound="click" href="/#workspace">Workspace</Link>
