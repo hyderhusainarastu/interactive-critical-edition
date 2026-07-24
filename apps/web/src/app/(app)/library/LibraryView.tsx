@@ -98,8 +98,19 @@ const SOURCE_TYPE_GLYPH: Record<string, string> = {
 
 /** Shared uppercase field-label treatment for the filter row (spec §3.1's
  *  `.library-filters label` mapping), factored out since five-plus labels
- *  repeat it identically. */
-const FIELD_LABEL_CLASS = "text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]";
+ *  repeat it identically.
+ *
+ *  D-23-35: this used `--color-text-muted` against the filter row's
+ *  `--color-surface-sunken` background, which measures only 4.654:1 in
+ *  light mode — real, but with almost no headroom above the 4.5:1 AA floor
+ *  for 10px text, and evidently not enough in practice (a full-page axe
+ *  scan flagged it). `--color-accent-umber` is an existing token (no new
+ *  one needed) that clears 4.5:1 with real margin against the same
+ *  background in BOTH themes (~5.42:1 light / ~6.73:1 dark, computed),
+ *  and is already used elsewhere in this exact warm palette for
+ *  secondary/hover accents, so it reads as "muted" without reusing a
+ *  token this close to the floor. */
+const FIELD_LABEL_CLASS = "text-[10px] font-semibold uppercase tracking-wide text-[var(--color-accent-umber)]";
 
 /** Same three-band thresholds `CredibilityMeter` already uses (0.7/0.4),
  *  reused here only to color the authority-grade circle's border so it
@@ -744,7 +755,19 @@ function LibraryRow({
             // the row's own box at ~768px for longer values like
             // "abandoned"/"completed" — this makes it actually shrink to
             // the `.4fr` track it's allocated.
-            className="app-control w-full min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
+            //
+            // D-23-36: `appearance-none` (verified needed via direct
+            // screenshot comparison, not just computed style). This
+            // select's *computed* color/background already resolved
+            // correctly to the dark-theme tokens, but the browser was
+            // still painting it with native OS control chrome
+            // (a light pill, ignoring the dark background entirely) — this
+            // one select, uniquely among this row's `<select>`s, exhibited
+            // that native-chrome divergence in dark mode. `appearance-none`
+            // makes the actual rendered pixels use our own bg/text tokens
+            // (verified: dark pill, light text, after the fix) instead of
+            // leaving that to the browser's native widget rendering.
+            className="app-control w-full min-w-0 appearance-none rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
             aria-label={`Reading status of ${item.title}`}
           >
             <option value="">To read</option>
