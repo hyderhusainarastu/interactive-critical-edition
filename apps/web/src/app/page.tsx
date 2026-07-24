@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import { isBetaTestingMode } from "@ice/config";
 import { AskLibraryDepiction } from "@/components/site/AskLibraryDepiction";
 import { InteractiveGraphRendering } from "@/components/site/InteractiveGraph";
@@ -145,9 +144,9 @@ export default async function Home() {
           <div className="hero-copy">
             <p className="kicker">The map in the margins · {SITE_NAME}</p>
             <h1 id="hero-title" className="hero-title" aria-label="A Text Is Never Alone">
-              <span aria-hidden="true" style={{ "--word-index": 0 } as CSSProperties}>A Text{" "}</span>
-              <span aria-hidden="true" style={{ "--word-index": 1 } as CSSProperties}>Is Never{" "}</span>
-              <span aria-hidden="true" style={{ "--word-index": 2 } as CSSProperties}>Alone</span>
+              <span aria-hidden="true">A Text{" "}</span>
+              <span aria-hidden="true">Is Never{" "}</span>
+              <span aria-hidden="true">Alone</span>
             </h1>
             <p className="hero-deck">
               Upload a difficult scholarly work. {SITE_NAME} builds a traceable critical edition around it — then turns

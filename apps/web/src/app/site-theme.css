@@ -780,37 +780,35 @@ html:has(.pal-site) { scroll-behavior: smooth; }
 .pal-site .header-compact + .public-scroll-progress { top: 65px; }
 
 .pal-site .pal-reveal {
-  opacity: 0;
+  opacity: 1;
   transform: translateY(34px);
 }
 
 .pal-site .pal-reveal.is-visible {
-  opacity: 1;
   transform: translateY(0);
 }
 
 .pal-site .pal-reveal > :where(.section-shell, .section-head, .product-frame, .status-grid, .faq-intro, .faq-list) {
-  opacity: 0;
+  opacity: 1;
   transform: translateY(22px);
 }
 
 .pal-site .pal-reveal.is-visible > :where(.section-shell, .section-head, .product-frame, .status-grid, .faq-intro, .faq-list) {
-  opacity: 1;
   transform: translateY(0);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduced"]) .pal-site .pal-reveal {
-    transition: opacity .72s var(--spring-smooth), transform .78s var(--spring-smooth);
+    transition: transform .78s var(--spring-gentle);
   }
 
   :root:not([data-motion="reduced"]) .pal-site .pal-reveal > :where(.section-shell, .section-head, .product-frame, .status-grid, .faq-intro, .faq-list) {
-    transition: opacity .75s var(--spring-smooth) .08s, transform .82s var(--spring-smooth) .08s;
+    transition: transform .82s var(--spring-gentle) .08s;
   }
 
   :root:not([data-motion="reduced"]) .pal-site [data-magnetic] {
     transform: translate(var(--magnetic-x, 0), var(--magnetic-y, 0));
-    transition: transform .35s var(--spring-bouncy), background-color .2s ease;
+    transition: transform .35s var(--spring-gentle), background-color .2s ease;
   }
 
   :root:not([data-motion="reduced"]) .pal-site [data-magnetic]:hover {
@@ -855,7 +853,7 @@ html:has(.pal-site) { scroll-behavior: smooth; }
 
 .pal-landing .product-frame {
   transform-style: preserve-3d;
-  transition: box-shadow .45s var(--spring-smooth), transform .45s var(--spring-smooth), border-color .3s ease;
+  transition: box-shadow .45s var(--spring-gentle), transform .45s var(--spring-gentle), border-color .3s ease;
 }
 
 .pal-landing .product-frame:hover {
@@ -869,7 +867,7 @@ html:has(.pal-site) { scroll-behavior: smooth; }
 .pal-landing .integrity-grid article,
 .pal-landing .status-grid article,
 .pal-landing .route-card {
-  transition: transform .35s var(--spring-bouncy), background-color .3s ease, border-color .3s ease;
+  transition: transform .35s var(--spring-gentle), border-color .3s ease;
 }
 
 .pal-landing .scope-grid article:hover,
@@ -890,9 +888,12 @@ html:has(.pal-site) { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: no-preference) {
   :root:not([data-motion="reduced"]) .pal-landing .hero-title span {
     opacity: 0;
-    animation: pal-word-rise .9s var(--spring-smooth) forwards;
-    animation-delay: calc(90ms + var(--word-index) * 110ms);
+    animation: pal-word-rise .9s var(--spring-gentle) forwards;
+    animation-delay: 90ms;
   }
+
+  :root:not([data-motion="reduced"]) .pal-landing .hero-title span:nth-child(2) { animation-delay: 200ms; }
+  :root:not([data-motion="reduced"]) .pal-landing .hero-title span:nth-child(3) { animation-delay: 310ms; }
 
   :root:not([data-motion="reduced"]) .pal-landing .paper-sheet-primary {
     animation: pal-manuscript-breathe 7s ease-in-out infinite;

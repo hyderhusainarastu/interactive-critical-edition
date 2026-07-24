@@ -2,6 +2,20 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.describe("Public editorial experience", () => {
+  test("hero headline settles visibly without moving the initial viewport", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("/");
+    await page.waitForTimeout(1_500);
+
+    const words = page.locator(".hero-title > span");
+    await expect(words).toHaveCount(3);
+    for (const word of await words.all()) {
+      await expect(word).toBeVisible();
+      await expect(word).toHaveCSS("opacity", "1");
+    }
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
   test("policy disclosures and footer routes are explicit", async ({ page }) => {
     await page.goto("/privacy");
 
