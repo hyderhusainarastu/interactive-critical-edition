@@ -6,7 +6,7 @@ import { applyAnnotationMarkers, applyHighlights, captureSelectionAnchor, clearA
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import type { RelationshipCategory } from "./types";
-import type { HighlightRecord } from "./types";
+import { HIGHLIGHT_COLORS, type HighlightColor, type HighlightRecord } from "./types";
 
 export type Authority = "A" | "B" | "C" | "D" | "E";
 export type Agreement = "strong" | "contested" | "mixed" | "insufficient";
@@ -386,6 +386,8 @@ export function EditionReader({
   notes = [],
   scriptDisplay = "original",
   focusMode = false,
+  pendingColor = "gold",
+  onColorChange,
   onPositionChange,
   onCreateHighlight,
   onCreateLinkedNote,
@@ -399,6 +401,13 @@ export function EditionReader({
   notes?: Array<{ id: string; body: string }>;
   scriptDisplay?: "original" | "transliteration";
   focusMode?: boolean;
+  /** The color the next highlight will use, and the setter for it — the
+   *  swatches live in this reader's own text-selection popover (Phase 23
+   *  Lane D), next to the "Highlight" action they actually affect, rather
+   *  than a permanently-visible toolbar group with no visible effect until
+   *  text is selected. */
+  pendingColor?: HighlightColor;
+  onColorChange?: (color: HighlightColor) => void;
   onPositionChange?: (position: { pageIndex: number; textBlockId: string }) => void;
   onCreateHighlight?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<string | undefined>;
   onCreateLinkedNote?: (anchor: { pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string }) => Promise<void>;
@@ -632,6 +641,29 @@ export function EditionReader({
           role="toolbar"
           aria-label="Selected text actions"
         >
+          {onCreateHighlight && onColorChange && (
+            <div className="flex items-center gap-0.5" role="group" aria-label="Highlight color">
+              {HIGHLIGHT_COLORS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`${c} highlight`}
+                  aria-pressed={pendingColor === c}
+                  onClick={() => onColorChange(c)}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 rounded-full border"
+                    style={{
+                      background: `var(--color-${c === "gold" ? "highlight" : `accent-${c}`})`,
+                      borderColor: pendingColor === c ? "var(--color-background)" : "transparent",
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
           {onCreateHighlight && <button type="button" onClick={() => void runSelectionAction(onCreateHighlight)}>Highlight</button>}
           {onCreateLinkedNote && <button type="button" onClick={() => void runSelectionAction(onCreateLinkedNote)}>New linked note</button>}
           {onLinkExistingNote && notes.length > 0 && (

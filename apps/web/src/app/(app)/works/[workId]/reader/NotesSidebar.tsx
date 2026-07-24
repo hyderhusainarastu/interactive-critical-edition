@@ -16,6 +16,7 @@ export function NotesSidebar({
   onAddNote,
   onDeleteNote,
   onDeleteBookmark,
+  onSelectBookmark,
   pendingHighlightIds = [],
   onClose,
 }: {
@@ -26,6 +27,11 @@ export function NotesSidebar({
   onAddNote: (body: string, highlightIds?: string[]) => void;
   onDeleteNote: (id: string) => void;
   onDeleteBookmark: (id: string) => void;
+  /** Only "processed" (interactive reader) bookmarks can navigate anywhere
+   *  real — a page/paragraph number on its own isn't a DOM target the
+   *  reader can scroll to. Legacy pdf/text bookmarks stay display-only, as
+   *  before. */
+  onSelectBookmark?: (bookmark: BookmarkRecord) => void;
   pendingHighlightIds?: string[];
   /** Present only so this panel can be shown as a narrow-viewport dialog
    *  (`ReaderSidebarFrame`) — at wide widths it stays an always-open sticky
@@ -52,8 +58,8 @@ export function NotesSidebar({
   // / 8.95:1 (dark), nowhere near marginal, so the token was never the
   // defect.
   return (
-    <ReaderSidebarFrame label="Notes and highlights" widthClassName="w-72" onClose={onClose}>
-    <aside aria-label="Notes and highlights" className="border-s border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
+    <ReaderSidebarFrame label="My notes and highlights" widthClassName="w-72" onClose={onClose}>
+    <aside aria-label="My notes and highlights" className="border-s border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm">
       <section className="mb-6">
         <h2 className="mb-2 font-semibold text-[var(--color-text)]">Add a note</h2>
         {pendingHighlightIds.length > 0 && <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.</p>}
@@ -135,7 +141,16 @@ export function NotesSidebar({
         <ul className="flex flex-col gap-2">
           {bookmarks.map((b) => (
             <li key={b.id} className="flex items-center justify-between rounded-md border border-[var(--color-border)] p-2">
-              <span>{b.label || positionLabel(b.position)}</span>
+              {/* Only a "processed" (interactive reader) bookmark anchors to
+                  a real block the reader can jump to — legacy pdf/text
+                  bookmarks stay a plain label, as before. */}
+              {b.position.kind === "processed" && onSelectBookmark ? (
+                <button type="button" onClick={() => onSelectBookmark(b)} className="app-control text-start">
+                  {b.label || positionLabel(b.position)}
+                </button>
+              ) : (
+                <span>{b.label || positionLabel(b.position)}</span>
+              )}
               <button type="button" onClick={() => onDeleteBookmark(b.id)} className="app-control text-[var(--color-text-muted)] underline">
                 Remove
               </button>

@@ -65,14 +65,14 @@ test("authorial notes stay distinct from AI-generated ones", async ({ page }) =>
   await expect(sidebar).toContainText(/Adapted from Aquinas/i);
   await expect(sidebar).toContainText(/provenance: authorial source/i);
 
-  await page.getByRole("button", { name: /^Notes/i }).click();
+  await page.getByRole("button", { name: /^Critical notes/i }).click();
   // The machine's editorial commentary, which must never be mistaken for it.
   await expect(sidebar.getByRole("region", { name: /Generated critical notes/i })).toContainText(/reason subordinated to antecedent inclination/i);
   await expect(sidebar.getByRole("region", { name: /Generated critical notes/i })).not.toContainText(/Adapted from Aquinas/i);
 });
 
 test("a generated claim exposes supporting AND contradicting evidence", async ({ page }) => {
-  await page.getByRole("button", { name: /^Notes/i }).click();
+  await page.getByRole("button", { name: /^Critical notes/i }).click();
   const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
   await expect(sidebar).toContainText(/reason subordinated to antecedent inclination/i);
   // Contested agreement has to be stated on the claim itself.
@@ -144,7 +144,7 @@ test("a quote-matched critical note marker opens the sidebar Notes tab (plan §3
   await marker.click();
 
   const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
-  await expect(sidebar.getByRole("button", { name: /^Notes/i })).toHaveAttribute("aria-pressed", "true");
+  await expect(sidebar.getByRole("button", { name: /^Critical notes/i })).toHaveAttribute("aria-pressed", "true");
   await expect(sidebar).toContainText(/quote-matched/i);
   await expect(sidebar).toContainText(/Vice remains a state on which one decides/i);
   await expect(sidebar).toContainText(/reason subordinated to antecedent inclination/i);
@@ -345,25 +345,38 @@ test("highlight creation honors the chosen color and survives reload, in the int
   const block = edition.locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });
   await expect(block).toBeVisible();
 
-  // Choose a non-default color before highlighting.
-  const burgundySwatch = page.getByRole("button", { name: "burgundy highlight" });
-  await burgundySwatch.click();
-  await expect(burgundySwatch).toHaveAttribute("aria-pressed", "true");
-
   // Bind directly to the locator's already-resolved element handle (rather
   // than re-querying `document` inside a separate `page.evaluate`) — the
   // latter raced the resolved locator and was intermittently empty.
-  await block.evaluate((el) => {
-    const textNode = el.childNodes[0];
-    const range = document.createRange();
-    range.setStart(textNode, 0);
-    range.setEnd(textNode, 7); // "Vicious"
-    const sel = window.getSelection()!;
-    sel.removeAllRanges();
-    sel.addRange(range);
-  });
-  await block.dispatchEvent("mouseup");
-  await page.getByRole("toolbar", { name: "Selected text actions" }).getByRole("button", { name: "Highlight", exact: true }).click();
+  async function selectVicious() {
+    await block.evaluate((el) => {
+      const textNode = el.childNodes[0];
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, 7); // "Vicious"
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+    await block.dispatchEvent("mouseup");
+  }
+
+  await selectVicious();
+
+  // Phase 23 Lane D: the color swatches moved out of the always-visible
+  // toolbar into this same text-selection popover, next to "Highlight" —
+  // they only exist once a selection is active, so choose the non-default
+  // color from inside the popover rather than from the page at large.
+  const selectionToolbar = page.getByRole("toolbar", { name: "Selected text actions" });
+  const burgundySwatch = selectionToolbar.getByRole("button", { name: "burgundy highlight" });
+  await burgundySwatch.click();
+  await expect(burgundySwatch).toHaveAttribute("aria-pressed", "true");
+
+  // Re-select: clicking the swatch button is a real user action that can
+  // collapse the DOM selection the anchor capture reads at click time,
+  // independent of the popover's own (React-state) visibility.
+  await selectVicious();
+  await selectionToolbar.getByRole("button", { name: "Highlight", exact: true }).click();
 
   const mark = block.locator("mark[data-highlight-id]");
   await expect(mark).toHaveClass(/reader-highlight-burgundy/);
@@ -375,15 +388,32 @@ test("highlight creation honors the chosen color and survives reload, in the int
 });
 
 test("a bookmark and a standalone note persist from the reader sidebar (Phase 19 D-19 audit)", async ({ page }) => {
+  // The user-notes rail now defaults collapsed at every viewport width
+  // (Phase 23 Lane D) — open it before interacting with anything inside.
+  await page.getByRole("button", { name: "My notes" }).click();
+  const notesSidebar = page.getByRole("complementary", { name: /my notes and highlights/i });
+
   await page.getByRole("button", { name: "+ Bookmark" }).click();
-  await expect(page.getByText(/Processed page 1/)).toBeVisible();
+  // Tightened (Phase 23 Lane D, bookmark route fix): before the fix, the
+  // bookmarks POST route rejected the interactive reader's "processed"
+  // position kind with a silent 400, so no bookmark row was ever created —
+  // yet an unscoped `getByText(/Processed page 1/)` still passed, because
+  // NotesSidebar renders the identical "Processed page 1" label for a
+  // "processed" HIGHLIGHT anchor too. Scoping to the Bookmarks section's
+  // own count heading makes this assertion fail again if the route breaks.
+  await expect(notesSidebar.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
+  await expect(notesSidebar).toContainText(/Processed page 1/);
 
   await page.getByPlaceholder("Write a note about this work…").fill("A standalone note, not linked to any highlight.");
   await page.getByRole("button", { name: "Save note" }).click();
   await expect(page.getByText("A standalone note, not linked to any highlight.")).toBeVisible();
 
   await page.reload();
-  await expect(page.getByText(/Processed page 1/)).toBeVisible();
+  await expect(page.getByRole("region", { name: /interactive reader.*processed text/i })).toBeVisible();
+  await page.getByRole("button", { name: "My notes" }).click();
+  const notesSidebarAfter = page.getByRole("complementary", { name: /my notes and highlights/i });
+  await expect(notesSidebarAfter.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
+  await expect(notesSidebarAfter).toContainText(/Processed page 1/);
   await expect(page.getByText("A standalone note, not linked to any highlight.")).toBeVisible();
 });
 

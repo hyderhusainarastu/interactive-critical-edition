@@ -57,7 +57,7 @@ export interface EditionReaderFilters {
  * (passage annotations, both anchored and whole-work, ported off the old
  * unconditional below-paragraph list) and "Sources" (the "Sources
  * consulted" list, relocated here so a long document no longer needs
- * scrolling past the whole text to reach it). "Notes" (plan §36 11.6)
+ * scrolling past the whole text to reach it). "Critical notes" (plan §36 11.6)
  * keeps generated critical notes and source footnotes in the same side rail,
  * with generated-note markers only when quote matching is unambiguous.
  */
@@ -174,7 +174,7 @@ export function EditionAnnotationsPanel({
             color: tab === "notes" ? "var(--color-text)" : "var(--color-text-muted)",
           }}
         >
-          Notes{notesCount > 0 ? ` (${notesCount})` : ""}
+          Critical notes{notesCount > 0 ? ` (${notesCount})` : ""}
         </button>
         {enablePhase12Reader && <button type="button" aria-pressed={tab === "apparatus"} onClick={() => setTab("apparatus")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "apparatus" ? "var(--color-accent-ink)" : "transparent", color: tab === "apparatus" ? "var(--color-text)" : "var(--color-text-muted)" }}>Apparatus{apparatusCount > 0 ? ` (${apparatusCount})` : ""}</button>}
         {enablePhase12Reader && <button type="button" aria-pressed={tab === "terms"} onClick={() => setTab("terms")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "terms" ? "var(--color-accent-ink)" : "transparent", color: tab === "terms" ? "var(--color-text)" : "var(--color-text-muted)" }}>Terms{suggestedTerms.length > 0 ? ` (${suggestedTerms.length})` : ""}</button>}

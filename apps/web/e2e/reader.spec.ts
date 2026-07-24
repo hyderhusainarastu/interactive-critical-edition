@@ -137,6 +137,11 @@ test.describe("Reader (Phase 3)", () => {
     await page.getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(contentParagraph.locator("mark[data-highlight-id]")).toBeVisible();
 
+    // The user-notes rail now defaults collapsed at every viewport width
+    // (Phase 23 Lane D) — open it before interacting with the note/bookmark
+    // UI it contains.
+    await page.getByRole("button", { name: "My notes" }).click();
+
     // Add a standalone note via the sidebar.
     await page.getByPlaceholder("Write a note about this work…").fill("Test note from Playwright");
     await page.getByRole("button", { name: "Save note" }).click();

@@ -5,8 +5,8 @@ import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode }
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
-  HIGHLIGHT_COLORS,
   type AnnotationRecord,
+  type BookmarkRecord,
   type FootnoteRecord,
   type HighlightColor,
   type Position,
@@ -65,7 +65,12 @@ export function ReaderShell({
   // on first load, so the initial value is seeded from the real viewport
   // width at mount rather than hardcoded `true` for every screen size.
   const narrow = useNarrowViewport();
-  const [showNotes, setShowNotes] = useState(() => !narrow);
+  // D-23-51 follow-up (Phase 23 Lane D): the user-notes rail defaults
+  // collapsed at every viewport width, not just narrow ones — it's a
+  // reader-authored aside (highlights/notes/bookmarks), not primary reading
+  // apparatus, so it shouldn't claim screen space unrequested the way
+  // showAnalysis/showOutline (still `!narrow`-seeded) do.
+  const [showNotes, setShowNotes] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(() => !narrow);
   const [showOutline, setShowOutline] = useState(() => !narrow);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
@@ -229,9 +234,14 @@ export function ReaderShell({
         },
       );
       setData((d) => (d ? { ...d, bookmarks: [created, ...d.bookmarks] } : d));
+      setShowNotes(true);
     },
     [workId],
   );
+
+  const selectBookmark = useCallback((bookmark: BookmarkRecord) => {
+    if (bookmark.position.kind === "processed") setActiveReaderBlockId(bookmark.position.textBlockId);
+  }, []);
 
   const deleteBookmark = useCallback(
     async (id: string) => {
@@ -463,33 +473,6 @@ export function ReaderShell({
                 </button>
               </div>
             )}
-            <div className="flex items-center" role="group" aria-label="Highlight color">
-              {HIGHLIGHT_COLORS.map((c) => (
-                // Phase 23.2 (D-23-x): the clickable button is a full 44x44
-                // touch target; the visible color dot inside it stays the
-                // original small swatch size (`--color` set on the inner
-                // `span`, not the button itself) so the toolbar's density
-                // doesn't change — same "small visual, large hit area"
-                // pattern common for compact icon/color pickers.
-                <button
-                  key={c}
-                  type="button"
-                  aria-label={`${c} highlight`}
-                  aria-pressed={pendingColor === c}
-                  onClick={() => setPendingColor(c)}
-                  className="app-control grid h-11 w-11 place-items-center rounded-full"
-                >
-                  <span
-                    aria-hidden="true"
-                    className="h-4 w-4 rounded-full border"
-                    style={{
-                      background: `var(--color-${c === "gold" ? "highlight" : `accent-${c}`})`,
-                      borderColor: pendingColor === c ? "var(--color-text)" : "transparent",
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
             <button
               type="button"
               className="app-control"
@@ -535,7 +518,7 @@ export function ReaderShell({
                   ` (${data.annotations.filter((a) => !a.hidden).length})`}
             </button>
             <button ref={notesTriggerRef} type="button" className="app-control" onClick={() => setShowNotes((v) => !v)} aria-pressed={showNotes}>
-              {showNotes ? "Hide notes" : "Notes"}
+              {showNotes ? "Hide my notes" : "My notes"}
             </button>
             {enablePhase18Rag && !embedded && (
               <button
@@ -557,7 +540,7 @@ export function ReaderShell({
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
           >
-            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
+            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} pendingColor={pendingColor} onColorChange={setPendingColor} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
               data.fileUrl ? (
                 <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
                   fileUrl={data.fileUrl}
@@ -653,6 +636,7 @@ export function ReaderShell({
           onAddNote={addNote}
           onDeleteNote={deleteNote}
           onDeleteBookmark={deleteBookmark}
+          onSelectBookmark={selectBookmark}
           pendingHighlightIds={pendingNoteHighlightIds}
           onClose={closeNotesPanel}
         />
