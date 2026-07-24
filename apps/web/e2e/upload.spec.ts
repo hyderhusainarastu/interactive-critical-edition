@@ -155,6 +155,15 @@ test.describe("Batch upload (Phase 14)", () => {
    * when reached through the generic Upload page instead.
    */
   test("a real deep-linked upload links the new work to the Library entry's canonical identity", async ({ page }) => {
+    // Real Storage PUT + real `/api/works/upload/init` write path — CI runs
+    // this spec file (see .github/workflows/ci.yml's E2E step) against a
+    // dummy Supabase env with no real bucket, and never sets this flag, so
+    // skipping on it is also, incidentally, the correct real-Storage guard:
+    // there is no other precedent in this codebase for a programmatic
+    // dummy-vs-real-Storage check (only a doc comment on the separate,
+    // not-CI-run upload-integrity.spec.ts), and CI never turning this flag
+    // on is sufficient on its own to keep this test out of CI.
+    test.skip(process.env.PHASE_12_LIBRARY_IDENTITY_ENABLED !== "true", "requires the Phase 12 Library-identity release flag (also real Supabase Storage, which CI's dummy env does not provide)");
     const linkBackEmail = `e2e-upload-linkback-${Date.now()}@example.com`;
     const linkBackUserId = await createVerifiedTestUser(linkBackEmail, PASSWORD);
     const { resourceId, resourceWorkIdentityId } = await seedLibraryItemForSourceAttach(linkBackUserId, {
@@ -193,5 +202,59 @@ test.describe("Batch upload (Phase 14)", () => {
     expect(work?.title).toBe("Deep Linked Upload Work");
 
     await deleteTestUser(linkBackEmail);
+  });
+
+  /**
+   * Lane I fix-review defect: the deep-linked learningResourceId must bind
+   * to AT MOST the first file of a batch. Dropping/selecting a second,
+   * unrelated file in the same session must not also claim the Library
+   * entry's identity and title for it.
+   */
+  test("does not carry the deep-linked learningResourceId past the first file in a multi-file batch", async ({ page }) => {
+    const multiEmail = `e2e-upload-context-multi-${Date.now()}@example.com`;
+    await createVerifiedTestUser(multiEmail, PASSWORD);
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(multiEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+
+    const initCalls: Array<{ name: string; learningResourceId?: string }> = [];
+    await page.route("**/api/works/upload/init", async (route) => {
+      const payload = route.request().postDataJSON() as { name: string; learningResourceId?: string };
+      initCalls.push(payload);
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          workId: `00000000-0000-4000-8000-${String(initCalls.length).padStart(12, "0")}`,
+          documentId: `00000000-0000-4000-8001-${String(initCalls.length).padStart(12, "0")}`,
+          uploadUrl: `${new URL(page.url()).origin}/test-signed-upload/${payload.name}`,
+        }),
+      });
+    });
+    await page.route("**/test-signed-upload/**", (route) => route.fulfill({ status: 200, body: "" }));
+    await page.route("**/api/works/upload/complete", async (route) => {
+      const payload = route.request().postDataJSON() as { workId: string };
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ workId: payload.workId }) });
+    });
+
+    const params = new URLSearchParams({ learningResourceId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", title: "Multi File Context Work", author: "Multi Author" });
+    await page.goto(`/upload?${params.toString()}`);
+    await expect(page.getByText("Uploading the source text for")).toBeVisible();
+
+    await page.getByLabel("Choose files to upload").setInputFiles([
+      { name: "bound-first.txt", mimeType: "text/plain", buffer: Buffer.from("first file, should carry the context") },
+      { name: "unrelated-second.txt", mimeType: "text/plain", buffer: Buffer.from("second file, must NOT carry the context") },
+    ]);
+    await expect(page.locator('[data-upload-item="bound-first.txt"]')).toContainText("Queued for processing");
+    await expect(page.locator('[data-upload-item="unrelated-second.txt"]')).toContainText("Queued for processing");
+
+    expect(initCalls).toHaveLength(2);
+    expect(initCalls[0].name).toBe("bound-first.txt");
+    expect(initCalls[0].learningResourceId).toBe("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    expect(initCalls[1].name).toBe("unrelated-second.txt");
+    expect(initCalls[1].learningResourceId).toBeUndefined();
+
+    await deleteTestUser(multiEmail);
   });
 });

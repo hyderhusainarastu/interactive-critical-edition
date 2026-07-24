@@ -115,11 +115,15 @@ export interface LibraryItem {
   credibilityAbsence: "cited-not-assessed" | "stale-assessment" | null;
   /**
    * Lane I live-issue fix: true when the reader already owns a non-deleted
-   * work sharing this resource's own canonical `work_identity` — the exact
-   * same eligibility check `/library/[resourceId]`'s "Upload source text"
-   * action already uses (Phase 20.4). False (no owned work, or the resource
-   * has no established identity yet to check against) is what gates the
-   * Library row's "Upload this source" affordance.
+   * work sharing this resource's own canonical `work_identity`. Practically
+   * equivalent to `/library/[resourceId]`'s "Upload source text" eligibility
+   * check (Phase 20.4), which additionally inner-joins `documents` — that
+   * extra join is redundant here rather than contradictory, since every
+   * `work` insert creates its `document` row in the same request (see
+   * `/api/works/upload/init`), so an owned work with no document at all
+   * isn't a real case this map needs to distinguish. False (no owned work,
+   * or the resource has no established identity yet to check against) is
+   * what gates the Library row's "Upload this source" affordance.
    */
   hasAssociatedWork: boolean;
   creatorVerification: string | null;
@@ -314,9 +318,11 @@ export async function getLibrary(userId: string, options: { search?: string } = 
       : currentResource.resourceType === "unresolved-citation" || currentResource.resourceType === "bibliographic"
         ? "cited-not-assessed"
         : "stale-assessment";
-    // Same identity-ownership check as `/library/[resourceId]`'s existing
-    // "Upload source text" gate: `identityToWorks` already holds every
-    // owned, non-deleted work keyed by its own `workIdentityId`, so a
+    // Practically the same identity-ownership check as `/library/[resourceId]`'s
+    // existing "Upload source text" gate (see the `hasAssociatedWork` doc
+    // comment above for why that page's extra `documents` join is
+    // redundant, not a discrepancy, here): `identityToWorks` already holds
+    // every owned, non-deleted work keyed by its own `workIdentityId`, so a
     // resource is "associated" only when that map has an entry for its own
     // identity — a resource with no identity yet can't be checked this way
     // and is treated as unassociated, same as that page's documented rule.

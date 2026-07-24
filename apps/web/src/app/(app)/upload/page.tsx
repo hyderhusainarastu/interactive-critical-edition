@@ -20,6 +20,11 @@ type BatchItem = {
   error: string | null;
   workId: string | null;
   duplicate: { workId: string; title: string } | null;
+  /** Lane I fix-review: set only on the one entry (at most) that consumed a
+   *  deep-linked source context — see `beginBatch`'s binding comment. Every
+   *  other entry in the same or a later batch must never carry this, or an
+   *  unrelated file would silently claim someone else's Library identity. */
+  learningResourceId?: string;
 };
 type UploadResult =
   | { kind: "complete"; workId: string }
@@ -91,7 +96,15 @@ export default function UploadPage() {
   // initializer would also run during SSR (no `window` there), so reading
   // it there would diverge server- and client-rendered markup, same
   // reasoning as LibraryView's dismissed-suggestion state.
+  //
+  // Fix-review defect: this must bind to AT MOST one file, never every file
+  // in a batch (or a later batch) — a deep link names ONE Library entry,
+  // not "every file this browser tab ever uploads." `sourceContext` is the
+  // still-unconsumed context read from the URL; `beginBatch` consumes it
+  // into the first queued entry's own `learningResourceId` and clears this
+  // state so nothing else can claim it afterward.
   const [sourceContext, setSourceContext] = useState<{ learningResourceId: string; title: string; author: string } | null>(null);
+  const [boundSource, setBoundSource] = useState<{ title: string; author: string; fileName: string } | null>(null);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const learningResourceId = params.get("learningResourceId");
@@ -108,6 +121,7 @@ export default function UploadPage() {
     file: File,
     duplicateResolution: "add_edition" | undefined,
     onProgress: (loaded: number, total: number) => void,
+    learningResourceId?: string,
   ): Promise<UploadResult> {
     if (!ACCEPTED_TYPES.includes(file.type)) {
       throw new Error("Unsupported file type. Palimnote accepts PDF, EPUB, plain text, and Markdown.");
@@ -124,7 +138,9 @@ export default function UploadPage() {
       // for the entry-detail page's "Upload source text" action — the
       // server derives and sets `work.work_identity_id` from this id itself
       // rather than trusting any client-supplied identity value directly.
-      body: JSON.stringify({ name: file.name, type: file.type, size: file.size, contentHash, duplicateResolution, learningResourceId: sourceContext?.learningResourceId }),
+      // Passed explicitly per call (not read from component state) so it
+      // can never leak onto a second, unrelated file in the same batch.
+      body: JSON.stringify({ name: file.name, type: file.type, size: file.size, contentHash, duplicateResolution, learningResourceId }),
     });
     const body = await init.json().catch(() => ({}));
     if (!init.ok) throw new Error(body.error ?? "Upload failed.");
@@ -179,7 +195,7 @@ export default function UploadPage() {
     for (const entry of entries) {
       updateItem(entry.id, { state: "uploading", progress: null, error: null, duplicate: null });
       try {
-        let result = await uploadFile(entry.file, undefined, (loaded, total) => updateItem(entry.id, { progress: { loaded, total } }));
+        let result = await uploadFile(entry.file, undefined, (loaded, total) => updateItem(entry.id, { progress: { loaded, total } }), entry.learningResourceId);
         if (result.kind === "duplicate") {
           updateItem(entry.id, { state: "awaiting_duplicate", duplicate: { workId: result.workId, title: result.title } });
           const resolution = await new Promise<"add_edition" | "skip">((resolve) => duplicateResolvers.current.set(entry.id, resolve));
@@ -189,7 +205,7 @@ export default function UploadPage() {
             continue;
           }
           updateItem(entry.id, { state: "uploading", duplicate: null, progress: null });
-          result = await uploadFile(entry.file, "add_edition", (loaded, total) => updateItem(entry.id, { progress: { loaded, total } }));
+          result = await uploadFile(entry.file, "add_edition", (loaded, total) => updateItem(entry.id, { progress: { loaded, total } }), entry.learningResourceId);
           if (result.kind === "duplicate") throw new Error("This duplicate could not be resolved. Please try the file again later.");
         }
         updateItem(entry.id, { state: "queued_for_processing", workId: result.workId, progress: null });
@@ -206,6 +222,14 @@ export default function UploadPage() {
 
   function beginBatch(files: File[]) {
     if (submitting || files.length === 0) return;
+    // Consume any pending deep-linked source context into the FIRST file of
+    // THIS batch only, then clear it — so neither a second file dropped in
+    // the same selection nor a later, separate batch in the same page visit
+    // can also claim it. `multiple` on the picker only limits the native
+    // file dialog, not a drag-and-drop; binding at the entry level (rather
+    // than trying to also restrict drops to one file) is what actually
+    // enforces "at most one file" regardless of how files arrived.
+    const context = sourceContext;
     const entries = files.map((file, index): BatchItem => ({
       id: `${Date.now()}-${index}-${file.name}`,
       file,
@@ -214,7 +238,12 @@ export default function UploadPage() {
       error: null,
       workId: null,
       duplicate: null,
+      learningResourceId: index === 0 ? context?.learningResourceId : undefined,
     }));
+    if (context) {
+      setSourceContext(null);
+      setBoundSource({ title: context.title, author: context.author, fileName: files[0].name });
+    }
     setBatchItems(entries);
     void processBatch(entries);
   }
@@ -233,7 +262,14 @@ export default function UploadPage() {
       {sourceContext && (
         <p data-upload-source-context className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
           Uploading the source text for <strong className="text-[var(--color-text)]">&ldquo;{sourceContext.title}&rdquo;</strong>
-          {sourceContext.author && <> by {sourceContext.author}</>} from your Library — this title is used as the default, editable when you confirm the upload.
+          {sourceContext.author && <> by {sourceContext.author}</>} from your Library — this title is used as the default, editable when you confirm the upload. Only the first file you choose is attached to this Library entry.
+        </p>
+      )}
+      {boundSource && (
+        <p data-upload-source-context className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+          <strong className="text-[var(--color-text)]">{boundSource.fileName}</strong> will be attached to{" "}
+          <strong className="text-[var(--color-text)]">&ldquo;{boundSource.title}&rdquo;</strong>
+          {boundSource.author && <> by {boundSource.author}</>} from your Library.
         </p>
       )}
 
