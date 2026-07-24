@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
+import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, VERIFICATION_LABELS } from "./annotationMeta";
 import {
@@ -110,6 +111,15 @@ export function EditionAnnotationsPanel({
   const activeIsGeneratedNote = activeId ? edition.generatedNotes.some((note) => note.id === activeId) : false;
   const annotationTypes = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.annotationType))], [edition.passageAnnotations]);
   const relationships = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.relationship))], [edition.passageAnnotations]);
+  // Twin of the Library's `hasReaderLevelSignal`/Curriculum's
+  // `rolesHaveReaderLevelSignal` use (D-23-12/D-23-8): only offer the reader-
+  // level filter when at least one annotation actually carries a real
+  // (non-null) level — otherwise every option would return the identical
+  // set, which is a lie by omission, not a working control.
+  const readerLevelSignal = useMemo(
+    () => rolesHaveReaderLevelSignal([...edition.passageAnnotations, ...edition.wholeWorkGuidance]),
+    [edition.passageAnnotations, edition.wholeWorkGuidance],
+  );
 
   // Clicking an in-text marker always means "show me the annotation" — if
   // the reader is currently on another tab, switch to the tab that owns the
@@ -184,17 +194,35 @@ export function EditionAnnotationsPanel({
 
       {enableLevelFilter && tab === "annotations" && (
         <div className="grid grid-cols-1 gap-2 border-b border-[var(--color-border)] px-3 py-2 text-xs">
-          <label className="flex items-center justify-between gap-2">
-            <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Reader level</span>
-            <select
-              value={readerLevel}
-              onChange={(event) => onReaderLevelChange(event.target.value as ReaderLevelFilter)}
-              className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
-            >
-              {READER_LEVEL_FILTER_OPTIONS.map((level) => <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>)}
-            </select>
-          </label>
-          {readerLevel !== "all" && (
+          {readerLevelSignal ? (
+            <label className="flex items-center justify-between gap-2">
+              <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Reader level</span>
+              <select
+                value={readerLevel}
+                onChange={(event) => onReaderLevelChange(event.target.value as ReaderLevelFilter)}
+                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
+              >
+                {READER_LEVEL_FILTER_OPTIONS.map((level) => <option key={level} value={level}>{READER_LEVEL_FILTER_LABEL[level]}</option>)}
+              </select>
+            </label>
+          ) : (
+            // Twin of the Library's D-23-12/`hasReaderLevelSignal` and
+            // Curriculum's D-23-8/`rolesHaveReaderLevelSignal`: no annotation
+            // in this edition carries a level-specific tag, so every filter
+            // option would return the identical set — say so instead of a
+            // select that visibly does nothing.
+            <div className="flex flex-col gap-1">
+              <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Reader level</span>
+              <p
+                role="note"
+                aria-label="Reader level filtering is not available"
+                className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 text-[0.7rem] text-[var(--color-text-muted)]"
+              >
+                Not available yet — every annotation here currently applies at every level.
+              </p>
+            </div>
+          )}
+          {readerLevelSignal && readerLevel !== "all" && (
             <label className="flex items-center justify-between gap-2">
               <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Level match</span>
               <select

@@ -355,8 +355,13 @@ export function ReaderShell({
   const initialPosition = useMemo(() => data?.lastPosition ?? null, [data]);
   const visibleEdition = useMemo(() => {
     if (!edition) return edition;
+    // Must match `EditionAnnotationsPanel`'s `enableLevelFilter` render gate
+    // below exactly — otherwise the level select can render (under
+    // `enablePhase12Reader`) while this filter silently never applies,
+    // leaving a control that visibly does nothing.
+    const levelFilterEnabled = enablePhase12Identity || enablePhase12Reader;
     const visibleAtLevel = (annotation: EditionPayload["passageAnnotations"][number]) =>
-      !enablePhase12Identity || editionReaderLevel === "all" || matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
+      !levelFilterEnabled || editionReaderLevel === "all" || matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
     const visibleByReaderFilter = (annotation: EditionPayload["passageAnnotations"][number]) =>
       !enablePhase12Reader
       || ((editionFilters.annotationType === "all" || annotation.annotationType === editionFilters.annotationType)
