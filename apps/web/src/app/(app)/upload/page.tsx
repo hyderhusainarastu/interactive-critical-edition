@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 
@@ -85,6 +85,21 @@ export default function UploadPage() {
   const batchStatusRef = useScrollReveal<HTMLElement>();
   const duplicateResolvers = useRef(new Map<string, (resolution: "add_edition" | "skip") => void>());
 
+  // Lane I live-issue fix: arriving from a Library item's "Upload this
+  // source" affordance carries its learning_resource id plus title/author
+  // as query params. Read after mount, not a lazy initializer — the
+  // initializer would also run during SSR (no `window` there), so reading
+  // it there would diverge server- and client-rendered markup, same
+  // reasoning as LibraryView's dismissed-suggestion state.
+  const [sourceContext, setSourceContext] = useState<{ learningResourceId: string; title: string; author: string } | null>(null);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const learningResourceId = params.get("learningResourceId");
+    if (!learningResourceId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSourceContext({ learningResourceId, title: params.get("title") ?? "", author: params.get("author") ?? "" });
+  }, []);
+
   function updateItem(id: string, patch: Partial<BatchItem>) {
     setBatchItems((previous) => previous.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
@@ -104,7 +119,12 @@ export default function UploadPage() {
     const init = await fetch("/api/works/upload/init", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, type: file.type, size: file.size, contentHash, duplicateResolution }),
+      // learningResourceId (Lane I): reuses the same "attach to a Library
+      // entry" handling `/api/works/upload/init` already validates and links
+      // for the entry-detail page's "Upload source text" action — the
+      // server derives and sets `work.work_identity_id` from this id itself
+      // rather than trusting any client-supplied identity value directly.
+      body: JSON.stringify({ name: file.name, type: file.type, size: file.size, contentHash, duplicateResolution, learningResourceId: sourceContext?.learningResourceId }),
     });
     const body = await init.json().catch(() => ({}));
     if (!init.ok) throw new Error(body.error ?? "Upload failed.");
@@ -209,6 +229,13 @@ export default function UploadPage() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
       <PageHeader title="Upload works" description="Add one or more PDF, EPUB, plain text, or Markdown files for private processing." />
+
+      {sourceContext && (
+        <p data-upload-source-context className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+          Uploading the source text for <strong className="text-[var(--color-text)]">&ldquo;{sourceContext.title}&rdquo;</strong>
+          {sourceContext.author && <> by {sourceContext.author}</>} from your Library — this title is used as the default, editable when you confirm the upload.
+        </p>
+      )}
 
       <div
         ref={dropzoneRef}

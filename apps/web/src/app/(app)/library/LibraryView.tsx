@@ -127,6 +127,21 @@ function gradeTextColor(score: number | null | undefined): string {
   return "var(--color-credibility-critical)";
 }
 
+/**
+ * Lane I live-issue fix: deep-links an unowned Library item's "Upload this
+ * source" row affordance into the existing batch Upload page, carrying its
+ * `learning_resource` id plus title/author as purely presentational
+ * prefill. The canonical-identity link-back reuses the exact
+ * `learningResourceId` handling `/api/works/upload/init` already has for
+ * the Library entry detail page's "Upload source text" action (Phase
+ * 20.4) — no new server-side matching logic is introduced here.
+ */
+function uploadSourceHref(item: LibraryItem): string {
+  const params = new URLSearchParams({ learningResourceId: item.id, title: item.title });
+  if (item.authors.length > 0) params.set("author", item.authors.join(", "));
+  return `/upload?${params.toString()}`;
+}
+
 function matchesTab(item: LibraryItem, tab: Tab): boolean {
   if (tab === "all") return true;
   if (tab === "to_read") return item.readingStatus === null || item.readingStatus === "planned";
@@ -622,6 +637,15 @@ function LibraryRow({
               {item.year ? <span className="font-normal text-[var(--color-text-muted)]"> ({item.year})</span> : null}
             </p>
             {item.authors.length > 0 && <p className="text-xs text-[var(--color-text-muted)]">{item.authors.join(", ")}</p>}
+            {!item.hasAssociatedWork && (
+              <Link
+                href={uploadSourceHref(item)}
+                data-upload-this-source
+                className="mt-1.5 inline-flex w-fit items-center gap-1 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text)] hover:bg-[var(--color-surface)]"
+              >
+                Upload this source
+              </Link>
+            )}
             {rationale && <p className="mt-1 text-sm text-[var(--color-text-muted)]">{rationale}</p>}
 
             {item.recommendedFor.length > 0 && (

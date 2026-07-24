@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import {
   createVerifiedTestUser,
   deleteTestUser,
+  seedLibraryItemForSourceAttach,
   seedOwnedWork,
   seedSearchableLibraryItem,
   seedWorkWithLibraryItem,
@@ -489,6 +490,61 @@ test.describe("Library (Phase 9.5)", () => {
     await expect(page.getByRole("heading", { name: /upload/i }).first()).toBeVisible();
 
     await deleteTestUser(emptyEmail);
+  });
+
+  /**
+   * Lane I live-issue fix: an item with no owned full text gets an
+   * "Upload this source" row affordance deep-linking into the existing
+   * `/upload` page with its learning_resource id and title/author as
+   * prefill; an item whose full text the reader already owns does not.
+   */
+  test("shows an 'Upload this source' affordance only for items without an owned full text, deep-linking to /upload", async ({ page }) => {
+    const email = `e2e-library-upload-affordance-${Date.now()}@example.com`;
+    const uploadUserId = await createVerifiedTestUser(email, PASSWORD);
+    const { resourceId: unownedResourceId } = await seedLibraryItemForSourceAttach(uploadUserId, {
+      resourceTitle: "Unowned Source Needing Upload",
+      recommendingWorkTitle: "Recommending Work For Unowned",
+    });
+    await seedLibraryItemForSourceAttach(uploadUserId, {
+      resourceTitle: "Already Owned Source",
+      recommendingWorkTitle: "Recommending Work For Owned",
+      alreadyOwned: true,
+    });
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto("/library");
+
+    const libraryContent = page.locator("#main-content");
+    // Both seeded items' own recommending works exist, but the default
+    // Focus anchors to the single newest upload (`seedLibraryItemForSourceAttach`'s
+    // `alreadyOwned` case also creates an owned work, which sorts newest) —
+    // switch to "All works" so both rows are visible, same pattern the
+    // existing Focus-selector test above already uses.
+    await libraryContent.getByLabel("Focus work").selectOption("");
+    const unownedRow = libraryContent.locator("[data-library-item]").filter({ hasText: "Unowned Source Needing Upload" });
+    const ownedRow = libraryContent.locator("[data-library-item]").filter({ hasText: "Already Owned Source" });
+    await expect(unownedRow).toBeVisible();
+    await expect(ownedRow).toBeVisible();
+
+    const affordance = unownedRow.getByRole("link", { name: "Upload this source" });
+    await expect(affordance).toBeVisible();
+    const href = await affordance.getAttribute("href");
+    expect(href).toContain("/upload?");
+    expect(href).toContain(`learningResourceId=${unownedResourceId}`);
+    expect(href).toContain("title=Unowned+Source+Needing+Upload");
+
+    await expect(ownedRow.getByRole("link", { name: "Upload this source" })).toHaveCount(0);
+
+    await affordance.click();
+    await page.waitForURL("**/upload?**");
+    await expect(page.getByText("Uploading the source text for")).toBeVisible();
+    await expect(page.getByText("“Unowned Source Needing Upload”")).toBeVisible();
+
+    await deleteTestUser(email);
   });
 
   /**

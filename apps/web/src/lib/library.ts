@@ -113,6 +113,15 @@ export interface LibraryItem {
    * a superseded run). Null whenever `credibility` itself is non-null.
    */
   credibilityAbsence: "cited-not-assessed" | "stale-assessment" | null;
+  /**
+   * Lane I live-issue fix: true when the reader already owns a non-deleted
+   * work sharing this resource's own canonical `work_identity` — the exact
+   * same eligibility check `/library/[resourceId]`'s "Upload source text"
+   * action already uses (Phase 20.4). False (no owned work, or the resource
+   * has no established identity yet to check against) is what gates the
+   * Library row's "Upload this source" affordance.
+   */
+  hasAssociatedWork: boolean;
   creatorVerification: string | null;
   readingStatus: "planned" | "reading" | "completed" | "abandoned" | null;
   understandingScore: number | null;
@@ -305,6 +314,13 @@ export async function getLibrary(userId: string, options: { search?: string } = 
       : currentResource.resourceType === "unresolved-citation" || currentResource.resourceType === "bibliographic"
         ? "cited-not-assessed"
         : "stale-assessment";
+    // Same identity-ownership check as `/library/[resourceId]`'s existing
+    // "Upload source text" gate: `identityToWorks` already holds every
+    // owned, non-deleted work keyed by its own `workIdentityId`, so a
+    // resource is "associated" only when that map has an entry for its own
+    // identity — a resource with no identity yet can't be checked this way
+    // and is treated as unassociated, same as that page's documented rule.
+    const hasAssociatedWork = Boolean(currentResource.workIdentityId && identityToWorks.has(currentResource.workIdentityId));
 
     const focusMetrics = recommendedFor.flatMap((work) => {
       const role = resourceRolesForResource
@@ -346,6 +362,7 @@ export async function getLibrary(userId: string, options: { search?: string } = 
       attached: [],
       credibility,
       credibilityAbsence,
+      hasAssociatedWork,
       creatorVerification: creatorVerification(resource.creator),
       readingStatus: reading?.status ?? null,
       understandingScore: rating?.score ?? null,
