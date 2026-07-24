@@ -17,7 +17,14 @@ type CompetencyNotice = {
   previousScore: number | null;
   newScore: number;
 };
-type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[] };
+// `notFound` is the authoritative Phase 18 signal for whether an assistant
+// answer is substantiated (`@ice/rag`'s `SocraticAnswer.notFound`, streamed
+// on the SSE `done` event below) — it is NOT persisted on the `rag_message`
+// DB row (see `packages/db/src/schema.ts`'s `ragMessages`: content/role/
+// tokens/cost only), so it is only ever present on a message completed in
+// THIS session. Optional and absent for history loaded from `GET
+// /api/rag/conversations/:id`.
+type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[]; notFound?: boolean };
 
 function conversationStorageKey(contextWorkId?: string | null) {
   return `palimnote:rag-conversation:${contextWorkId ?? "library"}`;
@@ -217,14 +224,21 @@ export function RagChatPanel({
         const eventName = raw.match(/^event: ([^\n]+)/m)?.[1];
         const data = raw.match(/^data: (.+)$/m)?.[1];
         if (!eventName || !data) return;
-        const value = JSON.parse(data) as Message | Citation | CompetencyNotice | { text: string } | { message: Message };
+        const value = JSON.parse(data) as Message | Citation | CompetencyNotice | { text: string } | { message: Message; notFound: boolean };
         if (eventName === "user") setMessages((existing) => [...existing, value as Message]);
         if (eventName === "delta") setPending((existing) => existing + (value as { text: string }).text);
         if (eventName === "citation") setPendingCitations((existing) => [...existing, value as Citation]);
         if (eventName === "competency") competencyNotices = [...competencyNotices, value as CompetencyNotice];
         if (eventName === "done") {
-          const message = (value as { message: Message }).message;
-          setMessages((existing) => [...existing, competencyNotices.length ? { ...message, competencyNotices } : message]);
+          // The API streams every delta token, THEN citations, THEN this
+          // event (see `route.ts`'s `streamAnswer`) — so the trust signal
+          // (substantiated vs. no-evidence) is only known for certain here.
+          // `notFound` is carried explicitly rather than re-derived from
+          // `message.citations.length`, so a `notFound: true` answer that
+          // still cites something (finding 2 of the adversarial review)
+          // can never be miscolored green.
+          const { message, notFound } = value as { message: Message; notFound: boolean };
+          setMessages((existing) => [...existing, { ...message, notFound, ...(competencyNotices.length ? { competencyNotices } : {}) }]);
           setPending("");
           setPendingCitations([]);
         }
@@ -295,7 +309,7 @@ export function RagChatPanel({
       <div ref={scrollRef} role="log" className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
         {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
         <ol className="flex flex-col gap-3">{messages.map((message) => <MessageCard key={message.id} message={message} />)}</ol>
-        {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} />}
+        {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} isPending />}
         {error && (
           <div className="mt-3">
             <p className="text-sm text-[var(--color-accent-burgundy)]">{error}</p>
@@ -320,37 +334,67 @@ export function RagChatPanel({
   );
 }
 
+type TurnState = "user" | "pending" | "notFound" | "answered";
+
 /**
  * Visual-only restyle to the landing's Ask Library depiction (docs
  * "ui-overhaul-spec.md" §3.3): each turn gets a left accent bar keyed by
  * role/state, matching the depiction's `.chat-ask`/`.chat-answer`/
  * `.chat-empty` convention — ink for the reader's own turn, green for a
- * substantiated answer, umber for the explicit no-evidence fallback (the
- * only case an assistant turn ever has zero citations, per `@ice/rag`'s
- * `fallbackSocraticAnswer`). Applied via inline `borderInlineStart` rather
- * than a Tailwind border-side utility so it layers cleanly over the
- * existing whole-border/background classes below without a specificity
- * fight over border-color.
+ * substantiated answer, umber for the explicit no-evidence fallback.
+ *
+ * `isPending` (the turn is still streaming, pre-`done`) always wins and
+ * renders the neutral `user` treatment: the API streams every delta token
+ * BEFORE any citation event and citations before `done` (see
+ * `route.ts`'s `streamAnswer`), so a citation-count-based read of an
+ * in-flight answer would misrepresent a substantiated answer as
+ * "no evidence" for its entire streaming duration. Once a turn is no
+ * longer pending, `message.notFound` — the authoritative flag `@ice/rag`
+ * computes and the `done` event carries — decides the state, never the
+ * citation count, so a `notFound: true` answer that still cites something
+ * can't be miscolored green either. `message.notFound` is undefined for
+ * message history loaded from the DB (`rag_message` has no persisted
+ * `notFound` column, see the `Message` type above) — for THOSE messages
+ * only (never a live, in-session turn) the citations-length proxy is used,
+ * since it's the only signal available.
  */
-function turnAccentColor(message: Message): string {
-  if (message.role === "user") return "var(--color-accent-ink)";
-  return message.citations.length > 0 ? "var(--color-accent-green)" : "var(--color-accent-umber)";
+function turnState(message: Message, isPending: boolean): TurnState {
+  if (message.role === "user") return "user";
+  if (isPending) return "pending";
+  const noEvidence = message.notFound ?? message.citations.length === 0;
+  return noEvidence ? "notFound" : "answered";
 }
 
-function MessageCard({ message }: { message: Message }) {
-  const noEvidence = message.role === "assistant" && message.citations.length === 0;
+const TURN_ACCENT: Record<TurnState, string> = {
+  user: "var(--color-accent-ink)",
+  pending: "var(--color-accent-ink)",
+  notFound: "var(--color-accent-umber)",
+  answered: "var(--color-accent-green)",
+};
+
+function MessageCard({ message, isPending = false }: { message: Message; isPending?: boolean }) {
+  const state = turnState(message, isPending);
   return (
     <li
-      className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${noEvidence ? "bg-[var(--color-surface-sunken)]" : ""}`}
-      style={{ borderInlineStart: `3px solid ${turnAccentColor(message)}` }}
+      className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${state === "notFound" ? "bg-[var(--color-surface-sunken)]" : ""}`}
+      style={{ borderInlineStart: `3px solid ${TURN_ACCENT[state]}` }}
     >
       <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p>
-      <p className={`whitespace-pre-wrap leading-6 ${noEvidence ? "text-[var(--color-accent-umber)]" : ""}`}>{message.content}</p>
+      <p className={`whitespace-pre-wrap leading-6 ${state === "notFound" ? "text-[var(--color-accent-umber)]" : ""}`}>{message.content}</p>
       {message.citations.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
           {message.citations.map((citation) => (
             <li key={citation.chunkId} className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-2 text-xs">
-              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-green)] font-serif text-[10px] text-white">§</span>
+              {/* Contrast fix (adversarial review finding): --color-accent-green
+                  flips polarity between themes (dark green in light mode,
+                  a pale green in dark mode, both tuned instead for
+                  text/border legibility against the page background), so a
+                  fixed white glyph fails AA in dark mode (1.97:1, computed).
+                  --color-background happens to flip the opposite way each
+                  theme needs here — computed 6.90:1 light / 9.14:1 dark,
+                  both comfortably above the 4.5:1 floor, no new token
+                  required. */}
+              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-green)] font-serif text-[10px] text-[var(--color-background)]">§</span>
               <span className="min-w-0">
                 <a href={citation.href} className="block truncate font-serif text-xs font-semibold underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>
                 <span className="block text-[10px] text-[var(--color-text-muted)]">{citation.sourceType === "uploaded" ? "Your upload" : "Open-access source"}{citation.license ? ` · ${citation.license}` : ""}</span>
