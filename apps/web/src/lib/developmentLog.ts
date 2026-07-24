@@ -27,6 +27,7 @@ export const developmentLog = [
       "The current release is reshaping Palimnote into a more tactile, readable, and responsive place to study difficult texts.",
     highlights: [
       "Introduced the editorial motion and interaction foundation, with reader-controlled motion and interface sound settings.",
+      "Refined the public site with readable editorial motion, tactile feedback, and an accessible interactive knowledge graph.",
       "Published the Beta v.5 badge and a public development timeline tracing Palimnote’s releases from foundation to the current work.",
       "Removed user-facing processing cost data while keeping analysis available without monetary figures.",
     ],
