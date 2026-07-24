@@ -71,6 +71,10 @@ async function main() {
     `\n=== EXECUTE${filter ? ` (filter: "${filter}")` : ""} — applying ${merges.length} confident merge group(s) ===`,
   );
 
+  // Partial-batch semantics: each mergeWorkIdentities call is individually
+  // atomic and reversible, but the batch is NOT one transaction — a mid-batch
+  // failure leaves the earlier merges applied, each with its mergeId printed
+  // below for selective revert (revertWorkIdentityMerge).
   const applied: Array<{ mergeId: string; winnerId: string; loserId: string }> = [];
   const failures: Array<{ winnerId: string; loserId: string; error: string }> = [];
   for (const merge of merges) {

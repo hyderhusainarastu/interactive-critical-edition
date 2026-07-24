@@ -222,6 +222,16 @@ describe("issue #3 — Nicomachean Ethics no longer fragments across possessive/
     expect(withPossessive.canonicalTitle).toBe("Aristotle's Nicomachean Ethics");
   });
 
+  it("does NOT strip a possessive whose surname is not a cited author (guard is conditional)", () => {
+    // "Darwin" is not in the cited set, so the possessive is topical, not
+    // authorship — the key must RETAIN the "darwin" token. This is the case
+    // that fails if the `cited.has(...)` condition is ever dropped.
+    const id = deriveWorkIdentity(R({ title: "Darwin's Dangerous Idea", authors: ["Daniel Dennett"] }), {
+      citedAuthorSurnames: NE_CITED, // does not contain "darwin"
+    });
+    expect(id.key).toBe("work:dangerous darwin idea:dennett");
+  });
+
   it("keeps a genuinely distinct same-topic work by a different author apart", () => {
     // "Aristotle's Ethics" by Kenny is a book ABOUT Aristotle, not the NE.
     const records = [
