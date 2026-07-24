@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { requireSession } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/admin";
 import { getWorkspacePreferences } from "@/lib/preferences";
+import { getUserReaderLevel } from "@/lib/readerLevel";
 import { AppShell } from "@/components/app/AppShell";
 import { PreferenceBootstrap } from "@/components/app/PreferenceBootstrap";
 import { isBetaTestingMode, phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
@@ -23,11 +24,12 @@ export default async function AppLayout({
   const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, session.user.id)).limit(1);
   const admin = isAdminEmail(me?.email);
   const preferences = await getWorkspacePreferences(session.user.id);
+  const readerLevel = await getUserReaderLevel(session.user.id);
 
   return (
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
-      <AppShell email={session.user.email} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} betaTestingMode={isBetaTestingMode()} initialPreferences={preferences}>{children}</AppShell>
+      <AppShell email={session.user.email} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} betaTestingMode={isBetaTestingMode()} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
     </>
   );
 }

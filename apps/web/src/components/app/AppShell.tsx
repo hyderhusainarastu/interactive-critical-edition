@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { BetaBadge } from "@/components/shared/BetaBadge";
@@ -10,8 +11,15 @@ import { Mark } from "@/components/site/Mark";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
-import { ToastProvider } from "./ToastProvider";
+import { ToastProvider, useToast } from "./ToastProvider";
 import { WorkspacePreferencesProvider, useWorkspacePreferences } from "./WorkspacePreferencesProvider";
+
+const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
+  beginner: "Beginner",
+  undergraduate: "Undergraduate",
+  advanced: "Advanced",
+  research: "Research",
+};
 
 /** Matches only a real (UUID-shaped) work id segment, e.g. `/works/<id>` or
  * `/works/<id>/roadmap` — deliberately excludes non-id siblings like
@@ -28,6 +36,7 @@ export function AppShell({
   ragEnabled,
   betaTestingMode = false,
   initialPreferences,
+  initialReaderLevel = null,
   children,
 }: {
   email: string | null | undefined;
@@ -36,22 +45,26 @@ export function AppShell({
   ragEnabled: boolean;
   betaTestingMode?: boolean;
   initialPreferences: WorkspacePreferences;
+  initialReaderLevel?: ReaderLevel | null;
   children: React.ReactNode;
 }) {
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} betaTestingMode={betaTestingMode}>{children}</AppShellContents>
+        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} betaTestingMode={betaTestingMode} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTestingMode, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; betaTestingMode: boolean; children: React.ReactNode }) {
+function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTestingMode, initialReaderLevel, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; betaTestingMode: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { toast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [ragOpen, setRagOpen] = useState(false);
+  const [readerLevel, setReaderLevel] = useState<ReaderLevel | null>(initialReaderLevel);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
   const ragTriggerRef = useRef<HTMLButtonElement>(null);
@@ -83,6 +96,30 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
     focusModeFocusRequestRef.current = enabled ? "enter" : "exit";
     if (enabled) setPreferencesOpen(false);
     updatePreferences({ focusMode: enabled });
+  }
+
+  // Distinct from `updatePreferences` above: this is the explicit,
+  // account-level `users.readerLevel` (POST /api/reader-level), not a
+  // local-storage-synced workspace preference. `router.refresh()` re-runs
+  // every page's server component so pages seeded from `getUserReaderLevel()`
+  // (Library, Curriculum, Roadmap, Reader) pick up the new default on their
+  // next render, matching "browsing alone never silently changes a level" —
+  // this only fires on an explicit selection here.
+  async function updateReaderLevel(level: ReaderLevel) {
+    const previous = readerLevel;
+    setReaderLevel(level);
+    try {
+      const response = await fetch("/api/reader-level", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ level }),
+      });
+      if (!response.ok) throw new Error();
+      router.refresh();
+    } catch {
+      setReaderLevel(previous);
+      toast("Your reader level could not be saved.", "error");
+    }
   }
 
   function closeDrawer() {
@@ -139,7 +176,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
             </div>
             <div className="relative">
               <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
-              {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} onClose={closePreferences} />}
+              {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} readerLevel={readerLevel} onReaderLevelChange={updateReaderLevel} onClose={closePreferences} />}
             </div>
             {ragEnabled && (
               <button
@@ -226,7 +263,23 @@ function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; p
   );
 }
 
-function PreferencesMenu({ id, preferences, onUpdate, onFocusModeChange, onClose }: { id: string; preferences: WorkspacePreferences; onUpdate: (patch: Partial<WorkspacePreferences>) => void; onFocusModeChange: (enabled: boolean) => void; onClose: () => void }) {
+function PreferencesMenu({
+  id,
+  preferences,
+  onUpdate,
+  onFocusModeChange,
+  readerLevel,
+  onReaderLevelChange,
+  onClose,
+}: {
+  id: string;
+  preferences: WorkspacePreferences;
+  onUpdate: (patch: Partial<WorkspacePreferences>) => void;
+  onFocusModeChange: (enabled: boolean) => void;
+  readerLevel: ReaderLevel | null;
+  onReaderLevelChange: (level: ReaderLevel) => void;
+  onClose: () => void;
+}) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -240,6 +293,17 @@ function PreferencesMenu({ id, preferences, onUpdate, onFocusModeChange, onClose
       <PreferenceField label="Text size"><select className="app-control" value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
       <PreferenceField label="Reading width"><select className="app-control" value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>
       <PreferenceField label="Script display"><select className="app-control" value={preferences.scriptDisplay} onChange={(event) => onUpdate({ scriptDisplay: event.target.value as WorkspacePreferences["scriptDisplay"] })}><option value="original">Verified original script</option><option value="transliteration">Transliteration</option></select></PreferenceField>
+      {/* Distinct from the four fields above: this writes the account-level
+          `users.readerLevel` (POST /api/reader-level), not a local-storage
+          workspace preference — it's the same default Library/Curriculum/
+          Roadmap/Reader already read via `getUserReaderLevel()`, just now
+          settable from one place instead of only at onboarding. */}
+      <PreferenceField label="Reader level">
+        <select className="app-control" value={readerLevel ?? ""} onChange={(event) => onReaderLevelChange(event.target.value as ReaderLevel)}>
+          {readerLevel === null && <option value="" disabled>Not set</option>}
+          {READER_LEVELS.map((level) => <option key={level} value={level}>{READER_LEVEL_LABEL[level]}</option>)}
+        </select>
+      </PreferenceField>
       <label className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3 text-sm"><span>Focus mode</span><input type="checkbox" checked={preferences.focusMode} onChange={(event) => onFocusModeChange(event.target.checked)} /></label>
     </section>
   );
