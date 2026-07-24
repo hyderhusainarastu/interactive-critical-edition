@@ -59,7 +59,8 @@ Tailwind arbitrary-value utilities like `text-[var(--color-text)]` — retheme w
 | `--paper` / `--paper-light` | `#f4f0e7` / `#fbf9f4` | `#16202a` / `#10171e` | surfaces (→ `--color-surface`/`--color-background`) | 88-89, 701-702 |
 | `--muted` | `#5f6870` | `#a7b6c2` | darkened from the campaign source `#687078` (4.42:1, failing) | 90, 703 |
 | `--rule` | `#d7d0c3` | `#2d3d4a` | hairlines (→ `--color-border`) | 91, 704 |
-| `--ui-muted` / `--ui-muted-dark` | `#62615a` / `#93a3af` | — | small chrome text inside product depictions, ≥4.7:1 | 100-101, 710 |
+| `--ui-muted` | `#62615a` | `#9aa9b5` | small chrome text on light product-depiction chrome, ≥4.7:1 | 100 / 710 |
+| `--ui-muted-dark` | `#93a3af` | *(no override — same value in both themes)* | small chrome text on the graph band's dark chrome, which is dark in both themes | 101 |
 | `--prose-page` | `#485562` | `#cddae3` | long-form hero/copy prose | 104, 711 |
 | `--solid-bg` / `--solid-fg` | `#263a4f` / `#ffffff` | `#4a6f93` / `#ffffff` | solid-fill buttons/table heads (split from `--ink` because dark-mode `--ink` is a *text* color) | 109-111, 713-715 |
 | `--band-dark` / `--band-closing` | `#172838` / `#7a3f48` | `#060c12` / `#55282f` | the graph/integrity/closing bands — deliberately dark or burgundy **in both themes** | 142-143, 745-746 |
@@ -111,7 +112,8 @@ this — literal hex, ported as-is, renders identically in both themes (`site-th
 | `--font-serif` | `Georgia, "Times New Roman", serif` — system stack, no webfont fetch | `globals.css:268`, `site-theme.css:157` |
 | `--font-sans` | `var(--font-geist-sans)` (Tailwind `@theme inline`) | `globals.css:262` |
 | Headings (public pages) | `font-family: Georgia, ...; font-weight: 400` — `h1`/`h2` under `.pal-landing` | `site-theme.css:235` |
-| Body prose (public + reader depictions) | `font-family: Georgia, serif` | e.g. `site-theme.css:237, 326, 469` |
+| Body prose (reader/chat depictions) | `font-family: Georgia, serif` | e.g. `site-theme.css:326, 469` |
+| Hero deck (public pages) | `font-family: Georgia, "Times New Roman", serif` | `site-theme.css:237` |
 | Wordmark (app shell) | `font-serif text-lg font-semibold tracking-tight` next to the `<Mark>` glyph | `apps/web/src/components/app/AppShell.tsx:108-109, 115-116` |
 | Uppercase-tracked labels | `text-[11px] font-bold uppercase tracking-[.08em]` (nav items); public-site nav uses `font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase` | `AppShell.tsx:180`; `site-theme.css:188` |
 | Underline-active nav | Active tab/nav item gets a colored 2px `border-b` in the accent-ink token; inactive items are `border-transparent` | `AppShell.tsx:180` (`border-[var(--color-accent-ink)]` when `active`); public-site's `.nav-cta` uses the same underline convention (`site-theme.css:190`) |
@@ -128,13 +130,13 @@ depictions adopted as visual paradigms for the signed-in app").
 - **Content width cap:** authenticated single-column pages consistently wrap in
   `mx-auto max-w-4xl px-6 py-8` (Library, Roadmap, Curriculum) or `py-10` (Admin) — `apps/web/src/app/(app)/library/LibraryView.tsx:332`, `.../roadmap/RoadmapView.tsx:189`, `.../curriculum/CurriculumView.tsx:110`, `.../admin/page.tsx:174`.
 - **`.app-control`** (`globals.css:353-365`) — the shared interactive-surface vocabulary: a
-  `border-color`/`background-color`/`color`/`box-shadow` transition on hover/focus-visible. Applied to
-  every icon button, filter control, and toggle across the signed-in app (18 call sites, e.g.
-  `apps/web/src/components/graph/GraphView.tsx:584, 592, 612, 627...`).
+  `border-color`/`background-color`/`color`/`box-shadow` transition on hover/focus-visible. Used across
+  17 component files, 146 occurrences total (`GraphView.tsx` alone accounts for 32), e.g.
+  `apps/web/src/components/graph/GraphView.tsx:584, 592, 612, 627...`.
 - **`.app-reveal`** (`globals.css:361-365`) — a single scroll-triggered entrance
   (`opacity: 0` → `translateY(10px)` → `app-scroll-reveal` keyframe), gated entirely behind
   `@media (prefers-reduced-motion: no-preference)` — it does not exist at all for reduced-motion
-  readers, not merely a shortened duration. 10 call sites.
+  readers, not merely a shortened duration. Used across 9 component files, 14 occurrences total.
 - **`.app-panel-enter`** (`:367-381`) — the complementary one-shot entrance for *conditionally mounted*
   UI (modals/drawers/popovers: `RagChatPanel`, `FootnoteModal`, `PermanentDeleteDialog`, the
   preferences menu, mobile drawer, graph's "Roadmap for" popover). Unlike `.app-reveal` it needs no
@@ -179,8 +181,8 @@ alone (comment, `:10-14`) — e.g. `explicit_reference` → `→` / `--color-acc
 §6). `categoryMetaFor()` (`:142-146`) is the safe lookup for edges that may not carry a category value
 at all (structural/discovery/source-provenance edges) — returns `undefined` rather than guessing.
 
-**Credibility banding** — `CredibilityMeter.tsx` (3 discrete bands, not a continuous gradient, "to
-avoid implying a precision the underlying `credibility.score` doesn't have", `:1-7`):
+**Credibility banding** — `CredibilityMeter.tsx` (3 discrete bands, not a continuous gradient, so they
+"avoid implying a precision the underlying `credibility.score` doesn't have", `:1-7`):
 
 | Band | Score | Token | Line |
 |---|---|---|---|
