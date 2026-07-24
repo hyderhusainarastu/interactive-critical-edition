@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/brand";
 import { BetaBadge } from "@/components/shared/BetaBadge";
 import { Mark } from "@/components/site/Mark";
+import { SiteThemeToggle } from "@/components/site/SiteThemeToggle";
 
 /**
  * Public site masthead for the landing and policy pages, restyled to the
@@ -35,13 +36,14 @@ export async function SiteHeader() {
         {betaTestingMode && <BetaBadge />}
       </div>
       <nav aria-label="Primary navigation">
-        <Link href="/#product">Product</Link>
+        <Link href="/#workspace">Workspace</Link>
         <Link href="/#reader">Reader</Link>
         <Link href="/#library">Library</Link>
         <Link href="/#graph">Graph</Link>
         <Link href="/#ask">Ask Library</Link>
       </nav>
       <div className="masthead-end">
+        <SiteThemeToggle />
         {signedIn ? (
           <Link href="/dashboard" className="nav-cta">
             Your library

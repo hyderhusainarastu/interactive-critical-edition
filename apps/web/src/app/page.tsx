@@ -219,7 +219,7 @@ export default async function Home() {
           </div>
         </section>
 
-        <section id="product" className="scope section-shell" aria-labelledby="scope-title">
+        <section id="workspace" className="scope section-shell" aria-labelledby="scope-title">
           <div className="section-head">
             <div>
               <p className="section-index">02 / The complete workspace</p>

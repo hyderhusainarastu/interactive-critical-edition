@@ -73,6 +73,41 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     await expect(page.locator("section#graph canvas")).toHaveCount(0);
   });
 
+  test("the theme toggle switches the landing page to dark and persists it", async ({ page }) => {
+    await page.goto("/");
+
+    // Default is light (Playwright's default colorScheme), and the toggle
+    // therefore offers the dark action.
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    const toggle = page.getByRole("button", { name: "Switch to dark theme" });
+    await toggle.click();
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByRole("button", { name: "Switch to light theme" })).toBeVisible();
+
+    // The visuals actually change, not just the attribute: the page
+    // background flips from the campaign's bone paper to its dark ground.
+    const background = await page
+      .locator(".pal-site")
+      .first()
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(background).toBe("rgb(16, 23, 30)");
+
+    // Dark mode must clear the same accessibility bar as light mode.
+    const darkResults = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(darkResults.violations).toEqual([]);
+
+    // The choice is written to the shared workspace-preference key, so it
+    // carries into the signed-in app rather than being a second mechanism.
+    const stored = await page.evaluate(() => window.localStorage.getItem("palimnote.workspace-preferences"));
+    expect(stored).toBeTruthy();
+    expect(JSON.parse(stored!).theme).toBe("dark");
+
+    // And it survives a reload, applied before paint by PreferenceBootstrap.
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  });
+
   test("privacy and terms pages render", async ({ page }) => {
     await page.goto("/privacy");
     await expect(page.getByRole("heading", { name: /Privacy & copyright/i })).toBeVisible();
