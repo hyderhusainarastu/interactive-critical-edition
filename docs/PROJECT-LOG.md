@@ -355,6 +355,8 @@ Full changelog history (every phase, every canary run, every bug caught) lives i
 
 - **2026-07-24 (Workstream A — motion and sound foundation).** Shared motion/sound preference infrastructure and public sound-control behavior landed, including persisted public sound preference. Verification: workspace typecheck, lint, unit tests, and production build clean; `landing.spec.ts` + `security.spec.ts` 7/7 green, including public sound persistence and zero axe wcag2a/wcag2aa violations. No migrations, production canary, or paid-provider cost. The public `developmentLog` module does not exist until Workstream I, so no placeholder was invented; Workstream I will backfill this record.
 
+- **2026-07-24 (Workstream I — public development timeline).** Published the public `/development` release timeline (Beta v.5 through v.1), linked the Beta v.5 badge and public/signed-in navigation to it, and extended landing coverage for the route, timeline semantics, current in-progress status, and zero axe wcag2a/wcag2aa violations. No migration or paid-provider cost; project phase state remains unchanged.
+
 ## Tracker Workflow (Phase 13 onward)
 
 1. Treat `docs/project-status.json` as the only checklist/status source; do not edit `progress-checklist.html` by hand.
