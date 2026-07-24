@@ -28,12 +28,27 @@
  *    ONE bucket (normal East Asian orthography mixes them within a word),
  *    and letters whose script is not recognized are ignored entirely
  *    rather than counted as evidence.
+ * 4. Symbol-font / broken-CMap garble that decodes to LATIN glyphs (so
+ *    signals 2 and 3 see nothing — no PUA, no non-Latin script). Confirmed
+ *    on a real fixture where a corrupted CMap rendered polytonic Greek as
+ *    Latin mojibake in the SAME font as the surrounding English ("(?ia(j)?QOvxai)",
+ *    "(ejiiQv\iovgiv)", "(^loxOilQia)"). The tell is a character that never
+ *    occurs INSIDE a legitimate word — '?', '\\', or '^' — immediately
+ *    followed by a Latin letter. Gated hard to preserve precision: a single
+ *    stray '?' standing in for a lost dash between two readable words
+ *    ("pursue?and") is NOT flagged (readable prose must never be hidden); a
+ *    word is flagged only when it carries a backslash/caret (which never sit
+ *    mid-word in real prose) OR at least two such marker characters. Clean
+ *    mojibake with no marker character at all (e.g. "aviaxoi" for ἄκρατοι) is
+ *    deliberately NOT detectable by conservative means and is left as prose —
+ *    the same honest limitation as OCR l-for-1 confusions inside citations.
  */
 
 export type UntranscribableReason =
   | "replacement_character"
   | "private_use"
-  | "script_mixture";
+  | "script_mixture"
+  | "garbled_encoding";
 
 export interface UntranscribableSpan {
   /** UTF-16 code-unit offset into the input string (inclusive). */
@@ -63,6 +78,16 @@ const SCRIPT_BUCKETS: Array<[name: string, matcher: RegExp]> = [
 ];
 
 const LETTER = /\p{L}/u;
+
+// Signal 4 (garbled_encoding): a '?', '\' or '^' immediately before a Latin
+// letter — the mid-word marker a broken CMap leaves when it maps non-Latin
+// glyphs onto Latin ones. A backslash never sits mid-word in real prose, so
+// one is enough on its own; '?' and '^' each have a rare legitimate use
+// (a lost em-dash "pursue?and", an ASCII exponent "2^n"), so they count as
+// garble only when at least TWO marker characters co-occur in the word.
+const GARBLE_BEFORE_LETTER = /[?\\^][A-Za-z]/;
+const GARBLE_MARK = /[?\\^]/g;
+const BACKSLASH_BEFORE_LETTER = /\\[A-Za-z]/;
 
 function scriptBucket(char: string): string | null {
   for (const [name, matcher] of SCRIPT_BUCKETS) {
@@ -115,6 +140,12 @@ function classifyWord(word: string): UntranscribableReason | null {
     // No legitimate word alternates scripts this often; "α-helix"-style
     // two-script terms have exactly one transition and stay unflagged.
     if (transitions >= 4) return "script_mixture";
+  }
+
+  // Signal 4: symbol-font / broken-CMap garble that decoded to Latin glyphs.
+  if (GARBLE_BEFORE_LETTER.test(word)) {
+    const markCount = (word.match(GARBLE_MARK) ?? []).length;
+    if (BACKSLASH_BEFORE_LETTER.test(word) || markCount >= 2) return "garbled_encoding";
   }
 
   return null;

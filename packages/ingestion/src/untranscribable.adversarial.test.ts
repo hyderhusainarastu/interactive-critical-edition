@@ -63,6 +63,17 @@ describe("adversarial: legitimate scholarly text must never be flagged", () => {
   it("Cyrillic prose with a single Latin abbreviation token", () => {
     expect(detectUntranscribableSpans("Толстой писал (cf. Anna Karenina) о морали")).toEqual([]);
   });
+
+  it("Signal 4 must not flag question marks, math carets, or dash-loss (adversarial)", () => {
+    // Every legitimate use of the signal-4 marker characters that survived the
+    // implementer's own gating, re-checked independently: sentence-final '?',
+    // a '?' hugging a closing paren, ASCII exponent notation, LaTeX-free math,
+    // and a single '?' that replaced a lost em-dash between two readable words.
+    expect(detectUntranscribableSpans("What is virtue? Is it teachable? (really?)")).toEqual([]);
+    expect(detectUntranscribableSpans("x^2 + y^2 = r^2, and 2^n grows for all n")).toEqual([]);
+    expect(detectUntranscribableSpans("both pursue?and both avoid?is the crux")).toEqual([]);
+    expect(detectUntranscribableSpans("cost/benefit ratio ~ p^value under H0")).toEqual([]);
+  });
 });
 
 describe("adversarial: genuine mojibake must always be flagged", () => {

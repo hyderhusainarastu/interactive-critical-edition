@@ -74,6 +74,64 @@ describe("detectUntranscribableSpans — legitimate text is never flagged", () =
   it("footnote daggers, math symbols, and punctuation-heavy scholarly text", () => {
     expect(detectUntranscribableSpans("† ‡ § ¶ pp. 44–47; cf. n. 12 (∆ = 0.34)")).toEqual([]);
   });
+
+  it("Signal 4 gate: a trailing '?' (a real question) is never flagged as garbage", () => {
+    // "vice?" / "obvious?)" end a real question — the '?' is not before a
+    // letter, so signal 4 must ignore them.
+    expect(detectUntranscribableSpans("Is this account of vice? Perhaps not obvious?)")).toEqual([]);
+  });
+
+  it("Signal 4 gate: a single '?' standing in for a lost dash keeps the words readable", () => {
+    // "pursue?and" is "pursue—and" with the em-dash lost — both words are
+    // readable, so the single-'?'-no-slash-no-caret case is NOT hidden.
+    expect(detectUntranscribableSpans("What both pursue?and what both not pursue?is bodily pleasure.")).toEqual([]);
+  });
+
+  it("Signal 4 gate: ASCII math caret/power notation is not flagged", () => {
+    // 'x^2' has a caret followed by a DIGIT, not a letter — signal 4 requires
+    // a caret/backslash/'?' immediately before a Latin letter.
+    expect(detectUntranscribableSpans("let y = x^2 and z = a^10 for all x")).toEqual([]);
+  });
+});
+
+describe("detectUntranscribableSpans — Signal 4: broken-CMap Latin mojibake", () => {
+  it("flags a Greek word a corrupted CMap rendered as Latin with '?' markers", () => {
+    // Real fixture token: (?ia(j)?QOvxai) — multiple '?' before letters.
+    const text = "For bad people are in conflict (?ia(j)?QOvxai) with themselves";
+    const spans = detectUntranscribableSpans(text);
+    expect(spans).toHaveLength(1);
+    expect(spans[0].reason).toBe("garbled_encoding");
+    expect(text.slice(spans[0].start, spans[0].end)).toBe("(?ia(j)?QOvxai)");
+  });
+
+  it("flags a garble token carrying a backslash mid-word (real fixture)", () => {
+    // (ejiiQv\iovgiv): a single backslash before a letter is enough — '\' never
+    // sits mid-word in real prose.
+    const spans = detectUntranscribableSpans("they desire (ejiiQv\\iovgiv) some things");
+    expect(spans).toHaveLength(1);
+    expect(spans[0].reason).toBe("garbled_encoding");
+  });
+
+  it("flags a garble token carrying a caret alongside a second marker (real fixture)", () => {
+    // (axaoi?^ei) — a caret AND a '?' before letters (two markers); the caret
+    // alone would be spared to protect ASCII exponents like "2^n".
+    const spans = detectUntranscribableSpans("its soul is in conflict (axaoi?^ei) on the one hand");
+    expect(spans).toHaveLength(1);
+    expect(spans[0].reason).toBe("garbled_encoding");
+  });
+
+  it("does NOT flag a lone-caret token, sparing ASCII exponent notation (honest limitation)", () => {
+    // A single caret before a letter — as in the fixture's "(^loxOilQia)" — is
+    // deliberately left unflagged so legitimate math like "2^n" is never hidden.
+    expect(detectUntranscribableSpans("its baseness (^loxOilQia) is described")).toEqual([]);
+    expect(detectUntranscribableSpans("the series 2^n and a^k for all k")).toEqual([]);
+  });
+
+  it("does NOT flag clean mojibake with no marker character (honest limitation)", () => {
+    // "aviaxoi" (for ἄκρατοι) reads as a plausible Latin transliteration and
+    // carries no ?/\\/^ — conservative detection leaves it as prose.
+    expect(detectUntranscribableSpans("beyond cure (aviaxoi) if akrasia is cured")).toEqual([]);
+  });
 });
 
 describe("detectUntranscribableSpans — genuine mojibake is flagged", () => {
