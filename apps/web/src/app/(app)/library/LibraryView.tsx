@@ -94,12 +94,28 @@ const SOURCE_TYPE_GLYPH: Record<string, string> = {
 const FIELD_LABEL_CLASS = "text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]";
 
 /** Same three-band thresholds `CredibilityMeter` already uses (0.7/0.4),
- *  reused here only to color the authority-grade circle so it never
- *  invents a fourth color scheme alongside the meter it sits next to. */
-function gradeAccent(score: number | null | undefined): string {
+ *  reused here only to color the authority-grade circle's border so it
+ *  never invents a fourth color scheme alongside the meter it sits next
+ *  to. Kept separate from `gradeTextColor` below because the warning
+ *  band's own token fails AA for small text (see that function). */
+function gradeBorderColor(score: number | null | undefined): string {
   if (score == null) return "var(--color-text-muted)";
   if (score >= 0.7) return "var(--color-accent-green)";
   if (score >= 0.4) return "var(--color-credibility-warning)";
+  return "var(--color-credibility-critical)";
+}
+
+/** Same bands as `gradeBorderColor`, but for the badge letter's own text
+ *  color. `--color-credibility-warning` measures 4.48:1 for light-mode
+ *  14px/600 text — under the 4.5:1 AA floor — so the warning band uses
+ *  `--color-status-highlight-text` instead (the same darkened-gold token
+ *  the Works list's "Needs review" label already uses for this exact
+ *  reason; ~5.08:1 light / ~10:1 dark). The border above keeps the
+ *  original warning token — only the text needs the AA-safe swap. */
+function gradeTextColor(score: number | null | undefined): string {
+  if (score == null) return "var(--color-text-muted)";
+  if (score >= 0.7) return "var(--color-accent-green)";
+  if (score >= 0.4) return "var(--color-status-highlight-text)";
   return "var(--color-credibility-critical)";
 }
 
@@ -651,13 +667,13 @@ function LibraryRow({
           {focusMetric && <p className="mt-1">Relationship relevance {Math.round(focusMetric.relevance * 100)}%</p>}
         </div>
 
-        <div className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">
+        <div className="flex min-w-0 items-start gap-2 text-xs text-[var(--color-text-muted)]">
           {credibility?.authority && (
             <span
               role="img"
               aria-label={`Authority ${credibility.authority.toUpperCase()}`}
               className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 font-serif text-sm font-semibold"
-              style={{ borderColor: gradeAccent(credibility.score), color: gradeAccent(credibility.score) }}
+              style={{ borderColor: gradeBorderColor(credibility.score), color: gradeTextColor(credibility.score) }}
             >
               <span aria-hidden="true">{credibility.authority.toUpperCase()}</span>
             </span>
@@ -671,12 +687,18 @@ function LibraryRow({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs sm:flex-col sm:items-start">
+        <div className="flex min-w-0 items-center gap-2 text-xs sm:flex-col sm:items-start">
           <span className="text-[var(--color-text-muted)]">Status</span>
           <select
             value={item.readingStatus ?? ""}
             onChange={(e) => onSetStatus(item.id, (e.target.value || null) as (typeof READING_STATUSES)[number] | null)}
-            className="app-control rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
+            // `min-w-0 w-full`: the parent column uses `sm:items-start`
+            // (left-aligned, not stretched) so the select would otherwise
+            // size to its own intrinsic content width and overflow past
+            // the row's own box at ~768px for longer values like
+            // "abandoned"/"completed" — this makes it actually shrink to
+            // the `.4fr` track it's allocated.
+            className="app-control w-full min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
             aria-label={`Reading status of ${item.title}`}
           >
             <option value="">To read</option>
