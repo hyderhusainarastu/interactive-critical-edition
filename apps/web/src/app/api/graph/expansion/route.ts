@@ -12,7 +12,7 @@ import { getGraphExpansionPreview, GRAPH_JOB_HARD_CAP_USD, MANUAL_GRAPH_CANDIDAT
 const requestSchema = z.object({
   workId: z.string().uuid(),
   candidates: z.number().int().min(1).max(MANUAL_GRAPH_CANDIDATE_CAP),
-  confirmEstimatedCost: z.boolean().default(false),
+  confirmExpansion: z.boolean().default(false),
   idempotencyKey: z.string().min(8).max(128).optional(),
 });
 
@@ -29,8 +29,11 @@ export async function POST(request: Request) {
   if (!preview.hasGroundedClaims || preview.manual.candidateCount === 0) {
     return NextResponse.json({ error: "This work needs grounded v4 claims and another comparable work before it can be expanded." }, { status: 409 });
   }
-  if (preview.manual.requiresConfirmation && !parsed.data.confirmEstimatedCost) {
-    return NextResponse.json({ error: "Explicit confirmation is required for an estimate above $1.", preview }, { status: 409 });
+  if (preview.manual.requiresConfirmation && !parsed.data.confirmExpansion) {
+    return NextResponse.json({
+      error: "Explicit confirmation is required before queueing this expansion.",
+      preview: { manual: { requiresConfirmation: true } },
+    }, { status: 409 });
   }
   const headerIdempotencyKey = request.headers.get("Idempotency-Key")?.trim();
   const idempotencyKey = parsed.data.idempotencyKey ?? headerIdempotencyKey ?? randomUUID();
@@ -61,5 +64,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ idempotent: true, request: existing }, { status: 202 });
   }
   await enqueueGraphExpansion(created.id);
-  return NextResponse.json({ request: created, preview }, { status: 202 });
+  return NextResponse.json({
+    request: created,
+    preview: { manual: { candidateCount: preview.manual.candidateCount, requiresConfirmation: preview.manual.requiresConfirmation } },
+  }, { status: 202 });
 }

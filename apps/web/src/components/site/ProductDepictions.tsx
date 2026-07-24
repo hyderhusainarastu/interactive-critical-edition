@@ -264,7 +264,7 @@ export function ProductScope() {
     ["05", "Unified Library", "Uploaded, cited, recommended, saved, and referenced-but-unacquired sources collapse into one canonical entry per work — while each keeps the reason it entered your reading world."],
     ["06", "Roadmap and curriculum routes", "References are ranked into dependency-ordered priority tiers and recomputed on every request, so a new rating or a re-run can never leave a stale plan behind. Five-stage routes run at minimal, university, and graduate depth."],
     ["07", "Ask Library", "Ask a question and get an answer assembled from passages actually retrieved out of your own library, each carrying the reader anchor it came from. A question with no supporting evidence gets an explicit not-found instead of an invented answer."],
-    ["08", "Writing, cost, and safety controls", "Citation ingestion, MLA parenthetical citations and works-cited built from your own sources, DOCX and PDF export, per-run cost estimates with hard stops, versioned rollback, 30-day trash, and per-user isolation throughout."],
+    ["08", "Writing and safety controls", "Citation ingestion, MLA parenthetical citations and works-cited built from your own sources, DOCX and PDF export, versioned rollback, 30-day trash, and per-user isolation throughout."],
   ];
   return (
     <div className="scope-grid">

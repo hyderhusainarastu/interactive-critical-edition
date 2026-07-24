@@ -110,7 +110,7 @@ const faqs: Array<[string, string]> = [
   ],
   [
     "Will it find every relevant relationship?",
-    "No. Discovery runs under explicit numeric and cost ceilings, so it can be incomplete, and interpretation can be legitimately contested. Those limits and the paths for correcting them are part of the design rather than fine print.",
+    "No. Discovery runs under explicit numeric ceilings, so it can be incomplete, and interpretation can be legitimately contested. Those limits and the paths for correcting them are part of the design rather than fine print.",
   ],
   [
     "How are sources judged?",
@@ -404,8 +404,7 @@ export default async function Home() {
               <h3>The critical-edition engine</h3>
               <p>
                 Page-aware ingestion, structural extraction of body prose and apparatus, multi-source discovery,
-                credibility assessment, versioned processing runs, and traceable critical notes under a per-run cost
-                ceiling.
+                credibility assessment, versioned processing runs, and traceable critical notes with bounded processing.
               </p>
             </article>
             <article>
@@ -421,8 +420,7 @@ export default async function Home() {
               <h3>What the beta is for</h3>
               <p>
                 Registration is closed while a small group tests. Some capabilities stay behind release flags and are
-                not visible to readers yet; resolution accuracy, accessibility, and cost behaviour are still being
-                measured in the open.
+                not visible to readers yet; resolution accuracy and accessibility are still being measured in the open.
               </p>
             </article>
           </div>

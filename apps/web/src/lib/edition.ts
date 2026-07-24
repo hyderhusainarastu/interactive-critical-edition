@@ -19,11 +19,10 @@ import {
 } from "@ice/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { detectUntranscribableSpans } from "@ice/ingestion";
-import { getRunCostBreakdown } from "./cost";
 
 /**
  * Assemble the full published v2 edition for a document (plan §33 §3.3): the
- * published run + degradation/cost, pages/blocks, authorial notes, generated
+ * published run + non-monetary analysis state, pages/blocks, authorial notes, generated
  * notes with claim-level evidence, resources with independent credibility
  * components + agreement, resource relations, and the per-provider reports.
  * Returns null when there is no published run (caller falls back to the legacy
@@ -40,7 +39,7 @@ export async function getPublishedEdition(documentId: string) {
 
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
-  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, apparatus, termRows, costBreakdown] = await Promise.all([
+  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, apparatus, termRows] = await Promise.all([
     pageIds.length ? db.select().from(textBlocks).where(inArray(textBlocks.pageId, pageIds)).orderBy(asc(textBlocks.blockOrder)) : Promise.resolve([]),
     db.select().from(docFootnotes).where(eq(docFootnotes.runId, run.id)).orderBy(asc(docFootnotes.createdAt)),
     db.select().from(generatedNotes).where(eq(generatedNotes.runId, run.id)).orderBy(asc(generatedNotes.createdAt)),
@@ -53,8 +52,6 @@ export async function getPublishedEdition(documentId: string) {
     db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
     db.select().from(documentApparatus).where(eq(documentApparatus.runId, run.id)).orderBy(asc(documentApparatus.createdAt)),
     db.select().from(termVariants).where(eq(termVariants.documentId, documentId)).orderBy(asc(termVariants.createdAt)),
-    // Phase 9.7: per-run, per-module cost detail behind the existing single total.
-    getRunCostBreakdown(run.id),
   ]);
 
   const termVariantIds = termRows.map((term) => term.id);
@@ -235,7 +232,9 @@ export async function getPublishedEdition(documentId: string) {
       startedAt: run.startedAt,
       finishedAt: run.finishedAt,
     },
-    cost: { aiCostUsd: run.aiCostUsd, degraded: run.degraded, saturationNote: run.saturationNote, breakdown: costBreakdown },
+    // Monetary totals and ledger detail remain available to admin reporting;
+    // reader payloads expose only this useful quality signal.
+    analysis: { degraded: run.degraded },
     pages: editionPages,
     // D-23-9: untranscribable spans are recomputed deterministically on read
     // (same precedent as `matchNoteToBlock`) — the stored block text is never

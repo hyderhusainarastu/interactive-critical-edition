@@ -30,15 +30,20 @@ test.describe("Cross-library graph API guardrails", () => {
     ]);
 
     await login(page);
+    const preview = await page.request.get(`/api/graph/expansion/preview?workId=${source.workId}&candidates=1`);
+    expect(preview.ok()).toBe(true);
+    expect(JSON.stringify(await preview.json())).not.toMatch(/cost|usd|\$/i);
+
     const key = "e2e-graph-expansion-idempotency";
     const first = await page.request.post("/api/graph/expansion", {
       headers: { "Idempotency-Key": key },
-      data: { workId: source.workId, candidates: 1, confirmEstimatedCost: false },
+      data: { workId: source.workId, candidates: 1, confirmExpansion: false },
     });
     expect(first.status()).toBe(202);
+    expect(JSON.stringify(await first.json())).not.toMatch(/cost|usd|\$/i);
     const duplicate = await page.request.post("/api/graph/expansion", {
       headers: { "Idempotency-Key": key },
-      data: { workId: source.workId, candidates: 1, confirmEstimatedCost: false },
+      data: { workId: source.workId, candidates: 1, confirmExpansion: false },
     });
     expect(duplicate.status()).toBe(202);
     expect((await duplicate.json()).idempotent).toBe(true);
@@ -46,13 +51,13 @@ test.describe("Cross-library graph API guardrails", () => {
     for (let index = 0; index < 10; index += 1) {
       const response = await page.request.post("/api/graph/expansion", {
         headers: { "Idempotency-Key": key },
-        data: { workId: source.workId, candidates: 1, confirmEstimatedCost: false },
+        data: { workId: source.workId, candidates: 1, confirmExpansion: false },
       });
       expect(response.status()).toBe(202);
     }
     const limited = await page.request.post("/api/graph/expansion", {
       headers: { "Idempotency-Key": key },
-      data: { workId: source.workId, candidates: 1, confirmEstimatedCost: false },
+      data: { workId: source.workId, candidates: 1, confirmExpansion: false },
     });
     expect(limited.status()).toBe(429);
     expect(limited.headers()["retry-after"]).toBeTruthy();

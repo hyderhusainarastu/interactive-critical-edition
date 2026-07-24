@@ -168,17 +168,28 @@ test("provider reports are honest about what was not consulted", async ({ page }
   await expect(edition).toContainText(/mastodon.*disabled/i);
 });
 
-test("research cost is disclosed to the reader, with a per-module breakdown (Phase 9.7)", async ({ page }) => {
+test("reader-facing edition metadata omits monetary analysis data", async ({ page }) => {
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
-  await expect(edition).toContainText(/\$0\.04/);
+  await expect(edition).not.toContainText(/analysis cost|\$0\.0/i);
+  await expect(edition).toContainText(/structured extraction/i);
 
-  // The total is a <summary> — the per-stage breakdown is collapsed by
-  // default and only in the DOM/visible once expanded.
-  await edition.getByText(/Analysis cost/).click();
-  await expect(edition).toContainText("research-discovery");
-  await expect(edition).toContainText("$0.0300");
-  await expect(edition).toContainText("classification");
-  await expect(edition).toContainText("$0.0121");
+  const response = await page.request.get(`/api/works/${workId}/edition`);
+  expect(response.ok()).toBe(true);
+  const payload = await response.json();
+  expect(payload.edition).not.toHaveProperty("cost");
+  expect(JSON.stringify(payload.edition)).not.toMatch(/aiCostUsd|estimatedCostUsd|costUsd/);
+
+  // The source-of-truth run still retains the value for the admin dashboard.
+  const [document] = await db
+    .select({ documentId: documents.id })
+    .from(documents)
+    .where(eq(documents.workId, workId))
+    .limit(1);
+  const [run] = await db
+    .select({ aiCostUsd: processingRuns.aiCostUsd })
+    .from(processingRuns)
+    .where(eq(processingRuns.documentId, document.documentId));
+  expect(run.aiCostUsd).toBeCloseTo(0.0421);
 });
 
 test("the immutable published source remains reachable alongside processed text", async ({ page }) => {

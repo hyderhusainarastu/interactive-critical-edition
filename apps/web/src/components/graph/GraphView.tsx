@@ -647,7 +647,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           {/* D-23-52 (owner report: canvas buried below a wall of controls,
               "impossible to navigate"): the 3D scene/accessible table now
               render IMMEDIATELY after the primary layout controls above —
-              filters, legends, pinned works, and paid expansion (all still
+              filters, legends, pinned works, and expansion controls (all still
               fully present and functional, nothing removed or hidden) move
               to AFTER the canvas instead of before it. Reordering only
               (every control keeps its existing accessible name/role/test
@@ -1250,7 +1250,7 @@ function sourceTextLabel(status: string, accessStatus?: string | null) {
 interface ExpansionPreview {
   availableCandidates: number;
   hasGroundedClaims: boolean;
-  manual: { candidateCount: number; estimatedCostUsd: number; requiresConfirmation: boolean; hardCapUsd: number };
+  manual: { candidateCount: number; requiresConfirmation: boolean };
 }
 
 function GraphExpansionControls({ workNodes }: { workNodes: GraphNode[] }) {
@@ -1269,15 +1269,15 @@ function GraphExpansionControls({ workNodes }: { workNodes: GraphNode[] }) {
     return () => { ignore = true; };
   }, [workId, candidates]);
 
-  async function expand(confirmEstimatedCost: boolean) {
+  async function expand(confirmExpansion: boolean) {
     const response = await fetch("/api/graph/expansion", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
-      body: JSON.stringify({ workId, candidates, confirmEstimatedCost }),
+      body: JSON.stringify({ workId, candidates, confirmExpansion }),
     });
     const body = await response.json().catch(() => ({}));
     if (response.status === 409 && body.preview?.manual?.requiresConfirmation) {
-      setMessage(`Estimated ${formatUsd(body.preview.manual.estimatedCostUsd)}. Confirm to queue this paid expansion.`);
+      setMessage("Please confirm before queueing this expansion.");
       return;
     }
     setMessage(response.ok ? "Expansion queued. Grounded relationships appear when the job completes." : (body.error ?? "Could not queue expansion."));
@@ -1296,18 +1296,14 @@ function GraphExpansionControls({ workNodes }: { workNodes: GraphNode[] }) {
           <input type="number" min={1} max={100} value={candidates} onChange={(event) => setCandidates(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} className="app-control w-24 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1" />
         </label>
         <button type="button" disabled={!preview?.hasGroundedClaims || !preview?.manual.candidateCount} onClick={() => expand(false)} className="app-control rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-[var(--color-background)] disabled:opacity-50">Queue expansion</button>
-        {preview?.manual.requiresConfirmation && <button type="button" onClick={() => expand(true)} className="app-control rounded border border-[var(--color-credibility-warning)] px-3 py-1.5">Confirm {formatUsd(preview.manual.estimatedCostUsd)}</button>}
+        {preview?.manual.requiresConfirmation && <button type="button" onClick={() => expand(true)} className="app-control rounded border border-[var(--color-credibility-warning)] px-3 py-1.5">Confirm expansion</button>}
       </div>
       <p className="mt-2 text-xs text-[var(--color-text-muted)]">
         {preview
-          ? `${preview.manual.candidateCount} of ${preview.availableCandidates} grounded candidates · estimate ${formatUsd(preview.manual.estimatedCostUsd)} · hard cap ${formatUsd(preview.manual.hardCapUsd)}${preview.manual.requiresConfirmation ? " · confirmation required above $1" : ""}`
-          : "Calculating a read-only estimate…"}
+          ? `${preview.manual.candidateCount} of ${preview.availableCandidates} grounded candidates${preview.manual.requiresConfirmation ? " · explicit confirmation required" : ""}`
+          : "Checking available candidates…"}
       </p>
       {message && <p className="mt-2 text-xs text-[var(--color-text-muted)]">{message}</p>}
     </section>
   );
-}
-
-function formatUsd(value: number) {
-  return `$${value.toFixed(value < 1 ? 3 : 2)}`;
 }

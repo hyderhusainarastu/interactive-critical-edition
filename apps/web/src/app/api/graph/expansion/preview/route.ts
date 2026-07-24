@@ -18,5 +18,12 @@ export async function GET(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid graph expansion preview." }, { status: 400 });
   const preview = await getGraphExpansionPreview(userId, parsed.data.workId, parsed.data.candidates);
   if (!preview) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(preview);
+  return NextResponse.json({
+    availableCandidates: preview.availableCandidates,
+    hasGroundedClaims: preview.hasGroundedClaims,
+    manual: {
+      candidateCount: preview.manual.candidateCount,
+      requiresConfirmation: preview.manual.requiresConfirmation,
+    },
+  });
 }

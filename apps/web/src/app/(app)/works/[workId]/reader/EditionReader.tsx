@@ -96,12 +96,8 @@ export interface EditionGeneratedNote {
 
 export interface EditionPayload {
   run: { version: number; structureState: "full" | "limited"; note: string | null; status: string; stage: string | null };
-  cost: {
-    aiCostUsd: number;
+  analysis: {
     degraded: boolean;
-    saturationNote: string | null;
-    /** Per-module actual cost behind the single total above (plan §34.4 9.7). */
-    breakdown: Array<{ stage: string | null; task: string; costUsd: number; calls: number; promptTokens: number; completionTokens: number }>;
   };
   pages: Array<{ id: string; pageIndex: number; text: string | null; isOcr: boolean; extractionConfidence: number | null }>;
   blocks: Array<{
@@ -633,36 +629,17 @@ export function EditionReader({
   return (
     <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[var(--reading-measure,72ch)]">
       {/* `data-dense-controls`: same Phase 23.2 touch-target-audit test hook
-          as `ReaderShell.tsx`'s toolbar — this run-metadata bar (cost
-          disclosure, outline, page stepper) is compact secondary chrome.
+          as `ReaderShell.tsx`'s toolbar — this run-metadata bar (analysis
+          state, outline, page stepper) is compact secondary chrome.
           Landing-paradigm treatment: a hairline bottom rule instead of a
           filled/bordered box, with the secondary facts (structure state,
-          cost) set as a small uppercase-tracked kicker line — same
+          analysis state) set as a small uppercase-tracked kicker line — same
           `.reader-toolbar` convention the depiction uses for its own
           page/tool strip. The title text itself is unchanged. */}
       {!focusMode && <div data-dense-controls="edition-reader-meta" className="mb-6 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] pb-3 text-[0.72rem] uppercase tracking-[.06em] text-[var(--color-text-muted)]">
         <strong className="text-sm font-medium normal-case tracking-normal text-[var(--color-text)]">Interactive reader · processed text · run v{edition.run.version}</strong>
         <span>{edition.run.structureState === "full" ? "Structured extraction" : "Structure-limited extraction"}</span>
-        {edition.cost.breakdown.length > 0 ? (
-          <details>
-            <summary className="cursor-pointer">Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</summary>
-            <ul className="mt-1 flex flex-col gap-0.5 normal-case tracking-normal">
-              {edition.cost.breakdown.map((b, i) => (
-                <li key={i} className="flex justify-between gap-3">
-                  <span>{b.stage ?? b.task}</span>
-                  <span>${b.costUsd.toFixed(4)} · {b.calls} call{b.calls === 1 ? "" : "s"}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ) : (
-          <span>Analysis cost ${Number(edition.cost.aiCostUsd).toFixed(4)}</span>
-        )}
-        {/* `degraded` is set only when the run crossed its cost soft cap
-         *  (see `overSoftCap()` in apps/worker/src/analyze.ts) — it never
-         *  means anything else, so the default tooltip names the cause
-         *  rather than a generic "stopped early". */}
-        {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs normal-case tracking-normal" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
+        {edition.analysis.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs normal-case tracking-normal" title="Some analysis was limited during processing.">analysis limited</span>}
         {page && (
           <>
             <span className="ml-auto normal-case tracking-normal">Page {page.pageIndex + 1} / {edition.pages.length}</span>
