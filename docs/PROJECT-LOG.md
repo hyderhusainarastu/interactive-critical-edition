@@ -357,6 +357,8 @@ Full changelog history (every phase, every canary run, every bug caught) lives i
 
 - **2026-07-24 (Workstream I — public development timeline).** Published the public `/development` release timeline (Beta v.5 through v.1), linked the Beta v.5 badge and public/signed-in navigation to it, and extended landing coverage for the route, timeline semantics, current in-progress status, and zero axe wcag2a/wcag2aa violations. No migration or paid-provider cost; project phase state remains unchanged.
 
+- **2026-07-24 (Workstream F — processing cost privacy).** Removed monetary processing figures from public copy, reader/run metadata, graph expansion controls, and graph expansion API responses while keeping non-monetary analysis status and expansion functionality available. Verification: rebased production build clean; `edition.spec.ts` + `graph-expansion.spec.ts` **26/26** green, including API privacy regressions and zero axe wcag2a/wcag2aa violations. No migration, paid-provider cost, or project phase-status change.
+
 ## Tracker Workflow (Phase 13 onward)
 
 1. Treat `docs/project-status.json` as the only checklist/status source; do not edit `progress-checklist.html` by hand.

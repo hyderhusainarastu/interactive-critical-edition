@@ -28,6 +28,7 @@ export const developmentLog = [
     highlights: [
       "Introduced the editorial motion and interaction foundation, with reader-controlled motion and interface sound settings.",
       "Published the Beta v.5 badge and a public development timeline tracing Palimnote’s releases from foundation to the current work.",
+      "Removed user-facing processing cost data while keeping analysis available without monetary figures.",
     ],
   },
   {

@@ -4,6 +4,8 @@ Full changelog history, moved out of `docs/PROJECT-LOG.md` on 2026-07-20 to keep
 
 ## Changelog
 
+- **2026-07-24 (Workstream F — processing cost privacy).** Removed monetary processing figures from public copy, reader/run metadata, graph expansion controls, and graph expansion API responses while retaining non-monetary analysis status and expansion functionality. The rebased production build passed; `edition.spec.ts` + `graph-expansion.spec.ts` passed **26/26**, including API privacy regressions and zero axe wcag2a/wcag2aa violations. No migration, paid-provider cost, or project phase-status change.
+
 - **2026-07-24 (Workstream I — public development timeline).** Shipped a public `/development` timeline for Beta v.5 through v.1, made the Beta v.5 badge a link to it, and added Development navigation across public and signed-in footers/shell. Landing coverage now verifies the badge link, timeline structure, current in-progress state, and zero axe wcag2a/wcag2aa violations. No migration or paid-provider cost; project phase state is unchanged.
 
 - **2026-07-24 (Workstream A — motion and sound foundation).** Added the shared motion/sound preference foundation and public sound-control behavior, including persisted public-page sound preference; no migration, production canary, or paid-provider cost. Verified with workspace typecheck, lint, unit tests, and production build; `landing.spec.ts` + `security.spec.ts` passed **7/7**, including public sound-preference persistence and zero axe wcag2a/wcag2aa violations. The public `developmentLog` module does not exist yet and was intentionally not invented here; Workstream I will backfill this work from the changelog records.
