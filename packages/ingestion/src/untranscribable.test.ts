@@ -112,19 +112,24 @@ describe("detectUntranscribableSpans — Signal 4: broken-CMap Latin mojibake", 
     expect(spans[0].reason).toBe("garbled_encoding");
   });
 
-  it("flags a garble token carrying a caret alongside a second marker (real fixture)", () => {
-    // (axaoi?^ei) — a caret AND a '?' before letters (two markers); the caret
-    // alone would be spared to protect ASCII exponents like "2^n".
+  it("flags a garble token carrying an adjacent '?^' marker pair (real fixture)", () => {
+    // (axaoi?^ei) — an adjacent '?^' pair before a letter, which math never
+    // produces (its carets are letter-separated).
     const spans = detectUntranscribableSpans("its soul is in conflict (axaoi?^ei) on the one hand");
     expect(spans).toHaveLength(1);
     expect(spans[0].reason).toBe("garbled_encoding");
   });
 
-  it("does NOT flag a lone-caret token, sparing ASCII exponent notation (honest limitation)", () => {
-    // A single caret before a letter — as in the fixture's "(^loxOilQia)" — is
-    // deliberately left unflagged so legitimate math like "2^n" is never hidden.
-    expect(detectUntranscribableSpans("its baseness (^loxOilQia) is described")).toEqual([]);
-    expect(detectUntranscribableSpans("the series 2^n and a^k for all k")).toEqual([]);
+  it("flags a caret-marker token WITH a case anomaly (real fixture)", () => {
+    // (^loxOilQia) — a caret before a letter AND interior lowercase→uppercase
+    // ("xO"), the random casing a CMap dump produces. Distinct from math.
+    const spans = detectUntranscribableSpans("its baseness (^loxOilQia) is described");
+    expect(spans).toHaveLength(1);
+    expect(spans[0].reason).toBe("garbled_encoding");
+  });
+
+  it("does NOT flag ASCII caret exponents (no case anomaly, no adjacent markers)", () => {
+    expect(detectUntranscribableSpans("the series 2^n and a^k and x^i for all i")).toEqual([]);
   });
 
   it("does NOT flag clean mojibake with no marker character (honest limitation)", () => {

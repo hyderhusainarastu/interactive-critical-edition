@@ -74,6 +74,24 @@ describe("adversarial: legitimate scholarly text must never be flagged", () => {
     expect(detectUntranscribableSpans("both pursue?and both avoid?is the crux")).toEqual([]);
     expect(detectUntranscribableSpans("cost/benefit ratio ~ p^value under H0")).toEqual([]);
   });
+
+  it("Signal 4 backslash/caret classes: LaTeX, paths, regex escapes, glued caret-math (adversarial)", () => {
+    // The five verifier probe classes that a naive backslash/two-marker gate
+    // false-flags. None carries an interior lowercase→uppercase case anomaly,
+    // an adjacent '?'/'^' pair, or a doubled '?', so none is flagged.
+    expect(detectUntranscribableSpans("emphasize with \\emph{this} and \\textbf{that} \\alpha\\beta")).toEqual([]); // LaTeX commands
+    expect(detectUntranscribableSpans("the regex \\d+ then \\n and \\s+ match digits")).toEqual([]); // regex / string escapes
+    expect(detectUntranscribableSpans("open the folder C:\\Users\\name\\Documents please")).toEqual([]); // Windows path
+    expect(detectUntranscribableSpans("grep for \\bword\\b and \\Bother in the corpus")).toEqual([]); // shell word-boundary regex
+    expect(detectUntranscribableSpans("compute a^b^c and e^x^2 and 2^n^m over the reals")).toEqual([]); // glued caret-math
+  });
+
+  it("Signal 4 still detects the real CMap mojibake despite the tightened gate", () => {
+    // The tightened gate must not silently kill recall on the genuine article.
+    expect(detectUntranscribableSpans("desire (ejiiQv\\iovgiv) some things")).toHaveLength(1); // backslash + case anomaly
+    expect(detectUntranscribableSpans("conflict (?ia(j)?QOvxai) here")).toHaveLength(1); // two '?' before letters
+    expect(detectUntranscribableSpans("in conflict (axaoi?^ei) on")).toHaveLength(1); // adjacent '?^'
+  });
 });
 
 describe("adversarial: genuine mojibake must always be flagged", () => {
