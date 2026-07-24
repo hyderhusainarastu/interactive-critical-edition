@@ -58,6 +58,11 @@ export async function publishEditionRun(p: PublishParams): Promise<void> {
         isPublished: true,
         status: "complete",
         stage: "published",
+        // A publishing run has already finished its own per-source loop (its
+        // last setStage call was "validation", which nulls these), but reset
+        // explicitly rather than resting on that as an implicit invariant.
+        stageSourceIndex: null,
+        stageSourceTotal: null,
         structureState: p.structureState,
         note: p.note,
         finishedAt: new Date(),
@@ -115,6 +120,13 @@ export async function sweepAbandonedRuns(
     .set({
       status: "failed",
       stage: "failed",
+      // The abandoned run can die mid per-source discovery/classification
+      // loop (analyzeEditionRun's setStage), leaving these non-null; this
+      // sweep is the only thing that ever touches the run again, so a
+      // missed reset here would leave a stale "source N of M" count
+      // attached to "failed" forever.
+      stageSourceIndex: null,
+      stageSourceTotal: null,
       error: message,
       finishedAt: new Date(),
       updatedAt: new Date(),

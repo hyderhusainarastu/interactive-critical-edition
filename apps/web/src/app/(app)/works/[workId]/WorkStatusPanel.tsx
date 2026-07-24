@@ -60,7 +60,12 @@ function StageProgress({
 }) {
   const sequence = stageSequenceForPipeline(pipelineVersion);
   const currentIndex = currentStage ? sequence.indexOf(currentStage) : -1;
-  const hasSourceProgress = Boolean(stageSourceIndex) && Boolean(stageSourceTotal);
+  // Also require a real active step: during the sweep's non-transactional
+  // window (processing_run already "failed", documents.processingStatus
+  // still briefly "processing") stale, non-null counters must not render the
+  // explainer detached from any highlighted step. "failed" isn't in the
+  // sequence, so currentIndex is -1 there and this gate correctly suppresses it.
+  const hasSourceProgress = currentIndex >= 0 && Boolean(stageSourceIndex) && Boolean(stageSourceTotal);
   return (
     <>
       <ol className="mt-2 flex flex-col gap-1 text-sm">

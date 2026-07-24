@@ -151,6 +151,47 @@ describe.skipIf(!hasDb)("run lifecycle (integration)", () => {
     expect(liveDoc.status).toBe("processing");
   });
 
+  /**
+   * Lane F follow-up: a worker that dies mid per-source discovery/
+   * classification loop leaves `stage_source_index`/`stage_source_total`
+   * non-null. The sweep must reset both alongside `stage: "failed"` — a
+   * "failed" run must never carry a lingering "source N of M" count forward
+   * (the sweep is the only path that can otherwise preserve it forever,
+   * since nothing else ever touches a run once it's abandoned).
+   */
+  it("sweepAbandonedRuns nulls the per-source progress counters on a run abandoned mid-loop", async () => {
+    const staleSeed = await seedDoc();
+    cleanup.push(staleSeed.userId);
+    const old = new Date(Date.now() - 120 * 60_000);
+
+    await db.update(documents).set({ processingStatus: "processing" }).where(eq(documents.id, staleSeed.documentId));
+    const [staleRun] = await db.insert(processingRuns)
+      .values({
+        documentId: staleSeed.documentId,
+        version: 1,
+        pipelineVersion: "v3",
+        status: "running",
+        stage: "credibility",
+        stageSourceIndex: 7,
+        stageSourceTotal: 40,
+        startedAt: old,
+        updatedAt: old,
+      })
+      .returning({ id: processingRuns.id });
+
+    const swept = await sweepAbandonedRuns(90);
+    expect(swept.runIds).toContain(staleRun.id);
+
+    const [sweptRun] = await db
+      .select({ status: processingRuns.status, stage: processingRuns.stage, stageSourceIndex: processingRuns.stageSourceIndex, stageSourceTotal: processingRuns.stageSourceTotal })
+      .from(processingRuns)
+      .where(eq(processingRuns.id, staleRun.id));
+    expect(sweptRun.status).toBe("failed");
+    expect(sweptRun.stage).toBe("failed");
+    expect(sweptRun.stageSourceIndex).toBeNull();
+    expect(sweptRun.stageSourceTotal).toBeNull();
+  });
+
   it("sweepAbandonedRuns never touches a published run, and spares fresh bookkeeping rows for a swept document", async () => {
     const seed = await seedDoc();
     cleanup.push(seed.userId);
