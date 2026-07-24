@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CategoryGlyph } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, confidenceLabel, VERIFICATION_LABELS } from "./annotationMeta";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
+import { readerScrollBehavior } from "./readerMotion";
 import type { AnalysisStatus, AnnotationRecord, RelationshipCategory, VerificationStatus } from "./types";
 
 type SortKey = "confidence" | "category" | "verification";
@@ -239,7 +240,7 @@ function AnnotationCard({
   const [draft, setDraft] = useState(a.explanation);
 
   useEffect(() => {
-    if (active) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (active) ref.current?.scrollIntoView({ block: "center", behavior: readerScrollBehavior() });
   }, [active]);
 
   const rejected = a.verificationStatus === "rejected";

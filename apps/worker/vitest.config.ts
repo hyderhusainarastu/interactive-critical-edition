@@ -9,13 +9,14 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   test: {
-    // `v3.test.ts` and `citationSources.test.ts` (D-20-91) are intentionally
-    // pure — neither imports `@ice/db` — so both run without a database;
+    // `v3.test.ts`, `citationSources.test.ts` (D-20-91), and
+    // `foreignText.test.ts` are intentionally pure — none imports `@ice/db`
+    // — so they run without a database;
     // lifecycle tests also run wherever a local/integration database has
     // been configured.
     include: process.env.DATABASE_URL
       ? ["src/**/*.test.ts"]
-      : ["src/v3.test.ts", "src/citationSources.test.ts"],
+      : ["src/v3.test.ts", "src/citationSources.test.ts", "src/foreignText.test.ts"],
     passWithNoTests: true,
   },
 });

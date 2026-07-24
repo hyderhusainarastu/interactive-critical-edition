@@ -248,6 +248,83 @@
 }
 
 /*
+  Reader layout layers, explicit rather than escalating z-indexes:
+  sticky shell chrome 20; hover/foreign previews 25 (clamped to the reader
+  region, so they cannot enter either rail); selection actions 30; narrow
+  modal rails remain 40 in ReaderSidebarFrame.
+*/
+.reader-hover-preview { z-index: 25; }
+.reader-selection-toolbar { z-index: 30; }
+
+/* A real normal-flow marginalia track. The container breakpoint responds to
+   the space left after outline/analysis/notes rails, not just viewport width:
+   split panes and multi-rail layouts therefore fall back to inline details
+   before the reading column becomes unusably narrow. */
+.reader-content-container { container-type: inline-size; }
+.edition-reader-layout {
+  width: 100%;
+  max-width: var(--reading-measure, 72ch);
+}
+.edition-reader-text-column {
+  max-width: var(--reading-measure, 72ch);
+}
+.edition-reader-margin-track { display: none; }
+@container (min-width: 40rem) {
+  .edition-reader-layout {
+    max-width: calc(var(--reading-measure, 72ch) + 14.25rem);
+  }
+  .edition-reader-block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 13rem;
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .edition-reader-margin-track {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: .5rem;
+  }
+  .edition-reader-inline-notes { display: none; }
+}
+
+.foreign-text-span {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--color-accent-umber);
+  text-decoration-thickness: .14em;
+  text-underline-offset: .18em;
+}
+.foreign-text-span:hover,
+.foreign-text-span:focus-visible {
+  background: color-mix(in srgb, var(--color-accent-umber) 12%, transparent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reader-annotation-marker:hover,
+  .reader-annotation-marker:focus-visible {
+    animation: reader-marker-pulse .38s var(--spring-gentle) both;
+  }
+  .reader-panel-tab-content {
+    animation: reader-panel-tab-enter .16s var(--spring-fast) both;
+  }
+  .reader-selection-toolbar {
+    animation: reader-selection-enter .14s var(--spring-fast) both;
+    transform-origin: 50% 100%;
+  }
+  @keyframes reader-marker-pulse {
+    50% { transform: scale(1.22); }
+    100% { transform: scale(1.15); }
+  }
+  @keyframes reader-panel-tab-enter {
+    from { opacity: 0; transform: translateX(4px); }
+  }
+  @keyframes reader-selection-enter {
+    from { transform: translate(-50%, -100%) scale(.96); }
+  }
+}
+
+/*
   Lane G Fix 2b: authorial-footnote reference marker. Deliberately distinct
   from the filled category pill of a generated annotation — an outlined,
   muted superscript reading as source apparatus, not editorial. Its number is

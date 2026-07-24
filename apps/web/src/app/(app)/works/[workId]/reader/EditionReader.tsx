@@ -6,6 +6,7 @@ import { applyAnnotationMarkers, applyFootnoteMarkers, applyHighlights, captureS
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import { matchFootnotesToBlocks } from "./matchFootnoteToBlock";
+import { readerScrollBehavior } from "./readerMotion";
 import type { RelationshipCategory } from "./types";
 import { HIGHLIGHT_COLORS, type HighlightColor, type HighlightRecord } from "./types";
 
@@ -94,6 +95,29 @@ export interface EditionGeneratedNote {
   claims: EditionClaim[];
 }
 
+export interface EditionForeignSpan {
+  id: string;
+  textBlockId: string;
+  startOffset: number;
+  endOffset: number;
+  /** Exact stored block substring used to validate the anchor. */
+  sourceText: string;
+  /** Original-script text; differs from sourceText only for labelled recovery. */
+  originalText: string;
+  transliteration: string;
+  translation: string;
+  languageCode: string;
+  languageLabel: string;
+  direction: "ltr" | "rtl";
+  script: "greek" | "hebrew" | "arabic" | "cyrillic" | "cjk";
+  translationProvenance: "machine_translation";
+  sourceProvenance: {
+    kind: "source_text" | "ocr_recovery" | "pdf_glyph_recovery" | "manual";
+    label: string;
+    confidence: number;
+  };
+}
+
 export interface EditionPayload {
   run: { version: number; structureState: "full" | "limited"; note: string | null; status: string; stage: string | null };
   analysis: {
@@ -125,6 +149,12 @@ export interface EditionPayload {
     source: string;
     occurrences: Array<{ id: string; textBlockId: string; startOffset: number; endOffset: number }>;
   }>;
+  /**
+   * Migration-0036-backed rows only. Optional keeps the reader deployable
+   * before Workstream H supplies the table/query; no client detector invents
+   * content when this field is absent.
+   */
+  foreignSpans?: EditionForeignSpan[];
   /** Anchored to a real text_block_id — never a fabricated one (DB-enforced). */
   passageAnnotations: EditionPassageAnnotation[];
   /** No single passage applies; always rendered under the literal label
@@ -274,6 +304,10 @@ function renderVerifiedTerms(
   terms: EditionPayload["terms"],
   scriptDisplay: "original" | "transliteration",
   untranscribableSpans: Array<{ start: number; end: number }> = [],
+  foreignSpans: EditionForeignSpan[] = [],
+  onForeignOpen?: (span: EditionForeignSpan, rect: DOMRect) => void,
+  onForeignClose?: (spanId: string) => void,
+  activeForeignSpanId?: string | null,
 ) {
   const termSegments = terms
     .filter((term) => term.verificationStatus === "verified")
@@ -294,8 +328,23 @@ function renderVerifiedTerms(
     .filter((span) => span.start >= 0 && span.end <= text.length && span.end > span.start)
     .map((span) => ({ kind: "untranscribable" as const, start: span.start, end: span.end }));
 
-  const segments = [...termSegments, ...untranscribableSegments]
-    .sort((left, right) => left.start - right.start || left.end - right.end);
+  const foreignSegments = foreignSpans
+    .filter((span) => span.textBlockId === blockId)
+    .filter((span) => (
+      span.startOffset >= 0
+      && span.endOffset <= text.length
+      && span.endOffset > span.startOffset
+      && text.slice(span.startOffset, span.endOffset) === span.sourceText
+      && span.originalText.trim()
+      && span.transliteration.trim()
+      && span.translation.trim()
+      && span.translationProvenance === "machine_translation"
+    ))
+    .map((span) => ({ kind: "foreign" as const, start: span.startOffset, end: span.endOffset, span }));
+
+  const priority = { untranscribable: 0, foreign: 1, term: 2 } as const;
+  const segments = [...untranscribableSegments, ...foreignSegments, ...termSegments]
+    .sort((left, right) => left.start - right.start || priority[left.kind] - priority[right.kind] || left.end - right.end);
 
   const nodes: ReactNode[] = [];
   let offset = 0;
@@ -304,6 +353,29 @@ function renderVerifiedTerms(
     if (segment.start > offset) nodes.push(text.slice(offset, segment.start));
     if (segment.kind === "untranscribable") {
       nodes.push(<UntranscribableMarker key={`untranscribable-${segment.start}`} />);
+    } else if (segment.kind === "foreign") {
+      const { span } = segment;
+      const active = activeForeignSpanId === span.id;
+      nodes.push(
+        <button
+          key={span.id}
+          type="button"
+          data-foreign-span={span.id}
+          lang={span.languageCode}
+          dir={span.direction}
+          className="foreign-text-span rounded-sm px-0.5"
+          aria-expanded={active}
+          aria-describedby={active ? `foreign-span-tooltip-${span.id}` : undefined}
+          onFocus={(event) => onForeignOpen?.(span, event.currentTarget.getBoundingClientRect())}
+          onBlur={() => onForeignClose?.(span.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onForeignOpen?.(span, event.currentTarget.getBoundingClientRect());
+          }}
+        >
+          {span.originalText}
+        </button>,
+      );
     } else {
       const { occurrence } = segment;
       const displayed = scriptDisplay === "transliteration" ? occurrence.term.transliteration : occurrence.term.originalScript;
@@ -324,6 +396,45 @@ function renderVerifiedTerms(
   }
   if (offset < text.length) nodes.push(text.slice(offset));
   return nodes.length ? nodes : text;
+}
+
+function ForeignSpanTooltip({
+  span,
+  anchorRect,
+  boundaryRect,
+}: {
+  span: EditionForeignSpan;
+  anchorRect: DOMRect;
+  boundaryRect: { left: number; right: number };
+}) {
+  const width = 288;
+  const gap = 8;
+  const minLeft = Math.max(gap, boundaryRect.left + gap);
+  const maxLeft = Math.max(minLeft, Math.min(window.innerWidth - width - gap, boundaryRect.right - width - gap));
+  const left = Math.min(Math.max(anchorRect.left, minLeft), maxLeft);
+  const placeAbove = anchorRect.bottom + 190 > window.innerHeight;
+  return (
+    <div
+      id={`foreign-span-tooltip-${span.id}`}
+      role="tooltip"
+      className="reader-hover-preview fixed w-72 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs shadow-lg"
+      style={{
+        left,
+        top: placeAbove ? anchorRect.top - 6 : anchorRect.bottom + 6,
+        transform: placeAbove ? "translateY(-100%)" : undefined,
+      }}
+    >
+      <p lang={span.languageCode} dir={span.direction} className="font-serif text-sm text-[var(--color-text)]">{span.originalText}</p>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1">
+        <dt className="text-[var(--color-text-muted)]">Transliteration</dt><dd>{span.transliteration}</dd>
+        <dt className="text-[var(--color-text-muted)]">Translation</dt><dd>{span.translation}</dd>
+        <dt className="text-[var(--color-text-muted)]">Language</dt><dd>{span.languageLabel}</dd>
+      </dl>
+      <p className="mt-2 border-t border-[var(--color-border)] pt-2 text-[0.68rem] text-[var(--color-text-muted)]">
+        Machine translation · source provenance: {span.sourceProvenance.label} · transcription confidence {Math.round(span.sourceProvenance.confidence * 100)}%
+      </p>
+    </div>
+  );
 }
 
 function InlineEvidenceMeta({
@@ -353,7 +464,7 @@ function MarginNote({
 }) {
   const category = CATEGORY_META[note.relationship];
   return (
-    <aside className="group hidden xl:block absolute left-[calc(100%+1.25rem)] top-0 w-52 border-l-2 bg-[var(--color-surface)] px-2 py-1.5 text-xs shadow-sm" style={{ borderColor: `var(${category.colorVar})` }} aria-label={`${category.label} margin note`} tabIndex={0}>
+    <aside data-reader-margin-note className="group border-l-2 bg-[var(--color-surface)] px-2 py-1.5 text-xs shadow-sm" style={{ borderColor: `var(${category.colorVar})` }} aria-label={`${category.label} margin note`} tabIndex={0}>
       <p className="font-medium"><span aria-hidden>{category.glyph}</span> {note.summary}</p>
       <div className="max-h-0 overflow-hidden opacity-0 transition-all duration-150 group-hover:max-h-96 group-hover:opacity-100 group-focus-within:max-h-96 group-focus-within:opacity-100">
         <p className="mt-1 leading-snug">{note.explanation}</p>
@@ -413,8 +524,18 @@ export function EditionReader({
   activeBlockId?: string | null;
 }) {
   const [pageIndex, setPageIndex] = useState(0);
-  const [hover, setHover] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [hover, setHover] = useState<{
+    id: string;
+    rect: DOMRect;
+    boundaryRect: { left: number; right: number };
+  } | null>(null);
   const [selectionUi, setSelectionUi] = useState<{ blockId: string; x: number; y: number } | null>(null);
+  const [readerBoundary, setReaderBoundary] = useState({ left: 0, right: 0 });
+  const [foreignTooltip, setForeignTooltip] = useState<{
+    span: EditionForeignSpan;
+    rect: DOMRect;
+    boundaryRect: { left: number; right: number };
+  } | null>(null);
   const page = edition.pages[pageIndex];
   const orderedBlocks = useMemo(
     () => [...edition.blocks].sort((a, b) => a.pageIndex - b.pageIndex || a.blockOrder - b.blockOrder),
@@ -496,6 +617,24 @@ export function EditionReader({
   }, [edition.authorApparatus, edition.generatedNotes, edition.passageAnnotations]);
 
   const blockRefs = useRef(new Map<string, HTMLElement>());
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const update = () => {
+      const rect = section.getBoundingClientRect();
+      setReaderBoundary({ left: rect.left, right: rect.right });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(section);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
+
   useEffect(() => {
     for (const [blockId, el] of blockRefs.current) {
       const notes = passageAnnotationsByBlock.get(blockId);
@@ -569,7 +708,7 @@ export function EditionReader({
     if (!block) return;
     const frame = window.requestAnimationFrame(() => {
       setPageIndex(block.pageIndex);
-      window.requestAnimationFrame(() => blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: "smooth" }));
+      window.requestAnimationFrame(() => blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: readerScrollBehavior() }));
     });
     return () => window.cancelAnimationFrame(frame);
   }, [activeAnnotationId, edition.blocks, edition.passageAnnotations]);
@@ -585,7 +724,7 @@ export function EditionReader({
     if (!block) return;
     window.requestAnimationFrame(() => {
       setPageIndex(block.pageIndex);
-      blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      blockRefs.current.get(block.id)?.scrollIntoView({ block: "center", behavior: readerScrollBehavior() });
     });
   }, [activeBlockId, edition.blocks]);
 
@@ -623,11 +762,11 @@ export function EditionReader({
     const clamped = Math.min(Math.max(0, nextPageIndex), Math.max(0, edition.pages.length - 1));
     setPageIndex(clamped);
     const first = orderedBlocks.find((block) => block.pageIndex === clamped);
-    if (first) window.requestAnimationFrame(() => blockRefs.current.get(first.id)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    if (first) window.requestAnimationFrame(() => blockRefs.current.get(first.id)?.scrollIntoView({ block: "start", behavior: readerScrollBehavior() }));
   }
 
   return (
-    <section aria-label="Interactive reader — processed text" className="mx-auto max-w-[var(--reading-measure,72ch)]">
+    <section ref={sectionRef} aria-label="Interactive reader — processed text" className="edition-reader-layout mx-auto">
       {/* `data-dense-controls`: same Phase 23.2 touch-target-audit test hook
           as `ReaderShell.tsx`'s toolbar — this run-metadata bar (analysis
           state, outline, page stepper) is compact secondary chrome.
@@ -662,7 +801,7 @@ export function EditionReader({
 
       {selectionUi && (
         <div
-          className="fixed z-30 flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-md bg-[var(--color-accent-ink)] px-2 py-1.5 text-xs text-[var(--color-background)] shadow-lg"
+          className="reader-selection-toolbar fixed z-30 flex max-w-[calc(100vw-1rem)] items-center gap-2 rounded-md bg-[var(--color-accent-ink)] px-2 py-1.5 text-xs text-[var(--color-background)] shadow-lg"
           style={{ left: selectionUi.x, top: selectionUi.y - 8, transform: "translate(-50%, -100%)" }}
           role="toolbar"
           aria-label="Selected text actions"
@@ -733,14 +872,26 @@ export function EditionReader({
           const footnote = (e.target as HTMLElement).closest?.("button[data-footnote-id]");
           if (footnote) {
             const id = (footnote as HTMLElement).dataset.footnoteId!;
-            setHover((current) => (current?.id === id ? null : { id, rect: footnote.getBoundingClientRect() }));
+            setHover((current) => (current?.id === id ? null : {
+              id,
+              rect: footnote.getBoundingClientRect(),
+              boundaryRect: readerBoundary.right > readerBoundary.left
+                ? readerBoundary
+                : { left: 0, right: window.innerWidth },
+            }));
           }
         }}
         onMouseOver={(e) => {
           const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id], button[data-footnote-id]");
           if (!marker) return;
           const el = marker as HTMLElement;
-          setHover({ id: el.dataset.annotationId ?? el.dataset.footnoteId!, rect: marker.getBoundingClientRect() });
+          setHover({
+            id: el.dataset.annotationId ?? el.dataset.footnoteId!,
+            rect: marker.getBoundingClientRect(),
+            boundaryRect: readerBoundary.right > readerBoundary.left
+              ? readerBoundary
+              : { left: 0, right: window.innerWidth },
+          });
         }}
         onMouseOut={(e) => {
           const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id], button[data-footnote-id]");
@@ -752,11 +903,27 @@ export function EditionReader({
             if (element) blockRefs.current.set(block.id, element);
             else blockRefs.current.delete(block.id);
           };
-          const text = renderVerifiedTerms(block.text, block.id, edition.terms, scriptDisplay, block.untranscribableSpans ?? []);
+          const text = renderVerifiedTerms(
+            block.text,
+            block.id,
+            edition.terms,
+            scriptDisplay,
+            block.untranscribableSpans ?? [],
+            edition.foreignSpans ?? [],
+            (span, rect) => setForeignTooltip({
+              span,
+              rect,
+              boundaryRect: readerBoundary.right > readerBoundary.left
+                ? readerBoundary
+                : { left: 0, right: window.innerWidth },
+            }),
+            (spanId) => setForeignTooltip((current) => current?.span.id === spanId ? null : current),
+            foreignTooltip?.span.id,
+          );
           const noteForBlock = passageAnnotationsByBlock.get(block.id) ?? [];
           const resourceById = new Map(edition.resources.map((resource) => [resource.id, resource]));
           const inlineNotes = noteForBlock.map((note) => (
-            <details key={`inline-${note.id}`} className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm xl:hidden">
+            <details key={`inline-${note.id}`} className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm">
               <summary className="cursor-pointer font-medium">{CATEGORY_META[note.relationship].label}: {note.summary}</summary>
               <p className="mt-1">{note.explanation}</p>
               <InlineEvidenceMeta note={note} resource={note.relatedResourceId ? resourceById.get(note.relatedResourceId) : undefined} />
@@ -766,7 +933,8 @@ export function EditionReader({
           const common = { id: `block-${block.id}`, ref: register, onMouseUp: (event: React.MouseEvent<HTMLElement>) => showSelectionToolbar(block.id, event.currentTarget) };
           const pageStart = index === 0 || orderedBlocks.filter((candidate) => !["footnote", "endnote", "bibliography", "reference"].includes(candidate.kind))[index - 1]?.pageIndex !== block.pageIndex;
           return (
-            <div key={block.id} className="relative" data-page-index={block.pageIndex}>
+            <div key={block.id} className="edition-reader-block" data-page-index={block.pageIndex}>
+              <div className="edition-reader-text-column min-w-0">
               {pageStart && <p className="mb-2 text-[0.68rem] font-semibold uppercase tracking-[.12em] text-[var(--color-text-muted)]">Source page {block.pageIndex + 1}</p>}
               {/* Headings drop to font-normal (the depiction's own display
                   serif is unbolded, e.g. `.demo-reader h3 { font-weight: 400 }`)
@@ -782,8 +950,9 @@ export function EditionReader({
                  * before, rather than freezing it at a literal rem value. */
                 <p {...common} className="whitespace-pre-wrap font-serif">{text}</p>
               )}
-              {margins}
-              {inlineNotes}
+              <div className="edition-reader-inline-notes">{inlineNotes}</div>
+              </div>
+              <div className="edition-reader-margin-track">{margins}</div>
             </div>
           );
         })}
@@ -796,6 +965,15 @@ export function EditionReader({
           categoryLabel={hoverNote.categoryLabel}
           summary={hoverNote.summary}
           anchorRect={hover.rect}
+          boundaryRect={hover.boundaryRect}
+        />
+      )}
+
+      {foreignTooltip && (
+        <ForeignSpanTooltip
+          span={foreignTooltip.span}
+          anchorRect={foreignTooltip.rect}
+          boundaryRect={foreignTooltip.boundaryRect}
         />
       )}
 

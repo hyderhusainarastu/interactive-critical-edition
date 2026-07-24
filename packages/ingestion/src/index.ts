@@ -11,6 +11,24 @@ export {
   type UntranscribableSpan,
   type UntranscribableReason,
 } from "./untranscribable";
+export {
+  FOREIGN_SCRIPTS,
+  detectForeignScriptSpans,
+  createForeignSpanAnchor,
+  matchForeignSpan,
+  type ForeignScript,
+  type ForeignLanguageHint,
+  type ForeignTextDirection,
+  type ForeignSpanProvenanceKind,
+  type ForeignSpanProvenance,
+  type DetectedForeignSpan,
+  type ForeignSpanAnchor,
+  type MatchedForeignSpan,
+} from "./foreignText";
+export {
+  inspectPdfGlyphRecoveryCandidates,
+  type PdfGlyphRecoveryCandidate,
+} from "./pdfGlyphRecovery";
 export { parseTei, type GrobidResult, type GrobidBlock, type GrobidBbox } from "./parsers/grobid";
 export { detectFootnotes, type DetectedFootnote } from "./parsers/footnotes";
 export {

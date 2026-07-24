@@ -54,6 +54,10 @@ test("the interactive reader renders its processed structure and run provenance"
   await expect(edition).toContainText("Vicious people act on decision");
   await expect(edition).not.toContainText("Adapted from Aquinas");
   await expect(edition).not.toContainText("Irwin, Terence. Vice and Reason.");
+  // No foreign-span row is seeded. The reader must not infer or decorate
+  // foreign text client-side; only resolved, provenance-bearing stored rows
+  // can create this interactive underline/tooltip.
+  await expect(edition.locator("[data-foreign-span]")).toHaveCount(0);
 });
 
 test("authorial notes stay distinct from AI-generated ones", async ({ page }) => {
@@ -134,6 +138,51 @@ test("a passage annotation renders as an in-text marker; clicking it reveals its
   // sidebar was never the divergent side of D-21-8's finding, only the
   // Visualization inspector was.
   await expect(page.getByLabel("Relationship")).toContainText("Interpretive aid");
+});
+
+test("wide-reader marginalia and hover previews reserve space between both rails at 1280 and 1440", async ({ page }) => {
+  const intersects = (
+    left: { x: number; y: number; width: number; height: number },
+    right: { x: number; y: number; width: number; height: number },
+  ) => (
+    left.x < right.x + right.width
+    && left.x + left.width > right.x
+    && left.y < right.y + right.height
+    && left.y + left.height > right.y
+  );
+
+  for (const width of [1280, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const leftRail = page.getByRole("navigation", { name: "Document outline" });
+    const rightRail = page.getByRole("complementary", { name: /edition sidebar/i });
+    const marginNote = page.locator("[data-reader-margin-note]").first();
+    await expect(leftRail).toBeVisible();
+    await expect(rightRail).toBeVisible();
+    await expect(marginNote).toBeVisible();
+
+    const [leftBox, rightBox, marginBox] = await Promise.all([
+      leftRail.boundingBox(),
+      rightRail.boundingBox(),
+      marginNote.boundingBox(),
+    ]);
+    expect(leftBox, `left rail should have a box at ${width}px`).not.toBeNull();
+    expect(rightBox, `right rail should have a box at ${width}px`).not.toBeNull();
+    expect(marginBox, `margin note should have a box at ${width}px`).not.toBeNull();
+    expect(intersects(marginBox!, leftBox!), `margin note intersects left rail at ${width}px`).toBe(false);
+    expect(intersects(marginBox!, rightBox!), `margin note intersects right rail at ${width}px`).toBe(false);
+    expect(marginBox!.x).toBeGreaterThanOrEqual(0);
+    expect(marginBox!.x + marginBox!.width).toBeLessThanOrEqual(width);
+
+    const marker = page.locator("button[data-annotation-id][data-marker-kind='annotation']").first();
+    await marker.hover();
+    const preview = page.locator("[data-reader-hover-preview]");
+    await expect(preview).toBeVisible();
+    const previewBox = await preview.boundingBox();
+    expect(previewBox, `hover preview should have a box at ${width}px`).not.toBeNull();
+    expect(intersects(previewBox!, leftBox!), `hover preview intersects left rail at ${width}px`).toBe(false);
+    expect(intersects(previewBox!, rightBox!), `hover preview intersects right rail at ${width}px`).toBe(false);
+    await page.mouse.move(4, 4);
+  }
 });
 
 test("a quote-matched critical note marker opens the sidebar Critical notes tab (plan §36 11.6)", async ({ page }) => {
@@ -301,7 +350,12 @@ test("reading width preference scales the original-text view by the identical co
   // (~1.517 vs ~1.464), so it still fails on the un-unified code and only
   // passes once both readers are driven by the same 58/72/88ch scale.
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
-  const editionMaxWidthPx = () => edition.evaluate((el) => parseFloat(getComputedStyle(el).maxWidth));
+  // The edition region also reserves a fixed-width marginalia track at wide
+  // container sizes. Measure the prose column, whose explicit max-width is
+  // the shared token, rather than folding that independent track into the
+  // reading-measure assertion.
+  const editionTextColumn = edition.locator(".edition-reader-text-column").first();
+  const editionMaxWidthPx = () => editionTextColumn.evaluate((el) => parseFloat(getComputedStyle(el).maxWidth));
 
   const originalMaxWidthPx = async () => {
     await page.getByRole("button", { name: "Published edition" }).click();

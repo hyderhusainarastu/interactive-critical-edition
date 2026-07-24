@@ -21,6 +21,7 @@ import {
 } from "./EditionReader";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
+import { readerScrollBehavior } from "./readerMotion";
 import type { RelationshipCategory, VerificationStatus } from "./types";
 
 type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources";
@@ -246,17 +247,19 @@ export function EditionAnnotationsPanel({
         </div>
       )}
 
-      {tab === "annotations" ? (
-        <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} onSelectAnnotation={onSelectAnnotation} />
-      ) : tab === "notes" ? (
-        <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} />
-      ) : tab === "apparatus" ? (
-        <ApparatusTab edition={edition} kind={filters.apparatusKind} onKindChange={(apparatusKind) => onFiltersChange({ ...filters, apparatusKind })} />
-      ) : tab === "terms" ? (
-        <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
-      ) : (
-        <SourcesTab edition={edition} />
-      )}
+      <div key={tab} className="reader-panel-tab-content">
+        {tab === "annotations" ? (
+          <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} onSelectAnnotation={onSelectAnnotation} />
+        ) : tab === "notes" ? (
+          <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} />
+        ) : tab === "apparatus" ? (
+          <ApparatusTab edition={edition} kind={filters.apparatusKind} onKindChange={(apparatusKind) => onFiltersChange({ ...filters, apparatusKind })} />
+        ) : tab === "terms" ? (
+          <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
+        ) : (
+          <SourcesTab edition={edition} />
+        )}
+      </div>
     </aside>
     </ReaderSidebarFrame>
   );
@@ -375,7 +378,7 @@ function CriticalNoteCard({
   const expanded = open || active;
 
   useEffect(() => {
-    if (active) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (active) ref.current?.scrollIntoView({ block: "center", behavior: readerScrollBehavior() });
   }, [active]);
 
   return (
@@ -604,7 +607,7 @@ function PassageAnnotationCard({
   // `note.id` is a dep so switching between two annotations while one is
   // already activated still re-scrolls to the newly selected card.
   useEffect(() => {
-    if (active && activationId === note.id) ref.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (active && activationId === note.id) ref.current?.scrollIntoView({ block: "center", behavior: readerScrollBehavior() });
   }, [active, activationId, note.id]);
   // Keep the edit draft in step with the server value when it changes under us.
   useEffect(() => {

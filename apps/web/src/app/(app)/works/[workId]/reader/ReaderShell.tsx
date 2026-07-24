@@ -553,7 +553,7 @@ export function ReaderShell({
           </div>}
 
           <div
-            className="px-6 py-8"
+            className="reader-content-container px-6 py-8"
             style={{
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
