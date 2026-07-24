@@ -1037,6 +1037,8 @@ export async function seedWorkWithLibraryItems(
     relationshipConfidence?: number;
     /** Creates the matching run-scoped credibility evidence when supplied. */
     credibilityScore?: number;
+    /** `learning_resource.work_role` — defaults to "primary" like the schema. */
+    workRole?: "primary" | "edition" | "translation" | "excerpt" | "review";
   }[],
   opts: { createdAt?: Date } = {},
 ): Promise<{ workId: string; resourceIds: string[] }> {
@@ -1079,6 +1081,7 @@ export async function seedWorkWithLibraryItems(
         authors: ["Aristotle"],
         year: -340,
         peerReviewed: null,
+        ...(item.workRole ? { workRole: item.workRole } : {}),
       })
       .returning({ id: learningResources.id });
     await db.insert(resourceRoles).values({

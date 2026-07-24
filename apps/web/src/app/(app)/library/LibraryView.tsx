@@ -75,6 +75,14 @@ const ATTACHED_ROLE_LABEL: Record<string, string> = {
 };
 const AUTHORITY_RANK: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
+/** Honest one-line explanations for why a Library item carries no
+ *  credibility score, rather than rendering the credibility column empty
+ *  with no reason given. */
+const CREDIBILITY_ABSENCE_LABEL: Record<string, string> = {
+  "cited-not-assessed": "Cited in the text — not independently assessed",
+  "stale-assessment": "No current assessment — from an earlier analysis run; reprocess this work to re-assess",
+};
+
 /** Decorative, aria-hidden source-type glyph for the row icon roundel
  *  (UI-overhaul spec §3.1) — the type itself stays announced via the
  *  existing `SOURCE_TYPE_LABEL` text, so this never carries meaning alone. */
@@ -371,6 +379,7 @@ export function LibraryView({
                 <p className="mt-1 text-sm text-[var(--color-text-muted)]">Recommendations below are ranked by their relationship to this work, then evidence-backed credibility.</p>
               </>
             ) : <p className="mt-1 text-sm text-[var(--color-text-muted)]">Showing recommendations across all uploaded works.</p>}
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Only independently researched sources carry a credibility score — cited-but-unresearched and not-yet-reassessed sources are labeled instead of scored.</p>
           </section>
           <div role="group" aria-label="Reading status filter" className="mb-4 flex flex-wrap gap-1 border-b border-[var(--color-border)] text-sm">
             {TABS.map((t) => (
@@ -575,6 +584,7 @@ function LibraryRow({
   const relationship = focusMetric?.relationship ?? item.relationship;
   const rationale = focusMetric?.rationale ?? item.rationale;
   const credibility = focusMetric?.credibility ?? item.credibility;
+  const credibilityAbsence = credibility ? null : item.credibilityAbsence;
   const readerLevel = focusMetric?.readerLevel ?? item.readerLevel;
   return (
     <li
@@ -663,7 +673,7 @@ function LibraryRow({
 
         <div className="min-w-0 text-xs text-[var(--color-text-muted)]">
           <p className="text-sm font-medium text-[var(--color-text)]">{RELATIONSHIP_LABEL[relationship] ?? relationship}</p>
-          <p>{SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</p>
+          <p>{item.workRole === "review" ? "Book review" : SOURCE_TYPE_LABEL[item.resourceType] ?? item.resourceType}</p>
           {focusMetric && <p className="mt-1">Relationship relevance {Math.round(focusMetric.relevance * 100)}%</p>}
         </div>
 
@@ -694,6 +704,7 @@ function LibraryRow({
             </div>
           </div>
           {credibility?.score != null && <CredibilityMeter score={credibility.score} className="w-full flex-wrap" />}
+          {credibilityAbsence && <p>{CREDIBILITY_ABSENCE_LABEL[credibilityAbsence] ?? credibilityAbsence}</p>}
           {item.creatorVerification && <p>{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</p>}
           {readerLevel && <p>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</p>}
         </div>

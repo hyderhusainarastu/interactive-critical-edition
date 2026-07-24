@@ -279,6 +279,66 @@ test.describe("Library (Phase 9.5)", () => {
     await deleteTestUser(focusEmail);
   });
 
+  /**
+   * Lane A live-issue fix: `getLibrary` explains WHY a score-less item has
+   * no credibility instead of rendering the column blank. Class (a) is a
+   * citation-projection stub (`resourceType` "unresolved-citation") never
+   * sent to research by design; class (b) is a real resource whose
+   * `normalizedKey` has no surviving assessed `research_resource` row
+   * (neither item here has a `credibilityScore`, so neither seeds one).
+   */
+  test("explains credibility absence with the right reason for each score-less class", async ({ page }) => {
+    const absenceEmail = `e2e-library-cred-absence-${Date.now()}@example.com`;
+    const absenceUserId = await createVerifiedTestUser(absenceEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItems(absenceUserId, "Absence focus", [
+      { resourceTitle: "Cited stub without research", relationship: "explicit_reference", resourceType: "unresolved-citation" },
+      { resourceTitle: "Orphaned durable source", relationship: "prerequisite", resourceType: "book" },
+    ]);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(absenceEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto(`/library?focus=${workId}`);
+
+    const libraryContent = page.locator("#main-content");
+    const stubRow = libraryContent.locator("[data-library-item]").filter({ hasText: "Cited stub without research" });
+    const orphanRow = libraryContent.locator("[data-library-item]").filter({ hasText: "Orphaned durable source" });
+    await expect(stubRow.getByText("Cited in the text — not independently assessed")).toBeVisible();
+    await expect(orphanRow.getByText(/No current assessment.*earlier analysis run/)).toBeVisible();
+    await expect(libraryContent.getByText(/Only independently researched sources carry a credibility score/)).toBeVisible();
+
+    await deleteTestUser(absenceEmail);
+  });
+
+  /**
+   * Lane A live-issue fix: a top-level (non-attached) item whose
+   * `workRole` is "review" labels itself "Book review" instead of the raw
+   * `resourceType` label ("Article").
+   */
+  test("labels a standalone review item 'Book review' instead of its raw source type", async ({ page }) => {
+    const reviewEmail = `e2e-library-review-label-${Date.now()}@example.com`;
+    const reviewUserId = await createVerifiedTestUser(reviewEmail, PASSWORD);
+    const { workId } = await seedWorkWithLibraryItems(reviewUserId, "Review label focus", [
+      { resourceTitle: "A Review of the Text", relationship: "prerequisite", resourceType: "article", workRole: "review" },
+    ]);
+
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(reviewEmail);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("**/dashboard");
+    await page.goto(`/library?focus=${workId}`);
+
+    const libraryContent = page.locator("#main-content");
+    const row = libraryContent.locator("[data-library-item]").filter({ hasText: "A Review of the Text" });
+    await expect(row.getByText("Book review", { exact: true })).toBeVisible();
+    await expect(row.getByText("Article", { exact: true })).not.toBeVisible();
+
+    await deleteTestUser(reviewEmail);
+  });
+
   test("keeps the Focus control usable on a narrow viewport and does not animate when motion is reduced", async ({ page }) => {
     const accessibilityEmail = `e2e-library-motion-${Date.now()}@example.com`;
     const accessibilityUserId = await createVerifiedTestUser(accessibilityEmail, PASSWORD);

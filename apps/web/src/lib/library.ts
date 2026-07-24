@@ -104,6 +104,15 @@ export interface LibraryItem {
   /** Phase 20.6: reviews/editions/translations collapsed under this entry. */
   attached: AttachedLibraryRecord[];
   credibility: { authority: string | null; score: number } | null;
+  /**
+   * Why `credibility` is null, so the UI can explain absence honestly
+   * instead of rendering nothing: "cited-not-assessed" for citation-projection
+   * stubs (`resourceType` "unresolved-citation"/"bibliographic") that are
+   * never researched by design; "stale-assessment" for a durable resource
+   * whose key matches no surviving assessed `research_resource` (orphaned by
+   * a superseded run). Null whenever `credibility` itself is non-null.
+   */
+  credibilityAbsence: "cited-not-assessed" | "stale-assessment" | null;
   creatorVerification: string | null;
   readingStatus: "planned" | "reading" | "completed" | "abandoned" | null;
   understandingScore: number | null;
@@ -287,6 +296,15 @@ export async function getLibrary(userId: string, options: { search?: string } = 
         }
       }
     }
+    // Same key-scoping as the credibility join above — only reached when
+    // that loop found no credibility anywhere. Class (a): a citation stub
+    // never sent to research. Class (b): a real resource whose key just
+    // has no surviving assessed research_resource for these works.
+    const credibilityAbsence: LibraryItem["credibilityAbsence"] = credibility
+      ? null
+      : currentResource.resourceType === "unresolved-citation" || currentResource.resourceType === "bibliographic"
+        ? "cited-not-assessed"
+        : "stale-assessment";
 
     const focusMetrics = recommendedFor.flatMap((work) => {
       const role = resourceRolesForResource
@@ -327,6 +345,7 @@ export async function getLibrary(userId: string, options: { search?: string } = 
       workRole: resource.workRole,
       attached: [],
       credibility,
+      credibilityAbsence,
       creatorVerification: creatorVerification(resource.creator),
       readingStatus: reading?.status ?? null,
       understandingScore: rating?.score ?? null,
