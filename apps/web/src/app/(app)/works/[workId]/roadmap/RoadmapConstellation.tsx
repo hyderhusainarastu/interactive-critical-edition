@@ -44,6 +44,12 @@ const NODE_RADIUS: Record<PriorityTier, number> = {
   optional: 4,
 };
 const ROOT_RADIUS = 10;
+// Default/reset view — the rotation the constellation opens with, and what
+// "Reset view" restores (its zoom component is further capped by the
+// AUTO-FIT ceiling at both mount and reset, see `fitZoomRef`).
+const DEFAULT_YAW = -0.35;
+const DEFAULT_PITCH = 0.18;
+const DEFAULT_ZOOM = 1.05;
 
 function ringRadius(tier: PriorityTier): number {
   return 70 + TIER_ORDER.indexOf(tier) * 55;
@@ -116,9 +122,22 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const viewRef = useRef({ yaw: -0.35, pitch: 0.18, zoom: 1.05 });
+  const viewRef = useRef({ yaw: DEFAULT_YAW, pitch: DEFAULT_PITCH, zoom: DEFAULT_ZOOM });
   const dragRef = useRef({ down: false, moved: false, x: 0, y: 0 });
   const pointsRef = useRef<Array<{ node: LayoutNode; x: number; y: number; r: number }>>([]);
+  // AUTO-FIT: the max zoom at which the outermost POPULATED ring still fits
+  // inside the canvas (`maxRing * zoom <= minDim/2 - 24`) — recomputed every
+  // `draw()` call from the container's actual measured size, since the
+  // fixed `h-[420px]` wrap can be paired with a much narrower width on
+  // mobile. Read by `adjustView`'s zoom-out floor and by the initial/reset
+  // zoom, so the whole populated set is never impossible to see regardless
+  // of container shape.
+  const fitZoomRef = useRef(DEFAULT_ZOOM);
+  // Tracks the `layout` array identity so a genuinely NEW roadmap (not just
+  // a resize or a selection change) resets the view to fit it, rather than
+  // carrying over a stale zoom/rotation from a previous, differently-sized
+  // roadmap.
+  const lastLayoutRef = useRef<LayoutNode[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<"map" | "table">("map");
   const [colors, setColors] = useState<ResolvedColors | null>(null);
@@ -150,6 +169,18 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
     }
     return nodes;
   }, [items]);
+
+  // AUTO-FIT: the radius of the outermost ring that actually has an item on
+  // it — the theoretical max (400, all 7 tiers populated) rarely applies in
+  // practice, so fitting to the tiers genuinely present avoids over-zooming
+  // out a roadmap that only spans a couple of tiers.
+  const maxPopulatedRing = useMemo(() => {
+    let max = 0;
+    for (const node of layout) {
+      if (node.item) max = Math.max(max, ringRadius(node.item.tier));
+    }
+    return max || ringRadius(TIER_ORDER[0]);
+  }, [layout]);
 
   const byId = useMemo(() => new Map(layout.map((n) => [n.id, n])), [layout]);
   const selectedItem = selected && selected !== "root" ? (byId.get(selected)?.item ?? null) : null;
@@ -226,6 +257,17 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
+    // AUTO-FIT: recompute the fit-zoom ceiling from the CURRENT measured
+    // size every draw (the fixed-height wrap can pair with any width), and
+    // reset the view to it whenever `layout` itself changed (a genuinely
+    // new/different roadmap) — never on a mere resize or selection change,
+    // which would otherwise fight the reader's own in-progress rotation.
+    fitZoomRef.current = Math.max(0.3, Math.min(1.9, (Math.min(width, height) / 2 - 24) / maxPopulatedRing));
+    if (lastLayoutRef.current !== layout) {
+      lastLayoutRef.current = layout;
+      viewRef.current.zoom = Math.min(DEFAULT_ZOOM, fitZoomRef.current);
+    }
+
     const { yaw, pitch, zoom } = viewRef.current;
     const cy = Math.cos(yaw);
     const sy = Math.sin(yaw);
@@ -295,12 +337,15 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
       ctx.stroke();
       ctx.setLineDash([]);
 
-      if (!isRoot) {
+      // Sequence captions: 8px -> 10px, and hidden below ~0.8 zoom instead
+      // of shrinking further — past that point the pill is smaller than
+      // the text it would need to render legibly.
+      if (!isRoot && zoom >= 0.8) {
         const seqLabel = `${known ? "✓" : ""}${p.node.item!.sequence}`;
-        ctx.font = "600 8px Inter, sans-serif";
+        ctx.font = "600 10px Inter, sans-serif";
         ctx.textAlign = "center";
         ctx.fillStyle = colors.textMuted;
-        ctx.fillText(seqLabel, p.x, p.y + p.r + 10);
+        ctx.fillText(seqLabel, p.x, p.y + p.r + 11);
       }
 
       if (isSelected || isRoot) {
@@ -316,8 +361,18 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
     }
 
     pointsRef.current = projected.map(({ node, x, y, r }) => ({ node, x, y, r: Math.max(r + 8, 14) }));
-  }, [layout, colors, selected, rootTitle]);
+  }, [layout, colors, selected, rootTitle, maxPopulatedRing]);
 
+  // NAVIGABILITY FIX: the Map/Table toggle conditionally unmounts and
+  // remounts the canvas/wrap DOM nodes (`view === "map" ? <canvas.../> :
+  // <table.../>`) — without `view` in this effect's own dependency array,
+  // switching back to Map left `canvasRef`/`wrapRef` pointing at a FRESH
+  // node that this effect never re-ran `draw()` against (its identity
+  // depends on `layout`/`colors`/`selected`/etc., none of which change on a
+  // view toggle alone), so the canvas stayed at its default un-sized
+  // dimensions and `pointsRef` kept stale hit-test coordinates from the
+  // previous mount — every click after a Table round-trip silently missed.
+  // Found via a real e2e regression (map -> table -> map, then click).
   useEffect(() => {
     draw();
     const wrap = wrapRef.current;
@@ -325,17 +380,58 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
     const observer = new ResizeObserver(draw);
     observer.observe(wrap);
     return () => observer.disconnect();
-  }, [draw]);
+  }, [draw, view]);
 
   // Drag = rotate, wheel = zoom — the same math the landing's
   // `InteractiveGraphRendering` already uses (§4.5): presentation logic,
-  // not brand-specific, safe to port verbatim.
-  function adjustView(yaw: number, pitch: number, zoom = 0) {
-    viewRef.current.yaw += yaw;
-    viewRef.current.pitch = Math.max(-1.15, Math.min(1.15, viewRef.current.pitch + pitch));
-    viewRef.current.zoom = Math.max(0.55, Math.min(1.9, viewRef.current.zoom + zoom));
+  // not brand-specific, safe to port verbatim. Wrapped in `useCallback` (not
+  // a plain function) so the native wheel listener below can depend on a
+  // stable-but-current reference rather than closing over a stale `draw`.
+  // AUTO-FIT: the zoom-out floor is `min(0.55, fitZoomRef.current)` instead
+  // of a fixed 0.55 — if the default floor wouldn't be enough to fit the
+  // populated rings in a small/narrow container, the floor drops to
+  // whatever DOES fit, so "zoom all the way out" always reaches a state
+  // where the whole populated set is visible.
+  const adjustView = useCallback(
+    (yaw: number, pitch: number, zoom = 0) => {
+      viewRef.current.yaw += yaw;
+      viewRef.current.pitch = Math.max(-1.15, Math.min(1.15, viewRef.current.pitch + pitch));
+      const minZoom = Math.min(0.55, fitZoomRef.current);
+      viewRef.current.zoom = Math.max(minZoom, Math.min(1.9, viewRef.current.zoom + zoom));
+      draw();
+    },
+    [draw],
+  );
+
+  // CONTROLS: a native (non-React) `wheel` listener registered with
+  // `{ passive: false }` — the JSX `onWheel` handler this replaces called
+  // `event.preventDefault()` but was a no-op, since React >=17 attaches
+  // wheel listeners at the root container and does not mark them non-
+  // passive, so the browser's own page-scroll behavior won its race with
+  // this canvas's zoom gesture. A listener added directly on the canvas
+  // element, explicitly non-passive, actually gets to call
+  // `preventDefault()` before the page scrolls.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      adjustView(0, 0, event.deltaY > 0 ? -0.08 : 0.08);
+    };
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, [adjustView]);
+
+  // Restores the default rotation/zoom — the same values the view starts at
+  // on first mount, re-derived from the CURRENT fit-zoom ceiling rather than
+  // the fixed `DEFAULT_ZOOM` alone, so "Reset view" still fits the populated
+  // set even if the container is narrower than it was at mount.
+  const resetView = useCallback(() => {
+    viewRef.current.yaw = DEFAULT_YAW;
+    viewRef.current.pitch = DEFAULT_PITCH;
+    viewRef.current.zoom = Math.min(DEFAULT_ZOOM, fitZoomRef.current);
     draw();
-  }
+  }, [draw]);
 
   function focusListItem(bibId: string) {
     const el = document.querySelector(`[data-roadmap-item="${bibId}"]`);
@@ -387,6 +483,15 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
             Table
           </button>
         </div>
+        {view === "map" && (
+          <button
+            type="button"
+            onClick={resetView}
+            className="rounded border border-[var(--color-border)] px-2 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]"
+          >
+            Reset view
+          </button>
+        )}
       </div>
 
       {view === "map" ? (
@@ -423,10 +528,6 @@ export function RoadmapConstellation({ rootTitle, items }: { rootTitle: string; 
                 const y = event.clientY - rect.top;
                 const hit = [...pointsRef.current].reverse().find((point) => Math.hypot(point.x - x, point.y - y) <= point.r);
                 if (hit) setSelected(hit.node.id);
-              }}
-              onWheel={(event) => {
-                event.preventDefault();
-                adjustView(0, 0, event.deltaY > 0 ? -0.08 : 0.08);
               }}
               onKeyDown={(event) => {
                 if (event.key === "ArrowLeft") adjustView(-0.12, 0);
