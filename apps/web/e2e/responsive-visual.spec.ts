@@ -226,7 +226,7 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
     { name: "work-detail", path: () => `/works/${editionWorkId}`, heading: "Vice and Reason" },
     { name: "upload", path: () => "/upload", heading: "Upload works" },
     { name: "reader", path: () => `/works/${editionWorkId}/reader`, heading: null },
-    { name: "roadmap", path: () => `/works/${roadmapWorkId}/roadmap`, heading: "Reading roadmap" },
+    { name: "roadmap", path: () => `/works/${roadmapWorkId}/roadmap`, heading: "Reading roadmap", mask: true },
     { name: "graph", path: () => `/works/${roadmapWorkId}/graph`, heading: "Visualization", mask: true },
   ];
 
@@ -252,7 +252,7 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
             fullPage: true,
             animations: "disabled",
             maxDiffPixelRatio: 0.01,
-            ...(mask ? { mask: [page.locator("[data-graph-canvas]")] } : {}),
+            ...(mask ? { mask: [page.locator("[data-graph-canvas]"), page.locator("[data-roadmap-canvas]")] } : {}),
           });
         });
       }

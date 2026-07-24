@@ -14,6 +14,7 @@ import {
   type RoadmapMode,
 } from "@ice/roadmap";
 import { TIER_COLOR, TierDot } from "@/components/shared/roadmapPrimitives";
+import { RoadmapConstellation } from "./RoadmapConstellation";
 
 interface RoadmapResponse {
   title: string;
@@ -201,7 +202,7 @@ export function RoadmapView({
       {/* Controls */}
       <div ref={controlsRevealRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--color-text-muted)]">Depth</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Depth</span>
           <select value={mode} onChange={(e) => setMode(e.target.value as RoadmapMode)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
             <option value="comprehensive">Comprehensive</option>
             <option value="concise">Concise (essential + high)</option>
@@ -209,7 +210,7 @@ export function RoadmapView({
         </label>
         {enablePhase12Identity && readerLevel !== "all" && (
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Level match</span>
             <select
               value={levelMode}
               onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
@@ -221,10 +222,10 @@ export function RoadmapView({
           </label>
         )}
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--color-text-muted)]">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Level
             {readerLevel !== "all" && (
-              <span className="ml-1 text-[var(--color-text-muted)]">
+              <span className="ml-1 normal-case font-normal tracking-normal text-[var(--color-text-muted)]">
                 (never hides anything you can&rsquo;t also see — pick &ldquo;Show all levels&rdquo; anytime)
               </span>
             )}
@@ -243,7 +244,7 @@ export function RoadmapView({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-[var(--color-text-muted)]">Time budget (hours)</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Time budget (hours)</span>
           <input
             type="number"
             min={0}
@@ -326,6 +327,12 @@ export function RoadmapView({
           No connected readings were found for this work{mode === "concise" ? " at this depth" : ""}.
         </p>
       )}
+
+      {/* The one functional addition (feature spec §4): a small, restrained
+          companion map of the SAME items the tier list below already
+          renders — never a second data source. The tier list stays the
+          always-visible, never-collapsed accessible default. */}
+      {data && visible.length > 0 && <RoadmapConstellation rootTitle={title} items={visible} />}
 
       {byTier.map(({ tier, items }) => (
         <section key={tier} className="mb-6">
