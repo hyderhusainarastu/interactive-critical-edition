@@ -767,7 +767,26 @@ function LibraryRow({
             // makes the actual rendered pixels use our own bg/text tokens
             // (verified: dark pill, light text, after the fix) instead of
             // leaving that to the browser's native widget rendering.
-            className="app-control w-full min-w-0 appearance-none rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1"
+            //
+            // `appearance-none` also removes the native dropdown caret, so
+            // it's replaced here with an inline `currentColor` SVG chevron
+            // as a second `bg-[...]` (background-image) utility alongside
+            // the existing background-color one — `currentColor` means the
+            // SAME rule paints correctly in both themes (it resolves to
+            // whatever `color` this element inherits) rather than needing a
+            // second, theme-conditional rule. `pr-7` clears room for it.
+            // Spaces inside the data URI are `%20`, not `_` — Tailwind's
+            // usual underscore-means-space arbitrary-value convention does
+            // NOT apply inside `url(...)` (it deliberately preserves
+            // underscores there, since they're valid in real filenames), so
+            // an underscore version silently produces literal `_`
+            // characters in the SVG markup (invalid XML, no chevron) —
+            // caught by checking the actual computed `background-image`,
+            // not just by assuming the class compiled correctly.
+            // First use of the appearance-none+chevron pattern in this repo
+            // — reuse this shape rather than inventing a new one if another
+            // `<select>` needs `appearance-none` later.
+            className="app-control w-full min-w-0 appearance-none rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] bg-[url('data:image/svg+xml;utf8,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2020%2020%22%20fill=%22none%22%20stroke=%22currentColor%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22><path%20d=%22M5%208l5%205%205-5%22/></svg>')] bg-no-repeat bg-[right_0.65rem_center] pl-3 pr-7 py-1"
             aria-label={`Reading status of ${item.title}`}
           >
             <option value="">To read</option>
