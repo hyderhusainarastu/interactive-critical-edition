@@ -667,24 +667,35 @@ function LibraryRow({
           {focusMetric && <p className="mt-1">Relationship relevance {Math.round(focusMetric.relevance * 100)}%</p>}
         </div>
 
-        <div className="flex min-w-0 items-start gap-2 text-xs text-[var(--color-text-muted)]">
-          {credibility?.authority && (
-            <span
-              role="img"
-              aria-label={`Authority ${credibility.authority.toUpperCase()}`}
-              className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 font-serif text-sm font-semibold"
-              style={{ borderColor: gradeBorderColor(credibility.score), color: gradeTextColor(credibility.score) }}
-            >
-              <span aria-hidden="true">{credibility.authority.toUpperCase()}</span>
-            </span>
-          )}
-          <div className="min-w-0">
-            {credibility?.score != null && <p className="font-semibold text-[var(--color-text)]">{Math.round(credibility.score * 100)}/100</p>}
-            <p>{item.peerReviewed === true ? "Peer-reviewed" : item.peerReviewed === false ? "Not peer-reviewed" : "Peer review unverified"}</p>
-            {credibility?.score != null && <CredibilityMeter score={credibility.score} className="mt-1" />}
-            {item.creatorVerification && <p className="mt-1">{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</p>}
-            {readerLevel && <p>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</p>}
+        {/* Stacked vertically (badge+text row, then the meter on its own
+         *  full-width row) rather than side-by-side: `CredibilityMeter`'s
+         *  own root is an un-wrapped inline-flex (3 bars + a label like
+         *  "Mixed credibility"), whose irreducible min-content is wider
+         *  than the ~74px left after the badge+gap eat into this track at
+         *  sm+ widths. Giving it the row's full ~110px+ track, plus
+         *  `flex-wrap` via its `className` prop (its own markup/props are
+         *  otherwise untouched — spec boundary), lets the label wrap under
+         *  the bars instead of forcing the row to overflow. */}
+        <div className="flex min-w-0 flex-col gap-1.5 text-xs text-[var(--color-text-muted)]">
+          <div className="flex min-w-0 items-start gap-2">
+            {credibility?.authority && (
+              <span
+                role="img"
+                aria-label={`Authority ${credibility.authority.toUpperCase()}`}
+                className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 font-serif text-sm font-semibold"
+                style={{ borderColor: gradeBorderColor(credibility.score), color: gradeTextColor(credibility.score) }}
+              >
+                <span aria-hidden="true">{credibility.authority.toUpperCase()}</span>
+              </span>
+            )}
+            <div className="min-w-0">
+              {credibility?.score != null && <p className="font-semibold text-[var(--color-text)]">{Math.round(credibility.score * 100)}/100</p>}
+              <p>{item.peerReviewed === true ? "Peer-reviewed" : item.peerReviewed === false ? "Not peer-reviewed" : "Peer review unverified"}</p>
+            </div>
           </div>
+          {credibility?.score != null && <CredibilityMeter score={credibility.score} className="w-full flex-wrap" />}
+          {item.creatorVerification && <p>{VERIFICATION_LABEL[item.creatorVerification] ?? `Creator ${item.creatorVerification}`}</p>}
+          {readerLevel && <p>{READER_LEVEL_LABEL[readerLevel] ?? readerLevel}</p>}
         </div>
 
         <div className="flex min-w-0 items-center gap-2 text-xs sm:flex-col sm:items-start">
