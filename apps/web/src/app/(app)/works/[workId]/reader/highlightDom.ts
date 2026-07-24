@@ -184,6 +184,66 @@ export function clearAnnotationMarkers(container: HTMLElement) {
   });
 }
 
+export interface FootnoteMarkerAnchor {
+  id: string;
+  /** findQuoteOffset anchor for the marker reference (the token ending in the
+   *  marker, plus context). Re-located in the rendered DOM, so it survives the
+   *  reader displaying untranscribable/verified spans differently from the
+   *  stored block text. */
+  quote: string;
+  prefix: string;
+  suffix: string;
+  /** The note's marker number (aria/label only; the glyph is drawn via CSS). */
+  marker: string;
+  ariaLabel: string;
+}
+
+/**
+ * Authorial-footnote reference markers (Lane G Fix 2b). Rendered as a distinct
+ * superscript button — a separate class and `data-footnote-id`, never the
+ * `data-annotation-id` used for AI-generated annotations — so the four-way
+ * source distinction (plan §9/§18) is preserved: an authorial note reference
+ * never looks like a generated annotation. The marker is placed just AFTER the
+ * reference (re-located by quote, same mechanism as highlights/annotations),
+ * and adds no text node of its own. Idempotent — clears its own markers first.
+ */
+export function applyFootnoteMarkers(container: HTMLElement, list: FootnoteMarkerAnchor[]) {
+  clearFootnoteMarkers(container);
+  for (const a of list) {
+    const spans = getTextNodeSpans(container);
+    const fullText = spans.map((s) => s.node.textContent).join("");
+    const start = findQuoteOffset(fullText, a.quote, a.prefix, a.suffix);
+    if (start === null) continue;
+    const offset = start + a.quote.length; // just after the reference
+
+    const span = spans.find((s) => offset >= s.start && offset < s.end)
+      ?? spans.find((s) => offset === s.end); // reference at the very end of a text node
+    if (!span) continue;
+    const localOffset = Math.min(offset - span.start, span.node.textContent?.length ?? 0);
+    const node = span.node;
+    const insertionPoint = localOffset === 0 ? node : node.splitText(localOffset);
+
+    const marker = document.createElement("button");
+    marker.type = "button";
+    marker.dataset.footnoteId = a.id;
+    marker.dataset.marker = a.marker;
+    marker.className = "reader-footnote-marker";
+    // No textContent: the glyph is drawn from `data-marker` via CSS ::before,
+    // so this button adds no text node and cannot shift the offsets the
+    // reader's quote/untranscribable matching relies on.
+    marker.setAttribute("aria-label", a.ariaLabel);
+    node.parentNode?.insertBefore(marker, insertionPoint);
+  }
+}
+
+export function clearFootnoteMarkers(container: HTMLElement) {
+  container.querySelectorAll("button[data-footnote-id]").forEach((m) => {
+    const parent = m.parentNode;
+    m.remove();
+    parent?.normalize();
+  });
+}
+
 /**
  * Captures the current browser selection within `container` as a
  * stable anchor. Returns null if there's no selection or it falls

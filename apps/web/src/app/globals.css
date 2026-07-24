@@ -229,6 +229,37 @@
 }
 
 /*
+  Lane G Fix 2b: authorial-footnote reference marker. Deliberately distinct
+  from the filled category pill of a generated annotation — an outlined,
+  muted superscript reading as source apparatus, not editorial. Its number is
+  rendered from the `data-marker` attribute via ::before, so the marker button
+  contributes NO text node: the reader's quote-based annotation matching and
+  its untranscribable-span offsets are computed against the same clean text
+  whether or not these markers are present.
+*/
+.reader-footnote-marker {
+  vertical-align: super;
+  font-size: 0.62em;
+  line-height: 1;
+  margin: 0 0.08em;
+  padding: 0 0.2em;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+.reader-footnote-marker::before {
+  content: "†";
+}
+.reader-footnote-marker:hover,
+.reader-footnote-marker:focus-visible {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+/*
   Minimal pdf.js text-layer CSS (not importing pdf.js's own stylesheet
   bundle — this is the small subset actually needed for selectable,
   invisible-but-positioned text over the rendered canvas).

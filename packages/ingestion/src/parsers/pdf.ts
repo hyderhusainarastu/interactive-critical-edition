@@ -2,6 +2,7 @@ import { extractText, getDocumentProxy, getMeta } from "unpdf";
 import { collectBoilerplateLines, isEntirelyBoilerplate, normalizeBoilerplateCandidate, stripBoilerplateAtBoundaries, stripBoilerplateLines } from "./boilerplate";
 import { recoverLeadingBodyProse } from "./bodyRecovery";
 import { recoverTruncatedEndnotes } from "./endnoteRecovery";
+import { recoverPageBottomFootnotes } from "./footnoteRecovery";
 import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
 
@@ -243,6 +244,28 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
         const index = Math.min(Math.max(entry.pageIndex, 0), Math.max(0, pages.length - 1));
         const page = pages[index];
         if (page) page.blocks.push({ kind: "endnote", text: entry.text, marker: entry.marker, recovered: true });
+      }
+
+      // D-24-G2: recover page-bottom numbered footnotes GROBID emitted no
+      // `<note>` for at all (confirmed on the Brickhouse fixture: zero notes,
+      // every footnote mis-segmented). Same text-layer, honest-provenance
+      // precedent as the endnote recovery above; entries are `footnote` kind
+      // so `processedTextFromPages` (already computed) excludes them from the
+      // body transcript — this only adds addressable authorial apparatus.
+      // structuredMarkers now also reflects any endnote just recovered, so the
+      // two recoveries never double-emit the same marker number.
+      for (const entry of recovered) {
+        const n = Number(entry.marker);
+        if (Number.isInteger(n)) structuredMarkers.add(n);
+      }
+      const recoveredFootnotes = recoverPageBottomFootnotes({
+        pageTexts: pages.map((page) => page.text),
+        structuredMarkers,
+      });
+      for (const entry of recoveredFootnotes) {
+        const index = Math.min(Math.max(entry.pageIndex, 0), Math.max(0, pages.length - 1));
+        const page = pages[index];
+        if (page) page.blocks.push({ kind: "footnote", text: entry.text, marker: entry.marker, recovered: true });
       }
     }
   }

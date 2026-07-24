@@ -2,9 +2,10 @@
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META } from "./annotationMeta";
-import { applyAnnotationMarkers, applyHighlights, captureSelectionAnchor, clearAnnotationMarkers } from "./highlightDom";
+import { applyAnnotationMarkers, applyFootnoteMarkers, applyHighlights, captureSelectionAnchor, clearAnnotationMarkers, clearFootnoteMarkers } from "./highlightDom";
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import { matchNoteToBlock } from "./matchNoteToBlock";
+import { matchFootnotesToBlocks } from "./matchFootnoteToBlock";
 import type { RelationshipCategory } from "./types";
 import { HIGHLIGHT_COLORS, type HighlightColor, type HighlightRecord } from "./types";
 
@@ -444,6 +445,28 @@ export function EditionReader({
     }
     return map;
   }, [edition.blocks, edition.generatedNotes]);
+  // Lane G Fix 2b: authorial footnotes/endnotes (source apparatus) anchored to
+  // the body block that calls them out, recomputed on read (never persisted).
+  // A numeric marker anchors only when its inline reference is unambiguous
+  // document-wide; the rest stay in the Apparatus panel list.
+  const footnoteMatchesByBlock = useMemo(() => {
+    const authorialFootnotes = edition.authorApparatus.filter(
+      (entry) => entry.kind === "footnote" || entry.kind === "endnote",
+    );
+    // Only the rendered prose blocks call out footnotes; searching apparatus
+    // blocks (whose own text carries numbers) would skew the uniqueness count.
+    const proseBlocks = edition.blocks.filter(
+      (block) => !["footnote", "endnote", "bibliography", "reference"].includes(block.kind),
+    );
+    const matches = matchFootnotesToBlocks(authorialFootnotes, proseBlocks);
+    const map = new Map<string, Array<{ id: string; quote: string; prefix: string; suffix: string; marker: string }>>();
+    for (const match of matches) {
+      const list = map.get(match.blockId) ?? [];
+      list.push({ id: match.footnoteId, quote: match.quote, prefix: match.prefix, suffix: match.suffix, marker: match.marker });
+      map.set(match.blockId, list);
+    }
+    return map;
+  }, [edition.authorApparatus, edition.blocks]);
   const previewById = useMemo(() => {
     const map = new Map<string, { glyph: string; colorVar: string; categoryLabel: string; summary: string }>();
     for (const a of edition.passageAnnotations) {
@@ -462,18 +485,37 @@ export function EditionReader({
         summary: note.body,
       });
     }
+    // Authorial footnotes read distinctly from generated material: a neutral
+    // ink glyph and an explicit "Authorial note" label, never a category color.
+    for (const entry of edition.authorApparatus) {
+      if (entry.kind !== "footnote" && entry.kind !== "endnote") continue;
+      map.set(entry.id, {
+        glyph: "†",
+        colorVar: "--color-text-muted",
+        categoryLabel: `Authorial ${entry.kind}${entry.marker ? ` ${entry.marker}` : ""}`,
+        summary: entry.text,
+      });
+    }
     return map;
-  }, [edition.generatedNotes, edition.passageAnnotations]);
+  }, [edition.authorApparatus, edition.generatedNotes, edition.passageAnnotations]);
 
   const blockRefs = useRef(new Map<string, HTMLElement>());
   useEffect(() => {
     for (const [blockId, el] of blockRefs.current) {
       const notes = passageAnnotationsByBlock.get(blockId);
       const matchedNotes = matchedNotesByBlock.get(blockId);
+      const footnoteMatches = footnoteMatchesByBlock.get(blockId) ?? [];
       const blockHighlights = highlights.filter(
         (highlight): highlight is HighlightRecord & { anchor: { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string } } =>
           highlight.anchor.kind === "processed" && highlight.anchor.textBlockId === blockId,
       );
+      // Clear both marker layers first so every offset/quote match below is
+      // computed against the block's clean text. Highlights add no text; the
+      // footnote markers add no text node (number drawn via CSS); annotation
+      // markers do add a glyph, so they go LAST — after footnote offsets are
+      // already placed against clean text.
+      clearAnnotationMarkers(el);
+      clearFootnoteMarkers(el);
       applyHighlights(el, blockHighlights.map((highlight) => ({
         id: highlight.id,
         color: highlight.color,
@@ -481,8 +523,15 @@ export function EditionReader({
         prefix: highlight.anchor.prefix,
         suffix: highlight.anchor.suffix,
       })));
+      applyFootnoteMarkers(el, footnoteMatches.map((match) => ({
+        id: match.id,
+        quote: match.quote,
+        prefix: match.prefix,
+        suffix: match.suffix,
+        marker: match.marker,
+        ariaLabel: `Authorial note ${match.marker} — show text`,
+      })));
       if ((!notes || notes.length === 0) && (!matchedNotes || matchedNotes.length === 0)) {
-        clearAnnotationMarkers(el);
         continue;
       }
       applyAnnotationMarkers(
@@ -514,7 +563,7 @@ export function EditionReader({
         ],
       );
     }
-  }, [highlights, matchedNotesByBlock, orderedBlocks, passageAnnotationsByBlock, scriptDisplay]);
+  }, [footnoteMatchesByBlock, highlights, matchedNotesByBlock, orderedBlocks, passageAnnotationsByBlock, scriptDisplay]);
 
   useEffect(() => {
     if (!activeAnnotationId) return;
@@ -701,14 +750,23 @@ export function EditionReader({
         className="flex flex-col gap-4 leading-[1.7] text-[var(--color-text)]"
         onClick={(e) => {
           const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
-          if (marker) onOpenAnnotation((marker as HTMLElement).dataset.annotationId!);
+          if (marker) { onOpenAnnotation((marker as HTMLElement).dataset.annotationId!); return; }
+          // An authorial-footnote reference toggles its own text preview
+          // (its full text also remains in the Apparatus panel).
+          const footnote = (e.target as HTMLElement).closest?.("button[data-footnote-id]");
+          if (footnote) {
+            const id = (footnote as HTMLElement).dataset.footnoteId!;
+            setHover((current) => (current?.id === id ? null : { id, rect: footnote.getBoundingClientRect() }));
+          }
         }}
         onMouseOver={(e) => {
-          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
-          if (marker) setHover({ id: (marker as HTMLElement).dataset.annotationId!, rect: marker.getBoundingClientRect() });
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id], button[data-footnote-id]");
+          if (!marker) return;
+          const el = marker as HTMLElement;
+          setHover({ id: el.dataset.annotationId ?? el.dataset.footnoteId!, rect: marker.getBoundingClientRect() });
         }}
         onMouseOut={(e) => {
-          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id]");
+          const marker = (e.target as HTMLElement).closest?.("button[data-annotation-id], button[data-footnote-id]");
           if (marker) setHover(null);
         }}
       >
