@@ -363,7 +363,12 @@ test.describe("Phase 23.3 — large annotation count, large graph, long graph la
       await page.goto(`/works/${workId}/reader`);
       await page.getByRole("button", { name: /^Analysis/ }).click();
       await expect(page.getByRole("dialog", { name: "Edition sidebar" })).toBeVisible();
-      await expect(page.getByText("Annotation index")).toBeVisible();
+      // `getByText` substring-matches case-insensitively, and this fixture's
+      // own seeded explanation text ends "...exercise a large annotation
+      // index.", which collides with the plain-text search below (20
+      // matches instead of the intended index heading). Scope to the
+      // heading role, which the intended "Annotation index" h3 alone has.
+      await expect(page.getByRole("heading", { name: "Annotation index" })).toBeVisible();
       await assertNoHorizontalOverflow(page);
     }
   });
@@ -613,7 +618,15 @@ test.describe("Phase 23.3 — D-23-15 and D-23-17 visual confirmations", () => {
     }
     await assertNoHorizontalOverflow(page);
 
-    await expect(page.locator("header")).toHaveScreenshot("app-shell-header-768-light.png", {
+    // `page.locator("header")` is ambiguous on /dashboard: besides the
+    // app-shell's own sticky header, the dashboard page renders its own
+    // in-page section `<header>`s (e.g. per-section PageHeader markup),
+    // so a bare tag selector strict-mode-violates with 3 matches. The
+    // app-shell header is the only one nested directly under <body>
+    // (not inside <section>/<article>/<main>), so it's the sole element
+    // with the implicit `banner` landmark role — `getByRole("banner")`
+    // targets it unambiguously.
+    await expect(page.getByRole("banner")).toHaveScreenshot("app-shell-header-768-light.png", {
       animations: "disabled",
       maxDiffPixelRatio: 0.01,
     });
