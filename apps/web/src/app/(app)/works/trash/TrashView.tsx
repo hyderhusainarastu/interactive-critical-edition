@@ -112,7 +112,7 @@ export function TrashView() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-12">
-      <PageHeader title="Trash" description="Restore a work within 30 days before its reader data, analysis, and uploaded file are permanently deleted." actions={<Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+      <PageHeader title="Trash" description="Restore a work within 30 days before its reader data, analysis, and uploaded file are permanently deleted." actions={<Link href="/works" className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Uploaded works
         </Link>} />
 
@@ -122,14 +122,19 @@ export function TrashView() {
           {statusMessage}
         </p>
       )}
-      {!items && !error && <p className="text-[var(--color-text-muted)]">Loading…</p>}
+      {!items && !error && (
+        <div role="status" aria-label="Loading trash" className="space-y-3">
+          {[0, 1].map((index) => <div key={index} className="app-card app-shimmer app-skeleton h-20 rounded-lg" />)}
+          <span className="sr-only">Loading trash…</span>
+        </div>
+      )}
 
-      {items && items.length === 0 && <p className="text-[var(--color-text-muted)]">Nothing in the trash.</p>}
+      {items && items.length === 0 && <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">Nothing in the trash.</p>}
 
       {items && items.length > 0 && (
-        <ul ref={listRevealRef} className="app-reveal flex flex-col divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
+        <ul ref={listRevealRef} className="app-reveal-stagger flex flex-col gap-3">
           {items.map((item) => (
-            <li key={item.workId} data-trash-item={item.workId} className="flex items-center justify-between gap-4 px-4 py-3">
+            <li key={item.workId} data-trash-item={item.workId} className="app-card app-lift flex items-center justify-between gap-4 rounded-lg px-4 py-3">
               <div>
                 <p className="font-medium text-[var(--color-text)]">
                   {item.title}
@@ -150,14 +155,14 @@ export function TrashView() {
                 <button
                   type="button"
                   onClick={() => restore(item.workId)}
-                  className="app-control rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)]"
+                  className="app-control app-press rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm text-[var(--color-text)]"
                 >
                   Restore
                 </button>
                 <button
                   type="button"
                   onClick={(event) => openPurgeDialog(item, event.currentTarget)}
-                  className="app-control rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
+                  className="app-control app-press rounded-md border border-[var(--color-accent-burgundy)] px-3 py-1.5 text-sm text-[var(--color-accent-burgundy)]"
                 >
                   Delete permanently now
                 </button>

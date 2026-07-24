@@ -366,7 +366,7 @@ export function LibraryView({
     <div className="mx-auto max-w-4xl px-6 py-8">
       <div className="mb-5"><PageHeader title="Library" description="A focused research shelf for the works you upload." /></div>
 
-      <aside className="mb-5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
+      <aside className="app-card app-mount mb-5 rounded-lg px-4 py-3 text-sm leading-6 text-[var(--color-text-muted)]">
         <span className="font-medium text-[var(--color-text)]">Your uploaded work is the focus.</span>{" "}
         Upload texts you want Palimnote to index. External texts are fetched and indexed only when clearly open access; other recommendations remain source records.
       </aside>
@@ -390,14 +390,14 @@ export function LibraryView({
       )}
 
       {initialWorks.length === 0 && (
-        <p className="rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
+        <p className="app-empty app-mount rounded-lg px-5 py-8 text-sm text-[var(--color-text-muted)]">
           Nothing here yet. <Link href="/upload" className="underline">Upload a work</Link> to start a private research shelf.
         </p>
       )}
 
       {initialWorks.length > 0 && (
         <>
-          <section ref={focusRef} data-focus-work={focusedWork?.id} className="app-reveal mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3">
+          <section ref={focusRef} data-focus-work={focusedWork?.id} className={`app-card app-reveal mb-4 rounded-lg px-4 py-3 ${focusedWork ? "app-selected" : ""}`}>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-text-muted)]">Focused work</p>
             {focusedWork ? (
               <>
@@ -419,7 +419,7 @@ export function LibraryView({
                 // filter row already has room below it.
                 // UI-overhaul spec §3.1: underline-style tab treatment
                 // (`.library-tabs button`) — same DOM/aria, styling only.
-                className="min-h-11 border-b-2 px-3.5 py-2.5 text-[9px] uppercase tracking-[0.08em]"
+                className={`app-control app-press min-h-11 border-b-2 px-3.5 py-2.5 text-[9px] uppercase tracking-[0.08em] ${tab === t.key ? "app-selected" : ""}`}
                 style={{
                   borderColor: tab === t.key ? "var(--color-text)" : "transparent",
                   color: tab === t.key ? "var(--color-text)" : "var(--color-text-muted)",
@@ -431,7 +431,7 @@ export function LibraryView({
             ))}
           </div>
 
-          <div ref={controlsRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-3 text-sm">
+          <div ref={controlsRef} className="app-card app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg p-3 text-sm">
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL_CLASS}>Search library</span>
               <div className="flex items-center gap-1">
@@ -461,7 +461,7 @@ export function LibraryView({
                 value={workId}
                 onChange={(e) => selectFocus(e.target.value)}
                 aria-label="Focus work"
-                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
               >
                 <option value="">All works</option>
                 {initialWorks.map((w) => (
@@ -473,7 +473,7 @@ export function LibraryView({
             </label>
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL_CLASS}>Relationship</span>
-              <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <select value={relationship} onChange={(e) => setRelationship(e.target.value)} className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {relationships.map((r) => (
                   <option key={r} value={r}>
@@ -484,7 +484,7 @@ export function LibraryView({
             </label>
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL_CLASS}>Source type</span>
-              <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <select value={resourceType} onChange={(e) => setResourceType(e.target.value)} className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="">All</option>
                 {resourceTypes.map((t) => (
                   <option key={t} value={t}>
@@ -506,7 +506,7 @@ export function LibraryView({
                 <select
                   value={readerLevel}
                   onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   {READER_LEVEL_FILTER_OPTIONS.map((level) => (
                     <option key={level} value={level}>
@@ -538,7 +538,7 @@ export function LibraryView({
                 <select
                   value={levelMode}
                   onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="cumulative">Selected + foundations</option>
                   <option value="exact">Exact level</option>
@@ -547,7 +547,7 @@ export function LibraryView({
             )}
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL_CLASS}>Sort</span>
-              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+              <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
                 <option value="relevance">Most relevant and credible</option>
                 <option value="title">Title A–Z</option>
                 <option value="recency">Recently added</option>
@@ -564,7 +564,7 @@ export function LibraryView({
           </div>
 
           {visible.length === 0 && (
-            <p className="text-[var(--color-text-muted)]">
+            <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">
               {search ? <>No results for &ldquo;{search}&rdquo;.</> : "No items match these filters."}
             </p>
           )}
@@ -575,7 +575,7 @@ export function LibraryView({
             // converting the rows to `role="table"`/`role="cell"` — the
             // `<li>` rows keep native list semantics (`getByRole("listitem")`
             // in library.spec.ts) while sighted readers see a table look.
-            <div className="overflow-hidden rounded-lg border border-[var(--color-border)]">
+            <div className="app-card app-mount overflow-hidden rounded-lg">
               <div
                 aria-hidden="true"
                 className="hidden grid-cols-[1.65fr_.65fr_.55fr_.4fr] gap-3 bg-[var(--color-surface-strong)] px-3 py-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--color-surface-strong-fg-soft)] sm:grid sm:px-4"
@@ -585,7 +585,7 @@ export function LibraryView({
                 <span>Credibility</span>
                 <span>Reading state</span>
               </div>
-              <ul className="flex flex-col">
+              <ul className="app-reveal-stagger flex flex-col">
                 {visible.map((item) => (
                   <LibraryRow key={item.id} item={item} focusMetric={workId ? item.focusMetrics.find((metric) => metric.workId === workId) ?? null : null} onSetStatus={setReadingStatus} />
                 ))}
@@ -615,7 +615,7 @@ function LibraryRow({
   return (
     <li
       data-library-item={item.id}
-      className="app-control border-t border-[var(--color-border)] bg-[var(--color-background)] px-3 py-3 first:border-t-0 hover:bg-[var(--color-surface)] sm:px-4"
+      className={`app-control app-mount border-t border-[var(--color-border)] bg-[var(--color-background)] px-3 py-3 first:border-t-0 hover:bg-[var(--color-surface)] sm:px-4 ${item.readingStatus ? "app-selected" : ""}`}
     >
       {/* UI-overhaul spec §3.1: `.library-row`'s four visual columns
        *  (source & reason / relationship / credibility / reading state),
@@ -786,7 +786,7 @@ function LibraryRow({
             // First use of the appearance-none+chevron pattern in this repo
             // — reuse this shape rather than inventing a new one if another
             // `<select>` needs `appearance-none` later.
-            className="app-control w-full min-w-0 appearance-none rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] bg-[url('data:image/svg+xml;utf8,<svg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2020%2020%22%20fill=%22none%22%20stroke=%22currentColor%22%20stroke-width=%222%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22><path%20d=%22M5%208l5%205%205-5%22/></svg>')] bg-no-repeat bg-[right_0.65rem_center] pl-3 pr-7 py-1"
+            className="app-control app-select w-full min-w-0 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] pl-3 py-1"
             aria-label={`Reading status of ${item.title}`}
           >
             <option value="">To read</option>

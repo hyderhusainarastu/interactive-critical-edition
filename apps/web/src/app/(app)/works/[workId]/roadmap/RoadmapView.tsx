@@ -76,7 +76,7 @@ export function RoadmapView({
   const [addResults, setAddResults] = useState<SearchResult[]>([]);
   const [addError, setAddError] = useState<string | null>(null);
   const controlsRevealRef = useScrollReveal<HTMLDivElement>();
-  const loadingRevealRef = useScrollReveal<HTMLParagraphElement>();
+  const loadingRevealRef = useScrollReveal<HTMLDivElement>();
 
   // Used by `mutate` to refetch after a change. Not called from the effect
   // (the set-state-in-effect rule flags calling any state-setting function
@@ -200,10 +200,10 @@ export function RoadmapView({
       </p>
 
       {/* Controls */}
-      <div ref={controlsRevealRef} className="app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm">
+      <div ref={controlsRevealRef} className="app-card app-reveal mb-6 flex flex-wrap items-end gap-4 rounded-lg p-3 text-sm">
         <label className="flex flex-col gap-1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Depth</span>
-          <select value={mode} onChange={(e) => setMode(e.target.value as RoadmapMode)} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
+          <select value={mode} onChange={(e) => setMode(e.target.value as RoadmapMode)} className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
             <option value="comprehensive">Comprehensive</option>
             <option value="concise">Concise (essential + high)</option>
           </select>
@@ -214,7 +214,7 @@ export function RoadmapView({
             <select
               value={levelMode}
               onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-              className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+              className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
             >
               <option value="cumulative">Selected + foundations</option>
               <option value="exact">Exact level</option>
@@ -233,7 +233,7 @@ export function RoadmapView({
           <select
             value={readerLevel}
             onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-            className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+            className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
           >
             {READER_LEVEL_OPTIONS.map((lvl) => (
               <option key={lvl} value={lvl}>
@@ -312,7 +312,13 @@ export function RoadmapView({
       </div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
-      {!data && !error && <p ref={loadingRevealRef} className="app-reveal text-[var(--color-text-muted)]">Computing roadmap…</p>}
+      {!data && !error && (
+        <div ref={loadingRevealRef} className="app-reveal space-y-3" role="status" aria-label="Computing roadmap">
+          <div className="app-shimmer app-skeleton h-28 rounded-lg" />
+          <div className="app-shimmer app-skeleton h-24 rounded-lg" />
+          <span className="sr-only">Computing roadmap…</span>
+        </div>
+      )}
 
       {data && data.analysisStatus !== "complete" && (
         <p className="mb-4 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm text-[var(--color-text-muted)]">
@@ -323,7 +329,7 @@ export function RoadmapView({
       )}
 
       {data && visible.length === 0 && data.analysisStatus === "complete" && (
-        <p className="text-[var(--color-text-muted)]">
+        <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">
           No connected readings were found for this work{mode === "concise" ? " at this depth" : ""}.
         </p>
       )}
@@ -335,12 +341,12 @@ export function RoadmapView({
       {data && visible.length > 0 && <RoadmapConstellation rootTitle={title} items={visible} />}
 
       {byTier.map(({ tier, items }) => (
-        <section key={tier} className="mb-6">
+        <section key={tier} className="app-reveal mb-6">
           <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide" style={{ color: `var(${TIER_COLOR[tier]})` }}>
             <TierDot colorVar={TIER_COLOR[tier]} className="inline-block" />
             {TIER_LABEL[tier]}
           </h2>
-          <ol className="flex flex-col gap-2">
+          <ol className="app-reveal-stagger flex flex-col gap-2">
             {items.map((item) => (
               <RoadmapCard key={item.bibId} item={item} onMutate={mutate} />
             ))}
@@ -386,7 +392,7 @@ function RoadmapCard({
   return (
     <li
       data-roadmap-item={item.bibId}
-      className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3"
+      className={`app-card app-lift rounded-lg p-3 ${item.status || item.known ? "app-selected" : ""}`}
       style={{ opacity: item.known || item.overBudget ? 0.6 : 1 }}
     >
       <div className="flex items-start gap-3">
@@ -445,7 +451,7 @@ function RoadmapCard({
               <select
                 defaultValue={item.status ?? ""}
                 onChange={(e) => onMutate(item.bibId, { readingStatus: e.target.value || null })}
-                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
+                className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-1 py-0.5"
                 aria-label={`Reading status of ${item.title}`}
               >
                 <option value="">—</option>

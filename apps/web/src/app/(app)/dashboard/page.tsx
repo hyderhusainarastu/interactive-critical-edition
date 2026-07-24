@@ -53,25 +53,25 @@ export default async function DashboardPage() {
       {continueReading && (
         <Link
           href={`/works/${continueReading.workId}/reader`}
-          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4 hover:bg-[var(--color-surface)]/80"
+          className="app-card app-lift app-press app-mount rounded-lg px-5 py-4"
         >
           <div className="text-sm text-[var(--color-text-muted)]">Continue reading</div>
           <div className="mt-1 text-lg font-medium text-[var(--color-text)]">{continueReading.title}</div>
         </Link>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Link href="/works" className="rounded-md border border-[var(--color-border)] px-5 py-4 hover:bg-[var(--color-surface)]">
+      <div className="app-reveal-stagger grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Link href="/works" className="app-card app-lift app-press app-mount rounded-lg px-5 py-4">
           <div className="text-2xl font-semibold text-[var(--color-text)]">{myWorks.length}</div>
           <div className="text-sm text-[var(--color-text-muted)]">
             {myWorks.length === 1 ? "work uploaded" : "works uploaded"}
           </div>
         </Link>
-        <Link href="/library" className="rounded-md border border-[var(--color-border)] px-5 py-4 hover:bg-[var(--color-surface)]">
+        <Link href="/library" className="app-card app-lift app-press app-mount rounded-lg px-5 py-4">
           <div className="text-2xl font-semibold text-[var(--color-text)]">{toReadCount}</div>
           <div className="text-sm text-[var(--color-text-muted)]">Library items to read</div>
         </Link>
-        <div className="rounded-md border border-[var(--color-border)] px-5 py-4">
+        <div className="app-card app-mount rounded-lg px-5 py-4">
           <div className="text-2xl font-semibold text-[var(--color-text)]">
             {statusCounts.processing ?? 0}
           </div>
@@ -82,16 +82,16 @@ export default async function DashboardPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Link href="/works" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+        <Link href="/works" className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Uploaded works
         </Link>
-        <Link href="/library" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+        <Link href="/library" className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Library
         </Link>
-        <Link href="/graph" className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
+        <Link href="/graph" className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">
           Visualization
         </Link>
-        <Link href="/upload" className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]">
+        <Link href="/upload" className="app-control app-press rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]">
           Upload a work
         </Link>
       </div>

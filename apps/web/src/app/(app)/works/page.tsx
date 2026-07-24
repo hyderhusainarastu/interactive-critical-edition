@@ -40,19 +40,19 @@ export default async function WorksPage() {
         actions={<>
           <Link
             href="/works/trash"
-            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+            className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
           >
             Trash
           </Link>
           <Link
             href="/graph"
-            className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
+            className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
           >
             Visualization
           </Link>
           <Link
             href="/upload"
-            className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
+            className="app-control app-press rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
           >
             Upload a work
           </Link>
@@ -60,7 +60,7 @@ export default async function WorksPage() {
       />
 
       {library.length === 0 ? (
-        <p className="text-[var(--color-text-muted)]">
+        <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">
           Nothing uploaded yet.{" "}
           <Link href="/upload" className="underline">
             Upload your first work
@@ -68,12 +68,12 @@ export default async function WorksPage() {
           to get started.
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-[var(--color-border)] rounded-md border border-[var(--color-border)]">
+        <ul className="app-reveal-stagger flex flex-col gap-3">
           {library.map((item) => (
-            <li key={item.workId}>
+            <li key={item.workId} className="app-card app-lift app-mount overflow-hidden rounded-lg">
               <Link
                 href={`/works/${item.workId}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-[var(--color-surface)]"
+                className="app-press flex items-center justify-between gap-4 px-4 py-3"
               >
                 <span>
                   <span className="font-medium text-[var(--color-text)]">

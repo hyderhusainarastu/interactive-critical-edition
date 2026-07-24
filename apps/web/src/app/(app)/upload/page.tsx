@@ -254,6 +254,13 @@ export default function UploadPage() {
 
   const activeItem = batchItems.find((item) => item.state === "uploading" || item.state === "awaiting_duplicate");
   const completedCount = batchItems.filter((item) => item.state === "queued_for_processing" || item.state === "skipped" || item.state === "failed").length;
+  const batchProgress = batchItems.length > 0
+    ? Math.round((batchItems.reduce((total, item) => {
+        if (item.state === "queued_for_processing" || item.state === "skipped" || item.state === "failed") return total + 100;
+        if (item.state === "uploading" && item.progress?.total) return total + (item.progress.loaded / item.progress.total) * 100;
+        return total;
+      }, 0) / batchItems.length))
+    : 0;
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
@@ -292,7 +299,7 @@ export default function UploadPage() {
             inputRef.current?.click();
           }
         }}
-        className="app-reveal flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-16 text-center transition-colors hover:border-[var(--color-accent-umber)] focus-visible:border-[var(--color-accent-ink)]"
+        className={`app-reveal app-lift flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-6 py-16 text-center transition-colors hover:border-[var(--color-accent-umber)] focus-visible:border-[var(--color-accent-ink)] ${dragging ? "app-selected" : ""}`}
         style={{
           borderColor: dragging ? "var(--color-accent-ink)" : "var(--color-border)",
           background: dragging ? "var(--color-surface)" : "transparent",
@@ -318,21 +325,36 @@ export default function UploadPage() {
       </div>
 
       {batchItems.length > 0 && (
-        <section ref={batchStatusRef} aria-labelledby="batch-status-heading" className="app-reveal rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="batch-status-heading" className="font-serif text-lg font-semibold">Batch status</h2>
-            <p className="text-xs text-[var(--color-text-muted)]" aria-live="polite">{completedCount} of {batchItems.length} resolved{activeItem ? ` · ${activeItem.file.name}` : ""}</p>
+        <section ref={batchStatusRef} aria-labelledby="batch-status-heading" className="app-card app-reveal rounded-lg p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="app-progress-ring" style={{ "--progress": batchProgress } as React.CSSProperties} aria-hidden>
+              <span>{batchProgress}%</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 id="batch-status-heading" className="font-serif text-lg font-semibold">Batch status</h2>
+                <p className="text-xs text-[var(--color-text-muted)]" aria-live="polite">{completedCount} of {batchItems.length} resolved{activeItem ? ` · ${activeItem.file.name}` : ""}</p>
+              </div>
+              <progress className="app-progress mt-2 w-full" value={batchProgress} max={100}>
+                {batchProgress}%
+              </progress>
+            </div>
           </div>
-          <ol className="mt-3 flex flex-col gap-2">
-            {batchItems.map((item) => (
-              <li key={item.id} data-upload-item={item.file.name} className="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm">
+          <ol className="app-reveal-stagger mt-4 flex flex-col gap-2">
+            {batchItems.map((item, index) => (
+              <li
+                key={item.id}
+                data-upload-item={item.file.name}
+                className={`app-mount rounded-md border bg-[var(--color-background)] px-3 py-2 text-sm ${item === activeItem ? "app-selected border-[var(--color-highlight)]" : "border-[var(--color-border)]"}`}
+                style={{ "--reveal-index": index } as React.CSSProperties}
+              >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <span className="font-medium text-[var(--color-text)]">{item.file.name}</span>
                   <BatchStateLabel item={item} />
                 </div>
                 {item.state === "uploading" && item.progress && item.progress.total > 0 && (
                   <div className="mt-2">
-                    <progress className="w-full" value={item.progress.loaded} max={item.progress.total} />
+                    <progress className="app-progress w-full" value={item.progress.loaded} max={item.progress.total} />
                     <p className="mt-1 text-xs text-[var(--color-text-muted)]">{Math.round((item.progress.loaded / item.progress.total) * 100)}% · {fileSizeLabel(item.progress.loaded)} of {fileSizeLabel(item.progress.total)}</p>
                   </div>
                 )}
@@ -340,9 +362,9 @@ export default function UploadPage() {
                   <div className="mt-2 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-xs">
                     <p><strong>{item.duplicate.title}</strong> is already among your uploaded works. Choose whether this file is another edition before Palimnote continues the batch.</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      <Link href={`/works/${item.duplicate.workId}`} className="rounded border border-[var(--color-border)] px-2 py-1">Open existing</Link>
-                      <button type="button" className="rounded border border-[var(--color-border)] px-2 py-1" onClick={() => resolveDuplicate(item.id, "skip")}>Skip this file</button>
-                      <button type="button" className="rounded bg-[var(--color-accent-ink)] px-2 py-1 text-[var(--color-background)]" onClick={() => resolveDuplicate(item.id, "add_edition")}>Add as another edition</button>
+                      <Link href={`/works/${item.duplicate.workId}`} className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1">Open existing</Link>
+                      <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1" onClick={() => resolveDuplicate(item.id, "skip")}>Skip this file</button>
+                      <button type="button" className="app-control app-press rounded bg-[var(--color-accent-ink)] px-2 py-1 text-[var(--color-background)]" onClick={() => resolveDuplicate(item.id, "add_edition")}>Add as another edition</button>
                     </div>
                   </div>
                 )}

@@ -45,7 +45,7 @@ import { nextUp, progressByStage } from "./roadmapLayout";
 // WebGL + three.js — client only, so pull it in dynamically with SSR off.
 const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => m.KnowledgeGraph3D), {
   ssr: false,
-  loading: () => <p className="py-10 text-center text-[var(--color-text-muted)]">Loading 3D view…</p>,
+  loading: () => <div className="app-shimmer app-skeleton h-[420px] rounded-lg" role="status"><span className="sr-only">Loading 3D view…</span></div>,
 });
 
 const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork", "stage"] as const;
@@ -558,7 +558,13 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
       <div className="mb-4"><PageHeader title="Visualization" description={`${data?.title ?? "Your library"} · works, sources, concepts, people, and (per-work) the text’s own outline.`} /></div>
 
       {error && <p className="text-[var(--color-accent-burgundy)]">{error}</p>}
-      {!data && !error && <p className="text-[var(--color-text-muted)]">Loading graph…</p>}
+      {!data && !error && (
+        <div className="space-y-3" role="status" aria-label="Loading visualization">
+          <div className="app-shimmer app-skeleton h-10 rounded-lg" />
+          <div className="app-shimmer app-skeleton h-[420px] rounded-lg" />
+          <span className="sr-only">Loading graph…</span>
+        </div>
+      )}
 
       {data && data.nodes.length === 0 && (
         <p className="text-[var(--color-text-muted)]">
@@ -581,7 +587,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setLayoutMode("roadmap")}
                 aria-pressed={layoutMode === "roadmap"}
-                className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "roadmap" ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "roadmap" ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
               >
                 Roadmap
               </button>
@@ -589,7 +595,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setLayoutMode("explore")}
                 aria-pressed={layoutMode === "explore"}
-                className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "explore" ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "explore" ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
               >
                 Explore
               </button>
@@ -609,7 +615,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={readerLevel}
                   onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
                     <option key={level} value={level}>
@@ -624,7 +630,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setShowReadingThread(!showReadingThread)}
                 aria-pressed={showReadingThread}
-                className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${showReadingThread ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                className={`app-control app-press rounded border border-[var(--color-border)] px-2 py-1 ${showReadingThread ? "app-selected bg-[var(--color-surface)] font-medium" : ""}`}
               >
                 Reading thread
               </button>
@@ -659,7 +665,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
             <div className="space-y-4">
               <section
                 ref={graphWorkspaceRef}
-                className={`rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
+                className={`app-card app-mount rounded-lg p-3 ${isFullscreen ? "h-screen w-screen overflow-hidden rounded-none p-4" : ""}`}
                 aria-label="3D graph canvas"
                 data-graph-stage
                 data-reading-thread={showReadingThread ? "on" : "off"}
@@ -681,7 +687,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                           type="button"
                           onClick={() => setFocusMode(mode)}
                           aria-pressed={focusMode === mode}
-                          className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${focusMode === mode ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                          className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${focusMode === mode ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
                         >
                           {FOCUS_MODE_LABEL[mode]}
                         </button>
@@ -790,7 +796,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 value={filters.search}
                 onChange={(event) => updateFilter("search", event.target.value)}
                 placeholder="Works, concepts, sources"
-                className="w-48 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="app-control w-48 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
               />
             </label>
             <label className="flex items-center gap-1">
@@ -803,7 +809,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               <select
                 value={filters.state}
                 onChange={(e) => updateFilter("state", e.target.value)}
-                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
               >
                 <option value="all">All ({data.nodes.length})</option>
                 {STATE_ORDER.map((s) => (
@@ -820,7 +826,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.type}
                   onChange={(e) => updateFilter("type", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {(types as NodeType[]).map((t) => (
@@ -838,7 +844,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.relation}
                   onChange={(e) => updateFilter("relation", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {relations.map((r) => (
@@ -856,7 +862,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.authority}
                   onChange={(e) => updateFilter("authority", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {authorities.map((a) => (
@@ -874,7 +880,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.provider}
                   onChange={(e) => updateFilter("provider", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {providers.map((p) => (
@@ -892,7 +898,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.credibilityBand}
                   onChange={(e) => updateFilter("credibilityBand", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {credibilityBands.map((band) => (
@@ -910,7 +916,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.stage}
                   onChange={(e) => updateFilter("stage", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {STAGE_ORDER.map((stage) => (
@@ -928,7 +934,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 <select
                   value={filters.associatedWork}
                   onChange={(e) => updateFilter("associatedWork", e.target.value)}
-                  className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   <option value="all">All</option>
                   {workNodes.map((work) => (
@@ -962,7 +968,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               <div className="flex flex-wrap gap-x-4 gap-y-2">
                 {workNodes.map((work) => (
                   <label key={work.id} className="flex items-center gap-1.5">
-                    <input type="checkbox" checked={pinnedWorkIds.includes(work.id)} onChange={(event) => togglePinnedWork(work.id, event.target.checked)} />
+                    <input className="app-toggle" type="checkbox" checked={pinnedWorkIds.includes(work.id)} onChange={(event) => togglePinnedWork(work.id, event.target.checked)} />
                     <span>{work.label}</span>
                   </label>
                 ))}
@@ -1009,7 +1015,7 @@ function GraphInspector({
   allNodes?: readonly GraphNode[];
 }) {
   return (
-    <aside className="max-h-[520px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3" aria-label="Graph inspector" data-graph-inspector>
+    <aside className={`max-h-[520px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3 ${selected || selectedLink ? "app-panel-enter app-selected" : ""}`} aria-label="Graph inspector" data-graph-inspector>
       {!selected && !selectedLink && <p className="text-sm text-[var(--color-text-muted)]">Select a graph node or a table row to inspect its source, access, and provenance. Select a link for relationship evidence.</p>}
       {selected && (
         <div>
@@ -1202,14 +1208,14 @@ function RoadmapProgressStrip({
   onFocusNextUp: () => void;
 }) {
   return (
-    <div className="mb-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-xs" data-graph-roadmap-progress>
+    <div className="app-card app-mount mb-4 rounded-lg p-3 text-xs" data-graph-roadmap-progress>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="font-medium text-[var(--color-text)]">
           {essentialKnown} of {essentialTotal} essential works read
         </span>
         {currentStage && <span className="text-[var(--color-text-muted)]">You&rsquo;re in: {STAGE_LABEL[currentStage]}</span>}
         {nextUpNode && (
-          <button type="button" onClick={onFocusNextUp} className="app-control rounded border border-[var(--color-accent-ink)] px-2 py-1 text-[var(--color-accent-ink)]">
+          <button type="button" onClick={onFocusNextUp} className="app-control app-press app-selected rounded border border-[var(--color-accent-ink)] px-2 py-1 text-[var(--color-accent-ink)]">
             Next up: {nextUpNode.label}
           </button>
         )}
@@ -1230,7 +1236,7 @@ function RoadmapProgressStrip({
             onClick={() => onSelectStage(activeStage === stage ? "all" : stage)}
             aria-pressed={activeStage === stage}
             disabled={total === 0}
-            className={`app-control rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40 ${activeStage === stage ? "bg-[var(--color-background)] font-medium" : ""}`}
+            className={`app-control app-press rounded border border-[var(--color-border)] px-2 py-1 disabled:cursor-not-allowed disabled:opacity-40 ${activeStage === stage ? "app-selected bg-[var(--color-background)] font-medium" : ""}`}
           >
             {STAGE_LABEL[stage]} {known}/{total}
           </button>
