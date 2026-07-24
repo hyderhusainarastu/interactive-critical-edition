@@ -207,6 +207,21 @@ export function deriveWorkIdentity(
     evidence.push("author-suffixed listing");
   }
 
+  // Issue #3, fragmentation vector (a): a leading POSSESSIVE of a cited author
+  // ("Aristotle's Nicomachean Ethics") is authorship, not a title word, yet
+  // `titleKey` keeps "aristotle" as a title token — so the possessive and
+  // non-possessive forms of one work ("Aristotle's Nicomachean Ethics" vs
+  // "Nicomachean Ethics") fragment into two keys. Strip the possessive token
+  // from the KEY (only), and only when it names an author the citing document
+  // actually cites — a topical possessive of an uncited name is left intact.
+  // The displayed `canonicalTitle` keeps the original wording untouched.
+  let keyTitle = working;
+  const possessive = working.match(/^([A-Z][A-Za-z.\-'’]*?)['’]s\s+(.{4,})$/);
+  if (possessive && cited.has(surnameOf(possessive[1]))) {
+    keyTitle = tidy(possessive[2]);
+    evidence.push("leading possessive of cited author stripped from key");
+  }
+
   const surnames = record.authors.map(surnameOf).filter(Boolean);
   // Prefer an author the citing document names — that is the work's author, not
   // the reviewer who happens to occupy the same metadata field. Failing that,
@@ -215,7 +230,13 @@ export function deriveWorkIdentity(
   const titleTokens = new Set(
     tidy(record.title).toLowerCase().split(/[\s,.:;–—-]+/).map((t) => t.replace(/[^a-z'’-]/g, "")).filter(Boolean),
   );
-  const citedInTitle = [...cited].find((s) => titleTokens.has(s)) ?? null;
+  // The significant tokens of the FINAL work-key title (after the possessive
+  // strip above). Issue #3, fragmentation vector (b): a token that is part of
+  // THIS work's own title must never be mistaken for its author. Without this,
+  // a mis-parsed citation surname that happens to be a title word ("Nicomachean")
+  // leaks through `citedInTitle` and becomes the author, splitting the work.
+  const keyTitleTokens = new Set(titleKey(keyTitle).split(" ").filter(Boolean));
+  const citedInTitle = [...cited].find((s) => titleTokens.has(s) && !keyTitleTokens.has(s)) ?? null;
 
   const isReview =
     review.markers.length > 0 ||
@@ -236,7 +257,7 @@ export function deriveWorkIdentity(
   // and keying on the identifier is exactly what splits one work into five
   // entries. Tokens are de-duplicated because review titles often repeat the
   // work's title verbatim alongside it.
-  const tk = [...new Set(titleKey(working).split(" ").filter(Boolean))].sort().join(" ");
+  const tk = [...new Set(titleKey(keyTitle).split(" ").filter(Boolean))].sort().join(" ");
   const key = tk
     ? `work:${tk}${authorSurname ? `:${authorSurname}` : ""}`
     : `record:${canonicalizeDoi(record.doi) ?? canonicalizeIsbn(record.isbn) ?? tidy(record.title).toLowerCase()}`;
@@ -284,11 +305,22 @@ export function groupByWork<T>(
   // "[Recensão a] Aristotle's Philosophy of Action" is a review of the book,
   // not a separate work. Ambiguity (two authors, same title) leaves it alone.
   for (const [key, group] of [...groups]) {
+    if (!key.startsWith("work:")) continue;
     if (key.split(":").length !== 2) continue; // already carries an author
-    if (group.entries.some((e) => e.id.role === "primary")) continue;
     const prefix = `${key}:`;
     const candidates = [...groups.keys()].filter((k) => k.startsWith(prefix));
     if (candidates.length !== 1) continue;
+    // A review/edition-only identity (no primary) folds into its unique
+    // authored match unconditionally — it is explicitly ABOUT the named work.
+    // An authorless PRIMARY — a bare title with no author metadata, the residue
+    // of the issue #3 possessive/citedInTitle hardening — also folds into its
+    // unique authored twin, but only when the title is specific enough (≥2
+    // significant tokens) that a generic one-word title ("Ethics") can never
+    // dissolve into an unrelated work. Precision over recall.
+    if (group.entries.some((e) => e.id.role === "primary")) {
+      const tokenCount = key.slice("work:".length).split(" ").filter(Boolean).length;
+      if (tokenCount < 2) continue;
+    }
     const target = groups.get(candidates[0])!;
     target.entries.push(...group.entries);
     groups.delete(key);

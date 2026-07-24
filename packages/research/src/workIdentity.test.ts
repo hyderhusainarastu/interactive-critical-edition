@@ -175,6 +175,84 @@ describe("issue #2 — a review NOTICE is treated as a review, a review-named ve
   });
 });
 
+describe("issue #3 — Nicomachean Ethics no longer fragments across possessive/author vectors", () => {
+  // Production evidence: one work split into four identities —
+  //   work:ethics nicomachean:nicomachean
+  //   work:ethics nicomachean:aristotle
+  //   work:aristotle ethics nicomachean:nicomachean
+  //   work:aristotle ethics nicomachean:aristotle
+  // via (a) the possessive "Aristotle's" adding an "aristotle" title token and
+  // (b) the mis-parsed cited surname "nicomachean" (a title word) becoming the
+  // author. The citing corpus names both "aristotle" and (wrongly) "nicomachean".
+  const NE_CITED = new Set(["aristotle", "nicomachean", "kenny"]);
+
+  // The four records that produced the four observed fragment shapes.
+  const fragmentShapes = [
+    R({ title: "Aristotle's Nicomachean Ethics", authors: ["Aristotle"] }), // :aristotle, possessive
+    R({ title: "Nicomachean Ethics", authors: ["Aristotle"] }), // :aristotle
+    R({ title: "Aristotle's Nicomachean Ethics", authors: [] }), // was :nicomachean, possessive
+    R({ title: "Nicomachean Ethics", authors: [] }), // was :nicomachean, bare
+  ];
+
+  it("collapses all four observed fragment shapes into ONE work", () => {
+    const groups = groupByWork(fragmentShapes, read, { citedAuthorSurnames: NE_CITED });
+    expect(groups).toHaveLength(1);
+    expect(groups[0].authorSurname).toBe("aristotle");
+    expect(groups[0].key).toBe("work:ethics nicomachean:aristotle");
+  });
+
+  it("never lets a title word ('nicomachean') become the author (vector b)", () => {
+    for (const record of fragmentShapes) {
+      const id = deriveWorkIdentity(record, { citedAuthorSurnames: NE_CITED });
+      expect(id.authorSurname).not.toBe("nicomachean");
+    }
+  });
+
+  it("strips the leading possessive of a cited author from the key (vector a)", () => {
+    const withPossessive = deriveWorkIdentity(
+      R({ title: "Aristotle's Nicomachean Ethics", authors: ["Aristotle"] }),
+      { citedAuthorSurnames: NE_CITED },
+    );
+    const without = deriveWorkIdentity(R({ title: "Nicomachean Ethics", authors: ["Aristotle"] }), {
+      citedAuthorSurnames: NE_CITED,
+    });
+    expect(withPossessive.key).toBe(without.key);
+    expect(withPossessive.key).toBe("work:ethics nicomachean:aristotle");
+    // The displayed title keeps its original wording; only the key is stripped.
+    expect(withPossessive.canonicalTitle).toBe("Aristotle's Nicomachean Ethics");
+  });
+
+  it("keeps a genuinely distinct same-topic work by a different author apart", () => {
+    // "Aristotle's Ethics" by Kenny is a book ABOUT Aristotle, not the NE.
+    const records = [
+      R({ title: "Nicomachean Ethics", authors: ["Aristotle"] }),
+      R({ title: "Aristotle's Ethics", authors: ["Anthony Kenny"] }),
+    ];
+    const groups = groupByWork(records, read, { citedAuthorSurnames: NE_CITED });
+    expect(groups).toHaveLength(2);
+    const surnames = groups.map((g) => g.authorSurname).sort();
+    expect(surnames).toEqual(["aristotle", "kenny"]);
+  });
+
+  it("does not dissolve an authorless GENERIC one-word title into an authored work", () => {
+    // Precision guard: "Ethics" (authorless) is too generic to auto-attach to
+    // the single authored "Ethics" that happens to share it.
+    const records = [
+      R({ title: "Ethics", authors: ["Spinoza"] }),
+      R({ title: "Ethics", authors: [] }),
+    ];
+    expect(groupByWork(records, read, { citedAuthorSurnames: NE_CITED })).toHaveLength(2);
+  });
+
+  it("does not merge two distinct multi-word works that share no author", () => {
+    const records = [
+      R({ title: "Nicomachean Ethics", authors: ["Aristotle"] }),
+      R({ title: "Eudemian Ethics", authors: ["Aristotle"] }),
+    ];
+    expect(groupByWork(records, read, { citedAuthorSurnames: NE_CITED })).toHaveLength(2);
+  });
+});
+
 describe("work identity is explainable", () => {
   it("records why a record was treated as a review", () => {
     const id = deriveWorkIdentity(
