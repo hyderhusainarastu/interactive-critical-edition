@@ -16,6 +16,8 @@ export interface WorkspacePreferences {
   readingWidth: WorkspaceReadingWidth;
   focusMode: boolean;
   scriptDisplay: WorkspaceScriptDisplay;
+  soundEnabled: boolean;
+  motionEnabled: boolean;
 }
 
 export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
@@ -24,6 +26,8 @@ export const DEFAULT_WORKSPACE_PREFERENCES: WorkspacePreferences = {
   readingWidth: "comfortable",
   focusMode: false,
   scriptDisplay: "original",
+  soundEnabled: true,
+  motionEnabled: true,
 };
 
 function isOption<T extends readonly string[]>(value: unknown, options: T): value is T[number] {
@@ -43,5 +47,7 @@ export function normalizeWorkspacePreferences(value: unknown): WorkspacePreferen
     scriptDisplay: isOption(candidate.scriptDisplay, SCRIPT_DISPLAY_OPTIONS)
       ? candidate.scriptDisplay
       : DEFAULT_WORKSPACE_PREFERENCES.scriptDisplay,
+    soundEnabled: typeof candidate.soundEnabled === "boolean" ? candidate.soundEnabled : DEFAULT_WORKSPACE_PREFERENCES.soundEnabled,
+    motionEnabled: typeof candidate.motionEnabled === "boolean" ? candidate.motionEnabled : DEFAULT_WORKSPACE_PREFERENCES.motionEnabled,
   };
 }

@@ -83,6 +83,18 @@
   --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
 
   --color-focus-ring: #263a4f;
+  --gradient-hero: linear-gradient(135deg, #fbf9f4 0%, #eee8dd 48%, #e4edf1 100%);
+  --gradient-accent: linear-gradient(135deg, #7a3f48, #765641 55%, #3e5d52);
+  --gradient-surface: linear-gradient(145deg, #fbf9f4, #f4f0e7);
+  --shadow-elevation-1: 0 1px 2px rgb(23 40 56 / 10%);
+  --shadow-elevation-2: 0 10px 24px rgb(23 40 56 / 13%);
+  --shadow-elevation-3: 0 22px 54px rgb(23 40 56 / 18%);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--color-highlight) 28%, transparent), 0 12px 32px color-mix(in srgb, var(--color-accent-ink) 15%, transparent);
+  --spring-fast: cubic-bezier(.2, .8, .2, 1);
+  --spring-gentle: cubic-bezier(.22, 1, .36, 1);
+  --depth-near: 2px;
+  --depth-mid: 6px;
+  --depth-far: 12px;
   /* Keep native UI (scrollbars, form controls) light too, so a dark-mode
      OS doesn't render dark inputs against the bone-white page. */
   color-scheme: light;
@@ -110,6 +122,13 @@
   --color-surface-strong: #4a6f93;
   --color-surface-strong-fg: #ffffff;
   --color-surface-strong-fg-soft: #eef3f7;
+  --gradient-hero: linear-gradient(135deg, #10171e 0%, #16202a 52%, #203642 100%);
+  --gradient-accent: linear-gradient(135deg, #e0a3ac, #d3ab86 55%, #8fc4a8);
+  --gradient-surface: linear-gradient(145deg, #16202a, #10171e);
+  --shadow-elevation-1: 0 1px 2px rgb(0 0 0 / 28%);
+  --shadow-elevation-2: 0 10px 24px rgb(0 0 0 / 34%);
+  --shadow-elevation-3: 0 22px 54px rgb(0 0 0 / 42%);
+  --shadow-glow: 0 0 0 1px color-mix(in srgb, var(--color-highlight) 22%, transparent), 0 12px 32px rgb(0 0 0 / 32%);
 }
 
 :root[data-theme="light"] {
@@ -351,6 +370,19 @@ body {
 }
 
 .app-shell-main { min-width: 0; }
+.app-shell-header, .masthead { transition: min-height .18s var(--spring-fast), box-shadow .18s var(--spring-fast), background-color .18s var(--spring-fast); }
+.header-compact { box-shadow: var(--shadow-elevation-1); }
+.app-shell-header.header-compact { min-height: 3.1rem; }
+.nav { position: relative; }
+.nav::after { content: ""; position: absolute; right: 0; bottom: -.1rem; left: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .2s var(--spring-gentle); }
+.nav:hover::after, .nav:focus-visible::after, .nav[aria-current="page"]::after { transform: scaleX(1); }
+.app-shimmer { background: linear-gradient(100deg, var(--color-surface) 30%, color-mix(in srgb, var(--color-background) 72%, white) 50%, var(--color-surface) 70%); }
+.app-selected { border-inline-start: 3px solid var(--color-highlight); background: color-mix(in srgb, var(--color-highlight) 10%, var(--color-surface)); padding-inline-start: calc(.5rem + var(--depth-near)); }
+.sound-toggle svg { overflow: visible; }
+.sound-wave, .sound-slash { transition: opacity .16s var(--spring-fast), transform .16s var(--spring-fast); transform-origin: 12px 12px; }
+.sound-toggle-on .sound-slash, .sound-toggle-off .sound-wave { opacity: 0; transform: scale(.65); }
+.sound-toggle-off .sound-slash { opacity: 1; }
+@media (prefers-reduced-motion: no-preference) { .wordmark:hover .mark-lines { transform: translateX(1px); } .wordmark:hover .mark-lines i { animation: mark-line-draw .32s var(--spring-gentle) both; } .wordmark:hover .mark-lines i:nth-child(2) { animation-delay: .05s; } .wordmark:hover .mark-lines i:nth-child(3) { animation-delay: .1s; } @keyframes mark-line-draw { from { transform: scaleX(.35); transform-origin: left; } } }
 /* Phase 23.2 (accessibility completion, D-23-x): bumped from 2.2rem
    (35.2px) to 2.75rem (44px) — this app's self-imposed touch-target floor,
    stricter than WCAG 2.5.8 AA's 24px minimum, matching common
@@ -395,15 +427,30 @@ body {
    light, warm boundary on intent; reveal is a single scroll entry and remains
    entirely off for readers who reduce motion. 3D remains graph-only. */
 .app-control {
-  transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease;
+  transition: border-color .16s var(--spring-fast), background-color .16s var(--spring-fast), color .16s var(--spring-fast), box-shadow .16s var(--spring-fast);
 }
 .app-control:hover { border-color: var(--color-accent-umber); }
 .app-control:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-ink) 18%, transparent); }
 @media (prefers-reduced-motion: no-preference) {
   .app-reveal[data-reveal-ready="true"] { opacity: 0; transform: translateY(10px); }
-  .app-reveal[data-revealed="true"] { animation: app-scroll-reveal .28s ease-out both; }
+  .app-reveal[data-revealed="true"] { animation: app-scroll-reveal .36s var(--spring-gentle) both; animation-delay: calc(var(--reveal-index, 0) * 45ms); }
+  .app-reveal-stagger > .app-reveal[data-revealed="true"] { animation-delay: calc(var(--reveal-index, 0) * 60ms); }
   @keyframes app-scroll-reveal { to { opacity: 1; transform: translateY(0); } }
+  .app-lift { transform-style: preserve-3d; transition: transform .2s var(--spring-fast), box-shadow .2s var(--spring-fast); }
+  .app-lift:hover { transform: perspective(700px) translateY(calc(var(--depth-near) * -1)) rotateX(1.2deg) rotateY(-1.2deg); box-shadow: var(--shadow-elevation-2); }
+  .app-press:active { transform: translateY(1px) scale(.985); }
+  .app-shimmer { background-size: 200% 100%; animation: app-shimmer 1.8s linear infinite; }
+  .app-selected { animation: app-selected .42s var(--spring-gentle) both; }
+  @keyframes app-shimmer { to { background-position: -200% 0; } }
+  @keyframes app-selected { from { box-shadow: var(--shadow-glow); transform: translateY(-1px); } }
 }
+
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+
+.wordmark { display: inline-flex; align-items: center; gap: .04em; }
+.wordmark-letter { display: inline-block; transition: transform .2s var(--spring-gentle), color .2s var(--spring-fast); transition-delay: calc(var(--wordmark-index) * 16ms); }
+@media (prefers-reduced-motion: no-preference) { .wordmark:hover .wordmark-letter { transform: translateY(-1px); } .wordmark:hover .mark-margin { animation: mark-margin-nod .42s var(--spring-gentle); } @keyframes mark-margin-nod { 50% { transform: translateX(2px); } } }
+:root[data-motion="reduced"] .wordmark-letter { transform: none !important; }
 
 /* D-22-10 (plan §22.7): a second, complementary one-shot entrance for
    components that are conditionally mounted rather than scrolled into view —

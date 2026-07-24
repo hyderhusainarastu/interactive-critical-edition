@@ -9,6 +9,8 @@ const preferencesSchema = z.object({
   readingWidth: z.enum(["compact", "comfortable", "wide"]).optional(),
   focusMode: z.boolean().optional(),
   scriptDisplay: z.enum(["original", "transliteration"]).optional(),
+  soundEnabled: z.boolean().optional(),
+  motionEnabled: z.boolean().optional(),
 }).strict();
 
 export async function GET() {

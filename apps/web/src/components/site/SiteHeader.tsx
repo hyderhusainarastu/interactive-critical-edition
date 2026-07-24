@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { isBetaTestingMode } from "@ice/config";
 import { auth } from "@/lib/auth";
-import { SITE_NAME } from "@/lib/brand";
 import { BetaBadge } from "@/components/shared/BetaBadge";
-import { Mark } from "@/components/site/Mark";
 import { SiteThemeToggle } from "@/components/site/SiteThemeToggle";
+import { SoundToggle } from "@/components/site/SoundToggle";
+import { Wordmark } from "@/components/site/Wordmark";
+import { ScrollAwareHeader } from "@/components/site/ScrollAwareHeader";
 
 /**
  * Public site masthead for the landing and policy pages, restyled to the
@@ -27,23 +28,21 @@ export async function SiteHeader() {
   const betaTestingMode = isBetaTestingMode();
 
   return (
-    <header className="masthead">
+    <ScrollAwareHeader className="masthead">
       <div className="brand-group">
-        <Link href="/" className="brand" aria-label={`${SITE_NAME} home`}>
-          <Mark small />
-          <span>{SITE_NAME}</span>
-        </Link>
+        <Wordmark href="/" className="brand" />
         {betaTestingMode && <BetaBadge />}
       </div>
       <nav aria-label="Primary navigation">
-        <Link href="/#workspace">Workspace</Link>
-        <Link href="/#reader">Reader</Link>
-        <Link href="/#library">Library</Link>
-        <Link href="/#graph">Graph</Link>
-        <Link href="/#ask">Ask Library</Link>
+        <Link className="nav" data-sound="click" href="/#workspace">Workspace</Link>
+        <Link className="nav" data-sound="click" href="/#reader">Reader</Link>
+        <Link className="nav" data-sound="click" href="/#library">Library</Link>
+        <Link className="nav" data-sound="click" href="/#graph">Graph</Link>
+        <Link className="nav" data-sound="click" href="/#ask">Ask Library</Link>
       </nav>
       <div className="masthead-end">
         <SiteThemeToggle />
+        <SoundToggle className="theme-toggle" />
         {signedIn ? (
           <Link href="/dashboard" className="nav-cta">
             Your library
@@ -58,6 +57,6 @@ export async function SiteHeader() {
           </Link>
         )}
       </div>
-    </header>
+    </ScrollAwareHeader>
   );
 }

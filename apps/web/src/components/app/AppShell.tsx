@@ -7,7 +7,8 @@ import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { BetaBadge } from "@/components/shared/BetaBadge";
-import { Mark } from "@/components/site/Mark";
+import { Wordmark } from "@/components/site/Wordmark";
+import { SoundToggle } from "@/components/site/SoundToggle";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
@@ -64,6 +65,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [ragOpen, setRagOpen] = useState(false);
+  const [headerCompact, setHeaderCompact] = useState(false);
   const [readerLevel, setReaderLevel] = useState<ReaderLevel | null>(initialReaderLevel);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
@@ -85,6 +87,12 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];
   const focusMode = preferences.focusMode;
+  useEffect(() => {
+    const update = () => setHeaderCompact(window.scrollY > 18);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
   useEffect(() => {
     const request = focusModeFocusRequestRef.current;
     if ((request === "enter" && !focusMode) || (request === "exit" && focusMode) || !request) return;
@@ -138,21 +146,15 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
       {focusMode && <button ref={focusModeExitRef} type="button" className="app-control fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
-      <header inert={focusMode} className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
+      <header inert={focusMode} className={focusMode ? "sr-only" : `app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur ${headerCompact ? "header-compact" : ""}`}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           {betaTestingMode ? (
             <div className="flex min-w-0 items-center gap-2">
-              <Link href="/dashboard" className="flex shrink-0 items-center gap-2 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">
-                <Mark small />
-                <span>Palimnote</span>
-              </Link>
+              <Wordmark href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]" />
               <BetaBadge />
             </div>
           ) : (
-            <Link href="/dashboard" className="flex shrink-0 items-center gap-2 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">
-              <Mark small />
-              <span>Palimnote</span>
-            </Link>
+            <Wordmark href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]" />
           )}
           {/* D-23-15: the middle `minmax(0,1fr)` grid track can be narrower than
               the nav's no-wrap content at tablet widths (768–~1000px), making the
@@ -164,7 +166,8 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
           <nav className="hidden min-w-0 flex-wrap items-center gap-1 py-1.5 md:flex" aria-label="Primary navigation">
             {navItems.map((item) => <NavLink key={item.href} item={item} pathname={pathname} />)}
           </nav>
-          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
+            <SoundToggle enabled={preferences.soundEnabled} onChange={(soundEnabled) => updatePreferences({ soundEnabled })} />
             <button type="button" className="app-control app-icon-button hidden sm:inline-flex" data-tooltip="Search pages and works (⌘K)" aria-label="Search pages and works" onClick={(event) => window.dispatchEvent(new CustomEvent("palimnote:open-command-palette", { detail: event.currentTarget }))}>⌕</button>
             {/* Phase 23.2 (D-23-x): both toggle buttons and "Log out" bumped
                 to the 44x44 touch-target floor via `min-h-11 min-w-11` —
@@ -214,7 +217,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
   const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-  return <Link href={item.href} onClick={onClick} aria-current={active ? "page" : undefined} className={`app-control whitespace-nowrap border-b-2 px-1 py-1.5 text-[11px] font-bold uppercase tracking-[.08em] ${active ? "border-[var(--color-accent-ink)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
+  return <Link href={item.href} data-sound="click" onClick={onClick} aria-current={active ? "page" : undefined} className={`nav app-control whitespace-nowrap border-b-2 px-1 py-1.5 text-[11px] font-bold uppercase tracking-[.08em] ${active ? "border-[var(--color-accent-ink)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
 }
 
 function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; pathname: string; email: string | null | undefined; onClose: () => void }) {
@@ -293,6 +296,8 @@ function PreferencesMenu({
       <PreferenceField label="Text size"><select className="app-control" value={preferences.fontSize} onChange={(event) => onUpdate({ fontSize: event.target.value as WorkspacePreferences["fontSize"] })}><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></PreferenceField>
       <PreferenceField label="Reading width"><select className="app-control" value={preferences.readingWidth} onChange={(event) => onUpdate({ readingWidth: event.target.value as WorkspacePreferences["readingWidth"] })}><option value="compact">Compact</option><option value="comfortable">Comfortable</option><option value="wide">Wide</option></select></PreferenceField>
       <PreferenceField label="Script display"><select className="app-control" value={preferences.scriptDisplay} onChange={(event) => onUpdate({ scriptDisplay: event.target.value as WorkspacePreferences["scriptDisplay"] })}><option value="original">Verified original script</option><option value="transliteration">Transliteration</option></select></PreferenceField>
+      <label className="mt-3 flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3 text-sm"><span>Interface sounds</span><input type="checkbox" checked={preferences.soundEnabled} onChange={(event) => onUpdate({ soundEnabled: event.target.checked })} /></label>
+      <label className="mt-3 flex items-center justify-between gap-3 text-sm"><span>Motion</span><input type="checkbox" checked={preferences.motionEnabled} onChange={(event) => onUpdate({ motionEnabled: event.target.checked })} /></label>
       {/* Distinct from the four fields above: this writes the account-level
           `users.readerLevel` (POST /api/reader-level), not a local-storage
           workspace preference — it's the same default Library/Curriculum/

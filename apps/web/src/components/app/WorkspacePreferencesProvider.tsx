@@ -35,6 +35,7 @@ function applyPreferences(preferences: WorkspacePreferences) {
   root.dataset.readingWidth = preferences.readingWidth;
   root.dataset.focusMode = String(preferences.focusMode);
   root.dataset.scriptDisplay = preferences.scriptDisplay;
+  root.dataset.motion = preferences.motionEnabled ? "full" : "reduced";
 }
 
 export function WorkspacePreferencesProvider({
@@ -112,6 +113,15 @@ export function WorkspacePreferencesProvider({
       return next;
     });
   }, [toast]);
+
+  useEffect(() => {
+    const onExternalChange = (event: Event) => {
+      const patch = (event as CustomEvent<Partial<WorkspacePreferences>>).detail;
+      if (patch && typeof patch === "object") updatePreferences(patch);
+    };
+    window.addEventListener("palimnote:workspace-preferences-change", onExternalChange);
+    return () => window.removeEventListener("palimnote:workspace-preferences-change", onExternalChange);
+  }, [updatePreferences]);
 
   const value = useMemo(() => ({ preferences, updatePreferences }), [preferences, updatePreferences]);
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
