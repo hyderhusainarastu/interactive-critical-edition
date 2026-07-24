@@ -274,9 +274,16 @@ export function RagChatPanel({
     >
       <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] p-4">
         <div>
-          <h2 className="font-serif text-lg font-semibold">Ask your Library</h2>
+          {/* Visual-only restyle to the landing's Ask Library depiction
+              (docs "ui-overhaul-spec.md" §3.3): a small burgundy eyebrow
+              above the existing heading, matching the depiction's
+              "GROUNDED IN YOUR OWN LIBRARY" kicker. No new user-facing copy
+              beyond that existing depiction string; heading text, the
+              description, and the "Scope: ..." string are unchanged. */}
+          <p className="text-[9px] font-bold uppercase tracking-[.13em] text-[var(--color-accent-burgundy)]">Grounded in your own library</p>
+          <h2 className="mt-1 font-serif text-lg font-semibold">Ask your Library</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p>
-          <p className="mt-1 text-xs font-medium text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
+          <p className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-sunken)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
         </div>
         <div className="flex gap-1"><button type="button" className="app-control app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
       </header>
@@ -313,8 +320,48 @@ export function RagChatPanel({
   );
 }
 
+/**
+ * Visual-only restyle to the landing's Ask Library depiction (docs
+ * "ui-overhaul-spec.md" §3.3): each turn gets a left accent bar keyed by
+ * role/state, matching the depiction's `.chat-ask`/`.chat-answer`/
+ * `.chat-empty` convention — ink for the reader's own turn, green for a
+ * substantiated answer, umber for the explicit no-evidence fallback (the
+ * only case an assistant turn ever has zero citations, per `@ice/rag`'s
+ * `fallbackSocraticAnswer`). Applied via inline `borderInlineStart` rather
+ * than a Tailwind border-side utility so it layers cleanly over the
+ * existing whole-border/background classes below without a specificity
+ * fight over border-color.
+ */
+function turnAccentColor(message: Message): string {
+  if (message.role === "user") return "var(--color-accent-ink)";
+  return message.citations.length > 0 ? "var(--color-accent-green)" : "var(--color-accent-umber)";
+}
+
 function MessageCard({ message }: { message: Message }) {
-  return <li className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"}`}><p className="mb-1 text-xs font-medium text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p><p className="whitespace-pre-wrap leading-6">{message.content}</p>{message.citations.length > 0 && <ul className="mt-2 flex flex-col gap-1 border-t border-[var(--color-border)] pt-2 text-xs">{message.citations.map((citation) => <li key={citation.chunkId}><a href={citation.href} className="underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>{citation.license && <span className="text-[var(--color-text-muted)]"> · {citation.license}</span>}</li>)}</ul>}{message.role === "assistant" && message.competencyNotices?.length ? <CompetencyNoticeList notices={message.competencyNotices} /> : null}</li>;
+  const noEvidence = message.role === "assistant" && message.citations.length === 0;
+  return (
+    <li
+      className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${noEvidence ? "bg-[var(--color-surface-sunken)]" : ""}`}
+      style={{ borderInlineStart: `3px solid ${turnAccentColor(message)}` }}
+    >
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p>
+      <p className={`whitespace-pre-wrap leading-6 ${noEvidence ? "text-[var(--color-accent-umber)]" : ""}`}>{message.content}</p>
+      {message.citations.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-2">
+          {message.citations.map((citation) => (
+            <li key={citation.chunkId} className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-2 text-xs">
+              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-green)] font-serif text-[10px] text-white">§</span>
+              <span className="min-w-0">
+                <a href={citation.href} className="block truncate font-serif text-xs font-semibold underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>
+                <span className="block text-[10px] text-[var(--color-text-muted)]">{citation.sourceType === "uploaded" ? "Your upload" : "Open-access source"}{citation.license ? ` · ${citation.license}` : ""}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {message.role === "assistant" && message.competencyNotices?.length ? <CompetencyNoticeList notices={message.competencyNotices} /> : null}
+    </li>
+  );
 }
 
 const COMPETENCY_LEVEL_LABEL: Record<CompetencyLevel, string> = {
