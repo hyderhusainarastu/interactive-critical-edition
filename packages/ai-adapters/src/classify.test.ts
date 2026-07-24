@@ -35,6 +35,11 @@ describe("heuristicClassify", () => {
     expect(r.promptTokens).toBe(0);
   });
 
+  it("never suggests a reader level — no deterministic basis to judge level-specificity", () => {
+    const r = heuristicClassify(base);
+    expect(r.readerLevel).toBeNull();
+  });
+
   it("detects a polemical/disagreement cue", () => {
     const r = heuristicClassify({ ...base, sourceText: "Heidegger rejects Descartes's error here." });
     expect(r.category).toBe("disagreement_polemical_target");
@@ -128,6 +133,28 @@ describe("classifyWithProvider", () => {
     const provider = mockProvider(JSON.stringify({ category: "explicit_reference", explanation: "x", confidence: 5 }));
     const r = await classifyWithProvider(provider, base);
     expect(r.confidence).toBe(1);
+  });
+
+  it("accepts a valid reader_level suggestion", async () => {
+    const provider = mockProvider(
+      JSON.stringify({ category: "prerequisite", explanation: "x", confidence: 0.7, reader_level: "beginner" }),
+    );
+    const r = await classifyWithProvider(provider, base);
+    expect(r.readerLevel).toBe("beginner");
+  });
+
+  it("defaults reader_level to null when absent", async () => {
+    const provider = mockProvider(JSON.stringify({ category: "prerequisite", explanation: "x", confidence: 0.7 }));
+    const r = await classifyWithProvider(provider, base);
+    expect(r.readerLevel).toBeNull();
+  });
+
+  it("rejects an out-of-vocabulary reader_level rather than fabricating one", async () => {
+    const provider = mockProvider(
+      JSON.stringify({ category: "prerequisite", explanation: "x", confidence: 0.7, reader_level: "expert" }),
+    );
+    const r = await classifyWithProvider(provider, base);
+    expect(r.readerLevel).toBeNull();
   });
 
   it("falls back to the heuristic on an invalid category, keeping real token counts", async () => {

@@ -95,6 +95,8 @@ export function heuristicClassify(input: ClassificationInput): ClassificationRes
     promptTokens: 0,
     completionTokens: 0,
     heuristic: true,
+    // No deterministic basis to judge level-specificity — always universal.
+    readerLevel: null,
   };
 }
 

@@ -2363,7 +2363,12 @@ export async function analyzeEditionRun(input: {
             learningResourceId: learningResource.id,
             workIdentityId: primaryWorkIdentityId,
             relationship: conservativeCategory,
-            readerLevel: null,
+            // The classifier's own conservative, opt-in suggestion (null =
+            // universal, its default) — see `@ice/ai-adapters`'s
+            // `ClassificationResult.readerLevel` doc comment. Citation-only
+            // roles (`ensureCitationRole`, above) intentionally stay null:
+            // citations are genuinely universal, not just unclassified.
+            readerLevel: classification!.readerLevel,
             rationale: noteBody,
             confidence: classification!.confidence,
             createdBy: "system",

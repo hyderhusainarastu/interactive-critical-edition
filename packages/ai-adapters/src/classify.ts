@@ -1,10 +1,12 @@
 import { heuristicClassify } from "./providers/heuristic";
 import {
+  READER_LEVELS,
   RELATIONSHIP_CATEGORIES,
   SUSTAINED_CITATION_THRESHOLD,
   type ClassificationInput,
   type ClassificationResult,
   type LLMProvider,
+  type ReaderLevelName,
   type RelationshipCategory,
 } from "./types";
 
@@ -14,7 +16,7 @@ import {
  * (Phase 7) gates prompt changes, so a version bump is a deliberate,
  * traceable event, not an incidental edit.
  */
-export const CLASSIFY_PROMPT_VERSION = "relationship-classify-v2";
+export const CLASSIFY_PROMPT_VERSION = "relationship-classify-v3";
 
 const SYSTEM_PROMPT = `You are a scholarly research assistant classifying how a candidate work relates to a primary text a reader is studying. You must not invent bibliographic facts: reason only from the passage and titles given. Classify the relationship into exactly one of these categories:
 - explicit_reference: the primary text directly cites or quotes the candidate.
@@ -27,7 +29,8 @@ const SYSTEM_PROMPT = `You are a scholarly research assistant classifying how a 
 - parallel_comparison: a comparable work, neither prerequisite nor influence.
 - optional_extension: worthwhile follow-up reading, not essential.
 - ai_inferred: a plausible but uncertain connection you inferred, not stated in the text.
-Return JSON: {"category": <one category>, "explanation": <one concise sentence>, "confidence": <0..1 number>}. Set confidence honestly — low when the passage is thin evidence.`;
+Also suggest a reader level for the candidate, ONLY when the source is clearly level-specific (e.g. an introductory textbook is "beginner"; a specialist monograph presupposing graduate training is "research"). Use null whenever the candidate applies at every level — most material does, so null should be your default, not the exception.
+Return JSON: {"category": <one category>, "explanation": <one concise sentence>, "confidence": <0..1 number>, "reader_level": <one of "beginner"|"undergraduate"|"advanced"|"research" or null>}. Set confidence honestly — low when the passage is thin evidence.`;
 
 /**
  * Prompt-injection handling (plan §15/§21, hardened in Phase 7). Uploaded
@@ -73,6 +76,14 @@ function clampConfidence(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return 0.4;
   return Math.min(1, Math.max(0, n));
+}
+
+/** Same validate-else-null pattern as `packages/research/src/passageAnnotations.ts`'s
+ *  `validateDraft`: an out-of-vocabulary or missing value is treated as
+ *  "universal" (null), never fabricated or dropped. */
+function coerceReaderLevel(value: unknown): ReaderLevelName | null {
+  if (typeof value !== "string") return null;
+  return (READER_LEVELS as readonly string[]).includes(value) ? (value as ReaderLevelName) : null;
 }
 
 /**
@@ -129,6 +140,7 @@ export async function classifyWithProvider(
     promptTokens: result.promptTokens,
     completionTokens: result.completionTokens,
     heuristic: false,
+    readerLevel: coerceReaderLevel(obj.reader_level),
   };
 }
 

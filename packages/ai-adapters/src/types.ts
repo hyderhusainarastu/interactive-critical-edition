@@ -51,6 +51,13 @@ export const RELATIONSHIP_CATEGORIES = [
 
 export type RelationshipCategory = (typeof RELATIONSHIP_CATEGORIES)[number];
 
+// The four-level reader-level vocabulary (plan §34.4 9.4), duplicated here
+// rather than imported from `@ice/roadmap` — this package has no other
+// workspace dependencies, matching the same decoupling `packages/research`
+// already keeps from `@ice/ai-adapters` for its own `RELATIONSHIP_CATEGORIES`.
+export const READER_LEVELS = ["beginner", "undergraduate", "advanced", "research"] as const;
+export type ReaderLevelName = (typeof READER_LEVELS)[number];
+
 export const SUSTAINED_CITATION_THRESHOLD = 5;
 
 export interface CitationFrequencySignal {
@@ -94,4 +101,10 @@ export interface ClassificationResult {
    *  than a real model call — surfaced honestly all the way to the UI so
    *  a stub is never presented as an AI verdict. */
   heuristic: boolean;
+  /** Optional, conservative suggestion that this candidate applies at one
+   *  specific reader level rather than universally. Null (the default) means
+   *  "applies at every level" — the model is prompted to only suggest a
+   *  level when the source is clearly level-specific, and the heuristic
+   *  fallback (which has no basis to judge this) always returns null. */
+  readerLevel: ReaderLevelName | null;
 }
