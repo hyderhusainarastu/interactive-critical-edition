@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
 import * as THREE from "three";
+import { forceCollide } from "d3-force-3d";
 import { STAGE_LABEL, type CurriculumStage } from "@ice/curriculum";
 import {
   EDGE_FAMILY_META,
@@ -22,7 +23,12 @@ import {
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
+  nodePrimaryLabelVisible,
   nodeScaleForDistance,
+  nodeSecondaryLabelVisible,
+  nodeSizeFactorForLayout,
+  screenSpaceLabelScale,
+  type NodeLabelVisibilityContext,
 } from "./graphSceneScaling";
 import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
 import { assignStagePositions, stageHeaderPositions } from "./roadmapLayout";
@@ -33,26 +39,60 @@ import { assignStagePositions, stageHeaderPositions } from "./roadmapLayout";
 // only — never the final on-screen size. Distance/selection/pin accents are
 // applied afterward via `mesh.scale` mutation (see D-21-5 below), so this
 // table never needs to change for a node to visually grow or shrink.
+// Owner report ("hard to make out individual nodes"): roughly doubled from
+// the original table (work 6→12, reference 3→6, section 2→4, etc.) — still
+// scaled afterward by zoom/pin/selection/roadmap-mode accents exactly as
+// before, just off a bigger base.
 const NODE_SIZE: Record<NodeType, number> = {
-  work: 6,
-  reference: 3,
-  peer_reviewed_source: 4.5,
-  online_source: 3.5,
-  concept: 4,
-  person: 4,
-  section: 2,
+  work: 12,
+  reference: 6,
+  peer_reviewed_source: 9,
+  online_source: 7,
+  concept: 8,
+  person: 8,
+  section: 4,
 };
 
 // Label canvas geometry — two SEPARATE sprites (title, type/state) rather
 // than one combined canvas, specifically so the secondary line can be
 // hidden independently of the primary one (plan §21.4's "hide secondary
 // before shrinking primary") without redrawing/regenerating a texture.
+// These are TEXTURE resolutions (pixel crispness), not world/screen size —
+// actual on-screen size is set separately (see `screenSpaceLabelScale`).
 const PRIMARY_LABEL_CANVAS_HEIGHT = 72;
 const SECONDARY_LABEL_CANVAS_HEIGHT = 56;
 const EDGE_LABEL_CANVAS_HEIGHT = 46;
-const PRIMARY_LABEL_ASPECT = PRIMARY_LABEL_CANVAS_HEIGHT / 512;
-const SECONDARY_LABEL_ASPECT = SECONDARY_LABEL_CANVAS_HEIGHT / 512;
-const EDGE_LABEL_ASPECT = EDGE_LABEL_CANVAS_HEIGHT / 512;
+// Fallback aspect ratios (canvasHeight / 512), used only if a sprite's own
+// measured aspect is somehow missing — never hit in practice since
+// `makeLabelSprite` always returns one.
+const PRIMARY_LABEL_ASPECT_FALLBACK = PRIMARY_LABEL_CANVAS_HEIGHT / 512;
+const SECONDARY_LABEL_ASPECT_FALLBACK = SECONDARY_LABEL_CANVAS_HEIGHT / 512;
+
+// MEASURED PILLS: the label canvas is now sized to the actual text (via
+// `ctx.measureText`) plus this padding, clamped to a sane range — no more
+// full-512px pills behind a three-word title.
+const LABEL_PAD_X = 20;
+const LABEL_MIN_CANVAS_WIDTH = 60;
+const LABEL_MAX_CANVAS_WIDTH = 420;
+
+// SCREEN-SPACE LABELS: target on-screen pixel heights for the primary/
+// secondary node labels once `SpriteMaterial.sizeAttenuation` is off — a
+// fixed, always-legible size regardless of camera distance, replacing the
+// old distance-clamped world-space scale (calibrated around a 260-unit
+// reference distance, but real fit distances run 1000-3000+ at production
+// scale — see `screenSpaceLabelScale`'s own doc comment).
+const PRIMARY_LABEL_PX = 13;
+const SECONDARY_LABEL_PX = 11;
+/** Reasonable initial placeholder (fov/viewport) for a label sprite's scale
+ *  at CREATION time, before the first `applyNodeAccents` pass (which uses
+ *  the live camera fov + measured container height) corrects it. Sprites
+ *  start `.visible = false` regardless, so this is never actually seen —
+ *  it only guards against a moment where `getGraphBbox()` (which does not
+ *  check `.visible`, see that call site's own comment) would otherwise see
+ *  THREE.Sprite's native (1,1,1) default scale, orders of magnitude bigger
+ *  than the true screen-space size. */
+const PLACEHOLDER_FOV_DEGREES = 50;
+const PLACEHOLDER_VIEWPORT_HEIGHT = 600;
 
 // Selection/pin visual accents — additive bumps on top of the
 // distance-driven scale factor, applied via mutation (see `applyNodeAccents`
@@ -70,8 +110,11 @@ const SELECTED_SCALE_BUMP = 0.15;
 // avoids reintroducing that on every hover — doubly important now that a
 // custom `linkThreeObject` (the new edge label, D-21-4) also depends on
 // that same rebuild trigger.
-const BASE_LINK_WIDTH = 0.5;
-const LINK_HOVER_WIDTH_FACTOR = 3.2; // 1.6 / 0.5 — preserves the prior visual ratio.
+// Owner report ("can't tell what connects to what"): base width roughly
+// tripled (0.5 -> 1.6) so an idle edge is legible on its own, not just once
+// hover-emphasized.
+const BASE_LINK_WIDTH = 1.6;
+const LINK_HOVER_WIDTH_FACTOR = 2; // Preserves a clear idle-vs-connected distinction off the new, thicker base.
 
 /** react-force-graph-3d mutates link.source/target from a string id into the
  *  actual node object once the simulation runs — normalize both shapes to a
@@ -81,25 +124,69 @@ function endpointId(end: GraphLink["source"] | GraphLink["target"]): string {
   return typeof end === "string" ? end : (end as { id: string }).id;
 }
 
-function makeLabelSprite(text: string, font: string, color: string, canvasHeight: number): THREE.Sprite {
+/** A canvas 2D context used only to `measureText` — never rendered, never
+ *  attached to a texture. Reused across calls rather than allocating a new
+ *  measurement canvas per label. */
+let measureContext: CanvasRenderingContext2D | null | undefined;
+function getMeasureContext(): CanvasRenderingContext2D | null {
+  if (measureContext === undefined) measureContext = document.createElement("canvas").getContext("2d");
+  return measureContext;
+}
+
+/**
+ * MEASURED PILLS: the pill/canvas is sized to the actual text width (via
+ * `ctx.measureText`) plus padding, clamped to a sane range — the previous
+ * version filled the full 512px canvas regardless of text length, so a
+ * three-word title and a one-word title got an identically huge pill.
+ * `bgColor`/`textColor` come from the theme-resolved surface tokens (Design
+ * Decisions: "Pill colors from CSS vars"), not a hardcoded rgba. Returns the
+ * canvas's own aspect ratio (height/width) alongside the sprite so the
+ * caller can size `sprite.scale` to match — this varies per label now that
+ * width is measured, so it can no longer be a shared module constant.
+ */
+function makeLabelSprite(
+  text: string,
+  font: string,
+  textColor: string,
+  canvasHeight: number,
+  bgColor: string,
+  opts: { textAlpha?: number; sizeAttenuation?: boolean } = {},
+): { sprite: THREE.Sprite; aspect: number } {
+  const measure = getMeasureContext();
+  let textWidth = text.length * 8; // Reasonable fallback if canvas 2D is unavailable.
+  if (measure) {
+    measure.font = font;
+    textWidth = measure.measureText(text).width;
+  }
+  const canvasWidth = Math.round(Math.max(LABEL_MIN_CANVAS_WIDTH, Math.min(LABEL_MAX_CANVAS_WIDTH, textWidth + LABEL_PAD_X * 2)));
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
+  canvas.width = canvasWidth;
   canvas.height = canvasHeight;
   const context = canvas.getContext("2d");
   if (context) {
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = "rgba(20, 18, 15, 0.78)";
-    context.roundRect(8, 6, canvas.width - 16, canvas.height - 12, 14);
+    context.fillStyle = bgColor;
+    context.roundRect(4, 5, canvas.width - 8, canvas.height - 10, 12);
     context.fill();
-    context.fillStyle = color;
+    context.globalAlpha = opts.textAlpha ?? 1;
+    context.fillStyle = textColor;
     context.font = font;
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - 28);
+    context.fillText(text, canvas.width / 2, canvas.height / 2, canvas.width - LABEL_PAD_X);
+    context.globalAlpha = 1;
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false }));
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      sizeAttenuation: opts.sizeAttenuation ?? true,
+    }),
+  );
+  return { sprite, aspect: canvas.height / canvas.width };
 }
 
 /** `userData` shape stashed on each node's top-level `THREE.Group` by
@@ -108,8 +195,17 @@ function makeLabelSprite(text: string, font: string, color: string, canvasHeight
  *  is the read-back mechanism here). */
 type NodeGroupUserData = Partial<{
   nodeId: string;
+  /** Needed by the label-visibility policy (`nodePrimaryLabelVisible`),
+   *  which treats "work" nodes specially — read back here rather than
+   *  re-deriving it from `graphData` (no exposed `graphData()`, see this
+   *  file's other traversal-based read-backs). */
+  nodeType: NodeType;
   baseRadius: number;
-  baseLabelScale: number;
+  /** Each label sprite's own measured canvas aspect ratio (height/width) —
+   *  varies per node now that the canvas is sized to the actual text
+   *  (MEASURED PILLS), so it can no longer be a single shared constant. */
+  primaryAspect: number;
+  secondaryAspect: number;
   sphere: THREE.Mesh;
   primarySprite: THREE.Sprite;
   secondarySprite: THREE.Sprite;
@@ -143,8 +239,10 @@ type LinkSpriteUserData = Partial<{
  * accessible table, never the only way to read the data.
  *
  * **Phase 21.4/21.5 caching architecture (D-21-5):** `nodeThreeObject` and
- * `linkThreeObject` are memoized with STABLE dependencies only
- * (`typeColors`; nothing for links) — never `selectedNodeId`,
+ * `linkThreeObject` are memoized with STABLE dependencies only — theme-
+ * resolved palette values (`typeColors`, and now `labelColors` for the
+ * label pill background/text) that only ever change on a rare, expected,
+ * whole-scene-worth-rebuilding `data-theme` flip — never `selectedNodeId`,
  * `pinnedWorkIds`, `hoverNode`, or the throttled camera-distance sample.
  * react-force-graph-3d treats a changed accessor identity for either of
  * these (plus, for links, `linkWidth`) as "rebuild every node/link's 3D
@@ -155,6 +253,10 @@ type LinkSpriteUserData = Partial<{
  * distance-based scaling would "compound catastrophically" on top of the
  * pre-existing per-click full-scene rebuild, addressed by removing the
  * rebuild trigger first rather than layering more state onto it.
+ * `applyNodeAccents` itself, by contrast, legitimately reacts to
+ * `hoverNode`/`highlightNodeIds` now too (label-visibility policy below) —
+ * that is the intended lightweight mutation path this whole architecture
+ * exists to make cheap, not the expensive rebuild it protects against.
  */
 export function KnowledgeGraph3D({
   data,
@@ -216,6 +318,13 @@ export function KnowledgeGraph3D({
   const [colors, setColors] = useState<Record<NodeState, string>>();
   const [typeColors, setTypeColors] = useState<Record<NodeType, string>>();
   const [linkColors, setLinkColors] = useState<Record<EdgeFamily, string>>();
+  // Label pill background/text — resolved from the same `--color-surface-
+  // strong`/`--color-surface-strong-fg` pairing the rest of the app already
+  // uses for pills/badges (e.g. `RoadmapConstellation.tsx`), replacing the
+  // previous hardcoded dark rgba pill + white text (which does not adapt to
+  // theme, and could actually lose contrast against a light-theme resolution
+  // of a themed pill if only the background changed and not the text).
+  const [labelColors, setLabelColors] = useState<{ bg: string; fg: string }>();
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const [motionAllowed, setMotionAllowed] = useState(true);
   // D-21-3: camera-to-origin distance, sampled on a THROTTLED interval
@@ -256,6 +365,10 @@ export function KnowledgeGraph3D({
       setColors(next);
       setTypeColors(nextTypes);
       setLinkColors(nextLinks);
+      setLabelColors({
+        bg: cs.getPropertyValue("--color-surface-strong").trim() || "rgba(20,18,15,0.78)",
+        fg: cs.getPropertyValue("--color-surface-strong-fg").trim() || "#ffffff",
+      });
     };
     resolve();
     const obs = new MutationObserver(resolve);
@@ -336,6 +449,31 @@ export function KnowledgeGraph3D({
     };
   }, [data, pinnedWorkIds, layoutMode]);
 
+  // FORCES: a looser, less "hairball" explore-mode layout — longer link
+  // distance and stronger repulsion give nodes room to be individually
+  // legible, plus a collision force (new: `d3-force-3d`'s `forceCollide`,
+  // a transitive dep of `three-forcegraph` already, added as an explicit
+  // `apps/web` dependency so this direct import resolves) so nodes can
+  // never render fully overlapping regardless of the layout's own spacing.
+  // One-time per `graphData` change (not per-frame/per-render) — `d3Force`
+  // just reconfigures the SAME simulation instance react-force-graph-3d
+  // already owns, it doesn't create a new one. Radius uses the DOUBLED
+  // `NODE_SIZE` (owner report fix above) plus a fixed margin; roadmap mode's
+  // own `layoutSizeFactor` is irrelevant here since collision only ever
+  // does anything in explore mode — roadmap mode's nodes are fixed via
+  // `fx/fy/fz` with the simulation cooldown at 0, so nothing is left to
+  // collide regardless of what the forces are configured to.
+  useEffect(() => {
+    const graph = fgRef.current;
+    if (!graph) return;
+    graph.d3Force("link")?.distance(70);
+    graph.d3Force("charge")?.strength(-160);
+    graph.d3Force(
+      "collide",
+      forceCollide((n: object) => NODE_SIZE[(n as GraphNode).type] * 2 + 12),
+    );
+  }, [graphData]);
+
   // Neighbor adjacency, built once per data change rather than per hover
   // event — shared with `graphFocus.ts`'s selection-focus computation
   // rather than a second, locally-reimplemented adjacency map.
@@ -371,15 +509,18 @@ export function KnowledgeGraph3D({
   }, [hasSelectionFocus, emphasis, hoverNode, data.links]);
   const effectsEnabled = motionAllowed && data.nodes.length <= 140;
 
-  // D-21-5: depends ONLY on `typeColors` — never `selectedNodeId`/
-  // `pinnedWorkIds`, which used to force a full rebuild of every node's
-  // sphere + label sprites on every single click anywhere in the graph.
-  // Selection/pin accents are applied afterward by `applyNodeAccents`
-  // mutating the objects tagged here via `userData`.
+  // D-21-5: depends only on theme-resolved `typeColors`/`labelColors` —
+  // never `selectedNodeId`/`pinnedWorkIds`, which used to force a full
+  // rebuild of every node's sphere + label sprites on every single click
+  // anywhere in the graph. Selection/pin/label-visibility accents are
+  // applied afterward by `applyNodeAccents` mutating the objects tagged
+  // here via `userData`.
   const nodeThreeObject = useCallback((value: object) => {
     const node = value as GraphNode;
     const baseRadius = NODE_SIZE[node.type];
     const color = typeColors?.[node.type] ?? "#888";
+    const labelBg = labelColors?.bg ?? "rgba(20,18,15,0.78)";
+    const labelFg = labelColors?.fg ?? "#ffffff";
     // Phase 22.8: "known" is part of the per-node PAYLOAD (baked in by the
     // server-side roadmap projection), read directly from `node` at creation
     // time exactly like `node.label`/`node.type` above it — never part of
@@ -399,20 +540,46 @@ export function KnowledgeGraph3D({
     group.add(sphere);
 
     // Two SEPARATE canvas sprites (title, type/state) rather than one
-    // combined texture, so the secondary line can be hidden on zoom-out
-    // (D-21-3) without redrawing anything. Both always face the camera by
-    // construction (THREE.Sprite billboarding) — unchanged from before.
+    // combined texture, so the secondary line can be hidden independently
+    // of the primary one without redrawing anything. Both always face the
+    // camera by construction (THREE.Sprite billboarding) — unchanged from
+    // before. SCREEN-SPACE (`sizeAttenuation: false`): a fixed, always-
+    // legible on-screen pixel size regardless of camera distance, sized via
+    // `applyNodeAccents` below (creation-time scale here is only a
+    // placeholder — both sprites start invisible, see `LabelVisibility`
+    // constants' own doc comments). Both start `.visible = false` — the
+    // label-density fix (owner report: 200-400 always-visible pills at
+    // production scale): only a few bounded, meaningful signals ever reveal
+    // them (`applyNodeAccents`'s `nodePrimaryLabelVisible`/
+    // `nodeSecondaryLabelVisible` calls).
     const title = node.label.length > 42 ? `${node.label.slice(0, 39)}…` : node.label;
-    const primarySprite = makeLabelSprite(title, "600 30px system-ui, sans-serif", "#ffffff", PRIMARY_LABEL_CANVAS_HEIGHT);
+    const { sprite: primarySprite, aspect: primaryAspect } = makeLabelSprite(
+      title,
+      "600 30px system-ui, sans-serif",
+      labelFg,
+      PRIMARY_LABEL_CANVAS_HEIGHT,
+      labelBg,
+      { sizeAttenuation: false },
+    );
     const secondaryText = `${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}${known ? " · ✓ read" : ""}`;
-    const secondarySprite = makeLabelSprite(secondaryText, "22px system-ui, sans-serif", "rgba(255,255,255,0.78)", SECONDARY_LABEL_CANVAS_HEIGHT);
+    const { sprite: secondarySprite, aspect: secondaryAspect } = makeLabelSprite(
+      secondaryText,
+      "22px system-ui, sans-serif",
+      labelFg,
+      SECONDARY_LABEL_CANVAS_HEIGHT,
+      labelBg,
+      { textAlpha: 0.78, sizeAttenuation: false },
+    );
 
-    const baseLabelScale = Math.max(20, Math.min(42, 16 + node.label.length * 0.45));
-    primarySprite.scale.set(baseLabelScale, baseLabelScale * PRIMARY_LABEL_ASPECT, 1);
-    secondarySprite.scale.set(baseLabelScale, baseLabelScale * SECONDARY_LABEL_ASPECT, 1);
-    const primaryOffset = baseRadius + baseLabelScale * PRIMARY_LABEL_ASPECT * 0.65;
+    const placeholderPrimaryScale = screenSpaceLabelScale(PRIMARY_LABEL_PX, PLACEHOLDER_FOV_DEGREES, PLACEHOLDER_VIEWPORT_HEIGHT);
+    const placeholderSecondaryScale = screenSpaceLabelScale(SECONDARY_LABEL_PX, PLACEHOLDER_FOV_DEGREES, PLACEHOLDER_VIEWPORT_HEIGHT);
+    primarySprite.scale.set(placeholderPrimaryScale / primaryAspect, placeholderPrimaryScale, 1);
+    secondarySprite.scale.set(placeholderSecondaryScale / secondaryAspect, placeholderSecondaryScale, 1);
+    const primaryOffset = baseRadius * 1.4;
     primarySprite.position.set(0, primaryOffset, 0);
-    secondarySprite.position.set(0, primaryOffset + baseLabelScale * (PRIMARY_LABEL_ASPECT + SECONDARY_LABEL_ASPECT) * 0.6, 0);
+    secondarySprite.position.set(0, primaryOffset + baseRadius * 0.5, 0);
+    primarySprite.visible = false;
+    secondarySprite.visible = false;
     primarySprite.renderOrder = 1;
     secondarySprite.renderOrder = 1;
     group.add(primarySprite, secondarySprite);
@@ -428,30 +595,48 @@ export function KnowledgeGraph3D({
     ring.visible = false;
     group.add(ring);
 
-    const nodeUserData: NodeGroupUserData = { nodeId: node.id, baseRadius, baseLabelScale, sphere, primarySprite, secondarySprite, ring };
+    const nodeUserData: NodeGroupUserData = {
+      nodeId: node.id,
+      nodeType: node.type,
+      baseRadius,
+      primaryAspect,
+      secondaryAspect,
+      sphere,
+      primarySprite,
+      secondarySprite,
+      ring,
+    };
     group.userData = nodeUserData;
     return group;
-  }, [typeColors]);
+  }, [typeColors, labelColors]);
 
-  // D-21-4: the edge-relation label sprite. Depends on NOTHING that changes
-  // over time (no hover/selection/distance) — its text is fixed per edge,
-  // and it starts invisible, revealed by `applyLinkAccents` below. Combined
-  // with `linkThreeObjectExtend` (constant `true`, see the JSX), the
-  // library keeps managing the default line/cylinder object exactly as
-  // before; this sprite is purely an additional child.
+  // D-21-4: the edge-relation label sprite. Depends only on the theme-
+  // resolved `labelColors` (same accepted rebuild class as `typeColors`
+  // above — a rare, whole-scene-worth-rebuilding theme flip, never hover/
+  // selection/distance). Its text is fixed per edge, and it starts
+  // invisible, revealed by `applyLinkAccents` below. Combined with
+  // `linkThreeObjectExtend` (constant `true`, see the JSX), the library
+  // keeps managing the default line/cylinder object exactly as before;
+  // this sprite is purely an additional child.
   const linkThreeObject = useCallback((value: object) => {
     const link = value as GraphLink;
     const text = edgeRelationLabel(link.edgeType, link.category);
     const clipped = text.length > 30 ? `${text.slice(0, 27)}…` : text;
-    const sprite = makeLabelSprite(clipped, "600 22px system-ui, sans-serif", "#ffffff", EDGE_LABEL_CANVAS_HEIGHT);
-    const baseScale = { x: 16, y: 16 * EDGE_LABEL_ASPECT };
+    const { sprite, aspect } = makeLabelSprite(
+      clipped,
+      "600 22px system-ui, sans-serif",
+      labelColors?.fg ?? "#ffffff",
+      EDGE_LABEL_CANVAS_HEIGHT,
+      labelColors?.bg ?? "rgba(20,18,15,0.78)",
+    );
+    const baseScale = { x: 16, y: 16 * aspect };
     sprite.scale.set(baseScale.x, baseScale.y, 1);
     sprite.visible = false;
     sprite.renderOrder = 2;
     const linkUserData: LinkSpriteUserData = { linkId: link.id, baseScale, sourceId: endpointId(link.source), targetId: endpointId(link.target) };
     sprite.userData = linkUserData;
     return sprite;
-  }, []);
+  }, [labelColors]);
 
   // The library calls this every tick with the two endpoints' current
   // positions and passes OUR sprite directly (since `linkThreeObjectExtend`
@@ -495,30 +680,71 @@ export function KnowledgeGraph3D({
   // not by inspection. `scene()` IS part of `ForceGraphMethods`, so
   // traversal reads back exactly the same `userData` stash with no cast
   // onto unexposed methods.
+  // SELECTIVE LABELS + SCREEN-SPACE LABELS: `nodeLabelCtx` is the one shared
+  // input to both label-visibility calls below (`nodePrimaryLabelVisible`/
+  // `nodeSecondaryLabelVisible`, `graphSceneScaling.ts`) so the two can never
+  // read a stale/inconsistent snapshot of selection+hover+highlight state.
+  const nodeLabelCtx = useMemo<NodeLabelVisibilityContext>(
+    () => ({
+      selectedNodeId: selectedNodeId ?? null,
+      hoverNodeId: hoverNode?.id ?? null,
+      nextUpNodeId: nextUpNodeId ?? null,
+      highlightNodeIds,
+    }),
+    [selectedNodeId, hoverNode, nextUpNodeId, highlightNodeIds],
+  );
+  // NODE/LINK SIZING: roadmap mode's fixed stage-column grid reads
+  // comfortably bigger than explore mode's naturally clustered force layout
+  // — an ADDITIONAL multiplier on top of the zoom-driven `nodeScaleFactor`.
+  const layoutSizeFactor = useMemo(() => nodeSizeFactorForLayout(layoutMode), [layoutMode]);
+
   const applyNodeAccents = useCallback(() => {
     const graph = fgRef.current;
     if (!graph) return;
+    const camera = graph.camera();
+    const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : PLACEHOLDER_FOV_DEGREES;
+    const primaryScaleY = screenSpaceLabelScale(PRIMARY_LABEL_PX, fov, size.h);
+    const secondaryScaleY = screenSpaceLabelScale(SECONDARY_LABEL_PX, fov, size.h);
     graph.scene().traverse((object) => {
       const stash = object.userData as NodeGroupUserData;
-      if (!stash.nodeId || !stash.sphere || !stash.primarySprite || !stash.secondarySprite || stash.baseRadius == null || stash.baseLabelScale == null) return;
+      if (!stash.nodeId || !stash.nodeType || !stash.sphere || !stash.primarySprite || !stash.secondarySprite || stash.baseRadius == null) return;
       const isSelected = selectedNodeId === stash.nodeId;
       const isPinned = pinnedWorkIds.includes(stash.nodeId);
-      const nodeFactor = nodeSceneScale.nodeScaleFactor + (isPinned ? PIN_SCALE_BUMP : 0) + (isSelected ? SELECTED_SCALE_BUMP : 0);
+      const nodeFactor = (nodeSceneScale.nodeScaleFactor + (isPinned ? PIN_SCALE_BUMP : 0) + (isSelected ? SELECTED_SCALE_BUMP : 0)) * layoutSizeFactor;
       stash.sphere.scale.setScalar(nodeFactor);
-      const labelFactor = nodeSceneScale.labelScaleFactor;
-      stash.primarySprite.scale.set(stash.baseLabelScale * labelFactor, stash.baseLabelScale * labelFactor * PRIMARY_LABEL_ASPECT, 1);
-      stash.secondarySprite.visible = nodeSceneScale.secondaryLabelVisible;
-      stash.secondarySprite.scale.set(stash.baseLabelScale * labelFactor, stash.baseLabelScale * labelFactor * SECONDARY_LABEL_ASPECT, 1);
       const radiusWorld = stash.baseRadius * nodeFactor;
-      const primaryOffset = radiusWorld + stash.baseLabelScale * labelFactor * PRIMARY_LABEL_ASPECT * 0.65;
+
+      // SELECTIVE LABELS: a bounded set of signals decides visibility —
+      // never every node at once (label-density owner report).
+      const primaryVisible = nodePrimaryLabelVisible({ id: stash.nodeId, type: stash.nodeType }, nodeLabelCtx);
+      const secondaryVisible = primaryVisible && nodeSecondaryLabelVisible({ id: stash.nodeId }, nodeLabelCtx);
+      stash.primarySprite.visible = primaryVisible;
+      stash.secondarySprite.visible = secondaryVisible;
+
+      // SCREEN-SPACE LABELS: fixed on-screen pixel height (via the live
+      // camera fov + measured container height), independent of the node's
+      // own zoom-driven scale factor — a label stays legible at any
+      // distance rather than saturating a world-space clamp.
+      if (primaryVisible) {
+        const aspect = stash.primaryAspect ?? PRIMARY_LABEL_ASPECT_FALLBACK;
+        stash.primarySprite.scale.set(primaryScaleY / aspect, primaryScaleY, 1);
+      }
+      if (secondaryVisible) {
+        const aspect = stash.secondaryAspect ?? SECONDARY_LABEL_ASPECT_FALLBACK;
+        stash.secondarySprite.scale.set(secondaryScaleY / aspect, secondaryScaleY, 1);
+      }
+      // Position stays WORLD-space (tied to the node's own visual radius)
+      // even though size is now screen-space — the two are independent
+      // concerns (where the label sits vs. how big it reads on screen).
+      const primaryOffset = radiusWorld * 1.4;
       stash.primarySprite.position.set(0, primaryOffset, 0);
-      stash.secondarySprite.position.set(0, primaryOffset + stash.baseLabelScale * labelFactor * (PRIMARY_LABEL_ASPECT + SECONDARY_LABEL_ASPECT) * 0.6, 0);
+      stash.secondarySprite.position.set(0, primaryOffset + radiusWorld * 0.5, 0);
       // Phase 22.8: the next-up ring is selection-independent — a node can
       // be both selected AND next-up (two different signals), or next-up
       // while nothing is selected at all.
       if (stash.ring) stash.ring.visible = nextUpNodeId != null && stash.nodeId === nextUpNodeId;
     });
-  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId]);
+  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId, layoutSizeFactor, nodeLabelCtx, size.h]);
 
   // D-21-4/D-21-5 (edge side): selection-and-hover-connected width emphasis
   // and edge-label reveal/scale, both applied by mutating the already-
@@ -693,11 +919,17 @@ export function KnowledgeGraph3D({
       scene.remove(headerGroupRef.current);
       headerGroupRef.current = null;
     }
-    if (layoutMode !== "roadmap" || !typeColors) return;
+    if (layoutMode !== "roadmap" || !typeColors || !labelColors) return;
     const group = new THREE.Group();
     for (const header of stageHeaderPositions(data.nodes)) {
-      const sprite = makeLabelSprite(STAGE_LABEL[header.stage], "600 26px system-ui, sans-serif", "#ffffff", PRIMARY_LABEL_CANVAS_HEIGHT);
-      sprite.scale.set(52, 52 * PRIMARY_LABEL_ASPECT, 1);
+      const { sprite, aspect } = makeLabelSprite(
+        STAGE_LABEL[header.stage],
+        "600 26px system-ui, sans-serif",
+        labelColors.fg,
+        PRIMARY_LABEL_CANVAS_HEIGHT,
+        labelColors.bg,
+      );
+      sprite.scale.set(52, 52 * aspect, 1);
       sprite.position.set(header.fx, header.fy, 0);
       sprite.renderOrder = 1;
       const headerUserData: { stageHeader: CurriculumStage } = { stageHeader: header.stage };
@@ -706,7 +938,7 @@ export function KnowledgeGraph3D({
     }
     scene.add(group);
     headerGroupRef.current = group;
-  }, [layoutMode, data.nodes, typeColors]);
+  }, [layoutMode, data.nodes, typeColors, labelColors]);
 
   // Clickable stage headers (feature plan §2.4): a raycast against ONLY the
   // header group's own sprites (a small, bounded set), never against the
@@ -766,13 +998,18 @@ export function KnowledgeGraph3D({
 
   return (
     <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
-      {colors && typeColors && linkColors && (
+      {colors && typeColors && linkColors && labelColors && (
         <ForceGraph3D
           ref={fgRef as never}
           graphData={graphData}
           width={size.w}
           height={size.h}
           backgroundColor="rgba(0,0,0,0)"
+          // CONTROLS: orbit locks the camera's up-vector, so drag-to-rotate
+          // can never introduce free roll (the default 'trackball' control
+          // allows the whole scene to tilt/spin off-axis) — still no
+          // auto-rotation, still the existing Reset view/fitCameraToBbox.
+          controlType="orbit"
           nodeThreeObject={nodeThreeObject as never}
           nodeColor={(n: object) => {
             const node = n as GraphNode;
@@ -798,6 +1035,7 @@ export function KnowledgeGraph3D({
             if (!highlightLinkIds) return linkColors[family];
             return highlightLinkIds.has(link.id) ? linkColors[family] : "rgba(120,110,90,0.08)";
           }}
+          linkOpacity={0.5}
           linkWidth={linkWidth}
           linkThreeObject={linkThreeObject as never}
           linkThreeObjectExtend={true}
@@ -815,8 +1053,12 @@ export function KnowledgeGraph3D({
           // Phase 22.8: every node already carries a fixed fx/fy/fz in
           // roadmap mode (`assignStagePositions`, above) — the simulation
           // has nothing left to converge on, so it's skipped outright
-          // rather than merely shortened.
-          cooldownTicks={layoutMode === "roadmap" ? 0 : data.nodes.length > 140 ? 35 : 80}
+          // rather than merely shortened. Explore-mode budgets bumped
+          // (35->55, 80->130) — the looser FORCES config above (longer link
+          // distance, stronger repulsion, a new collision force) needs a
+          // few more ticks to actually settle into its final layout than
+          // the old, tighter-clustered default did.
+          cooldownTicks={layoutMode === "roadmap" ? 0 : data.nodes.length > 140 ? 55 : 130}
           showNavInfo={false}
           showPointerCursor={() => true}
           onNodeHover={(n: object | null) => setHoverNode(n as GraphNode | null)}

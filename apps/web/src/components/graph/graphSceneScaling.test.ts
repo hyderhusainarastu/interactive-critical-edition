@@ -6,7 +6,11 @@ import {
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
+  nodePrimaryLabelVisible,
   nodeScaleForDistance,
+  nodeSecondaryLabelVisible,
+  nodeSizeFactorForLayout,
+  screenSpaceLabelScale,
 } from "./graphSceneScaling";
 
 /**
@@ -163,6 +167,62 @@ assert.equal(edgeRelationLabel("responds_to", "cross_library"), "responds to");
   const narrow = fitCameraToBbox({ x: [-50, 50], y: [-50, 50], z: [0, 0] }, 1);
   const wide = fitCameraToBbox({ x: [-500, 500], y: [-50, 50], z: [0, 0] }, 1);
   assert.ok(wide.distance > narrow.distance, "a wider bounding box requires a larger fit distance");
+}
+
+// --- nodePrimaryLabelVisible / nodeSecondaryLabelVisible (label density) ---
+
+const noHighlight: import("./graphSceneScaling").NodeLabelVisibilityContext = {
+  selectedNodeId: null,
+  hoverNodeId: null,
+  nextUpNodeId: null,
+  highlightNodeIds: null,
+};
+
+assert.equal(nodePrimaryLabelVisible({ id: "n1", type: "reference" }, noHighlight), false, "an ordinary node with no signal at all has no primary label");
+assert.equal(nodePrimaryLabelVisible({ id: "n1", type: "work" }, noHighlight), true, "a work-type node always shows its primary label, regardless of any other signal");
+assert.equal(nodePrimaryLabelVisible({ id: "n1", type: "reference" }, { ...noHighlight, selectedNodeId: "n1" }), true, "the selected node shows its primary label");
+assert.equal(nodePrimaryLabelVisible({ id: "n1", type: "reference" }, { ...noHighlight, nextUpNodeId: "n1" }), true, "the next-up node shows its primary label");
+assert.equal(nodePrimaryLabelVisible({ id: "n1", type: "reference" }, { ...noHighlight, highlightNodeIds: new Set(["n1"]) }), true, "a hover/selection-focus-highlighted node shows its primary label");
+assert.equal(nodePrimaryLabelVisible({ id: "n2", type: "reference" }, { ...noHighlight, highlightNodeIds: new Set(["n1"]) }), false, "a node absent from the highlight set stays hidden despite one existing elsewhere");
+
+assert.equal(nodeSecondaryLabelVisible({ id: "n1" }, { selectedNodeId: null, hoverNodeId: null }), false, "no secondary label with nothing selected or hovered");
+assert.equal(nodeSecondaryLabelVisible({ id: "n1" }, { selectedNodeId: "n1", hoverNodeId: null }), true, "the selected node shows its secondary label");
+assert.equal(nodeSecondaryLabelVisible({ id: "n1" }, { selectedNodeId: null, hoverNodeId: "n1" }), true, "the hovered node shows its secondary label");
+// A work-type node or a merely-highlighted neighbor must NOT get a
+// secondary label just because its primary label is visible — the two
+// policies are deliberately different widths.
+assert.equal(nodePrimaryLabelVisible({ id: "work1", type: "work" }, noHighlight), true);
+assert.equal(nodeSecondaryLabelVisible({ id: "work1" }, { selectedNodeId: null, hoverNodeId: null }), false, "a work-type node's primary-only visibility must not leak into secondary visibility");
+
+// --- nodeSizeFactorForLayout ---
+
+assert.equal(nodeSizeFactorForLayout("explore"), 1, "explore mode applies no additional roadmap size bump");
+assert.equal(nodeSizeFactorForLayout("roadmap"), 2, "roadmap mode's fixed stage-column grid gets an additional 2x node size bump");
+
+// --- screenSpaceLabelScale ---
+
+// Larger viewport -> smaller scale needed for the same pixel height (the
+// same NDC-space fraction covers more actual pixels on a taller viewport).
+{
+  const small = screenSpaceLabelScale(13, 50, 600);
+  const large = screenSpaceLabelScale(13, 50, 1200);
+  assert.ok(small > large, "a taller viewport needs a smaller scale for the same target pixel height");
+}
+// Doubling the target pixel height doubles the resulting scale (linear).
+{
+  const base = screenSpaceLabelScale(11, 50, 800);
+  const doubled = screenSpaceLabelScale(22, 50, 800);
+  assert.ok(Math.abs(doubled - base * 2) < 1e-9, "scale is linear in the target pixel height");
+}
+// Degenerate inputs (non-finite/zero viewport or fov) degrade to a finite,
+// positive result rather than NaN/Infinity.
+for (const badViewport of [0, -10, Number.NaN, Number.POSITIVE_INFINITY]) {
+  const result = screenSpaceLabelScale(13, 50, badViewport);
+  assert.ok(Number.isFinite(result) && result > 0, `viewport ${badViewport} must still yield a finite, positive scale`);
+}
+for (const badFov of [0, -5, Number.NaN]) {
+  const result = screenSpaceLabelScale(13, badFov, 800);
+  assert.ok(Number.isFinite(result) && result > 0, `fov ${badFov} must still yield a finite, positive scale`);
 }
 
 console.log("graphSceneScaling.test.ts: all assertions passed");

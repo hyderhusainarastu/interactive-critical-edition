@@ -2,7 +2,7 @@
 // bare `tsx` for its unit test (no Next.js/webpack path-alias resolution
 // available there — see `graphSceneScaling.test.ts`'s own doc comment).
 import { CATEGORY_META, type RelationshipCategory } from "../shared/annotationMeta";
-import { edgeTypeLabel, isDirectedEdgeType } from "./types";
+import { edgeTypeLabel, isDirectedEdgeType, type NodeType } from "./types";
 
 /**
  * Phase 21.4/21.5 (D-21-3, D-21-4, D-21-9's UI half, and the direction-cue
@@ -181,4 +181,71 @@ export function edgeRelationLabel(edgeType: string, category: string | null | un
     ? CATEGORY_META[category as RelationshipCategory]
     : undefined;
   return meta ? `${meta.glyph} ${meta.label}` : edgeTypeLabel(edgeType);
+}
+
+/**
+ * Label-density fix (owner report: every node carries two always-visible
+ * label sprites — ~200-400 pills at production scale, unreadable). A
+ * node's PRIMARY (title) label is shown only for a few bounded, meaningful
+ * signals — never unconditionally for every node in the scene.
+ */
+export interface NodeLabelVisibilityContext {
+  selectedNodeId: string | null;
+  hoverNodeId: string | null;
+  nextUpNodeId: string | null;
+  /** Selection-focus ∪ hover ∪ hover-neighbors (`KnowledgeGraph3D`'s own
+   *  `highlightNodeIds`) — `null` means no highlight/focus is active at all. */
+  highlightNodeIds: ReadonlySet<string> | null;
+}
+
+export function nodePrimaryLabelVisible(node: { id: string; type: NodeType }, ctx: NodeLabelVisibilityContext): boolean {
+  if (node.type === "work") return true;
+  if (ctx.selectedNodeId === node.id) return true;
+  if (ctx.nextUpNodeId === node.id) return true;
+  if (ctx.highlightNodeIds?.has(node.id)) return true;
+  return false;
+}
+
+/**
+ * The SECONDARY (type/state) label line is reserved for the one or two
+ * nodes actually being inspected right now — selected or hovered — a
+ * strictly narrower set than `nodePrimaryLabelVisible` allows (never the
+ * wider highlighted/neighbor/work-type set).
+ */
+export function nodeSecondaryLabelVisible(
+  node: { id: string },
+  ctx: Pick<NodeLabelVisibilityContext, "selectedNodeId" | "hoverNodeId">,
+): boolean {
+  return ctx.selectedNodeId === node.id || ctx.hoverNodeId === node.id;
+}
+
+/**
+ * Roadmap layout mode (Phase 22.8) uses a fixed stage-column grid with far
+ * more empty space between nodes than explore mode's naturally clustered
+ * force layout, so its nodes read as comfortably bigger — an ADDITIONAL
+ * multiplier on top of the zoom-driven `nodeScaleFactor`, applied by
+ * `applyNodeAccents`'s mutation pass (never by rebuilding node geometry).
+ */
+export function nodeSizeFactorForLayout(layoutMode: "roadmap" | "explore"): number {
+  return layoutMode === "roadmap" ? 2 : 1;
+}
+
+/**
+ * SCREEN-SPACE LABELS: with `SpriteMaterial.sizeAttenuation` set to
+ * `false`, a sprite's apparent on-screen size no longer shrinks with camera
+ * distance — but its `scale` must still be set to a specific value that
+ * resolves to the desired pixel height once three.js's own attenuation-
+ * cancelling shader math (`scale *= -mvPosition.z` for a perspective
+ * camera) runs. Standard perspective-camera geometry: the NDC-space half-
+ * height a `scale.y` world value produces is `scale.y / (2 * tan(vFov/2))`
+ * once distance cancels out; solving for the `scale.y` that yields a given
+ * PIXEL height on a viewport of `viewportHeightPx` gives the formula below.
+ * Pure and unit-tested so the pixel target is verifiable without a WebGL
+ * context.
+ */
+export function screenSpaceLabelScale(pixelHeight: number, fovDegrees: number, viewportHeightPx: number): number {
+  const safeViewport = Number.isFinite(viewportHeightPx) && viewportHeightPx > 0 ? viewportHeightPx : 1;
+  const safeFov = Number.isFinite(fovDegrees) && fovDegrees > 0 ? fovDegrees : 50;
+  const vFov = (safeFov * Math.PI) / 180 / 2;
+  return (2 * pixelHeight * Math.tan(vFov)) / safeViewport;
 }
