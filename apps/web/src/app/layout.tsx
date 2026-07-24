@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: SITE_NAME,
   description:
-    "An automated scholarly reader: annotated critical editions and personalized reading roadmaps for difficult texts.",
+    "A text is never alone. Upload a difficult scholarly work and get a traceable critical edition around it — resolved citations, passage-anchored annotations, a unified Library, dependency-ordered reading routes, an explorable knowledge graph, and answers grounded in your own library.",
 };
 
 export default function RootLayout({

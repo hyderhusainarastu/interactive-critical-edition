@@ -3,11 +3,22 @@ import { isBetaTestingMode } from "@ice/config";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/brand";
 import { BetaBadge } from "@/components/shared/BetaBadge";
+import { Mark } from "@/components/site/Mark";
 
 /**
- * Public site header for the landing and policy pages. Adapts its CTA to
- * whether the visitor is already signed in (avoids sending a logged-in
- * user back through signup).
+ * Public site masthead for the landing and policy pages, restyled to the
+ * campaign site's editorial masthead (see `.masthead` in
+ * apps/web/src/app/site-theme.css). Shared by `/`, `/privacy`, and
+ * `/terms` — nothing else renders it.
+ *
+ * The section links are absolute (`/#graph`, not `#graph`) so they still
+ * work from the policy pages, where those sections don't exist. They are
+ * hidden below 980px, where the campaign layout drops the nav entirely.
+ *
+ * The CTA keeps the pre-existing auth-aware behavior — a signed-in
+ * visitor is never sent back through signup — and additionally drops
+ * "Get started" while beta testing is on, since registration is closed
+ * for the duration and `/signup` renders only a contact notice.
  */
 export async function SiteHeader() {
   const session = await auth();
@@ -15,42 +26,35 @@ export async function SiteHeader() {
   const betaTestingMode = isBetaTestingMode();
 
   return (
-    <header className="border-b border-[var(--color-border)]">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        {betaTestingMode ? (
-          <div className="flex min-w-0 items-center gap-2">
-            <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
-              {SITE_NAME}
-            </Link>
-            <BetaBadge />
-          </div>
+    <header className="masthead">
+      <div className="brand-group">
+        <Link href="/" className="brand" aria-label={`${SITE_NAME} home`}>
+          <Mark small />
+          <span>{SITE_NAME}</span>
+        </Link>
+        {betaTestingMode && <BetaBadge />}
+      </div>
+      <nav aria-label="Primary navigation">
+        <Link href="/#product">Product</Link>
+        <Link href="/#reader">Reader</Link>
+        <Link href="/#library">Library</Link>
+        <Link href="/#graph">Graph</Link>
+        <Link href="/#ask">Ask Library</Link>
+      </nav>
+      <div className="masthead-end">
+        {signedIn ? (
+          <Link href="/dashboard" className="nav-cta">
+            Your library
+          </Link>
+        ) : betaTestingMode ? (
+          <Link href="/login" className="nav-cta">
+            Log in
+          </Link>
         ) : (
-          <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
-            {SITE_NAME}
+          <Link href="/signup" className="nav-cta">
+            Get started
           </Link>
         )}
-        <nav className="flex items-center gap-4 text-sm">
-          {signedIn ? (
-            <Link
-              href="/dashboard"
-              className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-[var(--color-background)]"
-            >
-              Your library
-            </Link>
-          ) : (
-            <>
-              <Link href="/login" className="text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
-                Log in
-              </Link>
-              <Link
-                href="/signup"
-                className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-[var(--color-background)]"
-              >
-                Get started
-              </Link>
-            </>
-          )}
-        </nav>
       </div>
     </header>
   );

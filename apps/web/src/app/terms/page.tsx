@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { SITE_NAME } from "@/lib/brand";
+import "../site-theme.css";
 
 export const metadata: Metadata = {
   title: `Terms — ${SITE_NAME}`,
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="pal-site flex min-h-full flex-col">
       <SiteHeader />
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
         <h1 className="font-serif text-3xl font-semibold text-[var(--color-text)]">Terms of use</h1>
