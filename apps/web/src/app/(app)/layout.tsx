@@ -5,7 +5,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { getWorkspacePreferences } from "@/lib/preferences";
 import { AppShell } from "@/components/app/AppShell";
 import { PreferenceBootstrap } from "@/components/app/PreferenceBootstrap";
-import { phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
+import { isBetaTestingMode, phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
 
 /**
  * Single, centralized auth check for every route under (app) — replaces
@@ -27,7 +27,7 @@ export default async function AppLayout({
   return (
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
-      <AppShell email={session.user.email} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} initialPreferences={preferences}>{children}</AppShell>
+      <AppShell email={session.user.email} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} betaTestingMode={isBetaTestingMode()} initialPreferences={preferences}>{children}</AppShell>
     </>
   );
 }

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
 import { ToastProvider } from "./ToastProvider";
@@ -23,6 +24,7 @@ export function AppShell({
   admin,
   writerEnabled,
   ragEnabled,
+  betaTestingMode = false,
   initialPreferences,
   children,
 }: {
@@ -30,19 +32,20 @@ export function AppShell({
   admin: boolean;
   writerEnabled: boolean;
   ragEnabled: boolean;
+  betaTestingMode?: boolean;
   initialPreferences: WorkspacePreferences;
   children: React.ReactNode;
 }) {
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled}>{children}</AppShellContents>
+        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} betaTestingMode={betaTestingMode}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; children: React.ReactNode }) {
+function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTestingMode, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; betaTestingMode: boolean; children: React.ReactNode }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -98,7 +101,14 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, children }:
       {focusMode && <button ref={focusModeExitRef} type="button" className="app-control fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
       <header inert={focusMode} className={focusMode ? "sr-only" : "app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur"}>
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
-          <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
+          {betaTestingMode ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
+              <BetaBadge />
+            </div>
+          ) : (
+            <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
+          )}
           {/* D-23-15: the middle `minmax(0,1fr)` grid track can be narrower than
               the nav's no-wrap content at tablet widths (768–~1000px), making the
               links overflow under the controls column (theme toggle over

@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { isBetaTestingMode } from "@ice/config";
 import { loginAction } from "@/lib/actions";
+import { BetaBadge } from "@/components/shared/BetaBadge";
+import { BetaNotice } from "@/components/shared/BetaNotice";
 
 export default async function LoginPage({
   searchParams,
@@ -7,10 +10,18 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; verified?: string; reset?: string }>;
 }) {
   const params = await searchParams;
+  const betaTestingMode = isBetaTestingMode();
 
   return (
     <main className="mx-auto flex max-w-sm flex-col gap-6 px-6 py-24">
+      {betaTestingMode && (
+        <header className="flex items-center">
+          <BetaBadge />
+        </header>
+      )}
       <h1 className="text-2xl font-semibold text-[var(--color-text)]">Log in</h1>
+
+      {betaTestingMode && <BetaNotice />}
 
       {params.verified && (
         <p className="rounded-md bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-accent-green)]">

@@ -1,5 +1,6 @@
 "use server";
 
+import { isBetaTestingMode } from "@ice/config";
 import { AuthError } from "next-auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -62,6 +63,23 @@ const registerSchema = z.object({
 });
 
 export async function registerAction(formData: FormData) {
+  // Temporary owner-requested beta gate: cheap to check first, before
+  // parsing the form. The signup page itself already shows a beta notice
+  // instead of the form, but this action still stays rate-limited exactly
+  // like the API route above — a closed path isn't an unthrottled one.
+  if (isBetaTestingMode()) {
+    const limited = preAuthRateLimit({
+      scope: "register-ip",
+      identity: await actionClientIdentity(),
+      limit: 10,
+      windowMs: HOUR_MS,
+    });
+    if (limited) {
+      redirect("/signup?error=1");
+    }
+    redirect("/signup");
+  }
+
   const parsed = registerSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),

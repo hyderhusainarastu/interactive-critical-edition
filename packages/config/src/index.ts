@@ -10,6 +10,7 @@ export {
 } from "./pipeline";
 export { PHASE_12_FEATURE_FLAGS, phase12FeatureEnabled, type Phase12Feature } from "./phase12";
 export { phase18RagEnabled } from "./phase18";
+export { isBetaTestingMode } from "./betaTesting";
 export {
   PHASE_22_COMPETENCY_FLAGS,
   phase22CompetencyEnabled,

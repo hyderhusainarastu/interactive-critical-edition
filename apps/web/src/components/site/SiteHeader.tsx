@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { isBetaTestingMode } from "@ice/config";
 import { auth } from "@/lib/auth";
 import { SITE_NAME } from "@/lib/brand";
+import { BetaBadge } from "@/components/shared/BetaBadge";
 
 /**
  * Public site header for the landing and policy pages. Adapts its CTA to
@@ -10,13 +12,23 @@ import { SITE_NAME } from "@/lib/brand";
 export async function SiteHeader() {
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
+  const betaTestingMode = isBetaTestingMode();
 
   return (
     <header className="border-b border-[var(--color-border)]">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
-          {SITE_NAME}
-        </Link>
+        {betaTestingMode ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
+              {SITE_NAME}
+            </Link>
+            <BetaBadge />
+          </div>
+        ) : (
+          <Link href="/" className="font-serif text-lg font-semibold text-[var(--color-text)]">
+            {SITE_NAME}
+          </Link>
+        )}
         <nav className="flex items-center gap-4 text-sm">
           {signedIn ? (
             <Link
