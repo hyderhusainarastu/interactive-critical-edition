@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, request as pwRequest, test } from "@playwright/test";
 import { db, documents, passageAnnotations, processingRuns } from "@ice/db";
 import { eq } from "drizzle-orm";
@@ -135,7 +136,7 @@ test("a passage annotation renders as an in-text marker; clicking it reveals its
   await expect(page.getByLabel("Relationship")).toContainText("Interpretive aid");
 });
 
-test("a quote-matched critical note marker opens the sidebar Notes tab (plan §36 11.6)", async ({ page }) => {
+test("a quote-matched critical note marker opens the sidebar Critical notes tab (plan §36 11.6)", async ({ page }) => {
   const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
   const marker = edition.locator("button[data-annotation-id][data-marker-kind='matched-note']");
   await expect(marker).toHaveCount(1);
@@ -537,5 +538,87 @@ test("the passage-annotation correction route is owner-scoped: 401 anonymous, 40
     expect(res.status(), "cross-user PATCH").toBe(404);
   } finally {
     await deleteTestUser(attacker);
+  }
+});
+
+/**
+ * Phase 23 Lane D follow-up (adversarial-verification item 3): the axe
+ * evidence for this wave's two new reader states (the notes rail defaulting
+ * collapsed, and the relocated highlight-color swatches in the
+ * text-selection popover) originally came from a temporary spec deleted
+ * before commit — not repeatable. Covers both states, both themes, since
+ * neither adds real cost (no upload, no live API call — same seeded
+ * fixture every other test in this file already uses).
+ */
+test("the collapsed-default notes rail and the open selection popover with color swatches have zero axe violations, in both themes", async ({ page }) => {
+  for (const themeButton of ["Light", "Dark"] as const) {
+    await page.getByRole("button", { name: themeButton, exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", themeButton.toLowerCase());
+    // A brief settle wait before every scan (same D-19-8 precedent as
+    // accessibility-sweep.spec.ts's own `scan()` helper): a color/background
+    // CSS transition caught mid-flight right after the theme switch can
+    // report a transient, non-representative contrast ratio that clears a
+    // moment later — confirmed here empirically (a run without this wait
+    // reported the Annotation-index button's resting-state colors as
+    // 1.5:1, which cleared to a real pass once settled).
+    await page.waitForTimeout(300);
+
+    // 1. Collapsed-default state: the "My notes" rail starts closed.
+    await expect(page.getByRole("button", { name: "My notes" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: /my notes and highlights/i })).toHaveCount(0);
+    let results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations, `${themeButton} theme, collapsed default`).toEqual([]);
+
+    // 2. The text-selection popover, with the color swatches mounted.
+    const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+    const block = edition.locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });
+    // A TreeWalker over the block's actual text nodes, not a hardcoded
+    // `childNodes[0]` offset: this same block also carries a verified-term
+    // span ("decision"), an in-text annotation marker ("live according to
+    // passion"), a matched-note marker ("Vice remains a state on which one
+    // decides."), and — once the earlier "highlight creation…" test in this
+    // same file has run — a highlight `<mark>` around "Vicious", all of
+    // which restructure the block's child nodes. Assuming child node 0 is
+    // still a single plain-text run of the full sentence broke with an
+    // `IndexSizeError` once that highlight existed. "yet" is a real word in
+    // this fixture's body text that none of those markers' quotes include.
+    await block.evaluate((el) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let found: Text | null = null;
+      let offset = -1;
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const index = (node.textContent ?? "").indexOf("yet");
+        if (index !== -1) {
+          found = node as Text;
+          offset = index;
+          break;
+        }
+      }
+      if (!found) throw new Error('"yet" not found in any text node of this block');
+      const range = document.createRange();
+      range.setStart(found, offset);
+      range.setEnd(found, offset + "yet".length);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+    await block.dispatchEvent("mouseup");
+    const selectionToolbar = page.getByRole("toolbar", { name: "Selected text actions" });
+    await expect(selectionToolbar).toBeVisible();
+    await expect(selectionToolbar.getByRole("button", { name: "gold highlight" })).toBeVisible();
+    results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations, `${themeButton} theme, selection popover`).toEqual([]);
+
+    // Clear the selection directly, then re-fire the block's own mouseup
+    // handler so EditionReader's real `showSelectionToolbar` logic (an
+    // empty selection makes `captureSelectionAnchor` return null, which
+    // closes the popover) dismisses it the same way a real empty click
+    // would — not a page click at a fixed offset, which risked landing on
+    // the block's own annotation marker and disturbing its DOM (this
+    // intermittently shortened the block's first text node enough to break
+    // the second iteration's range selection with an IndexSizeError).
+    await page.evaluate(() => window.getSelection()?.removeAllRanges());
+    await block.dispatchEvent("mouseup");
+    await expect(selectionToolbar).toHaveCount(0);
   }
 });

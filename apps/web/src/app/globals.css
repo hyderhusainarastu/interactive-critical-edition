@@ -162,6 +162,16 @@
   padding: 0.02em 0;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  /* Found via the Phase 23 Lane D axe additions (edition.spec.ts): with no
+     explicit `color` here, `<mark>` fell back to the user-agent default
+     (black), which reads fine against light theme's warm background but
+     measured only 2.06:1 for reader-highlight-burgundy against dark
+     theme's page background — a real, pre-existing WCAG AA failure this
+     was the first axe scan in the codebase to actually exercise (a
+     dark-theme scan with a visible highlight mark). Inheriting the same
+     page text token every other themed surface uses keeps it correct in
+     both themes instead of guessing a second color per swatch. */
+  color: var(--color-text);
 }
 .reader-highlight-gold { background: color-mix(in srgb, var(--color-highlight) 42%, transparent); }
 .reader-highlight-green { background: color-mix(in srgb, var(--color-accent-green) 32%, transparent); }

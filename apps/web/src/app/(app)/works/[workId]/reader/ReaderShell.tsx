@@ -389,6 +389,19 @@ export function ReaderShell({
   // internal navigation can never disagree about section boundaries.
   const outline = useMemo(() => (visibleEdition ? computeOutline(visibleEdition.blocks) : []), [visibleEdition]);
 
+  // "+ Bookmark"'s fallback for the brief window before EditionReader's own
+  // onPositionChange effect has fired at least once (currentPositionRef.current
+  // still null) — same ordering EditionReader's effect itself uses (sort by
+  // pageIndex then blockOrder, take the first), so a bookmark created in that
+  // window can never disagree with what the effect would have reported a
+  // moment later. Not a guess: it's the identical derivation, just read here
+  // instead of waited for.
+  const firstEditionBlock = useMemo(() => {
+    if (!visibleEdition) return null;
+    const ordered = [...visibleEdition.blocks].sort((a, b) => a.pageIndex - b.pageIndex || a.blockOrder - b.blockOrder);
+    return ordered[0] ?? null;
+  }, [visibleEdition]);
+
   const visibleAnnotationIds = useMemo(() => visibleEdition?.passageAnnotations.map((annotation) => annotation.id) ?? [], [visibleEdition]);
   const moveAnnotation = useCallback((direction: -1 | 1) => {
     if (!visibleAnnotationIds.length) return;
@@ -478,7 +491,12 @@ export function ReaderShell({
               className="app-control"
               onClick={() =>
                 addBookmark(
-                  currentPositionRef.current ?? (isPdf ? { kind: "pdf", page: 1 } : { kind: "text", paragraphIndex: 0 }),
+                  currentPositionRef.current ??
+                    (effectiveShowInteractive && firstEditionBlock
+                      ? { kind: "processed", pageIndex: firstEditionBlock.pageIndex, textBlockId: firstEditionBlock.id }
+                      : isPdf
+                        ? { kind: "pdf", page: 1 }
+                        : { kind: "text", paragraphIndex: 0 }),
                 )
               }
             >

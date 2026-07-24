@@ -402,6 +402,28 @@ test.describe("Phase 23.2 accessibility completion", () => {
     await page.goto(`/works/${workId}/reader`);
     await expect(page.getByRole("button", { name: "Ask Library" })).toBeVisible();
     expect(await auditTouchTargets(page)).toEqual([]);
+
+    // The text-selection popover (EditionReader's own "Selected text
+    // actions" toolbar, incl. the highlight-color swatches) only mounts
+    // once text is selected — the audit above, run on plain page load,
+    // never sees it, which is exactly how the popover's swatches shipped
+    // at 24x24 (D-23-x) without this test ever catching it. Select real
+    // text and re-audit with the popover actually open.
+    const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
+    const block = edition.locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });
+    await block.evaluate((el) => {
+      const textNode = el.childNodes[0];
+      const range = document.createRange();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, 7);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+    await block.dispatchEvent("mouseup");
+    await expect(page.getByRole("toolbar", { name: "Selected text actions" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "gold highlight" })).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
   });
 
   test("Library controls meet the 44x44 touch-target minimum", async ({ page }) => {

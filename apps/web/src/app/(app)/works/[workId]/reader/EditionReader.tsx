@@ -642,15 +642,20 @@ export function EditionReader({
           aria-label="Selected text actions"
         >
           {onCreateHighlight && onColorChange && (
-            <div className="flex items-center gap-0.5" role="group" aria-label="Highlight color">
+            <div className="flex items-center" role="group" aria-label="Highlight color">
               {HIGHLIGHT_COLORS.map((c) => (
+                // Phase 23.2 floor (D-23-x, same precedent the removed
+                // toolbar group carried): the clickable button is a full
+                // 44x44 touch target; the visible color dot stays small
+                // (`--color` set on the inner `span`, not the button
+                // itself) so the popover's density doesn't change.
                 <button
                   key={c}
                   type="button"
                   aria-label={`${c} highlight`}
                   aria-pressed={pendingColor === c}
                   onClick={() => onColorChange(c)}
-                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full"
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full"
                 >
                   <span
                     aria-hidden="true"
@@ -664,8 +669,13 @@ export function EditionReader({
               ))}
             </div>
           )}
-          {onCreateHighlight && <button type="button" onClick={() => void runSelectionAction(onCreateHighlight)}>Highlight</button>}
-          {onCreateLinkedNote && <button type="button" onClick={() => void runSelectionAction(onCreateLinkedNote)}>New linked note</button>}
+          {/* Phase 23.2 floor, applied here too (found via the accessibility
+              sweep's popover-audit addition, D-23-x): these two text
+              actions predate the swatch move and had never carried an
+              explicit touch-target size — `min-h-11` is padding-only, no
+              visual redesign, matching `AppShell`'s own precedent. */}
+          {onCreateHighlight && <button type="button" onClick={() => void runSelectionAction(onCreateHighlight)} className="min-h-11 min-w-11 px-1">Highlight</button>}
+          {onCreateLinkedNote && <button type="button" onClick={() => void runSelectionAction(onCreateLinkedNote)} className="min-h-11 min-w-11 px-1">New linked note</button>}
           {onLinkExistingNote && notes.length > 0 && (
             <select
               aria-label="Link existing note"
@@ -755,7 +765,7 @@ export function EditionReader({
       )}
 
       {/* Authorial notes and AI-generated critical notes moved to the
-       *  sidebar's "Notes" tab (plan §36 11.6). Generated notes may also
+       *  sidebar's "Critical notes" tab (plan §36 11.6). Generated notes may also
        *  receive visibly-inferred in-text markers when their evidence quote
        *  matches exactly one block; authorial notes remain page/sidebar-only
        *  because they carry no block anchor. */}

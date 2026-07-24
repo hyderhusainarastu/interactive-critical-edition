@@ -243,6 +243,19 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
           await page.goto(path());
           await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
           if (heading !== null) await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+          // `heading: null` means the reader has no single fixed heading to
+          // assert (see this array's own doc comment), but that left this
+          // one page with NO readiness wait at all before the screenshot —
+          // unlike every other entry here. In practice the theme==="light"
+          // combinations (the default value, so the data-theme assertion
+          // above resolves immediately with nothing to actually wait for)
+          // reliably raced ahead of the reader's own data fetch and froze
+          // the "Loading…" placeholder into the baseline (found regenerating
+          // these baselines: reader-desktop-light kept re-capturing that
+          // placeholder even after the route was already warm). Wait for
+          // its toolbar's "My notes" control, which only renders once
+          // ReaderShell's own data has loaded.
+          if (name === "reader") await expect(page.getByRole("button", { name: "My notes" })).toBeVisible();
           // A brief settle wait before the canvas-bearing page's screenshot —
           // same rationale as accessibility-sweep.spec.ts's own settle wait,
           // giving the 3D scene's initial mount/effects time to finish before
