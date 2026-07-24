@@ -783,9 +783,9 @@
         {
           "id": "23.6",
           "title": "Performance and resilience",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
-          "summary": "Re-verify the Render incident fixes have no signature recurrence, measured performance budgets, local restart/reconnection/outage-simulation drills."
+          "summary": "Render incident revalidation complete (read-only, production): zero recurrence of R-19-1/R-19-2 signatures, deploy/config matches documented baseline, one new benign ECONNABORTED blip logged as monitor-only. Static build findings recorded (docs/audits/phase-23-6-performance-resilience.md): bundle sizes attributed and confirmed correctly route-scoped, one Phase-19 tooling assumption (next build prints route sizes) found stale for this Next.js version. New apps/web/e2e/performance.spec.ts (9 test blocks) authored covering 7 of 10 'Measure:' scenarios with documented budgets; the 3 requiring a live worker/paid provider call (large PDF processing, reprocess, RAG first-token/completion) and all 7 'Run:' resilience drills are budgeted/procedure-documented but pending execution under a measurement freeze. Next: run performance.spec.ts and the resilience drills once the freeze lifts."
         },
         {
           "id": "23.7",
