@@ -1,74 +1,136 @@
 import type { Metadata } from "next";
-import { SiteFooter } from "@/components/site/SiteFooter";
-import { SiteHeader } from "@/components/site/SiteHeader";
+import { PolicyPageLayout, type PolicySection } from "@/components/site/PolicyPageLayout";
 import { SITE_NAME } from "@/lib/brand";
 import "../site-theme.css";
 
 export const metadata: Metadata = {
   title: `Privacy & Copyright — ${SITE_NAME}`,
-  description: "How your data, uploads, and system-generated content are handled.",
+  description: "How your data, uploads, research choices, and system-generated content are handled.",
 };
+
+const sections: PolicySection[] = [
+  {
+    id: "what-we-store",
+    title: "What we store",
+    content: (
+      <p>
+        We store your account details; the works you upload and text extracted from them; highlights, notes,
+        bookmarks, reading status, understanding ratings, corrections, and conversations; and preferences such as
+        reader level. Passwords are stored only as secure hashes. Uploaded files remain isolated to your account.
+      </p>
+    ),
+  },
+  {
+    id: "research-sharing",
+    title: "Research data sharing is your choice",
+    content: (
+      <>
+        <p>
+          You can explicitly opt in to share activity with the Palimnote team for research concerning pedagogy and
+          research practices. The option is off by default. If you opt in, the research view may include the titles
+          of works you upload, activity and usage patterns, and your reading-companion conversation histories.
+        </p>
+        <p>
+          You can revoke permission at any time from your profile. Turning it off stops future content-level research
+          access. Your account continues to work whether you share or not.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "telemetry",
+    title: "Service analytics and page visits",
+    content: (
+      <p>
+        We record content-free service events such as page-visit counts, session starts, uploads, chat-message counts,
+        and feedback submissions. These records help us understand reliability and how the beta is used. Page paths
+        and timestamps are retained; page contents, note text, and message text are not copied into these event
+        records.
+      </p>
+    ),
+  },
+  {
+    id: "isolation",
+    title: "Your data is isolated to you",
+    content: (
+      <p>
+        Every private resource is scoped to your account. Requests for a resource you do not own return
+        &ldquo;not found&rdquo; rather than revealing that it exists. Content-level research access is also withheld
+        from the Palimnote research view unless you have opted in.
+      </p>
+    ),
+  },
+  {
+    id: "copyright",
+    title: "Copyright — you bring your own texts",
+    content: (
+      <p>
+        Palimnote never bypasses paywalls or obtains copyrighted material on your behalf. For works it cannot obtain,
+        it stores a citation and a pointer toward legitimate acquisition. Upload only a copy you are permitted to use.
+        Roadmaps can still represent an unavailable work, clearly marked as not directly inspected.
+      </p>
+    ),
+  },
+  {
+    id: "automated-processing",
+    title: "Automated classification",
+    content: (
+      <p>
+        Bibliographic facts come from real catalogue lookups rather than generated citations. When a model classifies
+        how a reference relates to a passage, the request goes to the configured provider under its data-use terms.
+        Uploaded content is never used to train models without a separate, explicit opt-in.
+      </p>
+    ),
+  },
+  {
+    id: "deletion",
+    title: "Account deletion and export",
+    content: (
+      <>
+        <p>
+          You may delete your account at any time. Deletion removes your uploaded files, extracted text, annotations,
+          notes, conversations, and derived workspace data — not just your sign-in record. You may also export your
+          notes, roadmap, and bibliography.
+        </p>
+        <p>
+          We may retain a content-free aggregate record after deletion so platform totals remain accurate, such as
+          when the account was created and deleted and aggregate document or activity counts. It does not preserve
+          uploaded text, notes, or conversation transcripts.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "feedback",
+    title: "Feedback",
+    content: (
+      <p>
+        Feedback you submit is delivered to the Palimnote team with its category, message, the page it came from, and
+        — when you provide one — your account or contact email. We use it to investigate bugs and improve the product.
+        Feedback is not published or used as research content without asking you.
+      </p>
+    ),
+  },
+  {
+    id: "scholarly-limits",
+    title: "A research aid, not settled scholarship",
+    content: (
+      <p>
+        System-generated claims carry confidence and provenance, explaining the basis for the inference rather than
+        presenting it as settled fact. Verify against the primary text before relying on anything; you can correct,
+        dispute, or hide an automated annotation.
+      </p>
+    ),
+  },
+];
 
 export default function PrivacyPage() {
   return (
-    <div className="pal-site flex min-h-full flex-col">
-      <SiteHeader />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
-        <h1 className="font-serif text-3xl font-semibold text-[var(--color-text)]">Privacy &amp; copyright</h1>
-        <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-          Plain-language summary of how the service handles your data. This describes intended behavior of the
-          product as built; it is not legal advice.
-        </p>
-
-        <div className="mt-8 flex flex-col gap-6 text-[var(--color-text)]">
-          <Section title="What we store">
-            Your account (name, email, a hashed password), the texts you upload and the text extracted from them,
-            and everything you create: highlights, notes, bookmarks, reading status, understanding ratings, and any
-            corrections you make to automated annotations. Preferences such as your expertise level are stored to
-            personalize the roadmap.
-          </Section>
-
-          <Section title="Your data is isolated to you">
-            Every piece of your content is scoped to your account and never visible to other users. Requests for a
-            resource you don&rsquo;t own return &ldquo;not found&rdquo; rather than revealing it exists.
-          </Section>
-
-          <Section title="Copyright — you bring your own texts">
-            The service never bypasses paywalls or sources copyrighted material on your behalf. For works it
-            can&rsquo;t obtain, it stores a proper citation and a pointer toward legitimate acquisition, and lets you
-            upload your own legally obtained copy. Roadmap and analysis still work for works not directly inspected,
-            marking them accordingly.
-          </Section>
-
-          <Section title="Automated classification">
-            Bibliographic facts come only from real lookups (Crossref, OpenAlex, Open Library), never generated by a
-            model. When a classification model is used to classify how references relate to a text, calls go to the
-            provider&rsquo;s API tier under its data-use terms. Your uploaded content is never used to train models
-            without your explicit, separate opt-in — the default is opt-out.
-          </Section>
-
-          <Section title="Deletion &amp; export">
-            Deleting your account removes your uploaded files, extracted text, annotations, and derived data — not
-            just the account record. You can export your notes, roadmap, and bibliography.
-          </Section>
-
-          <Section title="A research aid, not settled scholarship">
-            Every system-generated claim carries a confidence and its provenance, explaining the basis for the
-            inference rather than presenting it as settled fact. Verify against the primary text before relying on
-            anything; you can correct, dispute, or hide any automated annotation.
-          </Section>
-        </div>
-      </main>
-      <SiteFooter />
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="font-serif text-lg font-semibold text-[var(--color-text)]">{title}</h2>
-      <p className="mt-1 leading-relaxed text-[var(--color-text-muted)]">{children}</p>
-    </section>
+    <PolicyPageLayout
+      eyebrow="Privacy / Copyright / Research"
+      title="Privacy & copyright"
+      summary="A plain-language account of what Palimnote stores, what stays private, and the research choices that remain yours."
+      sections={sections}
+    />
   );
 }

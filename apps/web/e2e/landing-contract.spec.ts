@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+async function prepareDepiction(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  // The contract freezes the depiction itself. The public masthead is
+  // intentionally sticky and would otherwise be painted into a locator
+  // screenshot after Playwright scrolls the section into view.
+  await page.locator(".masthead, .public-scroll-progress").evaluateAll((elements) => {
+    elements.forEach((element) => {
+      (element as HTMLElement).style.display = "none";
+    });
+  });
+  await page.evaluate(() => {
+    document.documentElement.dataset.motion = "reduced";
+    document.querySelectorAll(".pal-reveal").forEach((element) => element.classList.add("is-visible"));
+  });
+}
+
 /**
  * Landing-page visual contract.
  *
@@ -39,7 +55,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Landing page visual contract", () => {
   test("Annotated reader depiction — desktop", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto("/");
+    await prepareDepiction(page);
     const section = page.locator("section#reader");
     await expect(section).toBeVisible();
     await expect(section).toHaveScreenshot("reader-annotations-desktop.png", { maxDiffPixels: 40 });
@@ -47,7 +63,7 @@ test.describe("Landing page visual contract", () => {
 
   test("Annotated reader depiction — mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/");
+    await prepareDepiction(page);
     const section = page.locator("section#reader");
     await expect(section).toBeVisible();
     await expect(section).toHaveScreenshot("reader-annotations-mobile.png", { maxDiffPixels: 40 });
@@ -55,7 +71,7 @@ test.describe("Landing page visual contract", () => {
 
   test("Library depiction — desktop", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
-    await page.goto("/");
+    await prepareDepiction(page);
     const section = page.locator("section#library");
     await expect(section).toBeVisible();
     await expect(section).toHaveScreenshot("library-desktop.png", { maxDiffPixels: 40 });
@@ -63,7 +79,7 @@ test.describe("Landing page visual contract", () => {
 
   test("Library depiction — mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/");
+    await prepareDepiction(page);
     const section = page.locator("section#library");
     await expect(section).toBeVisible();
     await expect(section).toHaveScreenshot("library-mobile.png", { maxDiffPixels: 40 });

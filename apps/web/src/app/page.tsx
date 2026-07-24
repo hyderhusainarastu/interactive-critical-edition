@@ -1,10 +1,12 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { isBetaTestingMode } from "@ice/config";
 import { AskLibraryDepiction } from "@/components/site/AskLibraryDepiction";
 import { InteractiveGraphRendering } from "@/components/site/InteractiveGraph";
 import { DOCUMENTATION_URL } from "@/components/site/links";
 import { Mark } from "@/components/site/Mark";
 import { AnnotationsRendering, LibraryRendering, ProductScope } from "@/components/site/ProductDepictions";
+import { PublicExperience } from "@/components/site/PublicExperience";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { auth } from "@/lib/auth";
@@ -137,14 +139,15 @@ export default async function Home() {
   return (
     <div className="pal-site pal-landing">
       <SiteHeader />
+      <PublicExperience />
       <main id="top">
         <section className="hero section-shell" aria-labelledby="hero-title">
           <div className="hero-copy">
             <p className="kicker">The map in the margins · {SITE_NAME}</p>
-            <h1 id="hero-title">
-              A Text Is
-              <br />
-              Never Alone
+            <h1 id="hero-title" className="hero-title" aria-label="A Text Is Never Alone">
+              <span aria-hidden="true" style={{ "--word-index": 0 } as CSSProperties}>A Text{" "}</span>
+              <span aria-hidden="true" style={{ "--word-index": 1 } as CSSProperties}>Is Never{" "}</span>
+              <span aria-hidden="true" style={{ "--word-index": 2 } as CSSProperties}>Alone</span>
             </h1>
             <p className="hero-deck">
               Upload a difficult scholarly work. {SITE_NAME} builds a traceable critical edition around it — then turns
@@ -152,7 +155,7 @@ export default async function Home() {
               map, and a chat that answers only from what you actually hold.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href={primaryHref}>
+              <Link className="button button-primary app-press" data-magnetic href={primaryHref}>
                 {primaryLabel}
               </Link>
               <a className="text-link" href="#graph">
@@ -164,8 +167,10 @@ export default async function Home() {
             </p>
           </div>
 
-          <div className="hero-visual">
-            <div className="paper-sheet">
+          <div className="hero-visual" aria-label="Layered annotated manuscript">
+            <div className="paper-sheet paper-sheet-ghost paper-sheet-ghost-back" data-parallax-depth="0.9" aria-hidden="true" />
+            <div className="paper-sheet paper-sheet-ghost paper-sheet-ghost-mid" data-parallax-depth="0.55" aria-hidden="true" />
+            <div className="paper-sheet paper-sheet-primary" data-parallax-depth="0.24">
               <div className="folio">PAL / 01</div>
               <div className="text-lines" aria-hidden="true">
                 <i />
@@ -485,11 +490,12 @@ export default async function Home() {
               evidence in reach, and every inference answerable for itself.
             </p>
             <div className="closing-actions">
-              <Link className="button button-light" href={primaryHref}>
+              <Link className="button button-light app-press" data-magnetic href={primaryHref}>
                 {primaryLabel}
               </Link>
               <a
-                className="button button-ghost"
+                className="button button-ghost app-press"
+                data-magnetic
                 href={DOCUMENTATION_URL}
                 target="_blank"
                 rel="noopener noreferrer"

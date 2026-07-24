@@ -124,6 +124,8 @@ export function InteractiveGraphRendering() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef({ yaw: -0.35, pitch: 0.18, zoom: 1.05 });
   const dragRef = useRef({ down: false, moved: false, x: 0, y: 0 });
+  const parallaxRef = useRef({ x: 0, y: 0 });
+  const hoveredRef = useRef<GraphNode | null>(null);
   const pointsRef = useRef<Array<{ node: GraphNode; x: number; y: number; r: number }>>([]);
   const [selected, setSelected] = useState<GraphNode>(graphNodes[0]);
   const [view, setView] = useState<"graph" | "table">("graph");
@@ -151,7 +153,14 @@ export function InteractiveGraphRendering() {
       const y1 = node.y * cp - z1 * sp;
       const z2 = node.y * sp + z1 * cp;
       const perspective = (520 / (520 + z2)) * zoom;
-      return { node, x: width / 2 + x1 * perspective, y: height / 2 + y1 * perspective, z: z2, r: (node.type === "work" ? 8 : node.type === "passage" ? 5 : 6) * Math.max(.75, perspective) };
+      const depthParallax = Math.max(-1.25, Math.min(1.25, z2 / 175));
+      return {
+        node,
+        x: width / 2 + x1 * perspective + parallaxRef.current.x * depthParallax * 8,
+        y: height / 2 + y1 * perspective + parallaxRef.current.y * depthParallax * 6,
+        z: z2,
+        r: (node.type === "work" ? 8 : node.type === "passage" ? 5 : 6) * Math.max(.75, perspective),
+      };
     });
     const byId = new Map(projected.map((point) => [point.node.id, point]));
     for (const edge of graphEdges) {
@@ -161,22 +170,33 @@ export function InteractiveGraphRendering() {
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.strokeStyle = `${relationColors[edge.group]}75`;
-      ctx.lineWidth = edge.source === selected.id || edge.target === selected.id ? 1.7 : .65;
+      const emphasizedId = hoveredRef.current?.id ?? selected.id;
+      ctx.lineWidth = edge.source === emphasizedId || edge.target === emphasizedId ? 1.9 : .65;
       ctx.stroke();
     }
     projected.sort((a, b) => a.z - b.z);
     for (const point of projected) {
       const isSelected = point.node.id === selected.id;
+      const isHovered = point.node.id === hoveredRef.current?.id;
+      if (isHovered) {
+        const glow = ctx.createRadialGradient(point.x, point.y, point.r, point.x, point.y, point.r + 18);
+        glow.addColorStop(0, `${entityColors[point.node.type]}72`);
+        glow.addColorStop(1, `${entityColors[point.node.type]}00`);
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, point.r + 18, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
+        ctx.fill();
+      }
       ctx.beginPath();
-      ctx.arc(point.x, point.y, isSelected ? point.r + 4 : point.r, 0, Math.PI * 2);
+      ctx.arc(point.x, point.y, isSelected ? point.r + 4 : isHovered ? point.r + 3 : point.r, 0, Math.PI * 2);
       ctx.fillStyle = entityColors[point.node.type];
       ctx.globalAlpha = Math.max(.52, Math.min(1, .82 - point.z / 1000));
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.strokeStyle = isSelected ? "#ffffff" : "#172838";
+      ctx.lineWidth = isSelected || isHovered ? 2 : 1;
+      ctx.strokeStyle = isSelected || isHovered ? "#ffffff" : "#172838";
       ctx.stroke();
-      if (isSelected || point.node.type === "work" || point.node.id === "wisdom" || point.node.id === "formation") {
+      if (isSelected || isHovered || point.node.type === "work" || point.node.id === "wisdom" || point.node.id === "formation") {
         const label = point.node.label;
         ctx.font = `${isSelected ? "700" : "600"} ${isSelected ? 12 : 10}px Inter, sans-serif`;
         const textWidth = ctx.measureText(label).width;
@@ -189,6 +209,13 @@ export function InteractiveGraphRendering() {
     pointsRef.current = projected.map(({ node, x, y, r }) => ({ node, x, y, r: Math.max(r + 8, 14) }));
   }, [selected]);
 
+  const adjustView = useCallback((yaw: number, pitch: number, zoom = 0) => {
+    viewRef.current.yaw += yaw;
+    viewRef.current.pitch = Math.max(-1.15, Math.min(1.15, viewRef.current.pitch + pitch));
+    viewRef.current.zoom = Math.max(.62, Math.min(1.8, viewRef.current.zoom + zoom));
+    draw();
+  }, [draw]);
+
   useEffect(() => {
     draw();
     const observer = new ResizeObserver(draw);
@@ -196,12 +223,16 @@ export function InteractiveGraphRendering() {
     return () => observer.disconnect();
   }, [draw]);
 
-  function adjustView(yaw: number, pitch: number, zoom = 0) {
-    viewRef.current.yaw += yaw;
-    viewRef.current.pitch = Math.max(-1.15, Math.min(1.15, viewRef.current.pitch + pitch));
-    viewRef.current.zoom = Math.max(.62, Math.min(1.8, viewRef.current.zoom + zoom));
-    draw();
-  }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || view !== "graph") return;
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      adjustView(0, 0, event.deltaY > 0 ? -.08 : .08);
+    };
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, [adjustView, view]);
 
   return (
     <div className="product-frame graph-rendering">
@@ -224,9 +255,38 @@ export function InteractiveGraphRendering() {
                 tabIndex={0}
                 aria-label="Interactive three-dimensional knowledge graph. Drag or use arrow keys to rotate, scroll or use plus and minus to zoom, and select nodes for details."
                 onPointerDown={(event) => { dragRef.current = { down: true, moved: false, x: event.clientX, y: event.clientY }; event.currentTarget.setPointerCapture(event.pointerId); }}
-                onPointerMove={(event) => { const drag = dragRef.current; if (!drag.down) return; const dx = event.clientX - drag.x, dy = event.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true; drag.x = event.clientX; drag.y = event.clientY; adjustView(dx * .008, dy * .008); }}
+                onPointerMove={(event) => {
+                  const drag = dragRef.current;
+                  if (drag.down) {
+                    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+                    if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+                    drag.x = event.clientX;
+                    drag.y = event.clientY;
+                    adjustView(dx * .008, dy * .008);
+                    return;
+                  }
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const x = event.clientX - rect.left, y = event.clientY - rect.top;
+                  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                    || document.documentElement.dataset.motion === "reduced";
+                  parallaxRef.current = reducedMotion
+                    ? { x: 0, y: 0 }
+                    : {
+                        x: (x / Math.max(1, rect.width) - .5) * 2,
+                        y: (y / Math.max(1, rect.height) - .5) * 2,
+                      };
+                  hoveredRef.current = [...pointsRef.current].reverse().find((point) => Math.hypot(point.x - x, point.y - y) <= point.r)?.node ?? null;
+                  event.currentTarget.style.cursor = hoveredRef.current ? "pointer" : "grab";
+                  draw();
+                }}
                 onPointerUp={(event) => { const drag = dragRef.current; drag.down = false; if (!drag.moved) { const rect = event.currentTarget.getBoundingClientRect(); const x = event.clientX - rect.left, y = event.clientY - rect.top; const hit = [...pointsRef.current].reverse().find((point) => Math.hypot(point.x - x, point.y - y) <= point.r); if (hit) setSelected(hit.node); } }}
-                onWheel={(event) => { event.preventDefault(); adjustView(0, 0, event.deltaY > 0 ? -.08 : .08); }}
+                onPointerLeave={(event) => {
+                  dragRef.current.down = false;
+                  parallaxRef.current = { x: 0, y: 0 };
+                  hoveredRef.current = null;
+                  event.currentTarget.style.cursor = "grab";
+                  draw();
+                }}
                 onKeyDown={(event) => { if (event.key === "ArrowLeft") adjustView(-.12, 0); else if (event.key === "ArrowRight") adjustView(.12, 0); else if (event.key === "ArrowUp") adjustView(0, -.12); else if (event.key === "ArrowDown") adjustView(0, .12); else if (event.key === "+" || event.key === "=") adjustView(0, 0, .1); else if (event.key === "-") adjustView(0, 0, -.1); else return; event.preventDefault(); }}
               />
               <div className="graph-instructions">Drag to rotate · Scroll to zoom · Select any node</div>
