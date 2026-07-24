@@ -4,6 +4,13 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { CATEGORY_META } from "./annotationMeta";
 import { applyAnnotationMarkers, applyFootnoteMarkers, applyHighlights, captureSelectionAnchor, clearAnnotationMarkers, clearFootnoteMarkers } from "./highlightDom";
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
+import {
+  EMPTY_FOREIGN_SPAN_INTERACTION,
+  foreignSpanTooltipIsOpen,
+  updateForeignSpanInteraction,
+  type ForeignSpanInteraction,
+  type ForeignSpanInteractionEvent,
+} from "./foreignSpanInteraction";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import { matchFootnotesToBlocks } from "./matchFootnoteToBlock";
 import { readerScrollBehavior } from "./readerMotion";
@@ -305,8 +312,11 @@ function renderVerifiedTerms(
   scriptDisplay: "original" | "transliteration",
   untranscribableSpans: Array<{ start: number; end: number }> = [],
   foreignSpans: EditionForeignSpan[] = [],
-  onForeignOpen?: (span: EditionForeignSpan, rect: DOMRect) => void,
-  onForeignClose?: (spanId: string) => void,
+  onForeignInteraction?: (
+    span: EditionForeignSpan,
+    rect: DOMRect,
+    event: ForeignSpanInteractionEvent,
+  ) => void,
   activeForeignSpanId?: string | null,
 ) {
   const termSegments = terms
@@ -366,11 +376,24 @@ function renderVerifiedTerms(
           className="foreign-text-span rounded-sm px-0.5"
           aria-expanded={active}
           aria-describedby={active ? `foreign-span-tooltip-${span.id}` : undefined}
-          onFocus={(event) => onForeignOpen?.(span, event.currentTarget.getBoundingClientRect())}
-          onBlur={() => onForeignClose?.(span.id)}
+          onPointerEnter={(event) => onForeignInteraction?.(
+            span,
+            event.currentTarget.getBoundingClientRect(),
+            "pointer-enter",
+          )}
+          onPointerLeave={(event) => onForeignInteraction?.(
+            span,
+            event.currentTarget.getBoundingClientRect(),
+            "pointer-leave",
+          )}
+          onFocus={(event) => onForeignInteraction?.(span, event.currentTarget.getBoundingClientRect(), "focus")}
+          onBlur={(event) => onForeignInteraction?.(span, event.currentTarget.getBoundingClientRect(), "blur")}
           onClick={(event) => {
             event.stopPropagation();
-            onForeignOpen?.(span, event.currentTarget.getBoundingClientRect());
+            // Some touch browsers do not focus a button on tap. Explicit
+            // focus keeps the same accessible tooltip path for tap/keyboard.
+            event.currentTarget.focus({ preventScroll: true });
+            onForeignInteraction?.(span, event.currentTarget.getBoundingClientRect(), "focus");
           }}
         >
           {span.originalText}
@@ -535,6 +558,7 @@ export function EditionReader({
     span: EditionForeignSpan;
     rect: DOMRect;
     boundaryRect: { left: number; right: number };
+    interaction: ForeignSpanInteraction;
   } | null>(null);
   const page = edition.pages[pageIndex];
   const orderedBlocks = useMemo(
@@ -765,6 +789,30 @@ export function EditionReader({
     if (first) window.requestAnimationFrame(() => blockRefs.current.get(first.id)?.scrollIntoView({ block: "start", behavior: readerScrollBehavior() }));
   }
 
+  function handleForeignInteraction(
+    span: EditionForeignSpan,
+    rect: DOMRect,
+    event: ForeignSpanInteractionEvent,
+  ) {
+    setForeignTooltip((current) => {
+      const isExit = event === "pointer-leave" || event === "blur";
+      if (isExit && current?.span.id !== span.id) return current;
+      const interaction = updateForeignSpanInteraction(
+        current?.span.id === span.id ? current.interaction : EMPTY_FOREIGN_SPAN_INTERACTION,
+        event,
+      );
+      if (!foreignSpanTooltipIsOpen(interaction)) return null;
+      return {
+        span,
+        rect,
+        boundaryRect: readerBoundary.right > readerBoundary.left
+          ? readerBoundary
+          : { left: 0, right: window.innerWidth },
+        interaction,
+      };
+    });
+  }
+
   return (
     <section ref={sectionRef} aria-label="Interactive reader — processed text" className="edition-reader-layout mx-auto">
       {/* `data-dense-controls`: same Phase 23.2 touch-target-audit test hook
@@ -910,14 +958,7 @@ export function EditionReader({
             scriptDisplay,
             block.untranscribableSpans ?? [],
             edition.foreignSpans ?? [],
-            (span, rect) => setForeignTooltip({
-              span,
-              rect,
-              boundaryRect: readerBoundary.right > readerBoundary.left
-                ? readerBoundary
-                : { left: 0, right: window.innerWidth },
-            }),
-            (spanId) => setForeignTooltip((current) => current?.span.id === spanId ? null : current),
+            handleForeignInteraction,
             foreignTooltip?.span.id,
           );
           const noteForBlock = passageAnnotationsByBlock.get(block.id) ?? [];
