@@ -373,6 +373,10 @@ body {
 .app-shell-header, .masthead { transition: min-height .18s var(--spring-fast), box-shadow .18s var(--spring-fast), background-color .18s var(--spring-fast); }
 .header-compact { box-shadow: var(--shadow-elevation-1); }
 .app-shell-header.header-compact { min-height: 3.1rem; }
+.app-shell-header.header-compact > div { min-height: 3rem; }
+.pal-site .masthead { position: sticky; top: 0; z-index: 30; }
+.pal-site .masthead.header-compact { min-height: 66px; background: color-mix(in srgb, var(--color-background) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+@media (max-width: 700px) { .pal-site .masthead.header-compact { min-height: 62px; } }
 .nav { position: relative; }
 .nav::after { content: ""; position: absolute; right: 0; bottom: -.1rem; left: 0; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .2s var(--spring-gentle); }
 .nav:hover::after, .nav:focus-visible::after, .nav[aria-current="page"]::after { transform: scaleX(1); }

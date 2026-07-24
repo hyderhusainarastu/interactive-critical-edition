@@ -153,6 +153,26 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   });
 
+  test("the public sound toggle persists its accessible muted state", async ({ page }) => {
+    await page.goto("/");
+
+    // Sound defaults on for a fresh visitor. This test verifies the setting,
+    // not WebAudio output (which browsers intentionally gate by gesture).
+    const toggle = page.getByRole("button", { name: "Mute interface sounds" });
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await toggle.click();
+    await expect(page.getByRole("button", { name: "Enable interface sounds" })).toHaveAttribute("aria-pressed", "false");
+
+    await page.reload();
+    const muted = page.getByRole("button", { name: "Enable interface sounds" });
+    await expect(muted).toHaveAttribute("aria-pressed", "false");
+
+    await muted.click();
+    await expect(page.getByRole("button", { name: "Mute interface sounds" })).toHaveAttribute("aria-pressed", "true");
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mute interface sounds" })).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("privacy and terms pages render", async ({ page }) => {
     await page.goto("/privacy");
     await expect(page.getByRole("heading", { name: /Privacy & copyright/i })).toBeVisible();
