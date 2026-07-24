@@ -1,27 +1,44 @@
 @import "tailwindcss";
 
 /*
-  Design tokens (plan §19; Phase 8 theme fix): a BONE-WHITE default with
-  restrained dark complementary accents — warm, calm, scholarly, not
-  faux-antique. The default is bone-white for EVERYONE: there is
-  deliberately NO `@media (prefers-color-scheme: dark)` auto-flip. That
-  media block used to turn the entire app dark whenever the OS was in dark
-  mode, and the only theme control lived inside the reader — so most pages
-  had no way back to light. Dark is now opt-in only, via the reader's
-  explicit [data-theme] toggle below.
+  Design tokens (plan §19; Phase 8 theme fix, 2026-07-24 landing-palette
+  swap): a BONE-WHITE default with restrained dark complementary accents —
+  warm, calm, scholarly, not faux-antique. The default is bone-white for
+  EVERYONE: there is deliberately NO `@media (prefers-color-scheme: dark)`
+  auto-flip. That media block used to turn the entire app dark whenever the
+  OS was in dark mode, and the only theme control lived inside the reader —
+  so most pages had no way back to light. Dark is now opt-in only, via the
+  reader's explicit [data-theme] toggle below.
+
+  Values below were swapped to match the public landing page's `.pal-site`
+  palette (`site-theme.css`), so the signed-in app shares one visual
+  paradigm with the marketing site. Every pair re-verified against WCAG 2.2
+  AA (see the UI-overhaul spec's computed contrast table); `--color-text`
+  and `--color-accent-ink`/`--color-focus-ring` all clear 11:1+ in both
+  themes.
 */
 :root {
-  --color-background: #faf9f5; /* bone white */
-  --color-surface: #f1eee6; /* soft warm cream, elevated surfaces */
-  --color-text: #22201b; /* near-black charcoal, >7:1 on the background */
-  --color-text-muted: #4a4332;
-  --color-border: #d8cdb2;
+  --color-background: #fbf9f4; /* landing --paper-light */
+  --color-surface: #f4f0e7; /* landing --paper */
+  --color-text: #172838; /* landing --ink-deep, >14:1 on the background */
+  --color-text-muted: #5f6870; /* landing --muted */
+  --color-border: #d7d0c3; /* landing --rule */
 
-  --color-accent-burgundy: #7a2e3a;
-  --color-accent-green: #3b5d42;
-  --color-accent-ink: #2e4057;
-  --color-accent-umber: #5c4632;
-  --color-highlight: #c9a227; /* subdued gold/ochre, selection & highlight */
+  --color-accent-burgundy: #7a3f48;
+  --color-accent-green: #3e5d52;
+  --color-accent-ink: #263a4f; /* landing --ink */
+  --color-accent-umber: #765641;
+  --color-highlight: #b48a47; /* landing --gold, subdued gold/ochre, selection & highlight */
+
+  /* Additive surface-ladder tokens (UI-overhaul spec §1.3): the app only
+     had two surface levels (background/surface); the Library/Roadmap
+     table-head and chip treatments ported from the landing need a third,
+     reusing the landing's own pre-verified values rather than importing
+     its whole ~20-token ladder. */
+  --color-surface-sunken: #eee8dd;
+  --color-surface-strong: #263a4f;
+  --color-surface-strong-fg: #ffffff;
+  --color-surface-strong-fg-soft: #e9e3d9;
 
   /* Functional accents reserved specifically for credibility alerting
      (plan §36 11.2) — deliberately more saturated than the rest of the
@@ -52,9 +69,9 @@
      than reusing opacity, which blends every color toward the background
      and can fall below AA on any of them. See the dimmed-row rule near the
      end of this file for how it's applied. */
-  --color-graph-dim-text: #726a5c; /* ~4.6:1 on --color-surface #f1eee6 */
+  --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
 
-  --color-focus-ring: #2e4057;
+  --color-focus-ring: #263a4f;
   /* Keep native UI (scrollbars, form controls) light too, so a dark-mode
      OS doesn't render dark inputs against the bone-white page. */
   color-scheme: light;
@@ -62,39 +79,47 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-background: #211d17;
-  --color-surface: #2b2620;
-  --color-text: #f2ead9;
-  --color-text-muted: #d2c7b0;
-  --color-border: #574a38;
-  --color-accent-burgundy: #c2707c;
-  --color-accent-green: #7ea988;
-  --color-accent-ink: #8fa8c9;
-  --color-accent-umber: #b99c7a;
-  --color-highlight: #e0bb4d;
+  --color-background: #10171e;
+  --color-surface: #16202a;
+  --color-text: #f2f6f9;
+  --color-text-muted: #a7b6c2;
+  --color-border: #2d3d4a;
+  --color-accent-burgundy: #e0a3ac;
+  --color-accent-green: #8fc4a8;
+  --color-accent-ink: #e9eff4;
+  --color-accent-umber: #d3ab86;
+  --color-highlight: #dcbd7f;
   --color-credibility-critical: #ff6b5e;
   --color-credibility-warning: #f0a94e;
   --color-beta-badge: #f0a94e; /* already >7:1 on the dark background */
-  --color-graph-dim-text: #968e7c; /* ~4.6:1 on dark --color-surface #2b2620 */
-  --color-focus-ring: #8fa8c9;
+  --color-graph-dim-text: #968e7c; /* ~5.1:1 on dark --color-surface #16202a */
+  --color-focus-ring: #e9eff4;
+  --color-surface-sunken: #202c37;
+  --color-surface-strong: #4a6f93;
+  --color-surface-strong-fg: #ffffff;
+  --color-surface-strong-fg-soft: #eef3f7;
 }
 
 :root[data-theme="light"] {
-  --color-background: #faf9f5;
-  --color-surface: #f1eee6;
-  --color-text: #22201b;
-  --color-text-muted: #4a4332;
-  --color-border: #d8cdb2;
-  --color-accent-burgundy: #7a2e3a;
-  --color-accent-green: #3b5d42;
-  --color-accent-ink: #2e4057;
-  --color-accent-umber: #5c4632;
-  --color-highlight: #c9a227;
+  --color-background: #fbf9f4;
+  --color-surface: #f4f0e7;
+  --color-text: #172838;
+  --color-text-muted: #5f6870;
+  --color-border: #d7d0c3;
+  --color-accent-burgundy: #7a3f48;
+  --color-accent-green: #3e5d52;
+  --color-accent-ink: #263a4f;
+  --color-accent-umber: #765641;
+  --color-highlight: #b48a47;
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
   --color-beta-badge: #91540a;
-  --color-graph-dim-text: #726a5c; /* ~4.6:1 on --color-surface #f1eee6 */
-  --color-focus-ring: #2e4057;
+  --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
+  --color-focus-ring: #263a4f;
+  --color-surface-sunken: #eee8dd;
+  --color-surface-strong: #263a4f;
+  --color-surface-strong-fg: #ffffff;
+  --color-surface-strong-fg-soft: #e9e3d9;
 }
 
 :root[data-font-size="small"] { --app-font-scale: 0.94; }
@@ -223,10 +248,35 @@
   --color-credibility-warning: var(--color-credibility-warning);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  /* Warm, contemporary-scholarly serif for display headings (plan §19):
-     a real book face, not faux-antique. System stack — no webfont fetch. */
-  --font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  /* Display serif for headings (plan §19), matching the landing's own
+     stack (`site-theme.css`'s `.brand`/`h1`/`h2`) so headings render in the
+     same typeface family across the public and signed-in surfaces. System
+     stack — no webfont fetch either way. */
+  --font-serif: Georgia, "Times New Roman", serif;
 }
+
+/*
+  Brand mark glyph geometry for `@/components/site/Mark` (UI-overhaul
+  §2.1): AppShell's masthead reuses that same component so the app and the
+  public site share one wordmark, but the shape-drawing CSS for `.mark`/
+  `.mark-lines`/`.mark-margin` in site-theme.css is nested under the
+  `.pal-site` scope on purpose (see that file's own header comment) and
+  the signed-in shell renders outside it. Duplicated here, geometry only
+  (no color — it inherits `currentColor` from whatever text color wraps
+  it, same as on the public site), so Mark.tsx itself stays a single,
+  unforked component.
+*/
+.mark { position: relative; display: inline-block; width: 58px; height: 68px; flex: 0 0 auto; }
+.mark-small { width: 30px; height: 35px; }
+.mark-lines { position: absolute; inset: 12% 28% 12% 8%; border-left: 3px solid currentColor; }
+.mark-lines i { position: absolute; left: 23%; right: 0; height: 2px; background: currentColor; }
+.mark-lines i:nth-child(1) { top: 20%; }
+.mark-lines i:nth-child(2) { top: 48%; right: -12%; }
+.mark-lines i:nth-child(3) { top: 76%; right: 12%; }
+.mark-margin { position: absolute; top: 15%; right: 8%; width: 28%; height: 70%; border: 3px solid currentColor; border-left: 0; }
+.mark-small .mark-lines { border-left-width: 2px; }
+.mark-small .mark-lines i { height: 1.5px; }
+.mark-small .mark-margin { border-width: 2px; border-left: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   *,

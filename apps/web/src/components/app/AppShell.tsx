@@ -6,6 +6,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
 import { BetaBadge } from "@/components/shared/BetaBadge";
+import { Mark } from "@/components/site/Mark";
+import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
 import { ToastProvider } from "./ToastProvider";
@@ -103,11 +105,17 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
         <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           {betaTestingMode ? (
             <div className="flex min-w-0 items-center gap-2">
-              <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
+              <Link href="/dashboard" className="flex shrink-0 items-center gap-2 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">
+                <Mark small />
+                <span>Palimnote</span>
+              </Link>
               <BetaBadge />
             </div>
           ) : (
-            <Link href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">Palimnote</Link>
+            <Link href="/dashboard" className="flex shrink-0 items-center gap-2 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]">
+              <Mark small />
+              <span>Palimnote</span>
+            </Link>
           )}
           {/* D-23-15: the middle `minmax(0,1fr)` grid track can be narrower than
               the nav's no-wrap content at tablet widths (768–~1000px), making the
@@ -144,7 +152,11 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
                 aria-controls={ragSidebarId}
                 onClick={() => (ragOpen ? closeRag() : setRagOpen(true))}
               >
-                💬
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                  <path d="M4 11.5 L4 14 L7 11.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                  <text x="8" y="9.2" fontFamily="Georgia, serif" fontSize="7.5" textAnchor="middle" fill="currentColor">§</text>
+                </svg>
               </button>
             )}
             <form action={logoutAction} className="hidden lg:block">
@@ -156,6 +168,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
       </header>
       {drawerOpen && <MobileDrawer items={navItems} pathname={pathname} email={email} onClose={closeDrawer} />}
       <main id="main-content" className="app-shell-main flex-1">{children}</main>
+      <AppFooter />
       <CommandPalette items={navItems.map((item) => ({ ...item, shortcut: item.href === "/upload" ? "U" : undefined }))} />
       {ragEnabled && ragOpen && <GlobalRagSidebar id={ragSidebarId} contextWorkId={routeWorkId} onClose={closeRag} />}
     </div>
@@ -164,7 +177,7 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, betaTesting
 
 function NavLink({ item, pathname, onClick }: { item: NavItem; pathname: string; onClick?: () => void }) {
   const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-  return <Link href={item.href} onClick={onClick} aria-current={active ? "page" : undefined} className={`app-control rounded-md px-2.5 py-1.5 text-sm ${active ? "bg-[var(--color-surface)] font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
+  return <Link href={item.href} onClick={onClick} aria-current={active ? "page" : undefined} className={`app-control whitespace-nowrap border-b-2 px-1 py-1.5 text-[11px] font-bold uppercase tracking-[.08em] ${active ? "border-[var(--color-accent-ink)] text-[var(--color-text)]" : "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]"}`}>{item.label}</Link>;
 }
 
 function MobileDrawer({ items, pathname, email, onClose }: { items: NavItem[]; pathname: string; email: string | null | undefined; onClose: () => void }) {
