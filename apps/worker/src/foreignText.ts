@@ -81,7 +81,10 @@ export interface ForeignTranslationRepository {
     result: CachedForeignTranslation;
     translationProvenance: "machine_translation";
   }): Promise<void>;
-  markDeferred(spanId: string, reason: "provider_unavailable" | "budget_exhausted" | "invalid_model_response"): Promise<void>;
+  markDeferred(
+    spanId: string,
+    reason: "provider_unavailable" | "budget_exhausted" | "invalid_model_response" | "batch_limit",
+  ): Promise<void>;
   logUsage(input: {
     documentId: string;
     runId: string;
@@ -97,6 +100,7 @@ export interface ForeignTranslationRepository {
 
 export interface ProcessForeignTextOptions {
   maxSpans: number;
+  /** Maximum spans in a document's single model call for this pass. */
   batchSize: number;
   hardCapUsd: number;
   currentCostUsd: number;
@@ -188,7 +192,8 @@ export async function processForeignText(
     .filter((span) => (
       (span.transcriptionStatus === "legitimate" || span.transcriptionStatus === "recovered")
       && span.originalText.trim().length > 0
-    ));
+    ))
+    .slice(0, maxSpans);
   const summary: ProcessForeignTextSummary = {
     pending: pending.length,
     cached: 0,
@@ -215,15 +220,29 @@ export async function processForeignText(
     summary.cached += 1;
   }
 
-  if (!adapter.available) {
-    for (const span of uncached) await repository.markDeferred(span.id, "provider_unavailable");
-    summary.deferred += uncached.length;
-    return summary;
+  const byDocument = new Map<string, ForeignSpanForProcessing[]>();
+  for (const span of uncached) {
+    const spans = byDocument.get(span.documentId) ?? [];
+    spans.push(span);
+    byDocument.set(span.documentId, spans);
   }
 
   let spent = Math.max(0, options.currentCostUsd);
-  for (let offset = 0; offset < uncached.length; offset += batchSize) {
-    const batch = uncached.slice(offset, offset + batchSize);
+  for (const documentSpans of byDocument.values()) {
+    // The owner-facing contract is exactly one cheap-model call per document
+    // in a processing pass. `batchSize` therefore caps that one document call;
+    // it never creates a second call and a request never crosses documents.
+    const batch = documentSpans.slice(0, batchSize);
+    const overflow = documentSpans.slice(batchSize);
+    for (const span of overflow) await repository.markDeferred(span.id, "batch_limit");
+    summary.deferred += overflow.length;
+
+    if (!adapter.available) {
+      for (const span of batch) await repository.markDeferred(span.id, "provider_unavailable");
+      summary.deferred += batch.length;
+      continue;
+    }
+
     const request = buildForeignTranslationRequest(batch);
     const projected = Math.max(0, adapter.estimateMaximumCostUsd(request));
     if (spent + projected > options.hardCapUsd) {
@@ -239,10 +258,8 @@ export async function processForeignText(
     summary.costUsd += result.estimatedCostUsd;
     spent += result.estimatedCostUsd;
 
-    // One batch can contain multiple documents/runs after H's repository
-    // wiring. Split the single call's usage proportionally by character count
-    // so ai_usage_log remains owner/document addressable without duplicating
-    // the call's cost.
+    // A batch contains exactly one document. Split usage across its spans
+    // (and, defensively, their run ids) without duplicating the call's cost.
     const totalChars = Math.max(1, batch.reduce((sum, span) => sum + span.originalText.length, 0));
     let loggedCost = 0;
     let loggedPromptTokens = 0;

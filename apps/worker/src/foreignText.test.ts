@@ -6,6 +6,7 @@ import {
   type ForeignSpanForProcessing,
   type ForeignTranslationAdapter,
   type ForeignTranslationRepository,
+  type ForeignTranslationRequestItem,
 } from "./foreignText";
 
 const greekSpan: ForeignSpanForProcessing = {
@@ -52,6 +53,29 @@ function adapter(items = [{
       promptTokens: 20,
       completionTokens: 10,
       estimatedCostUsd: 0.002,
+    })),
+  };
+}
+
+function echoingAdapter(): ForeignTranslationAdapter {
+  return {
+    available: true,
+    model: "cheap-fixture",
+    estimateMaximumCostUsd: () => 0.01,
+    translateBatch: vi.fn(async (items: readonly ForeignTranslationRequestItem[]) => ({
+      items: items.map((item) => ({
+        id: item.id,
+        originalText: item.originalText,
+        languageCode: item.languageHint === "el" ? "el" : "und",
+        languageLabel: item.languageHint === "el" ? "Greek" : "Undetermined",
+        transliteration: `transliterated ${item.id}`,
+        translation: `translated ${item.id}`,
+      })),
+      provider: "fixture",
+      model: "cheap-fixture",
+      promptTokens: items.length * 20,
+      completionTokens: items.length * 10,
+      estimatedCostUsd: items.length * 0.002,
     })),
   };
 }
@@ -151,5 +175,49 @@ describe("foreign translation worker seam", () => {
     expect(summary.cached).toBe(1);
     expect(model.translateBatch).not.toHaveBeenCalled();
     expect(repo.logUsage).not.toHaveBeenCalled();
+  });
+
+  it("makes one homogeneous call per document, never a cross-document batch", async () => {
+    const spans = [
+      greekSpan,
+      { ...greekSpan, id: "span-2", textBlockId: "block-2", originalText: "λόγος" },
+      { ...greekSpan, id: "span-3", documentId: "document-2", runId: "run-2", textBlockId: "block-3", originalText: "ψυχή" },
+    ];
+    const repo = repository(spans);
+    const model = echoingAdapter();
+
+    const summary = await processForeignText(repo, model, {
+      maxSpans: 20,
+      batchSize: 8,
+      hardCapUsd: 0.05,
+      currentCostUsd: 0,
+    });
+
+    expect(summary).toMatchObject({ translated: 3, deferred: 0, modelCalls: 2 });
+    const calls = vi.mocked(model.translateBatch).mock.calls
+      .map(([items]) => items.map((item) => item.id));
+    expect(calls).toEqual([["span-1", "span-2"], ["span-3"]]);
+  });
+
+  it("defers per-document overflow instead of making a second call", async () => {
+    const spans = [
+      greekSpan,
+      { ...greekSpan, id: "span-2", textBlockId: "block-2", originalText: "λόγος" },
+      { ...greekSpan, id: "span-3", textBlockId: "block-3", originalText: "ψυχή" },
+    ];
+    const repo = repository(spans);
+    const model = echoingAdapter();
+
+    const summary = await processForeignText(repo, model, {
+      maxSpans: 20,
+      batchSize: 2,
+      hardCapUsd: 0.05,
+      currentCostUsd: 0,
+    });
+
+    expect(summary).toMatchObject({ translated: 2, deferred: 1, modelCalls: 1 });
+    expect(vi.mocked(model.translateBatch).mock.calls[0]?.[0].map((item) => item.id))
+      .toEqual(["span-1", "span-2"]);
+    expect(repo.markDeferred).toHaveBeenCalledWith("span-3", "batch_limit");
   });
 });

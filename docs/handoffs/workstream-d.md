@@ -69,7 +69,12 @@ H should supply a `foreign_span` table with these columns:
 
 Required constraints/indexes:
 
-- unique `(run_id, text_block_id, start_offset, end_offset)`;
+- **H integration decision required:** the owner's required identity constraint
+  is unique `(document_id, block_ref, surface_text)` — with the proposed D
+  names, `(document_id, text_block_id, source_text)`. The richer proposed
+  `(run_id, text_block_id, start_offset, end_offset)` uniqueness is not a
+  substitute. H must reconcile the names and may retain the richer constraint
+  in addition, but must not weaken or omit the owner-required uniqueness;
 - index `(status, run_id)` for pending batches;
 - index `cache_key` filtered to resolved rows, allowing reuse without making
   repeated occurrences themselves unique;
@@ -84,5 +89,9 @@ H then wires two adapters without changing the pure D modules:
 2. The worker repository maps pending/cache/save/log operations from
    `apps/worker/src/foreignText.ts`; each model call writes `ai_usage_log` with
    task `foreign_span_translation`, stage `foreign-text`, and its run/document.
+   It must return pending rows in deterministic order; D applies `maxSpans`
+   before grouping, then makes at most one homogeneous model call per document
+   per pass. Per-document rows beyond `batchSize` are deferred as `batch_limit`,
+   never sent in a second call or mixed with another document.
 
 The repository must never enqueue an untranscribable marker as model input.
