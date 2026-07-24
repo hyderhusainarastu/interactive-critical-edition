@@ -119,6 +119,40 @@ test.describe("Work status controls (Phase 19)", () => {
     await expect(steps.nth(2).locator("span[aria-hidden]")).toHaveText("");
   });
 
+  /**
+   * Lane F: the per-source discovery/classification loop (up to ~120
+   * sources) used to set "credibility" → "claims" →
+   * "conservative-influence-classification" once per source, so the
+   * checklist's position in `V3_STAGE_SEQUENCE` ticked forward then jumped
+   * BACK for the next source's "credibility" — visibly un-ticking
+   * checkmarks. The active step now carries an honest "source N of M"
+   * counter instead, driven by `processing_run.stage_source_index`/
+   * `stage_source_total`.
+   */
+  test("an active per-source stage shows an honest 'source N of M' counter and explainer", async ({ page }) => {
+    const { workId } = await seedWorkInStatus(userId, "processing", {
+      title: "Mid-discovery-loop work",
+      processingRun: {
+        pipelineVersion: "v3",
+        stage: "credibility",
+        runStatus: "running",
+        stageSourceIndex: 3,
+        stageSourceTotal: 12,
+      },
+    });
+
+    await login(page);
+    await page.goto(`/works/${workId}`);
+
+    const steps = page.locator("ol li");
+    const activeStep = steps.filter({ hasText: "Assessing source credibility" });
+    await expect(activeStep).toContainText("source 3 of 12");
+    // Only the active step carries the counter — no other step's text
+    // should mention it.
+    await expect(steps.filter({ hasText: "source 3 of 12" })).toHaveCount(1);
+    await expect(page.getByText("These steps repeat once per discovered source.")).toBeVisible();
+  });
+
   test("failed shows the error and a working retry control (D-19-29: no recovery action existed before this fix)", async ({ page }) => {
     const { workId, documentId } = await seedWorkInStatus(userId, "failed", {
       title: "Failed work",
@@ -401,6 +435,25 @@ test.describe("Work status controls (Phase 19)", () => {
     await login(page);
     await page.goto(`/works/${workId}`);
     await expect(page.getByText("Processing failed")).toBeVisible();
+    await page.waitForTimeout(300);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+
+  test("the per-source progress counter meets WCAG 2A/2AA", async ({ page }) => {
+    const { workId } = await seedWorkInStatus(userId, "processing", {
+      title: "Axe Per-Source Work",
+      processingRun: {
+        pipelineVersion: "v3",
+        stage: "credibility",
+        runStatus: "running",
+        stageSourceIndex: 3,
+        stageSourceTotal: 12,
+      },
+    });
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    await expect(page.getByText("These steps repeat once per discovered source.")).toBeVisible();
     await page.waitForTimeout(300);
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations).toEqual([]);

@@ -21,6 +21,13 @@ interface StatusPayload {
     version: number;
     pipelineVersion: string;
     stage: string | null;
+    /** Non-null only while `stage` is inside the per-source discovery/
+     * classification loop (up to ~120 sources) — lets the active step show
+     * "source 3 of 12" instead of the checklist un-ticking and re-ticking
+     * once per source. Optional — the server-rendered initial payload omits
+     * it and the 2-second poll fills it in, same precedent as `stalled`. */
+    stageSourceIndex?: number | null;
+    stageSourceTotal?: number | null;
     structureState: "full" | "limited";
     runStatus: "pending" | "running" | "complete" | "failed";
     published: boolean;
@@ -40,37 +47,56 @@ interface StatusPayload {
  * (`@ice/config`'s `stageSequenceForPipeline`, shared with the worker so
  * this list can never promise a stage that isn't really emitted).
  */
-function StageProgress({ pipelineVersion, currentStage }: { pipelineVersion: string; currentStage: string | null }) {
+function StageProgress({
+  pipelineVersion,
+  currentStage,
+  stageSourceIndex,
+  stageSourceTotal,
+}: {
+  pipelineVersion: string;
+  currentStage: string | null;
+  stageSourceIndex?: number | null;
+  stageSourceTotal?: number | null;
+}) {
   const sequence = stageSequenceForPipeline(pipelineVersion);
   const currentIndex = currentStage ? sequence.indexOf(currentStage) : -1;
+  const hasSourceProgress = Boolean(stageSourceIndex) && Boolean(stageSourceTotal);
   return (
-    <ol className="mt-2 flex flex-col gap-1 text-sm">
-      {sequence.map((stage, i) => {
-        const done = currentIndex >= 0 && i < currentIndex;
-        const active = i === currentIndex;
-        return (
-          <li key={stage} className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className="inline-flex h-4 w-4 flex-none items-center justify-center rounded-full border text-[0.6rem]"
-              style={{
-                borderColor: done || active ? "var(--color-accent-ink)" : "var(--color-border)",
-                background: done ? "var(--color-accent-ink)" : "transparent",
-                color: done ? "var(--color-background)" : "var(--color-text-muted)",
-              }}
-            >
-              {done ? "✓" : ""}
-            </span>
-            <span
-              className={active ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}
-            >
-              {STAGE_LABEL[stage as keyof typeof STAGE_LABEL] ?? stage}
-              {active ? "…" : ""}
-            </span>
-          </li>
-        );
-      })}
-    </ol>
+    <>
+      <ol className="mt-2 flex flex-col gap-1 text-sm">
+        {sequence.map((stage, i) => {
+          const done = currentIndex >= 0 && i < currentIndex;
+          const active = i === currentIndex;
+          return (
+            <li key={stage} className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="inline-flex h-4 w-4 flex-none items-center justify-center rounded-full border text-[0.6rem]"
+                style={{
+                  borderColor: done || active ? "var(--color-accent-ink)" : "var(--color-border)",
+                  background: done ? "var(--color-accent-ink)" : "transparent",
+                  color: done ? "var(--color-background)" : "var(--color-text-muted)",
+                }}
+              >
+                {done ? "✓" : ""}
+              </span>
+              <span
+                className={active ? "font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}
+              >
+                {STAGE_LABEL[stage as keyof typeof STAGE_LABEL] ?? stage}
+                {active ? "…" : ""}
+                {active && hasSourceProgress ? ` — source ${stageSourceIndex} of ${stageSourceTotal}` : ""}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {hasSourceProgress && (
+        <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+          These steps repeat once per discovered source.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -197,7 +223,12 @@ export function WorkStatusPanel({
           </span>
         </div>
         {data.processingRun && (
-          <StageProgress pipelineVersion={data.processingRun.pipelineVersion} currentStage={data.processingRun.stage} />
+          <StageProgress
+            pipelineVersion={data.processingRun.pipelineVersion}
+            currentStage={data.processingRun.stage}
+            stageSourceIndex={data.processingRun.stageSourceIndex}
+            stageSourceTotal={data.processingRun.stageSourceTotal}
+          />
         )}
         {data.stalled && (
           <div className="mt-3 border-t border-[var(--color-border)] pt-3">

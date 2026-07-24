@@ -441,7 +441,10 @@ export async function handleEditionExtraction(documentId: string) {
     if (job) await db.update(processingJobs).set({ status: "succeeded", updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await db.update(processingRuns).set({ status: "failed", stage: "failed", error: message, finishedAt: new Date(), updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
+    // A failure can land here mid per-source loop (analyzeEditionRun's
+    // `setStage`), so reset the source counters explicitly rather than
+    // leaving the last discovered source's count attached to "failed".
+    await db.update(processingRuns).set({ status: "failed", stage: "failed", stageSourceIndex: null, stageSourceTotal: null, error: message, finishedAt: new Date(), updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
     await db.update(documents).set({ processingStatus: "failed", processingError: message, updatedAt: new Date() }).where(eq(documents.id, documentId));
     if (job) await db.update(processingJobs).set({ status: "failed", error: message, attempts: sql`${processingJobs.attempts} + 1`, updatedAt: new Date() }).where(eq(processingJobs.id, job.id));
     throw error;

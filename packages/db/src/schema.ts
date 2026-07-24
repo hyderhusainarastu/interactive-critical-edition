@@ -840,6 +840,13 @@ export const processingRuns = pgTable(
     // Human-readable current stage for live progress (e.g. "extracting",
     // "scholarly-discovery", "note-synthesis").
     stage: text("stage"),
+    // Per-source position while `stage` is inside the up-to-120-source
+    // discovery/classification loop (e.g. "credibility" set once per
+    // discovered source) — lets the UI show "source 3 of 12" instead of
+    // un-ticking and re-ticking the same three checklist steps once per
+    // source. Null whenever `stage` is not inside that loop.
+    stageSourceIndex: integer("stage_source_index"),
+    stageSourceTotal: integer("stage_source_total"),
     // Only ONE published run per document at a time (enforced in app logic
     // on publish); the reader/edition reads exclusively the published run.
     isPublished: boolean("is_published").notNull().default(false),

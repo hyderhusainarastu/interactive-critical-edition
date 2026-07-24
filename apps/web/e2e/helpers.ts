@@ -274,6 +274,11 @@ export async function seedWorkInStatus(
       stage?: string;
       runStatus?: "pending" | "running" | "complete" | "failed";
       structureState?: "full" | "limited";
+      /** Per-source loop position (Lane F), only set when the fixture wants
+       * to simulate the worker mid-way through the up-to-120-source
+       * discovery/classification loop. */
+      stageSourceIndex?: number;
+      stageSourceTotal?: number;
     };
   } = {},
 ): Promise<{ workId: string; documentId: string }> {
@@ -305,6 +310,8 @@ export async function seedWorkInStatus(
       pipelineVersion: opts.processingRun.pipelineVersion ?? "v2",
       status: opts.processingRun.runStatus ?? "running",
       stage: opts.processingRun.stage ?? null,
+      stageSourceIndex: opts.processingRun.stageSourceIndex ?? null,
+      stageSourceTotal: opts.processingRun.stageSourceTotal ?? null,
       structureState: opts.processingRun.structureState ?? "limited",
       isPublished: false,
     });

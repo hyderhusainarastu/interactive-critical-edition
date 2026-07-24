@@ -34,6 +34,8 @@ export default async function WorkPage({
     version: processingRuns.version,
     pipelineVersion: processingRuns.pipelineVersion,
     stage: processingRuns.stage,
+    stageSourceIndex: processingRuns.stageSourceIndex,
+    stageSourceTotal: processingRuns.stageSourceTotal,
     structureState: processingRuns.structureState,
     runStatus: processingRuns.status,
     published: processingRuns.isPublished,

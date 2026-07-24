@@ -1415,9 +1415,20 @@ export async function analyzeEditionRun(input: {
   if (!doc) throw new Error(`Document ${input.documentId} not found for edition research`);
   const isV4 = input.pipeline === "v4";
   const isModernPipeline = input.pipeline === "v3" || isV4;
-  const setStage = async (v2Stage: string, v3Stage: string, v4Stage = v3Stage) => {
+  const setStage = async (
+    v2Stage: string,
+    v3Stage: string,
+    v4Stage = v3Stage,
+    sourceProgress?: { sourceIndex: number; sourceTotal: number },
+  ) => {
     await db.update(processingRuns).set({
       stage: isV4 ? v4Stage : isModernPipeline ? v3Stage : v2Stage,
+      // Null whenever this stage isn't inside the per-source loop, so a
+      // stage set before/after the loop never carries over a stale count
+      // from a prior source (the write is unconditional, so "omitted" always
+      // means "reset to null" here, not "leave whatever was there").
+      stageSourceIndex: sourceProgress?.sourceIndex ?? null,
+      stageSourceTotal: sourceProgress?.sourceTotal ?? null,
       updatedAt: new Date(),
     }).where(eq(processingRuns.id, input.runId));
   };
@@ -2032,7 +2043,8 @@ export async function analyzeEditionRun(input: {
   ]));
   await setStage("classification", "citation-graph-expansion");
 
-  for (const { r, assessment, authority } of ranked) {
+  for (const [rankedIndex, { r, assessment, authority }] of ranked.entries()) {
+    const sourceProgress = { sourceIndex: rankedIndex + 1, sourceTotal: ranked.length };
     const citationFrequency = citationFrequencyFor({ title: r.title, authors: r.authors }, input.text, frequencyCitationTexts);
     const classify = () => classifyRelationship({
       primaryTitle: resolvedTitle,
@@ -2149,7 +2161,7 @@ export async function analyzeEditionRun(input: {
     }
     relationProjection.push({ id: resourceRow.id, workKey: resourceWork.key, workRole: resourceWork.role });
 
-    await setStage("classification", "credibility");
+    await setStage("classification", "credibility", undefined, sourceProgress);
     // Structural cues (study design, sample size, statistics, hedging) beat
     // the old binary "does any snippet exist" check for scholarly articles —
     // deterministic, no model call, scoped to where the regex classes
@@ -2234,7 +2246,7 @@ export async function analyzeEditionRun(input: {
         logUsage("note_synthesis", "note-synthesis", researchModel, syn.promptTokens, syn.completionTokens);
       }
     }
-    await setStage("classification", "claims");
+    await setStage("classification", "claims", undefined, sourceProgress);
     const [note] = await db
       .insert(generatedNotes)
       .values({ runId: input.runId, evidenceSpanId: evidence.id, noteType: provisionalCategory, body: noteBody, confidence: relevanceConfidence })
@@ -2249,7 +2261,7 @@ export async function analyzeEditionRun(input: {
     }
 
     // Catalogue/graph projection for scholarly targets (roadmap + graph reuse).
-    await setStage("classification", "conservative-influence-classification");
+    await setStage("classification", "conservative-influence-classification", undefined, sourceProgress);
     if (isModernPipeline) classification = await classify();
     if (!classification!.heuristic && isModernPipeline) {
       logUsage("relationship_classification", "conservative-influence-classification", classification!.model, classification!.promptTokens, classification!.completionTokens);
@@ -2421,7 +2433,17 @@ export async function analyzeEditionRun(input: {
   const degraded = overSoftCap(budget);
   await db
     .update(processingRuns)
-    .set({ stage: "validation", aiCostUsd: budget.spentUsd - seededUsd, degraded, saturationNote: discovery.saturationNote, updatedAt: new Date() })
+    .set({
+      stage: "validation",
+      // Direct update, not the `setStage` closure — reset explicitly so the
+      // just-finished per-source loop's last count doesn't linger.
+      stageSourceIndex: null,
+      stageSourceTotal: null,
+      aiCostUsd: budget.spentUsd - seededUsd,
+      degraded,
+      saturationNote: discovery.saturationNote,
+      updatedAt: new Date(),
+    })
     .where(eq(processingRuns.id, input.runId));
   } catch (error) {
     // Error-cause preservation (floors2 crash follow-up, §5 error-cause
