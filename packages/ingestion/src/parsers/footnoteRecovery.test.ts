@@ -124,4 +124,78 @@ describe("recoverPageBottomFootnotes", () => {
       recoverPageBottomFootnotes({ pageTexts: ["1 lone note", "just body prose"], structuredMarkers: new Set() }),
     ).toEqual([]);
   });
+
+  describe("body-containment guard (D-24-G2 precision fix)", () => {
+    // Numbered SECTION HEADINGS read to the scan exactly like a footnote series.
+    const sectionPages = [
+      [
+        "1. Introduction",
+        "This paper introduces the central example and sets out the argument in detail.",
+        "2. Background",
+        "The background section reviews the prior literature on the example at length.",
+        "3. Method",
+        "The method section describes the procedure used to evaluate the example claim.",
+      ].join("\n"),
+    ];
+    const sectionBodies = [
+      "This paper introduces the central example and sets out the argument in detail.",
+      "The background section reviews the prior literature on the example at length.",
+      "The method section describes the procedure used to evaluate the example claim.",
+    ];
+
+    // An in-body ENUMERATED LIST is the same trap.
+    const listPages = [
+      [
+        "The author lists several considerations as follows.",
+        "1. The first consideration concerns the nature of the example under study.",
+        "2. The second consideration concerns its relation to the prior argument.",
+        "3. The third consideration concerns the consequences for the conclusion.",
+      ].join("\n"),
+    ];
+    const listBodies = [listPages[0].replace(/\n/g, " ")];
+
+    it("WITHOUT the guard, section headings fabricate footnotes (the bug)", () => {
+      const notes = recoverPageBottomFootnotes({ pageTexts: sectionPages, structuredMarkers: new Set() });
+      expect(notes.length).toBe(3); // red: three fabricated notes duplicating body prose
+    });
+
+    it("WITH the guard, numbered section headings recover ZERO notes", () => {
+      const notes = recoverPageBottomFootnotes({
+        pageTexts: sectionPages,
+        structuredMarkers: new Set(),
+        bodyBlockTexts: sectionBodies,
+      });
+      expect(notes).toEqual([]);
+    });
+
+    it("WITHOUT the guard, an in-body enumerated list fabricates footnotes (the bug)", () => {
+      const notes = recoverPageBottomFootnotes({ pageTexts: listPages, structuredMarkers: new Set() });
+      expect(notes.length).toBe(3);
+    });
+
+    it("WITH the guard, an in-body enumerated list recovers ZERO notes", () => {
+      const notes = recoverPageBottomFootnotes({
+        pageTexts: listPages,
+        structuredMarkers: new Set(),
+        bodyBlockTexts: listBodies,
+      });
+      expect(notes).toEqual([]);
+    });
+
+    it("keeps a genuine footnote whose text is absent from every body block", () => {
+      const pages = [
+        [
+          "1 Unless otherwise indicated, all references are to the standard edition.",
+          "2 See the discussion of the example in the secondary literature cited above.",
+          "3 Compare the parallel passage noted earlier in the argument of the paper.",
+        ].join("\n"),
+      ];
+      const notes = recoverPageBottomFootnotes({
+        pageTexts: pages,
+        structuredMarkers: new Set(),
+        bodyBlockTexts: ["A body paragraph that shares no full line with any of these notes."],
+      });
+      expect(notes.map((n) => n.marker)).toEqual(["1", "2", "3"]);
+    });
+  });
 });

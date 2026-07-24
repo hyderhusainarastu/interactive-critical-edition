@@ -33,6 +33,17 @@
  *    unreadable marker and resumes. It fires ONLY forward, ONLY by one, and
  *    ONLY mid-region, so a Bekker continuation line ("3.10.433b5-8.") — whose
  *    leading number is not `expected + 1` — never triggers it.
+ *  - A body-containment guard (mirrors `bodyRecovery`'s per-line normalized
+ *    containment): a NUMBERED section heading ("1. Introduction") or an in-body
+ *    enumerated list ("1. first point … 2. second point") reads to this scan
+ *    exactly like a footnote series, so without a guard it fabricates apparatus
+ *    that merely duplicates body prose into the citation path. An entry is
+ *    dropped when a substantial line of it is already present in a GROBID body
+ *    block. This deliberately ALSO drops a real footnote whose text GROBID
+ *    mis-segmented into a body block (the mislabeled-as-body class) — precision
+ *    over recall: a duplicated body line is never emitted as apparatus, at the
+ *    cost of a few genuine footnotes that are still visible in the body prose
+ *    GROBID mislabeled them into.
  *  - `MIN_ENTRIES_TO_TRUST`: a short or non-sequential match is treated as "not
  *    a real footnote series" and recovers nothing.
  */
@@ -48,6 +59,26 @@ export interface RecoveredFootnote {
 
 const MIN_ENTRIES_TO_TRUST = 3;
 const MAX_ENTRIES = 500;
+/** A line must be at least this long (normalized) to count as body-containment
+ *  evidence — mirrors `bodyRecovery`'s MIN_LINE_MATCH_CHARS so the two guards
+ *  treat "already present in body prose" identically. */
+const MIN_CONTAINMENT_CHARS = 20;
+
+function normalizeText(value: string): string {
+  return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** True when a substantial line of this entry is already present verbatim in a
+ *  GROBID body block — i.e. the "footnote" is really body prose (a numbered
+ *  heading/list item, or a footnote GROBID mis-segmented into the body). */
+function isBodyDerived(parts: readonly string[], bodyNorms: readonly string[]): boolean {
+  if (bodyNorms.length === 0) return false;
+  for (const part of parts) {
+    const n = normalizeText(part);
+    if (n.length >= MIN_CONTAINMENT_CHARS && bodyNorms.some((body) => body.includes(n))) return true;
+  }
+  return false;
+}
 
 /**
  * If `line` begins with exactly the integer `expected` (not a longer number),
@@ -75,9 +106,14 @@ export function matchFootnoteMarker(line: string, expected: number): string | nu
 export function recoverPageBottomFootnotes(params: {
   pageTexts: readonly string[];
   structuredMarkers: ReadonlySet<number>;
+  /** GROBID body block texts, for the body-containment guard. A recovered
+   *  entry whose text is already present in a body block is dropped (a numbered
+   *  heading/list, or a footnote GROBID mislabeled as body). */
+  bodyBlockTexts?: readonly string[];
 }): RecoveredFootnote[] {
-  const { pageTexts, structuredMarkers } = params;
+  const { pageTexts, structuredMarkers, bodyBlockTexts = [] } = params;
   if (pageTexts.length === 0) return [];
+  const bodyNorms = bodyBlockTexts.map(normalizeText);
 
   const boilerplate = collectBoilerplateLines(pageTexts);
   const entries: { marker: number; pageIndex: number; parts: string[] }[] = [];
@@ -118,6 +154,7 @@ export function recoverPageBottomFootnotes(params: {
 
   return entries
     .filter((entry) => !structuredMarkers.has(entry.marker))
+    .filter((entry) => !isBodyDerived(entry.parts, bodyNorms))
     .map((entry) => ({
       pageIndex: entry.pageIndex,
       marker: String(entry.marker),

@@ -261,6 +261,10 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
       const recoveredFootnotes = recoverPageBottomFootnotes({
         pageTexts: pages.map((page) => page.text),
         structuredMarkers,
+        // Body-containment guard corpus: every GROBID/recovered body block, so a
+        // numbered heading/list or a footnote GROBID mislabeled as body is not
+        // re-emitted as fabricated apparatus (D-24-G2 precision guard).
+        bodyBlockTexts: pages.flatMap((page) => page.blocks.filter((block) => block.kind === "body").map((block) => block.text)),
       });
       for (const entry of recoveredFootnotes) {
         const index = Math.min(Math.max(entry.pageIndex, 0), Math.max(0, pages.length - 1));
