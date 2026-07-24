@@ -604,12 +604,12 @@ export function EditionReader({
          *  (see `overSoftCap()` in apps/worker/src/analyze.ts) — it never
          *  means anything else, so the default tooltip names the cause
          *  rather than a generic "stopped early". */}
-        {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
+        {edition.cost.degraded && <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs normal-case tracking-normal" title={edition.cost.saturationNote ?? "Research stopped early — cost limit reached"}>degraded</span>}
         {page && (
           <>
-            <span className="ml-auto">Page {page.pageIndex + 1} / {edition.pages.length}</span>
-            <button type="button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)} className="disabled:opacity-40">← Prev</button>
-            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => goToPage(pageIndex + 1)} className="disabled:opacity-40">Next →</button>
+            <span className="ml-auto normal-case tracking-normal">Page {page.pageIndex + 1} / {edition.pages.length}</span>
+            <button type="button" disabled={pageIndex === 0} onClick={() => goToPage(pageIndex - 1)} className="normal-case tracking-normal disabled:opacity-40">← Prev</button>
+            <button type="button" disabled={pageIndex >= edition.pages.length - 1} onClick={() => goToPage(pageIndex + 1)} className="normal-case tracking-normal disabled:opacity-40">Next →</button>
           </>
         )}
       </div>}
