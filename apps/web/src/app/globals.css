@@ -61,6 +61,17 @@
      isBetaTestingMode() when the beta ends. */
   --color-beta-badge: #91540a; /* ~5.6:1 on --color-background and on the public-site paper */
 
+  /* Darkened-gold text accent, split from --color-highlight for the exact
+     same reason --color-beta-badge was split from --color-credibility-warning
+     above: --color-highlight is tuned for decorative/translucent uses
+     (reader highlight tint, graph node/legend swatches, the state-reading
+     border) that want the brighter gold, but it measures only 2.99:1 as
+     literal text on the page background — failing WCAG AA in both the
+     current and prior palette (found auditing the Works list's "Needs
+     review" status label, UI-overhaul spec §1.4). Use this token, never
+     --color-highlight itself, for gold-colored text. */
+  --color-status-highlight-text: #8a6423; /* ~5.08:1 on --color-background */
+
   /* Graph accessible-table "dimmed" row text (Phase 21.6 focus-mode
      contrast fix): a dedicated warm gray, distinctly lighter than
      --color-text/--color-text-muted so a de-emphasized row still reads as
@@ -92,6 +103,7 @@
   --color-credibility-critical: #ff6b5e;
   --color-credibility-warning: #f0a94e;
   --color-beta-badge: #f0a94e; /* already >7:1 on the dark background */
+  --color-status-highlight-text: #dcbd7f; /* same as --color-highlight (dark) — already ~10:1, dark mode was never the failing case */
   --color-graph-dim-text: #968e7c; /* ~5.1:1 on dark --color-surface #16202a */
   --color-focus-ring: #e9eff4;
   --color-surface-sunken: #202c37;
@@ -114,6 +126,7 @@
   --color-credibility-critical: #b3261e;
   --color-credibility-warning: #a8630a;
   --color-beta-badge: #91540a;
+  --color-status-highlight-text: #8a6423; /* ~5.08:1 on --color-background */
   --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
   --color-focus-ring: #263a4f;
   --color-surface-sunken: #eee8dd;

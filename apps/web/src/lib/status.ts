@@ -13,7 +13,11 @@ export const STATUS_LABEL: Record<ProcessingStatus, string> = {
 export const STATUS_COLOR: Record<ProcessingStatus, string> = {
   uploaded: "var(--color-text-muted)",
   processing: "var(--color-accent-ink)",
-  needs_review: "var(--color-highlight)",
+  // Not --color-highlight: that token is tuned for decorative/translucent
+  // uses and fails WCAG AA (~2.99:1) as literal text on the page
+  // background. --color-status-highlight-text is a darkened gold verified
+  // >=4.5:1 in both themes, added for exactly this use (globals.css).
+  needs_review: "var(--color-status-highlight-text)",
   ready: "var(--color-accent-green)",
   failed: "var(--color-accent-burgundy)",
 };
