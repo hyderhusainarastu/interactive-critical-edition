@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveWorkIdentity, groupByWork, stripEditionMarkers, stripReviewFraming } from "./workIdentity";
+import { deriveWorkIdentity, groupByWork, isReviewTitle, stripEditionMarkers, stripReviewFraming } from "./workIdentity";
 import type { RawResource } from "./types";
 
 /**
@@ -142,6 +142,36 @@ describe("grouping the real canary-10 duplicates", () => {
     expect(groups.length).toBeLessThanOrEqual(2);
     const biggest = groups.sort((a, b) => b.related.length - a.related.length)[0];
     expect(biggest.related.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("issue #2 — a review NOTICE is treated as a review, a review-named venue is not", () => {
+  it("flags production-observed review notices via the shared predicate", () => {
+    expect(isReviewTitle("Love and Friendship in Plato and Aristotle (review)")).toBe(true);
+    expect(isReviewTitle("Book Reviews … Pp. xxiii + 441, $50.00 (cloth)")).toBe(true);
+    expect(isReviewTitle("Sarah Broadie and Christopher Rowe (eds) … Pp. x+468. £15.00 (Pbk)")).toBe(true);
+  });
+
+  it("does NOT flag a journal/venue whose name merely starts with 'Review'", () => {
+    // The prefix shape was deliberately removed — these are legitimately cited.
+    expect(isReviewTitle("Review of Economic Studies")).toBe(false);
+    expect(isReviewTitle("Reviews of Modern Physics")).toBe(false);
+    expect(isReviewTitle("Review of Aristotle's Ethics, by W. D. Ross")).toBe(false);
+  });
+
+  it("gives a review-notice record the 'review' role so it attaches under its primary", () => {
+    const id = deriveWorkIdentity(
+      R({ title: "Love and Friendship in Plato and Aristotle (review)", authors: ["A Reviewer"] }),
+      { citedAuthorSurnames: CITED },
+    );
+    expect(id.role).toBe("review");
+  });
+
+  it("does NOT turn a review-named venue into a review role", () => {
+    const id = deriveWorkIdentity(R({ title: "Review of Economic Studies", authors: ["An Author"] }), {
+      citedAuthorSurnames: CITED,
+    });
+    expect(id.role).not.toBe("review");
   });
 });
 
