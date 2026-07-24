@@ -576,12 +576,12 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               row is compact secondary chrome, not a primary reading/nav
               control; see that spec's docblock for the full rationale. */}
           <div data-dense-controls="graph-layout-toolbar" className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-            <div role="group" aria-label="Layout" className="flex gap-1">
+            <div role="group" aria-label="Layout" className="flex gap-1 rounded border border-[var(--color-border)] p-0.5">
               <button
                 type="button"
                 onClick={() => setLayoutMode("roadmap")}
                 aria-pressed={layoutMode === "roadmap"}
-                className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${layoutMode === "roadmap" ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "roadmap" ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
               >
                 Roadmap
               </button>
@@ -589,7 +589,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setLayoutMode("explore")}
                 aria-pressed={layoutMode === "explore"}
-                className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${layoutMode === "explore" ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "explore" ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
               >
                 Explore
               </button>
@@ -674,14 +674,14 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                         rest fade); "Expand one hop" widens the emphasized
                         set by one more hop; "Full graph" turns fading off
                         entirely regardless of selection. */}
-                    <div role="group" aria-label="Focus mode" className="flex gap-1">
+                    <div role="group" aria-label="Focus mode" className="flex gap-1 rounded border border-[var(--color-border)] p-0.5">
                       {FOCUS_MODES.map((mode) => (
                         <button
                           key={mode}
                           type="button"
                           onClick={() => setFocusMode(mode)}
                           aria-pressed={focusMode === mode}
-                          className={`app-control rounded border border-[var(--color-border)] px-2 py-1 ${focusMode === mode ? "bg-[var(--color-surface)] font-medium" : ""}`}
+                          className={`app-control rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${focusMode === mode ? "bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
                         >
                           {FOCUS_MODE_LABEL[mode]}
                         </button>
@@ -748,14 +748,14 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
           )}
 
           {/* Legend + stats */}
-          <div className="mb-4 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <div className="mb-4 mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-y border-[var(--color-border)] py-2 text-[10px] uppercase tracking-wide">
             {STATE_ORDER.map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5 text-[var(--color-text-muted)]">
                 <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `var(${STATE_META[s].colorVar})` }} />
                 {STATE_META[s].label}
               </span>
             ))}
-            <span className="ml-auto text-[var(--color-text-muted)]">
+            <span className="ml-auto normal-case tracking-normal text-[var(--color-text-muted)]">
               {data.stats.works} works · {data.stats.references} references · {data.stats.sources} sources · {data.stats.concepts} concepts · {data.stats.people} people ·{" "}
               {data.stats.missing} missing · {data.stats.read} read
             </span>
@@ -767,7 +767,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               matched all four for the single string "Relation"). Renamed
               here and at the two other sites below so every accessible
               name on this page is unambiguous. */}
-          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" aria-label="Edge color legend">
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] uppercase tracking-wide" aria-label="Edge color legend">
             {[...new Set(data.links.map((link) => edgeFamilyFor(link.edgeType, link.category)))]
               .sort((a, b) => EDGE_FAMILY_ORDER.indexOf(a) - EDGE_FAMILY_ORDER.indexOf(b))
               .map((family) => (

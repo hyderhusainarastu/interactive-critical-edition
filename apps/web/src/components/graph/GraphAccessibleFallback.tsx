@@ -145,23 +145,23 @@ export function GraphAccessibleFallback({
           Visualization as a table: each work, reference, concept, or section, its status, and what it connects to.
         </caption>
         <thead>
-          <tr className="border-b border-[var(--color-border)] text-left">
+          <tr className="bg-[var(--color-surface-strong)] text-left text-[var(--color-surface-strong-fg-soft)]">
             <SortHeader label="Title" active={sortKey === "label"} asc={asc} onClick={() => toggleSort("label")} />
             <SortHeader label="Kind" active={sortKey === "type"} asc={asc} onClick={() => toggleSort("type")} />
             <SortHeader label="Status" active={sortKey === "state"} asc={asc} onClick={() => toggleSort("state")} />
-            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Stage</th>}
-            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Priority</th>}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide">Stage</th>}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide">Priority</th>}
             {hasRoadmap && (
               <SortHeader label="Order" active={sortKey === "sequence"} asc={asc} onClick={() => toggleSort("sequence")} />
             )}
-            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Known</th>}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide">Known</th>}
             <SortHeader
               label="Connections"
               active={sortKey === "connections"}
               asc={asc}
               onClick={() => toggleSort("connections")}
             />
-            {hasRoadmap && <th scope="col" className="py-2 pr-4 font-medium">Why</th>}
+            {hasRoadmap && <th scope="col" className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide">Why</th>}
           </tr>
         </thead>
         <tbody>
@@ -201,12 +201,14 @@ function SortHeader({
   onClick: () => void;
 }) {
   return (
-    <th scope="col" className="py-2 pr-4 font-medium" aria-sort={active ? (asc ? "ascending" : "descending") : "none"}>
+    <th
+      scope="col"
+      className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide"
+      aria-sort={active ? (asc ? "ascending" : "descending") : "none"}
+    >
       <button type="button" onClick={onClick} className="flex items-center gap-1">
         {label}
-        <span aria-hidden className="text-[var(--color-text-muted)]">
-          {active ? (asc ? "▲" : "▼") : ""}
-        </span>
+        <span aria-hidden>{active ? (asc ? "▲" : "▼") : ""}</span>
       </button>
     </th>
   );
