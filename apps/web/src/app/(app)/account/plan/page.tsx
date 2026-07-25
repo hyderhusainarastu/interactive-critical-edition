@@ -56,7 +56,7 @@ export default async function AccountPlanPage() {
       <section className="app-card rounded-lg p-5" aria-labelledby="plan-upgrade-heading">
         <h2 id="plan-upgrade-heading" className="font-serif text-lg font-semibold text-[var(--color-text)]">Plans</h2>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          Paid plans aren't available yet. Everyone uses the same free beta plan while Palimnote is in active
+          Paid plans aren&apos;t available yet. Everyone uses the same free beta plan while Palimnote is in active
           development.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">

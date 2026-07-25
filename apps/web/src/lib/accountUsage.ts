@@ -66,8 +66,15 @@ export async function getAccountUsageSnapshot(userId: string): Promise<AccountUs
     .select({ startedAt: readingRecords.startedAt, finishedAt: readingRecords.finishedAt })
     .from(readingRecords)
     .where(eq(readingRecords.userId, userId));
-  const readingProgressStarted = months.map((bucket) => countInBucket(recordRows.map((r) => r.startedAt), bucket));
-  const readingProgressCompleted = months.map((bucket) => countInBucket(recordRows.map((r) => r.finishedAt), bucket));
+  // LineChart's own emptiness check is `series.some(v => finite values
+  // exist)` — unlike RadarChart (which deliberately treats a real 0 score
+  // as legitimate data), a month bucket's count of 0 is ALSO a finite
+  // number, so 6 always-populated zero buckets would never trip LineChart's
+  // empty state at all. When this account has no reading records
+  // whatsoever, pass genuinely empty series instead of six zeros, so the
+  // chart's own empty state renders honestly rather than a flat zero line.
+  const readingProgressStarted = recordRows.length === 0 ? [] : months.map((bucket) => countInBucket(recordRows.map((r) => r.startedAt), bucket));
+  const readingProgressCompleted = recordRows.length === 0 ? [] : months.map((bucket) => countInBucket(recordRows.map((r) => r.finishedAt), bucket));
 
   const masteryRows = await db
     .select({ label: concepts.label, score: conceptMastery.score })
@@ -82,7 +89,9 @@ export async function getAccountUsageSnapshot(userId: string): Promise<AccountUs
     .from(ragMessages)
     .innerJoin(ragConversations, eq(ragMessages.conversationId, ragConversations.id))
     .where(and(eq(ragConversations.userId, userId), eq(ragMessages.role, "user")));
-  const chatActivity = days.map((bucket) => countInBucket(chatRows.map((r) => r.createdAt), bucket));
+  // Same reasoning as readingProgress above — Sparkline's own emptiness
+  // check counts finite values, and a zero-message day is still finite.
+  const chatActivity = chatRows.length === 0 ? [] : days.map((bucket) => countInBucket(chatRows.map((r) => r.createdAt), bucket));
 
   return {
     docsOverTime,

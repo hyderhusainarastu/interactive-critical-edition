@@ -25,9 +25,13 @@ export const AVATAR_MAX_BYTES = 100 * 1024;
  *  reachable without visibly ugly compression artifacts. */
 export const AVATAR_MAX_DIMENSION = 256;
 
-const SUPPORTED_AVATAR_MIME_TYPES = ["png", "jpeg", "webp"] as const;
+export const SUPPORTED_AVATAR_MIME_TYPES = ["png", "jpeg", "webp"] as const;
 export type SupportedAvatarMimeType = (typeof SUPPORTED_AVATAR_MIME_TYPES)[number];
 
+// Kept literal (not built from SUPPORTED_AVATAR_MIME_TYPES) so the accepted
+// set is visible at a glance in one place; `validateAvatarDataUrl` below
+// double-checks the match against that array too, so the two can never
+// silently drift out of sync without a type error.
 const AVATAR_DATA_URL_PATTERN = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+=*)$/;
 
 /**
@@ -77,7 +81,11 @@ export function validateAvatarDataUrl(dataUrl: string, maxBytes: number = AVATAR
   if (!match) {
     return { ok: false, error: "That doesn't look like a supported image (PNG, JPEG, or WebP)." };
   }
-  const mimeType = match[1] as SupportedAvatarMimeType;
+  const candidateMimeType = match[1] as SupportedAvatarMimeType;
+  if (!SUPPORTED_AVATAR_MIME_TYPES.includes(candidateMimeType)) {
+    return { ok: false, error: "That doesn't look like a supported image (PNG, JPEG, or WebP)." };
+  }
+  const mimeType = candidateMimeType;
   const bytes = base64ByteLength(match[2]);
   if (bytes === 0) {
     return { ok: false, error: "That image appears to be empty." };

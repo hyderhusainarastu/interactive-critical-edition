@@ -4,6 +4,7 @@ import {
   db,
   documents,
   feedback,
+  learningResources,
   ragConversations,
   ragMessages,
   readingRecords,
@@ -12,7 +13,7 @@ import {
   works,
 } from "@ice/db";
 import { getDocumentFileSize, uploadDocumentFile } from "@ice/ingestion";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { expect, test, type Page } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedWorkWithLibraryItem } from "./helpers";
 
@@ -37,6 +38,18 @@ async function login(page: Page, email: string, password: string) {
   await page.waitForURL(/\/(dashboard|welcome)/);
 }
 
+/**
+ * Scoped to `#main-content` (`AppShell.tsx`'s `<main>`) rather than the
+ * whole page — a documented Next.js 16 App Router streaming-SSR/hydration
+ * artifact (D-19-36, see docs/PROJECT-LOG.md) can transiently duplicate
+ * segment HTML in a hidden holder near `</body>` before it self-heals,
+ * which otherwise makes an unscoped text/role query ambiguous. Matches the
+ * existing repo convention (`curriculum.spec.ts`, `canonical-identity.spec.ts`).
+ */
+function mainOf(page: Page) {
+  return page.locator("#main-content");
+}
+
 test.describe("Account — profile, data sharing, plan (Workstream G)", () => {
   const EMAIL = `e2e-account-profile-${Date.now()}@example.com`;
   const PASSWORD = "password123";
@@ -51,13 +64,13 @@ test.describe("Account — profile, data sharing, plan (Workstream G)", () => {
   test("editing the profile name persists and renders back on reload", async ({ page }) => {
     await login(page, EMAIL, PASSWORD);
     await page.goto("/account/profile");
-    const nameInput = page.locator('input[name="name"]');
+    const nameInput = mainOf(page).locator('input[name="name"]');
     await nameInput.fill("Renamed Reader");
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.getByText("Saved.")).toBeVisible();
+    await expect(mainOf(page).getByText("Saved.")).toBeVisible();
 
     await page.reload();
-    await expect(page.locator('input[name="name"]')).toHaveValue("Renamed Reader");
+    await expect(mainOf(page).locator('input[name="name"]')).toHaveValue("Renamed Reader");
 
     const [row] = await db.select({ name: users.name }).from(users).where(eq(users.email, EMAIL)).limit(1);
     expect(row?.name).toBe("Renamed Reader");
@@ -67,22 +80,22 @@ test.describe("Account — profile, data sharing, plan (Workstream G)", () => {
     await login(page, EMAIL, PASSWORD);
     await page.goto("/account/profile");
 
-    const toggle = page.getByLabel("Share my activity for research");
+    const toggle = mainOf(page).getByLabel("Share my activity for research");
     await expect(toggle).not.toBeChecked();
 
     await toggle.check();
     await expect(toggle).toBeChecked();
     await page.waitForTimeout(300); // the toggle's server action round trip
     await page.reload();
-    await expect(page.getByLabel("Share my activity for research")).toBeChecked();
+    await expect(mainOf(page).getByLabel("Share my activity for research")).toBeChecked();
 
     const [enabledRow] = await db.select({ dataSharingEnabled: users.dataSharingEnabled }).from(users).where(eq(users.email, EMAIL)).limit(1);
     expect(enabledRow?.dataSharingEnabled).toBe(true);
 
-    await page.getByLabel("Share my activity for research").uncheck();
+    await mainOf(page).getByLabel("Share my activity for research").uncheck();
     await page.waitForTimeout(300);
     await page.reload();
-    await expect(page.getByLabel("Share my activity for research")).not.toBeChecked();
+    await expect(mainOf(page).getByLabel("Share my activity for research")).not.toBeChecked();
 
     const [disabledRow] = await db.select({ dataSharingEnabled: users.dataSharingEnabled }).from(users).where(eq(users.email, EMAIL)).limit(1);
     expect(disabledRow?.dataSharingEnabled).toBe(false);
@@ -91,11 +104,11 @@ test.describe("Account — profile, data sharing, plan (Workstream G)", () => {
   test("plan page shows the free beta plan with disabled upgrade affordances and no cost figures", async ({ page }) => {
     await login(page, EMAIL, PASSWORD);
     await page.goto("/account/plan");
-    await expect(page.getByRole("heading", { name: "Beta (free)" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Upgrade/ })).toBeDisabled();
-    await expect(page.getByRole("button", { name: /Manage billing/ })).toBeDisabled();
+    await expect(mainOf(page).getByRole("heading", { name: "Beta (free)" })).toBeVisible();
+    await expect(mainOf(page).getByRole("button", { name: /Upgrade/ })).toBeDisabled();
+    await expect(mainOf(page).getByRole("button", { name: /Manage billing/ })).toBeDisabled();
     // No user-facing cost figures anywhere on the plan or usage surfaces.
-    await expect(page.locator("body")).not.toContainText("$");
+    await expect(mainOf(page)).not.toContainText("$");
   });
 });
 
@@ -106,10 +119,10 @@ test.describe("Account — usage page (Workstream G)", () => {
     try {
       await login(page, email, "password123");
       await page.goto("/account/usage");
-      await expect(page.getByText(/No documents yet/)).toBeVisible();
-      await expect(page.getByText(/No reading activity yet/)).toBeVisible();
-      await expect(page.getByText(/No concept ratings yet/)).toBeVisible();
-      await expect(page.locator("body")).not.toContainText("$");
+      await expect(mainOf(page).getByText(/No documents yet/)).toBeVisible();
+      await expect(mainOf(page).getByText(/No reading activity yet/)).toBeVisible();
+      await expect(mainOf(page).getByText(/No concept ratings yet/)).toBeVisible();
+      await expect(mainOf(page)).not.toContainText("$");
     } finally {
       await deleteTestUser(email);
     }
@@ -131,22 +144,34 @@ test.describe("Account — usage page (Workstream G)", () => {
         extractedText: "Seeded text for a usage-page fixture.",
       });
       await db.insert(readingRecords).values({ userId, workId: work.id, status: "completed", startedAt: new Date(), finishedAt: new Date() });
-      const [concept] = await db.insert(concepts).values({ slug: `usage-fixture-concept-${userId}`, kind: "concept", label: "Fixture Concept" }).returning({ id: concepts.id });
-      await db.insert(conceptMastery).values({ userId, conceptId: concept.id, score: 72, source: "explicit" });
+      // RadarChart needs at least 3 axes to render as a polygon rather than
+      // its own empty state (see components/charts/RadarChart.tsx's own
+      // doc comment) — seed three concepts, not one.
+      const seededConcepts = await db
+        .insert(concepts)
+        .values([
+          { slug: `usage-fixture-concept-a-${userId}`, kind: "concept", label: "Fixture Concept A" },
+          { slug: `usage-fixture-concept-b-${userId}`, kind: "concept", label: "Fixture Concept B" },
+          { slug: `usage-fixture-concept-c-${userId}`, kind: "concept", label: "Fixture Concept C" },
+        ])
+        .returning({ id: concepts.id });
+      await db.insert(conceptMastery).values(
+        seededConcepts.map((c, i) => ({ userId, conceptId: c.id, score: 72 - i * 10, source: "explicit" as const })),
+      );
       const [conversation] = await db.insert(ragConversations).values({ userId, title: "Usage fixture" }).returning({ id: ragConversations.id });
       await db.insert(ragMessages).values({ conversationId: conversation.id, role: "user", content: "A seeded question." });
 
       await login(page, email, "password123");
       await page.goto("/account/usage");
-      await expect(page.getByText(/No documents yet/)).toHaveCount(0);
-      await expect(page.getByText(/No reading activity yet/)).toHaveCount(0);
-      await expect(page.getByText(/No concept ratings yet/)).toHaveCount(0);
+      await expect(mainOf(page).getByText(/No documents yet/)).toHaveCount(0);
+      await expect(mainOf(page).getByText(/No reading activity yet/)).toHaveCount(0);
+      await expect(mainOf(page).getByText(/No concept ratings yet/)).toHaveCount(0);
       // Four charts (bar, line, radar, sparkline) each render as an
       // accessible `role="img"` SVG with its own descriptive name.
-      await expect(page.getByRole("img", { name: "Documents uploaded per month" })).toBeVisible();
-      await expect(page.getByRole("img", { name: "Reading progress by month" })).toBeVisible();
-      await expect(page.getByRole("img", { name: "Concept mastery" })).toBeVisible();
-      await expect(page.getByRole("img", { name: /Ask Library questions per day/ })).toBeVisible();
+      await expect(mainOf(page).getByRole("img", { name: "Documents uploaded per month" })).toBeVisible();
+      await expect(mainOf(page).getByRole("img", { name: "Reading progress by month" })).toBeVisible();
+      await expect(mainOf(page).getByRole("img", { name: "Concept mastery" })).toBeVisible();
+      await expect(mainOf(page).getByRole("img", { name: /Ask Library questions per day/ })).toBeVisible();
     } finally {
       await deleteTestUser(email);
     }
@@ -191,10 +216,10 @@ test.describe("Account — deletion (Workstream G, real Storage)", () => {
       expect(sessionCookie, "a session cookie must exist after login").toBeTruthy();
 
       await page.goto("/account/profile");
-      await page.getByRole("button", { name: "Delete my account" }).click();
-      await page.getByLabel(/Type your email/).fill(email);
-      await page.getByLabel("Current password").fill(password);
-      const confirmButton = page.getByRole("button", { name: "Permanently delete my account" });
+      await mainOf(page).getByRole("button", { name: "Delete my account" }).click();
+      await mainOf(page).getByLabel(/Type your email/).fill(email);
+      await mainOf(page).getByLabel("Current password").fill(password);
+      const confirmButton = mainOf(page).getByRole("button", { name: "Permanently delete my account" });
       await expect(confirmButton).toBeEnabled();
       await confirmButton.click();
 
@@ -220,7 +245,6 @@ test.describe("Account — deletion (Workstream G, real Storage)", () => {
 
       // Orphan sweep: the recommended Library item this deleted account's
       // work was the only reference to should be gone too.
-      const { learningResources } = await import("@ice/db");
       const [resourceRow] = await db.select({ id: learningResources.id }).from(learningResources).where(eq(learningResources.id, resourceId)).limit(1);
       expect(resourceRow, "the orphaned learning_resource should have been swept").toBeUndefined();
 
@@ -254,12 +278,16 @@ test.describe("Account — deletion (Workstream G, real Storage)", () => {
     try {
       await login(page, email, password);
       await page.goto("/account/profile");
-      await page.getByRole("button", { name: "Delete my account" }).click();
-      await page.getByLabel(/Type your email/).fill(email);
-      await page.getByLabel("Current password").fill("definitely-wrong-password");
-      await page.getByRole("button", { name: "Permanently delete my account" }).click();
+      await mainOf(page).getByRole("button", { name: "Delete my account" }).click();
+      await mainOf(page).getByLabel(/Type your email/).fill(email);
+      await mainOf(page).getByLabel("Current password").fill("definitely-wrong-password");
+      await mainOf(page).getByRole("button", { name: "Permanently delete my account" }).click();
 
-      await expect(page.getByRole("alert")).toContainText(/didn't match/i);
+      // Scoped to #main-content — a bare page-wide query is ambiguous with
+      // both Next.js's own route announcer (`#__next-route-announcer__`,
+      // also `role="alert"`) and, in dev mode, the React hydration-overlay
+      // text, which can coincidentally also contain "didn't match".
+      await expect(mainOf(page).getByText(/didn't match/i)).toBeVisible();
       await expect(page).toHaveURL(/\/account\/profile/);
 
       const [row] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);

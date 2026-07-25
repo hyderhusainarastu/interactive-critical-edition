@@ -13,11 +13,12 @@ import {
   userDeletionArchives,
   users,
   usageEvents,
+  resourceRoles,
   workIdentities,
   works,
 } from "@ice/db";
 import type { WorkDeletionOutcome } from "@ice/deletion";
-import { and, count, eq, isNotNull, max, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNotNull, max, sql } from "drizzle-orm";
 import { deletionEffects, executeWorkDeletion, retryPendingCleanups } from "./trash";
 
 /**
@@ -259,8 +260,16 @@ async function listWorks(userId: string): Promise<Array<{ id: string; title: str
  * Candidates are collected BEFORE the per-work deletion loop below removes
  * the rows that make them reachable at all: `works.work_identity_id` (this
  * user's own uploads' canonical identity) and every `learning_resource` this
- * user's own data references (their reading records/understanding ratings,
- * or a citation in one of their own documents projected into the Library).
+ * user's own data references — their reading records/understanding ratings,
+ * a citation in one of their own documents projected into the Library, OR
+ * (the case that's easy to miss) a `resource_role` recommending some
+ * catalog resource FOR one of this user's own work identities. That last
+ * source matters because deleting an orphaned `work_identity` below
+ * CASCADES its `resource_role` rows — so a resource recommended only for
+ * this user's now-deleted work loses its one and only reference at the same
+ * moment, and would never be reachable to check again afterward if it
+ * weren't collected here first. Same technique `e2e/helpers.ts`'s
+ * `deleteTestUser` already uses for its own (test-only) sweep.
  */
 async function collectOrphanCandidates(userId: string): Promise<OrphanCandidates> {
   const identityRows = await db
@@ -283,10 +292,17 @@ async function collectOrphanCandidates(userId: string): Promise<OrphanCandidates
     .innerJoin(citations, eq(citationLibraryLinks.citationId, citations.id))
     .innerJoin(documents, eq(citations.documentId, documents.id))
     .where(eq(documents.userId, userId));
+  const roleRows =
+    workIdentityIds.length > 0
+      ? await db
+          .select({ id: resourceRoles.learningResourceId })
+          .from(resourceRoles)
+          .where(inArray(resourceRoles.workIdentityId, workIdentityIds))
+      : [];
 
   const learningResourceIds = [
     ...new Set(
-      [...rrRows, ...urRows, ...cllRows]
+      [...rrRows, ...urRows, ...cllRows, ...roleRows]
         .map((r) => r.id)
         .filter((id): id is string => id !== null),
     ),
@@ -326,7 +342,12 @@ async function sweepOrphans(candidates: OrphanCandidates): Promise<{ workIdentit
     if (ur) continue;
     const [cll] = await db.select({ id: citationLibraryLinks.id }).from(citationLibraryLinks).where(eq(citationLibraryLinks.learningResourceId, resourceId)).limit(1);
     if (cll) continue;
-    // Cascades any resource_role still pointing at this resource.
+    // The identity loop above runs first and already cascaded away any
+    // resource_role pointing at THIS user's own now-deleted identities —
+    // this check is for a role still pointing at some OTHER (still-alive,
+    // possibly another user's) work identity, which must not be swept.
+    const [role] = await db.select({ id: resourceRoles.id }).from(resourceRoles).where(eq(resourceRoles.learningResourceId, resourceId)).limit(1);
+    if (role) continue;
     await db.delete(learningResources).where(eq(learningResources.id, resourceId));
     learningResourcesDeleted += 1;
   }

@@ -16,7 +16,7 @@ export default async function AccountUsagePage() {
 
       <section className="app-card rounded-lg p-5" aria-labelledby="reading-progress-heading">
         <h2 id="reading-progress-heading" className="font-serif text-lg font-semibold text-[var(--color-text)]">Reading progress</h2>
-        <p className="mt-1 text-sm text-[var(--color-text-muted)]">Works you've started and finished, by month.</p>
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">Works you&apos;ve started and finished, by month.</p>
         <LineChart
           className="mt-4"
           series={[

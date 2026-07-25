@@ -559,4 +559,34 @@ test.describe("Phase 23.2 accessibility completion", () => {
     const activeElementIsBody = await page.evaluate(() => document.activeElement === document.body);
     expect(activeElementIsBody, "focus should not silently fall back to <body> once the Undo control unmounts").toBe(false);
   });
+
+  // Workstream G (v.5): the new /account/* pages had never been scanned.
+  test("account/profile", async ({ page }) => {
+    await login(page);
+    await page.goto("/account/profile");
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/profile — delete-account danger zone expanded", async ({ page }) => {
+    await login(page);
+    await page.goto("/account/profile");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await expect(page.getByLabel(/Type your email/)).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/usage", async ({ page }) => {
+    await login(page);
+    await page.goto("/account/usage");
+    await expect(page.getByRole("heading", { name: "Documents uploaded" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/plan", async ({ page }) => {
+    await login(page);
+    await page.goto("/account/plan");
+    await expect(page.getByRole("heading", { name: "Beta (free)" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
 });
