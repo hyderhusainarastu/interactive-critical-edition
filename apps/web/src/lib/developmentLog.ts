@@ -36,6 +36,7 @@ export const developmentLog = [
       "Added a feedback option to every page footer — report a bug, share an idea, or send praise without leaving the page.",
       "Rebuilt the Visualization map: a plate-style backdrop with glowing emphasis, distinct shapes for works, people, and concepts, reading-state and credibility cues, curved connection lines, a concepts focus mode, and an equally capable sortable table view.",
       "Added account pages: edit your profile and avatar, see your reading activity at a glance, review your plan, control data sharing, and delete your account with a safe, fully verified cleanup.",
+      "Fixed a glitch where the account and settings menus would close by themselves right after a page loaded.",
     ],
   },
   {

@@ -291,7 +291,8 @@ test.describe("Phase 12 workspace foundation", () => {
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL("/dashboard");
 
-    await page.getByRole("button", { name: "Log out" }).click();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("button", { name: "Sign out" }).click();
     await page.waitForURL("/");
 
     await page.goto("/dashboard");
