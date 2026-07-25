@@ -7,6 +7,7 @@ import { getApiUserId } from "@/lib/auth";
 import { enforceUserRateLimit } from "@/lib/apiRateLimit";
 import { rateLimitResponse } from "@/lib/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
+import { recordUsageEvent } from "@/lib/usageEvents";
 
 const schema = z.object({ workId: z.string().uuid(), documentId: z.string().uuid() });
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
@@ -69,5 +70,6 @@ export async function POST(request: Request) {
     reportWebError(error, { scope: "api.upload.complete", userId, documentId: document.id, workId: input.data.workId });
     return NextResponse.json({ error: "Upload succeeded but processing could not be started. Please try again." }, { status: 500 });
   }
+  recordUsageEvent({ userId, eventType: "upload", path: "/upload" });
   return NextResponse.json({ workId: input.data.workId });
 }

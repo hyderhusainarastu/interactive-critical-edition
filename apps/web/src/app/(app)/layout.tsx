@@ -6,6 +6,7 @@ import { getWorkspacePreferences } from "@/lib/preferences";
 import { getUserReaderLevel } from "@/lib/readerLevel";
 import { AppShell } from "@/components/app/AppShell";
 import { PreferenceBootstrap } from "@/components/app/PreferenceBootstrap";
+import { TelemetryBeacon } from "@/components/app/TelemetryBeacon";
 import { phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
 
 /**
@@ -29,6 +30,7 @@ export default async function AppLayout({
   return (
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
+      <TelemetryBeacon />
       <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
     </>
   );

@@ -1,4 +1,4 @@
-import { db, feedback, usageEvents } from "@ice/db";
+import { db, feedback } from "@ice/db";
 import { reportEvent } from "@ice/observability";
 import { after, NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
@@ -8,6 +8,7 @@ import { feedbackSchema, isHoneypotFilled } from "@/lib/feedback";
 import { feedbackEmailHtml, mailProvider } from "@/lib/mail";
 import { clientIdentity, preAuthRateLimit } from "@/lib/preAuthRateLimit";
 import { reportWebError } from "@/lib/telemetry";
+import { recordUsageEvent } from "@/lib/usageEvents";
 
 /**
  * Workstream J (v.5): accepts a `FeedbackModal` submission (see that
@@ -17,12 +18,10 @@ import { reportWebError } from "@/lib/telemetry";
  * neither can slow down or fail the submitter's own request; both failures
  * are caught and reported rather than thrown.
  *
- * `recordUsageEvent()` (Workstream H's planned shared `lib/usageEvents.ts`
- * helper) does not exist yet in this worktree — Lane H may still be adding
- * it in parallel. The `usage_event` insert below is written inline as the
- * documented stand-in; when that helper lands, this call site should be the
- * one line `recordUsageEvent({ userId, eventType: "feedback", path })`
- * instead of constructing the insert itself.
+ * The `usage_event` insert goes through Workstream H's shared
+ * `recordUsageEvent()` (`lib/usageEvents.ts`) rather than an inline insert
+ * here — it has its own `after()` + error handling, so this route only
+ * needs the one call.
  */
 export async function POST(request: Request) {
   const input = feedbackSchema.safeParse(await request.json().catch(() => null));
@@ -64,18 +63,14 @@ export async function POST(request: Request) {
 
   reportEvent("feedback.received", { feedbackId: row.id, category: input.data.category, authenticated: Boolean(userId) });
 
-  after(async () => {
-    // usage_event.userId has no FK and is NOT NULL by design (plan §H) —
-    // events survive account deletion, but they can't exist without an
-    // account at all, so this is signed-in only.
-    if (userId) {
-      try {
-        await db.insert(usageEvents).values({ userId, eventType: "feedback", path });
-      } catch (error) {
-        reportWebError(error, { scope: "api.feedback.usage_event", userId, feedbackId: row.id });
-      }
-    }
+  // usage_event.userId is NOT NULL by design (plan §H) — events survive
+  // account deletion, but they can't exist without an account at all, so
+  // this is signed-in only.
+  if (userId) {
+    recordUsageEvent({ userId, eventType: "feedback", path });
+  }
 
+  after(async () => {
     // Admin notification is optional and best-effort: ConsoleMailProvider
     // logs instead of sending when RESEND_API_KEY isn't configured, and any
     // real Resend failure here is caught rather than surfaced — the

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { CompetencyNoticeView } from "@/lib/competencyData";
 import { answerRagConversation, getRagConversationView } from "@/lib/ragData";
 import { isRagApiError, requireRagApiUser } from "@/lib/ragApi";
+import { recordUsageEvent } from "@/lib/usageEvents";
 
 const messageSchema = z.object({ message: z.string().trim().min(2).max(2_000) });
 
@@ -60,6 +61,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
   const { conversationId } = await params;
   const answer = await answerRagConversation({ userId, conversationId, question: parsed.data.message });
   if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  recordUsageEvent({ userId, eventType: "chat_message", path: "/ask-library" });
   return new Response(streamAnswer(answer), {
     headers: {
       "Content-Type": "text/event-stream; charset=utf-8",
