@@ -90,6 +90,68 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(trigger).toBeFocused();
   });
 
+  // Live-issue fix lane (2026-07-25): the account menu and the preferences
+  // menu opened then instantly closed in production right after signing in
+  // (or after any navigation). Root cause: `(app)` routes render `AppShell`
+  // (header, these two menus, etc.) as part of the routed page content that
+  // `PageTransition`'s `AnimatePresence` used to wrap at the ROOT layout
+  // level (see `app/layout.tsx`'s comment). An authenticated route's async
+  // Server Component work streams in after the shell's first paint, and
+  // `AnimatePresence`'s `mode="wait"` bookkeeping reacted to that
+  // late-arriving content by silently tearing down and rebuilding the whole
+  // wrapped subtree a second time ~150-200ms later — discarding whatever
+  // `useState` (like a just-opened menu) existed in between.
+  //
+  // A plain `.click()` immediately after `waitForURL` did NOT reproduce
+  // this (Playwright's synthetic click resolves before the real DOM "click"
+  // event a browser fires from a raw mousedown→mouseup gesture, which is
+  // what actually raced the remount in manual testing) — hence the explicit
+  // `mouse.down()` / wait / `mouse.up()` sequence below, fired the instant
+  // the dashboard URL resolves rather than after the page has settled. This
+  // is the interaction pattern that reproduced the bug red on the pre-fix
+  // tree; it stays green post-fix because `AppShell.tsx` now applies
+  // `PageTransition` only around `<main>`'s routed content, keeping these
+  // menus outside the animated/remounting boundary entirely.
+  test("the account and preferences menus survive a click made immediately after navigation settles", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const preferencesTrigger = page.getByRole("button", { name: "Workspace preferences" });
+    const preferencesBox = await preferencesTrigger.boundingBox();
+    if (!preferencesBox) throw new Error("Workspace preferences trigger has no layout box");
+    await page.mouse.move(preferencesBox.x + preferencesBox.width / 2, preferencesBox.y + preferencesBox.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(20);
+    await page.mouse.up();
+
+    const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
+    await expect(preferencesDialog).toBeVisible();
+    // The bug closed the panel within ~200ms of it opening; staying visible
+    // across a real wait (not just the instant after the click) is the
+    // actual proof — a synchronous check right after the click would pass
+    // even on the broken tree, since the phantom remount is itself delayed.
+    await page.waitForTimeout(500);
+    await expect(preferencesDialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(preferencesDialog).toBeHidden();
+
+    const profileTrigger = page.getByRole("button", { name: "Account menu" });
+    const profileBox = await profileTrigger.boundingBox();
+    if (!profileBox) throw new Error("Account menu trigger has no layout box");
+    await page.mouse.move(profileBox.x + profileBox.width / 2, profileBox.y + profileBox.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(20);
+    await page.mouse.up();
+
+    const profileDialog = page.getByRole("dialog", { name: "Account menu" });
+    await expect(profileDialog).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(profileDialog).toBeVisible();
+  });
+
   test("moves focus to the exit control when focus mode hides the shell", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(EMAIL);

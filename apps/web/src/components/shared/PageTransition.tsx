@@ -4,6 +4,13 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+/**
+ * Wraps routed page CONTENT in a subtle cross-fade on navigation. Deliberately
+ * scoped by callers to wrap only the content area, never persistent chrome
+ * (see `AppShell.tsx`'s single usage around `<main>`) — see that file's own
+ * comment for why: wrapping the whole app shell in this `AnimatePresence`
+ * caused a real production bug (menus opening and instantly closing).
+ */
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const systemReduced = useReducedMotion();
