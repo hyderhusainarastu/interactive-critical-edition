@@ -780,227 +780,261 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               ))}
           </div>
 
-          {/* Filters — the single source both views render from (plan §34.4 9.7). */}
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-            <label className="flex items-center gap-1">
-              <span className="text-[var(--color-text-muted)]">Search</span>
-              <input
-                value={filters.search}
-                onChange={(event) => updateFilter("search", event.target.value)}
-                placeholder="Works, concepts, sources"
-                className="app-control w-48 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-              />
-            </label>
-            <label className="flex items-center gap-1">
-              {/* D-21-11: was the bare, ambiguous "Filter" — that substring
-                  also matches the new "Clear all filters" button's
-                  accessible name below, so this control gets its own
-                  specific name (it filters by NodeState/reading status,
-                  not by relation, kind, or anything else on this page). */}
-              <span className="text-[var(--color-text-muted)]">Reading status</span>
-              <select
-                value={filters.state}
-                onChange={(e) => updateFilter("state", e.target.value)}
-                className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-              >
-                <option value="all">All ({data.nodes.length})</option>
-                {STATE_ORDER.map((s) => (
-                  <option key={s} value={s}>
-                    {STATE_META[s].label}
-                  </option>
-                ))}
-              </select>
-            </label>
+          {/* Filters — the single source both views render from (plan §34.4
+              9.7). Graph P4: regrouped into Scope / Attributes / Relations
+              clusters — every individual control below keeps its EXACT
+              pre-existing accessible name/label/select values (e2e
+              contracts), this only adds semantic `<fieldset>` groupings
+              around the same controls in the same relative position. */}
+          <div className="mb-4 flex flex-col gap-3 text-sm">
+            {/* Scope: which portion of the graph/roadmap is shown. */}
+            <fieldset className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2" aria-label="Scope">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Scope</legend>
+              {layoutMode === "roadmap" && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Stage</span>
+                  <select
+                    value={filters.stage}
+                    onChange={(e) => updateFilter("stage", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {STAGE_ORDER.map((stage) => (
+                      <option key={stage} value={stage}>
+                        {STAGE_LABEL[stage]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {workNodes.length > 1 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Associated work</span>
+                  <select
+                    value={filters.associatedWork}
+                    onChange={(e) => updateFilter("associatedWork", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {workNodes.map((work) => (
+                      <option key={work.id} value={work.id}>
+                        {work.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {layoutMode !== "roadmap" && workNodes.length <= 1 && (
+                <span className="text-xs text-[var(--color-text-muted)]">Whole library</span>
+              )}
+            </fieldset>
 
-            {types.length > 1 && (
+            {/* Attributes: narrows by a node's own properties. */}
+            <fieldset className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2" aria-label="Attributes">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Attributes</legend>
               <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Kind</span>
+                <span className="text-[var(--color-text-muted)]">Search</span>
+                <input
+                  value={filters.search}
+                  onChange={(event) => updateFilter("search", event.target.value)}
+                  placeholder="Works, concepts, sources"
+                  className="app-control w-48 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                />
+              </label>
+              <label className="flex items-center gap-1">
+                {/* D-21-11: was the bare, ambiguous "Filter" — that substring
+                    also matches the "Clear all filters" button's accessible
+                    name below, so this control gets its own specific name
+                    (it filters by NodeState/reading status, not by relation,
+                    kind, or anything else on this page). */}
+                <span className="text-[var(--color-text-muted)]">Reading status</span>
                 <select
-                  value={filters.type}
-                  onChange={(e) => updateFilter("type", e.target.value)}
+                  value={filters.state}
+                  onChange={(e) => updateFilter("state", e.target.value)}
                   className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
-                  <option value="all">All</option>
-                  {(types as NodeType[]).map((t) => (
-                    <option key={t} value={t}>
-                      {TYPE_LABEL[t]}
+                  <option value="all">All ({data.nodes.length})</option>
+                  {STATE_ORDER.map((s) => (
+                    <option key={s} value={s}>
+                      {STATE_META[s].label}
                     </option>
                   ))}
                 </select>
               </label>
-            )}
 
+              {types.length > 1 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Kind</span>
+                  <select
+                    value={filters.type}
+                    onChange={(e) => updateFilter("type", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {(types as NodeType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {TYPE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {authorities.length > 0 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Authority</span>
+                  <select
+                    value={filters.authority}
+                    onChange={(e) => updateFilter("authority", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {authorities.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {providers.length > 0 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Provider</span>
+                  <select
+                    value={filters.provider}
+                    onChange={(e) => updateFilter("provider", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {providers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {credibilityBands.length > 0 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Credibility</span>
+                  <select
+                    value={filters.credibilityBand}
+                    onChange={(e) => updateFilter("credibilityBand", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {credibilityBands.map((band) => (
+                      <option key={band} value={band}>
+                        {CREDIBILITY_BAND_META[band].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {/* Graph P2 (data contract v2): reader-level narrowing as an
+                  explore-mode FILTER — the roadmap-mode "Reader level"
+                  control above scopes what the SERVER computes; this one
+                  narrows which of the ALREADY-fetched nodes are shown, over
+                  the exact same `filters.readerLevel`/URL key (see the
+                  `FILTER_KEYS` comment for why they're one state, not two).
+                  Shown only in explore mode so the two controls never render
+                  side by side saying the same thing twice. */}
+              {layoutMode === "explore" && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Reader level</span>
+                  <select
+                    value={filters.readerLevel}
+                    onChange={(e) => updateFilter("readerLevel", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
+                      <option key={level} value={level}>
+                        {READER_LEVEL_LABEL[level]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {/* D-21-11 precedent: NOT labeled "Concept kind" — Playwright's
+                  (and screen readers') accessible-name lookup is substring-
+                  based, and this page's pre-existing NodeType filter is
+                  already named "Kind" (an e2e contract, preserved verbatim
+                  per this phase's own rule), so "Concept kind" would
+                  silently resolve both selects for `getByLabel("Kind")`.
+                  "Concept category" describes the same field without
+                  colliding. */}
+              {conceptKinds.length > 0 && (
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Concept category</span>
+                  <select
+                    value={filters.conceptKind}
+                    onChange={(e) => updateFilter("conceptKind", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {conceptKinds.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {conceptKindLabel(kind)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </fieldset>
+
+            {/* Relations cluster (edge_type narrowing) — the edge-family
+                legend above (recolored the same way this filter's own
+                colors would suggest) doubles as this cluster's own
+                documentation, so a reader can map "Citation / reference"
+                etc. straight to a value here without guessing. Named "Edge
+                types" here rather than "Relations": Playwright's (and
+                screen readers') accessible-name lookup is substring-based,
+                and "Relations" would collide with the pre-existing
+                "Relation" select's own accessible name (same D-21-11 class
+                of bug, caught by this phase's own e2e run) — legend text
+                and aria-label are kept identical to each other (never
+                diverging) to avoid a WCAG 2.5.3 Label-in-Name mismatch. */}
             {relations.length > 0 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Relation</span>
-                <select
-                  value={filters.relation}
-                  onChange={(e) => updateFilter("relation", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {relations.map((r) => (
-                    <option key={r} value={r}>
-                      {r.replace(/_/g, " ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <fieldset className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2" aria-label="Edge types">
+                <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Edge types</legend>
+                <label className="flex items-center gap-1">
+                  <span className="text-[var(--color-text-muted)]">Relation</span>
+                  <select
+                    value={filters.relation}
+                    onChange={(e) => updateFilter("relation", e.target.value)}
+                    className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                  >
+                    <option value="all">All</option>
+                    {relations.map((r) => (
+                      <option key={r} value={r}>
+                        {r.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-xs text-[var(--color-text-muted)]">Colors match the edge color legend above.</p>
+              </fieldset>
             )}
 
-            {authorities.length > 0 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Authority</span>
-                <select
-                  value={filters.authority}
-                  onChange={(e) => updateFilter("authority", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {authorities.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                disabled={isDefaultFilters(filters)}
+                aria-label="Clear all filters"
+                className="app-control rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Clear all filters
+              </button>
 
-            {providers.length > 0 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Provider</span>
-                <select
-                  value={filters.provider}
-                  onChange={(e) => updateFilter("provider", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {providers.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {credibilityBands.length > 0 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Credibility</span>
-                <select
-                  value={filters.credibilityBand}
-                  onChange={(e) => updateFilter("credibilityBand", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {credibilityBands.map((band) => (
-                    <option key={band} value={band}>
-                      {CREDIBILITY_BAND_META[band].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {/* Graph P2 (data contract v2): reader-level narrowing as an
-                explore-mode FILTER — the roadmap-mode "Reader level" control
-                above scopes what the SERVER computes; this one narrows which
-                of the ALREADY-fetched nodes are shown, over the exact same
-                `filters.readerLevel`/URL key (see the `FILTER_KEYS` comment
-                for why they're one state, not two). Shown only in explore
-                mode so the two controls never render side by side saying the
-                same thing twice. */}
-            {layoutMode === "explore" && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Reader level</span>
-                <select
-                  value={filters.readerLevel}
-                  onChange={(e) => updateFilter("readerLevel", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
-                    <option key={level} value={level}>
-                      {READER_LEVEL_LABEL[level]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {/* D-21-11 precedent: NOT labeled "Concept kind" — Playwright's
-                (and screen readers') accessible-name lookup is substring-
-                based, and this page's pre-existing NodeType filter is
-                already named "Kind" (an e2e contract, preserved verbatim
-                per this phase's own rule), so "Concept kind" would silently
-                resolve both selects for `getByLabel("Kind")`. "Concept
-                category" describes the same field without colliding. */}
-            {conceptKinds.length > 0 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Concept category</span>
-                <select
-                  value={filters.conceptKind}
-                  onChange={(e) => updateFilter("conceptKind", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {conceptKinds.map((kind) => (
-                    <option key={kind} value={kind}>
-                      {conceptKindLabel(kind)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {layoutMode === "roadmap" && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Stage</span>
-                <select
-                  value={filters.stage}
-                  onChange={(e) => updateFilter("stage", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {STAGE_ORDER.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {STAGE_LABEL[stage]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            {workNodes.length > 1 && (
-              <label className="flex items-center gap-1">
-                <span className="text-[var(--color-text-muted)]">Associated work</span>
-                <select
-                  value={filters.associatedWork}
-                  onChange={(e) => updateFilter("associatedWork", e.target.value)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="all">All</option>
-                  {workNodes.map((work) => (
-                    <option key={work.id} value={work.id}>
-                      {work.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              disabled={isDefaultFilters(filters)}
-              aria-label="Clear all filters"
-              className="app-control rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Clear all filters
-            </button>
-
-            <span className="ml-auto text-xs text-[var(--color-text-muted)]">
-              {displayed.nodes.length} of {data.nodes.length} shown
-            </span>
+              <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+                {displayed.nodes.length} of {data.nodes.length} shown
+              </span>
+            </div>
           </div>
 
           {workNodes.length > 0 && (
