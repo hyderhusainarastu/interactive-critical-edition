@@ -95,7 +95,39 @@ export function bestTitleMatch<T>(
   return best;
 }
 
-export type CitationForm = "book" | "journal" | "unknown";
+export type CitationForm = "book" | "journal" | "classical" | "unknown";
+
+/**
+ * Classical-citation backstop, duplicated (deliberately) from
+ * `packages/ingestion/src/parsers/classicalReferences.ts` rather than
+ * adding a workspace dependency just for one regex pair — this package has
+ * had zero `@ice/*` dependencies until now, and the full recognizer (curated
+ * Bekker page-range table, abbreviation table, modern-work veto) belongs to
+ * `@ice/ingestion`'s extraction stage, not here. See that module for the
+ * canonical, fully-featured recognizer and the citation-fix design.
+ *
+ * By the time a citation query reaches `resolveCitation`, the ingestion
+ * extraction gate and `apps/worker/analyze.ts`'s dedicated
+ * classical-resolution branch should already have intercepted anything
+ * classical (routing it to the canonical Library entry with zero provider
+ * round-trips). This exists purely as belt-and-braces: a minimal shape
+ * check so `resolveCitation` never spends a live provider call on a
+ * Bekker/Stephanus locus citation even if a future caller reaches it
+ * through some other path.
+ */
+// Two alternations, not one: `\b` cannot detect a boundary between two
+// non-word characters, so a trailing `\b` after a period-terminated form
+// ("Pol.", followed by a space or comma) would never match — the same
+// pitfall documented in `classicalReferences.ts`'s `ABBREVIATIONS` table.
+// Letter-ending forms (NE/EN/EE/MM) keep a real trailing boundary;
+// period-ending forms rely on the literal period for specificity instead.
+const CLASSICAL_ABBREV =
+  /\b(?:NE|EN|EE|MM)\b|\b(?:Eth\.\s*Nic\.|Met\.|Pol\.|Rhet\.|De\s+An\.|Phys\.|Top\.|Rep\.|Gorg\.|Phdr\.)/;
+const CLASSICAL_LOCUS = /\b\d{1,4}[a-e](?:[.,]?\s*\d{1,3})?(?:[-–—]\d{1,3})?\b/;
+
+function looksClassical(query: string): boolean {
+  return CLASSICAL_ABBREV.test(query) && CLASSICAL_LOCUS.test(query);
+}
 
 // A quoted title ("Does Aristotle Have a Consistent Account of Vice?") is
 // the humanities convention for an article/chapter-in-a-venue citation —
@@ -126,12 +158,16 @@ const BOOK_MARKERS =
 const EDITOR_MARKER = /,\s*ed\.,/i;
 
 /**
- * Classifies a citation's normalized query as book-form or journal-form
- * from its own surviving text — no separate structured metadata is
- * available at the `resolveCitation` call site (plan §12; see
+ * Classifies a citation's normalized query as classical-, book-, or
+ * journal-form from its own surviving text — no separate structured
+ * metadata is available at the `resolveCitation` call site (plan §12; see
  * D-20-81). "unknown" preserves today's default provider order exactly.
+ * Classical is checked FIRST: a Bekker/Stephanus locus citation is never a
+ * book or journal citation, and `resolveCitation` uses this classification
+ * to skip the provider loop entirely (see `looksClassical`'s doc comment).
  */
 export function classifyCitationForm(query: string): CitationForm {
+  if (looksClassical(query)) return "classical";
   if (QUOTED_TITLE.test(query) || JOURNAL_MARKERS.test(query)) return "journal";
   if (BOOK_MARKERS.test(query) || EDITOR_MARKER.test(query)) return "book";
   return "unknown";

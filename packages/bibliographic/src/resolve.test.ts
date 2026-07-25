@@ -100,6 +100,37 @@ describe("resolveCitation", () => {
     expect(r).toBeNull();
     expect(src.search).not.toHaveBeenCalled();
   });
+
+  // Classical-citation backstop, zero provider round-trips (see `types.ts`'s
+  // `looksClassical` doc comment): the primary interception happens earlier
+  // (the `@ice/ingestion` extraction gate, then apps/worker's dedicated
+  // classical-resolution branch), so `resolveCitation` should never even be
+  // reached for one of these in practice — this proves it never spends a
+  // live provider call even so.
+  it("never calls any source for a Bekker locus query, resolving null before the provider loop", async () => {
+    const crossref = fakeSource("crossref", kant);
+    const openalex = fakeSource("openalex", kant);
+    const openlibrary = fakeSource("openlibrary", kant);
+    const googlebooks = fakeSource("googlebooks", kant);
+    const r = await resolveCitation("Aristotle, NE 1151a20-8", {
+      sources: [crossref, openalex, openlibrary, googlebooks],
+    });
+    expect(r).toBeNull();
+    expect(crossref.search).not.toHaveBeenCalled();
+    expect(openalex.search).not.toHaveBeenCalled();
+    expect(openlibrary.search).not.toHaveBeenCalled();
+    expect(googlebooks.search).not.toHaveBeenCalled();
+  });
+
+  it("checks classification via rawText, same as the book/journal reordering path", async () => {
+    const src = fakeSource("crossref", kant);
+    const r = await resolveCitation("Aristotle Nicomachean Ethics 1151a20", {
+      sources: [src],
+      rawText: "NE 1151a20-8",
+    });
+    expect(r).toBeNull();
+    expect(src.search).not.toHaveBeenCalled();
+  });
 });
 
 // D-20-81: book-form and reference-work citations reliably failed
@@ -135,6 +166,24 @@ describe("classifyCitationForm", () => {
 
   it("classifies a plain author-year query with no signal as unknown", () => {
     expect(classifyCitationForm("Kant, Critique of Pure Reason")).toBe("unknown");
+  });
+
+  // Bekker/Stephanus classical-citation backstop (see `types.ts`'s
+  // `looksClassical` doc comment): duplicated, narrower detection than
+  // `@ice/ingestion`'s full recognizer, checked FIRST so a locus citation is
+  // never mistaken for book- or journal-form.
+  it("classifies a Bekker locus citation as classical, ahead of book/journal", () => {
+    expect(classifyCitationForm("NE 1103a15")).toBe("classical");
+    expect(classifyCitationForm("Pol. 1252a1")).toBe("classical");
+  });
+
+  it("classifies a Stephanus (Plato) locus citation as classical", () => {
+    expect(classifyCitationForm("Plato, Rep. 514a")).toBe("classical");
+  });
+
+  it("does not classify an abbreviation-shaped word or a bare number alone as classical (needs both signals)", () => {
+    expect(classifyCitationForm("NE plans for next quarter")).not.toBe("classical");
+    expect(classifyCitationForm("Bostock, David. Aristotle's Ethics. Oxford: Oxford University Press, 2000.")).toBe("book");
   });
 });
 
