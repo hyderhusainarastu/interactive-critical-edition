@@ -326,3 +326,75 @@ export function readerLevelBeadsVisible(distance: number): boolean {
   const safeDistance = Number.isFinite(distance) && distance > 0 ? distance : REFERENCE_CAMERA_DISTANCE;
   return safeDistance < READER_LEVEL_BEAD_VISIBLE_DISTANCE;
 }
+
+// ---------------------------------------------------------------------------
+// Graph P4: the performance degradation ladder. One exported const, one pure
+// lookup function — every tier's decisions live HERE so `data-graph-effects`
+// (the e2e-assertable tier report) and every visual system this file's
+// callers gate (particles, sphere segment count, beads, edge-label sprites,
+// curvature granularity, bloom, geometry variety) read the exact same
+// classification, never four independently-drifting node-count checks
+// scattered through `KnowledgeGraph3D.tsx`.
+// ---------------------------------------------------------------------------
+
+export type GraphEffectsTier = "full" | "reduced" | "minimal" | "bare";
+
+export interface GraphEffectsConfig {
+  tier: GraphEffectsTier;
+  /** Directional particles vs. a static arrowhead fallback — same choice
+   *  `edgeDirectionCue` already makes, now driven by this ladder rather than
+   *  a single hardcoded 140-node cutoff. */
+  particles: boolean;
+  /** [widthSegments, heightSegments] for the generic sphere geometry
+   *  (work/reference/peer_reviewed_source/online_source nodes). */
+  sphereSegments: readonly [number, number];
+  /** Reader-level orbital beads (also gated by camera distance/layout mode
+   *  independently — this is the PERFORMANCE gate, on top of those). */
+  beads: boolean;
+  /** On-scene edge-relation label sprites (D-21-4). */
+  edgeLabelSprites: boolean;
+  /** 4 = the full per-family curvature table; 2 = collapsed to a coarser
+   *  {straight, curved} split (`collapseCurvature` below). */
+  curvatureTiers: 4 | 2;
+  bloom: "full" | "half" | "off";
+  /** Whether node geometry varies by type/concept-kind at all — `false`
+   *  collapses every node to the plain generic sphere regardless of type,
+   *  the single biggest geometry-variety cost at very large scale. */
+  geometryVariety: boolean;
+}
+
+/** Ordered ascending by `maxNodes` — the first tier whose `maxNodes` the
+ *  actual node count doesn't exceed applies. The plan's own thresholds:
+ *  <=140 everything; 141-400 arrows + reduced sphere segments + beads off;
+ *  401-800 no edge-label sprites + 2-tier curvature + half bloom; >800 bloom
+ *  off + geometry collapses to spheres. */
+export const GRAPH_EFFECTS_LADDER: readonly { maxNodes: number; config: Omit<GraphEffectsConfig, "tier"> }[] = [
+  { maxNodes: 140, config: { particles: true, sphereSegments: [18, 14], beads: true, edgeLabelSprites: true, curvatureTiers: 4, bloom: "full", geometryVariety: true } },
+  { maxNodes: 400, config: { particles: false, sphereSegments: [10, 8], beads: false, edgeLabelSprites: true, curvatureTiers: 4, bloom: "full", geometryVariety: true } },
+  { maxNodes: 800, config: { particles: false, sphereSegments: [10, 8], beads: false, edgeLabelSprites: false, curvatureTiers: 2, bloom: "half", geometryVariety: true } },
+  { maxNodes: Number.POSITIVE_INFINITY, config: { particles: false, sphereSegments: [8, 6], beads: false, edgeLabelSprites: false, curvatureTiers: 2, bloom: "off", geometryVariety: false } },
+];
+
+const TIER_NAMES: readonly GraphEffectsTier[] = ["full", "reduced", "minimal", "bare"];
+
+/** `nodeCount` non-finite/negative degrades to the LOWEST-cost tier ("bare")
+ *  — a scene that can't even report a valid node count is treated the same
+ *  as an over-budget one, never assumed cheap. */
+export function graphEffectsForNodeCount(nodeCount: number): GraphEffectsConfig {
+  const safeCount = Number.isFinite(nodeCount) && nodeCount >= 0 ? nodeCount : Number.POSITIVE_INFINITY;
+  const index = GRAPH_EFFECTS_LADDER.findIndex((step) => safeCount <= step.maxNodes);
+  const resolved = index === -1 ? GRAPH_EFFECTS_LADDER.length - 1 : index;
+  return { tier: TIER_NAMES[resolved], ...GRAPH_EFFECTS_LADDER[resolved].config };
+}
+
+/** Collapses a per-family curvature value to a coarser two-value scheme
+ *  (`curvatureTiers: 2`) — zero stays exactly straight (structural edges
+ *  must never gain an unintended bow), any non-zero value collapses to a
+ *  single fixed magnitude with its ORIGINAL SIGN preserved (so prerequisite
+ *  edges still visibly bow the opposite way from everything else, the one
+ *  piece of the direction distinction worth keeping even at the coarser
+ *  tier). */
+export function collapseCurvature(curvature: number, tiers: 4 | 2): number {
+  if (tiers === 4 || curvature === 0) return curvature;
+  return curvature > 0 ? 0.15 : -0.15;
+}

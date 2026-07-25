@@ -4,6 +4,7 @@ import {
   REFERENCE_CAMERA_DISTANCE,
   SECONDARY_LABEL_HIDE_DISTANCE,
   authorityEmissiveIntensity,
+  collapseCurvature,
   credibilitySegmentCount,
   edgeCurvature,
   edgeDirectionCue,
@@ -11,6 +12,7 @@ import {
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
+  graphEffectsForNodeCount,
   nodePrimaryLabelVisible,
   nodeScaleForDistance,
   nodeSecondaryLabelVisible,
@@ -298,5 +300,58 @@ assert.equal(readerLevelBeadsVisible(READER_LEVEL_BEAD_VISIBLE_DISTANCE), false,
 assert.equal(readerLevelBeadsVisible(10000), false, "far camera -> beads hidden (visual-noise avoidance)");
 assert.ok(READER_LEVEL_BEAD_VISIBLE_DISTANCE < SECONDARY_LABEL_HIDE_DISTANCE, "beads must hide before the secondary label line does -- tighter detail hides first");
 assert.equal(readerLevelBeadsVisible(Number.NaN), false, "an invalid distance degrades to the reference distance, which is past the bead threshold");
+
+// --- Graph P4: graphEffectsForNodeCount / collapseCurvature ---------------
+
+assert.equal(graphEffectsForNodeCount(0).tier, "full");
+assert.equal(graphEffectsForNodeCount(140).tier, "full", "the boundary node count itself stays in the cheaper tier");
+assert.equal(graphEffectsForNodeCount(141).tier, "reduced");
+assert.equal(graphEffectsForNodeCount(400).tier, "reduced");
+assert.equal(graphEffectsForNodeCount(401).tier, "minimal");
+assert.equal(graphEffectsForNodeCount(800).tier, "minimal");
+assert.equal(graphEffectsForNodeCount(801).tier, "bare");
+assert.equal(graphEffectsForNodeCount(50000).tier, "bare");
+// Invalid input degrades to the cheapest tier, never assumed cheap-to-render.
+assert.equal(graphEffectsForNodeCount(Number.NaN).tier, "bare");
+assert.equal(graphEffectsForNodeCount(-5).tier, "bare");
+
+{
+  const full = graphEffectsForNodeCount(50);
+  assert.equal(full.particles, true);
+  assert.equal(full.beads, true);
+  assert.equal(full.edgeLabelSprites, true);
+  assert.equal(full.curvatureTiers, 4);
+  assert.equal(full.bloom, "full");
+  assert.equal(full.geometryVariety, true);
+
+  const reduced = graphEffectsForNodeCount(200);
+  assert.equal(reduced.particles, false, "arrows replace particles once past the full tier");
+  assert.equal(reduced.beads, false);
+  assert.ok(reduced.sphereSegments[0] < full.sphereSegments[0], "reduced tier uses fewer sphere segments than full");
+
+  const minimal = graphEffectsForNodeCount(600);
+  assert.equal(minimal.edgeLabelSprites, false);
+  assert.equal(minimal.curvatureTiers, 2);
+  assert.equal(minimal.bloom, "half");
+  assert.equal(minimal.geometryVariety, true, "geometry variety survives through minimal -- only the bare tier drops it");
+
+  const bare = graphEffectsForNodeCount(2000);
+  assert.equal(bare.bloom, "off");
+  assert.equal(bare.geometryVariety, false, "the largest scale collapses every node to the plain sphere");
+}
+
+// Every tier config field is defined (no accidental gaps in the ladder table).
+for (const nodeCount of [10, 200, 600, 2000]) {
+  const config = graphEffectsForNodeCount(nodeCount);
+  for (const key of ["particles", "sphereSegments", "beads", "edgeLabelSprites", "curvatureTiers", "bloom", "geometryVariety"] as const) {
+    assert.notEqual(config[key], undefined, `tier for ${nodeCount} nodes must define ${key}`);
+  }
+}
+
+assert.equal(collapseCurvature(0, 2), 0, "straight edges stay exactly straight at the coarser tier");
+assert.equal(collapseCurvature(0.12, 4), 0.12, "4-tier is a no-op (the full per-family table)");
+assert.equal(collapseCurvature(0.12, 2), 0.15, "a positive curvature collapses to the fixed positive magnitude");
+assert.equal(collapseCurvature(-0.2, 2), -0.15, "sign is preserved so prerequisite still visibly bows the other way");
+assert.equal(collapseCurvature(0.3, 2), 0.15, "opposition's larger bow still collapses to the same coarse magnitude");
 
 console.log("graphSceneScaling.test.ts: all assertions passed");

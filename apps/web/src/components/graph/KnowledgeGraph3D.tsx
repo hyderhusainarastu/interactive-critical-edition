@@ -548,51 +548,111 @@ export function KnowledgeGraph3D({
     };
   }, []);
 
-  // D-21-3: throttled camera-distance sampling. Direct-manipulation zoom
-  // feedback (not ambient/decorative animation), so this runs regardless of
-  // `motionAllowed` — same distinction this file already draws for
-  // billboarding always facing the camera. Graph P3: the SAME throttled
-  // interval also repositions the opposition-edge dashed overlay (below) —
-  // one more scene traversal on the same 180ms cadence rather than a second
-  // timer, matching this file's "no per-frame/unthrottled work" posture.
+  // D-21-3, migrated in Graph P4: camera-distance sampling now fires off the
+  // OrbitControls' own "change" event (dispatched on every real camera
+  // transform — drag, zoom, damping-driven inertia frames, and the
+  // programmatic `cameraPosition()` transitions this file already uses for
+  // reset/fly-to) rather than blindly polling every 180ms regardless of
+  // whether the camera actually moved. An rAF coalesces bursts of "change"
+  // events within the same frame into one sample, and the EXISTING
+  // quantization (`> 3` world units) still guards the eventual `setState`
+  // exactly as before — event-driven is a strictly closer-to-real-time
+  // replacement for the poll, not a loosening of the throttle discipline.
+  // Direct-manipulation zoom feedback (not ambient/decorative animation), so
+  // this runs regardless of `motionAllowed` — same distinction this file
+  // already draws for billboarding always facing the camera. Immediate +
+  // next-frame retry (same pattern as every other `fgRef`-dependent effect
+  // here) since `controls()` only exists once `<ForceGraph3D>` has mounted.
   useEffect(() => {
-    const sample = () => {
+    let rafPending = false;
+    let cleanupControls: (() => void) | undefined;
+    const sampleDistance = () => {
       const graph = fgRef.current;
-      if (!graph) return;
-      const camera = graph.camera();
-      if (camera) {
-        const distance = camera.position.length();
-        // Only setState when the change is large enough to actually move a
-        // clamped scale factor — keeps this genuinely throttled rather than
-        // firing a React update every 180ms regardless of whether anything
-        // would visually change.
-        if (Math.abs(distance - cameraDistanceRef.current) > 3) {
-          cameraDistanceRef.current = distance;
-          setCameraDistance(distance);
-        }
-      }
-      const overlay = dashOverlayGroupRef.current;
-      if (overlay && overlay.children.length > 0) {
-        const positions = new Map<string, THREE.Vector3>();
-        graph.scene().traverse((object) => {
-          const stash = object.userData as NodeGroupUserData;
-          if (stash.nodeId) positions.set(stash.nodeId, object.position);
-        });
-        for (const child of overlay.children) {
-          const line = child as THREE.Line;
-          const { sourceId, targetId } = line.userData as { sourceId?: string; targetId?: string };
-          const start = sourceId ? positions.get(sourceId) : undefined;
-          const end = targetId ? positions.get(targetId) : undefined;
-          if (!start || !end) continue;
-          line.geometry.setFromPoints([start, end]);
-          line.computeLineDistances();
-        }
+      const camera = graph?.camera();
+      if (!camera) return;
+      const distance = camera.position.length();
+      if (Math.abs(distance - cameraDistanceRef.current) > 3) {
+        cameraDistanceRef.current = distance;
+        setCameraDistance(distance);
       }
     };
-    sample();
-    const id = setInterval(sample, 180);
-    return () => clearInterval(id);
+    const onChange = () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        sampleDistance();
+      });
+    };
+    const setup = () => {
+      const graph = fgRef.current;
+      if (!graph) {
+        raf = requestAnimationFrame(setup);
+        return;
+      }
+      sampleDistance();
+      const controls = graph.controls() as Partial<{
+        addEventListener: (event: string, listener: () => void) => void;
+        removeEventListener: (event: string, listener: () => void) => void;
+      }>;
+      if (controls.addEventListener) {
+        controls.addEventListener("change", onChange);
+        cleanupControls = () => controls.removeEventListener?.("change", onChange);
+      }
+    };
+    let raf = requestAnimationFrame(setup);
+    return () => {
+      cancelAnimationFrame(raf);
+      cleanupControls?.();
+    };
   }, []);
+
+  // Graph P4: the opposition-edge dashed overlay's LIVE endpoint positions
+  // are a NODE-content concern, not a camera concern (unlike the distance
+  // sampling above) — nodes only move during the force simulation's own
+  // settling window (`enableNodeDrag={false}`, so there is no other source
+  // of node motion), so this is a bounded-duration interval that starts
+  // whenever `graphData` changes and stops itself once `onEngineStop` fires
+  // (below) or a generous safety timeout elapses, rather than running
+  // forever or riding the (unrelated) camera-change event above.
+  const dashOverlaySettledRef = useRef(false);
+  useEffect(() => {
+    dashOverlaySettledRef.current = false;
+    const reposition = () => {
+      const graph = fgRef.current;
+      const overlay = dashOverlayGroupRef.current;
+      if (!graph || !overlay || overlay.children.length === 0) return;
+      const positions = new Map<string, THREE.Vector3>();
+      graph.scene().traverse((object) => {
+        const stash = object.userData as NodeGroupUserData;
+        if (stash.nodeId) positions.set(stash.nodeId, object.position);
+      });
+      for (const child of overlay.children) {
+        const line = child as THREE.Line;
+        const { sourceId, targetId } = line.userData as { sourceId?: string; targetId?: string };
+        const start = sourceId ? positions.get(sourceId) : undefined;
+        const end = targetId ? positions.get(targetId) : undefined;
+        if (!start || !end) continue;
+        line.geometry.setFromPoints([start, end]);
+        line.computeLineDistances();
+      }
+    };
+    reposition();
+    const id = setInterval(() => {
+      reposition();
+      if (dashOverlaySettledRef.current) clearInterval(id);
+    }, 150);
+    const safetyTimeout = setTimeout(() => clearInterval(id), 8000);
+    return () => {
+      clearInterval(id);
+      clearTimeout(safetyTimeout);
+    };
+    // Depends on the same inputs `graphData`'s own useMemo below does
+    // (data/pinnedWorkIds/layoutMode) rather than `graphData` itself, which
+    // is declared further down this component — this effect only needs to
+    // know WHEN a new settling window starts, never the value itself
+    // (positions are read live via scene traversal inside `reposition`).
+  }, [data, pinnedWorkIds, layoutMode]);
 
   const nodeSceneScale = useMemo(() => nodeScaleForDistance(cameraDistance), [cameraDistance]);
 
@@ -1188,7 +1248,13 @@ export function KnowledgeGraph3D({
   // more reliable than guessing a fixed retry-frame count (measured
   // directly: an immediate-plus-one-more-frame retry still ran before real
   // node objects existed and framed an empty scene).
-  const onEngineStop = useCallback(() => fitCameraToGraph(0), [fitCameraToGraph]);
+  const onEngineStop = useCallback(() => {
+    // Graph P4: the simulation has converged — node positions are final
+    // (no drag is possible, `enableNodeDrag={false}`), so the bounded
+    // dash-overlay reposition interval above can stop itself.
+    dashOverlaySettledRef.current = true;
+    fitCameraToGraph(0);
+  }, [fitCameraToGraph]);
 
   useEffect(() => {
     if (!resetSignal) return;
