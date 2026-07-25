@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/ragConversationClient";
+import { canPlaySound, playSound } from "@/lib/sound";
 
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
 // Sub-phase 22.9b (plan §3.4): one quiet, collapsed line per chat-inferred
@@ -25,6 +27,12 @@ type CompetencyNotice = {
 // THIS session. Optional and absent for history loaded from `GET
 // /api/rag/conversations/:id`.
 type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[]; notFound?: boolean };
+
+// Workstream E (plan §4): the `GET /api/rag/conversations` list row shape
+// (`listRagConversations` in `ragData.ts`) — deliberately narrower than
+// `Message`'s conversation view, since the switcher only ever renders a
+// title, a scope, and a recency, never message content.
+type ConversationSummary = { id: string; title: string; contextWorkId: string | null; updatedAt: string };
 
 function conversationStorageKey(contextWorkId?: string | null) {
   return `palimnote:rag-conversation:${contextWorkId ?? "library"}`;
@@ -79,8 +87,23 @@ export function RagChatPanel({
   // be shown alongside a perfectly usable, already-open conversation (e.g.
   // an in-conversation answer failure).
   const [conversationUnavailable, setConversationUnavailable] = useState(false);
+  // True from the moment a question is sent until the `done` event (or an
+  // error/self-heal) resolves — distinct from `pending`, which stays "" for
+  // the whole gap between send and the FIRST streamed delta. Without a
+  // separate flag, that gap rendered nothing at all (see `ask()` below and
+  // the thinking-indicator render), which is exactly the silence the
+  // ink-dot ripple indicator is meant to fill.
+  const [streaming, setStreaming] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
+  const [conversationsError, setConversationsError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const historyTriggerRef = useRef<HTMLButtonElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const historyMenuId = useId();
+  const { preferences } = useWorkspacePreferences();
+  const soundReady = canPlaySound(preferences.soundEnabled, !preferences.motionEnabled);
 
   // Matches the FootnoteModal/PreferencesMenu/MobileDrawer precedent
   // (D-19-18/19/20): a dialog-presentation instance takes initial focus
@@ -147,8 +170,8 @@ export function RagChatPanel({
   }, [initializeConversation]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, pending]);
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: preferences.motionEnabled ? "smooth" : "auto" });
+  }, [messages, pending, preferences.motionEnabled]);
 
   /** Raw "start a fresh conversation" request, shared by the explicit "＋
    * New conversation" button and the mid-session self-heal below. Throws on
@@ -173,9 +196,58 @@ export function RagChatPanel({
       await startFreshConversation();
       setError(null);
       setConversationUnavailable(false);
+      closeHistory();
     } catch {
       setError(CONVERSATION_UNAVAILABLE_MESSAGE);
       setConversationUnavailable(true);
+    }
+  }
+
+  /**
+   * Workstream E (plan §4): `GET /api/rag/conversations` already returned
+   * this list; nothing consumed it until now. Loaded fresh every time the
+   * history menu opens (not cached) so `updatedAt` ordering — and any
+   * conversation just started elsewhere on this page — is always current.
+   */
+  const loadConversations = useCallback(async () => {
+    try {
+      const result = await ragJsonFetch<{ conversations: ConversationSummary[] }>("/api/rag/conversations");
+      setConversations(result.conversations);
+      setConversationsError(null);
+    } catch {
+      setConversationsError("Your earlier conversations could not be loaded.");
+    }
+  }, []);
+
+  function openHistory() {
+    setHistoryOpen(true);
+    void loadConversations();
+  }
+  function closeHistory() {
+    setHistoryOpen(false);
+    window.requestAnimationFrame(() => historyTriggerRef.current?.focus());
+  }
+
+  /** Switches the active conversation to an existing one picked from the
+   * history menu. Persists the pick under THIS panel instance's own storage
+   * key (`contextWorkId`-scoped, same as everywhere else in this file) —
+   * picking an entire-Library conversation while reading a specific work,
+   * say, simply makes that the active chat for this panel going forward,
+   * exactly as if the user had asked the first question in it here. */
+  async function switchConversation(targetId: string) {
+    if (targetId === conversationId) { closeHistory(); return; }
+    try {
+      const view = await ragJsonFetch<{ conversation: { id: string }; messages: Message[] }>(`/api/rag/conversations/${targetId}`);
+      window.localStorage.setItem(conversationStorageKey(contextWorkId), view.conversation.id);
+      setConversationId(view.conversation.id);
+      setMessages(view.messages);
+      setPending("");
+      setPendingCitations([]);
+      setError(null);
+      setConversationUnavailable(false);
+      closeHistory();
+    } catch {
+      setConversationsError("That conversation could not be opened.");
     }
   }
 
@@ -186,6 +258,11 @@ export function RagChatPanel({
     setPending("");
     setPendingCitations([]);
     setError(null);
+    // Covers the gap between send and the first streamed `delta` (see the
+    // thinking-indicator render below) — always cleared in `finally`, so
+    // every return path (the 404 self-heal's early `return`, a thrown
+    // error, or the normal stream-to-completion path) turns it back off.
+    setStreaming(true);
     try {
       const response = await fetch(`/api/rag/conversations/${conversationId}`, {
         method: "POST",
@@ -241,6 +318,7 @@ export function RagChatPanel({
           setMessages((existing) => [...existing, { ...message, notFound, ...(competencyNotices.length ? { competencyNotices } : {}) }]);
           setPending("");
           setPendingCitations([]);
+          if (soundReady) playSound("receive");
         }
       };
       while (true) {
@@ -255,6 +333,9 @@ export function RagChatPanel({
       setPending("");
       setPendingCitations([]);
       setError(askError instanceof Error ? askError.message : "Could not answer that question.");
+      if (soundReady) playSound("error");
+    } finally {
+      setStreaming(false);
     }
   }
 
@@ -297,9 +378,46 @@ export function RagChatPanel({
           <p className="text-[9px] font-bold uppercase tracking-[.13em] text-[var(--color-accent-burgundy)]">Grounded in your own library</p>
           <h2 className="mt-1 font-serif text-lg font-semibold">Ask your Library</h2>
           <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Answers use eligible sources only and link to the passage they cite.</p>
+          {/* Workstream E (plan §3): persistent, non-"AI" disclosure that
+              chat participation is also a competency signal — matches the
+              sentence added to the `/ask-library` intro and the notice
+              detail below. */}
+          <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Conversations here help Palimnote gauge your familiarity with each topic, so explanations and your roadmap match your level.</p>
           <p className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-sunken)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
         </div>
-        <div className="flex gap-1"><button type="button" className="app-control app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>{onClose && <button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}</div>
+        <div className="flex gap-1">
+          <div className="relative">
+            <button
+              ref={historyTriggerRef}
+              type="button"
+              className="app-control app-icon-button"
+              aria-label="Conversation history"
+              data-tooltip="Conversation history"
+              aria-expanded={historyOpen}
+              aria-controls={historyMenuId}
+              onClick={() => (historyOpen ? closeHistory() : openHistory())}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <circle cx="8" cy="8.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M8 5.2V8.5L10.3 9.9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {historyOpen && (
+              <ConversationHistoryMenu
+                id={historyMenuId}
+                conversations={conversations}
+                error={conversationsError}
+                activeConversationId={conversationId}
+                currentScopeWorkId={contextWorkId}
+                onSelect={(pickedId) => void switchConversation(pickedId)}
+                onNew={() => void createConversation()}
+                onClose={closeHistory}
+              />
+            )}
+          </div>
+          <button type="button" className="app-control app-icon-button" aria-label="New conversation" data-tooltip="New conversation" onClick={() => void createConversation()}>＋</button>
+          {onClose && <button ref={closeButtonRef} type="button" className="app-control app-icon-button" aria-label="Close chat" onClick={onClose}>×</button>}
+        </div>
       </header>
       {/* Phase 23.2 (D-23-x): a chat transcript is exactly the case
           WAI-ARIA's `log` role exists for — new entries append over time
@@ -307,11 +425,25 @@ export function RagChatPanel({
           `aria-live="polite"`; the explicit attribute is kept for clarity
           and because this was already relied on before the role existed. */}
       <div ref={scrollRef} role="log" className="min-h-0 flex-1 overflow-y-auto p-4" aria-live="polite">
-        {!messages.length && !pending && <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-muted)]">Ask about an argument, term, or passage. If your eligible Library does not support an answer, chat will say so rather than guess.</p>}
-        <ol className="flex flex-col gap-3">{messages.map((message) => <MessageCard key={message.id} message={message} />)}</ol>
+        {!messages.length && !pending && !streaming && (
+          <GreetingCard contextWorkId={contextWorkId} animate={preferences.motionEnabled} onPick={(question) => { setDraft(question); textareaRef.current?.focus(); }} />
+        )}
+        <ol className="flex flex-col gap-3">
+          {messages.map((message, index) => {
+            const previous = messages[index - 1];
+            const showDivider = !previous || dayLabel(previous.createdAt) !== dayLabel(message.createdAt);
+            return (
+              <Fragment key={message.id}>
+                {showDivider && <li aria-hidden="true" className="my-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{dayLabel(message.createdAt)}</li>}
+                <MessageCard message={message} />
+              </Fragment>
+            );
+          })}
+        </ol>
+        {streaming && !pending && <ThinkingIndicator />}
         {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} isPending />}
         {error && (
-          <div className="mt-3">
+          <div key={error} className="rag-chat-shake mt-3">
             <p className="text-sm text-[var(--color-accent-burgundy)]">{error}</p>
             {conversationUnavailable && (
               <button
@@ -327,9 +459,205 @@ export function RagChatPanel({
       </div>
       <form onSubmit={ask} className="border-t border-[var(--color-border)] p-3">
         <label className="sr-only" htmlFor="rag-question">Ask a question about your Library</label>
-        <textarea id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="app-control w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
-        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped.</span><button type="submit" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="app-control rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
+        <textarea ref={textareaRef} id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="app-control w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
+        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped.</span><button type="submit" data-sound="send" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="app-control rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
       </form>
+    </section>
+  );
+}
+
+/** Rendered while a question has been sent but no `delta` token has arrived
+ * yet (see `streaming` above) — the gap `pending === ""` alone couldn't
+ * distinguish from "nothing asked yet". A decorative ink-dot ripple; the
+ * `sr-only` text is what actually informs assistive tech, since the ripple
+ * itself is `aria-hidden` and — like every other infinite animation in this
+ * codebase (`.beta-badge::after`, `.app-stage-marker`) — is neutralized
+ * under both `prefers-reduced-motion` and the app's own `data-motion`
+ * toggle without needing its own gating logic here. */
+function ThinkingIndicator() {
+  return (
+    <li className="app-mount me-3 flex items-center gap-2 rounded-lg border border-[var(--color-border)] p-3 text-sm" style={{ borderInlineStart: `3px solid ${TURN_ACCENT.pending}` }}>
+      <span aria-hidden="true" className="flex items-center gap-1">
+        <span className="rag-chat-dot h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]" style={{ animationDelay: "0ms" }} />
+        <span className="rag-chat-dot h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]" style={{ animationDelay: "150ms" }} />
+        <span className="rag-chat-dot h-1.5 w-1.5 rounded-full bg-[var(--color-text-muted)]" style={{ animationDelay: "300ms" }} />
+      </span>
+      <span className="sr-only">Thinking…</span>
+    </li>
+  );
+}
+
+const SUGGESTED_QUESTIONS_WORK = [
+  "What is the central argument of this passage?",
+  "How does this respond to earlier thinkers?",
+  "What should I read next to understand this?",
+];
+const SUGGESTED_QUESTIONS_LIBRARY = [
+  "What connects the works in my Library?",
+  "Where do these authors agree or disagree?",
+  "What should I read next?",
+];
+
+/** Client-side only, never persisted (plan §1): the moment a real message
+ * exists — user or assistant — this stops rendering (see its call site's
+ * `!messages.length` guard), so there is nothing here for a server round
+ * trip or a DB row to ever get out of sync with. */
+function GreetingCard({ contextWorkId, animate, onPick }: { contextWorkId: string | null; animate: boolean; onPick: (question: string) => void }) {
+  const greeting = contextWorkId
+    ? "I can help you work through this text — ask about an argument, a term, or a passage, and I'll answer using only your Library."
+    : "Ask me about an argument, a term, or how your works connect. I'll answer using only your eligible Library, and say plainly when it can't support an answer.";
+  const revealed = useTypingReveal(greeting, animate);
+  const suggestions = contextWorkId ? SUGGESTED_QUESTIONS_WORK : SUGGESTED_QUESTIONS_LIBRARY;
+  return (
+    <div className="app-mount me-3 mb-3 rounded-lg border border-[var(--color-border)] p-3 text-sm" style={{ borderInlineStart: `3px solid ${TURN_ACCENT.answered}` }}>
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">Reading companion</p>
+      {/* The animated span is `aria-hidden`; a static `sr-only` twin carries
+          the full sentence once, so a screen reader announces it a single
+          time rather than on every incremental reveal inside this
+          `role="log"` region (each reveal is itself a text mutation, which
+          `aria-relevant="additions"` would otherwise re-announce). */}
+      <p className="leading-6">
+        <span aria-hidden="true">{revealed}{animate && revealed.length < greeting.length && <span className="rag-chat-caret" aria-hidden="true">▍</span>}</span>
+        <span className="sr-only">{greeting}</span>
+      </p>
+      {/* Phase 23.2's 44x44 touch-target floor (self-imposed, above WCAG
+          2.5.8's 24px) applies to every real control, greeting chips
+          included — `min-h-11` (44px) rather than shrinking the visual
+          pill to fit the text. */}
+      <ul className="mt-3 flex flex-wrap gap-1.5">
+        {suggestions.map((question) => (
+          <li key={question}>
+            <button type="button" className="app-control inline-flex min-h-11 items-center rounded-full border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1 text-xs hover:bg-[var(--color-surface-sunken)]" onClick={() => onPick(question)}>{question}</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Reveals `text` a few characters at a time when `animate` is true (gated
+ * on the workspace motion preference by the caller); otherwise the full
+ * text is present from the very first render — never a flash of empty
+ * content for a reduced-motion reader. The lazy `useState` initializer
+ * (not a synchronous `setState` in the effect body) gives the correct
+ * starting value immediately, matching `useNarrowViewport`'s documented
+ * "no synchronous setState in an effect body" convention; the interval
+ * callback below only ever fires asynchronously. */
+function useTypingReveal(text: string, animate: boolean): string {
+  const [revealed, setRevealed] = useState(() => (animate ? "" : text));
+  useEffect(() => {
+    if (!animate) return;
+    let index = 0;
+    const id = window.setInterval(() => {
+      index += 2;
+      setRevealed(text.slice(0, index));
+      if (index >= text.length) window.clearInterval(id);
+    }, 16);
+    return () => window.clearInterval(id);
+    // `text` is effectively constant for this hook's lifetime (a mounted
+    // greeting never changes its own copy); re-running only on `animate`
+    // avoids restarting the reveal on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animate]);
+  return revealed;
+}
+
+function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const startOfDay = (value: Date) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: date.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
+function scopeLabelFor(conversationWorkId: string | null, currentWorkId: string | null): string {
+  if (conversationWorkId === null) return "Entire Library";
+  if (conversationWorkId === currentWorkId) return "This work";
+  return "Another work";
+}
+
+function formatUpdatedAt(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * Workstream E (plan §4): follows the same convention as `AppShell`'s
+ * `PreferencesMenu` — a relative-wrapped trigger with
+ * `aria-expanded`/`aria-controls`, an absolutely positioned `role="dialog"`
+ * panel with `app-panel-enter`, initial focus on its own close button,
+ * Escape closes (stopping propagation so the panel underneath doesn't also
+ * treat it as ITS close), and focus returns to the trigger via `rAF` —
+ * `closeHistory` (the caller) does that last part, matching
+ * `closePreferences`/`closeRag` in `AppShell.tsx`.
+ */
+function ConversationHistoryMenu({
+  id,
+  conversations,
+  error,
+  activeConversationId,
+  currentScopeWorkId,
+  onSelect,
+  onNew,
+  onClose,
+}: {
+  id: string;
+  conversations: ConversationSummary[] | null;
+  error: string | null;
+  activeConversationId: string | null;
+  currentScopeWorkId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onClose: () => void;
+}) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  return (
+    <section
+      id={id}
+      role="dialog"
+      aria-label="Conversation history"
+      className="app-panel-enter absolute end-0 top-11 z-40 w-72 max-w-[calc(100vw-1rem)] rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 shadow-xl"
+      onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Conversations</h2>
+        <button ref={closeButtonRef} type="button" className="app-control app-icon-button h-7 w-7" aria-label="Close conversation history" onClick={onClose}>×</button>
+      </div>
+      <button type="button" className="app-control mb-2 min-h-11 w-full rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-start text-xs font-semibold" onClick={onNew}>＋ New conversation</button>
+      {error && <p className="mb-2 text-xs text-[var(--color-accent-burgundy)]">{error}</p>}
+      {conversations === null && !error && <p className="text-xs text-[var(--color-text-muted)]">Loading…</p>}
+      {conversations && conversations.length === 0 && <p className="text-xs text-[var(--color-text-muted)]">No earlier conversations yet.</p>}
+      {conversations && conversations.length > 0 && (
+        <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+          {conversations.map((conversation, index) => (
+            <li key={conversation.id} className="app-mount" style={{ animationDelay: `${index * 35}ms` } as React.CSSProperties}>
+              <button
+                type="button"
+                aria-current={conversation.id === activeConversationId ? "true" : undefined}
+                className={`app-control min-h-11 w-full rounded-md px-2 py-1.5 text-start text-xs ${conversation.id === activeConversationId ? "bg-[var(--color-surface-sunken)] font-semibold" : "hover:bg-[var(--color-surface-sunken)]"}`}
+                onClick={() => onSelect(conversation.id)}
+              >
+                <span className="block truncate">{conversation.title}</span>
+                <span className="mt-0.5 block text-[10px] text-[var(--color-text-muted)]">{scopeLabelFor(conversation.contextWorkId, currentScopeWorkId)} · {formatUpdatedAt(conversation.updatedAt)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -376,15 +704,27 @@ function MessageCard({ message, isPending = false }: { message: Message; isPendi
   const state = turnState(message, isPending);
   return (
     <li
-      className={`rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${state === "notFound" ? "bg-[var(--color-surface-sunken)]" : ""}`}
+      // `.app-mount` plays a one-shot slide-up/fade entrance exactly once,
+      // the moment React actually creates this `<li>`'s DOM node — since
+      // each turn keeps the same `key={message.id}` for the rest of its
+      // life (see the caller's `messages.map`), it never remounts and so
+      // never replays; a freshly appended user or assistant turn is the
+      // only thing that ever mounts fresh.
+      className={`app-mount rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${state === "notFound" ? "bg-[var(--color-surface-sunken)]" : ""}`}
       style={{ borderInlineStart: `3px solid ${TURN_ACCENT[state]}` }}
     >
       <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p>
-      <p className={`whitespace-pre-wrap leading-6 ${state === "notFound" ? "text-[var(--color-accent-umber)]" : ""}`}>{message.content}</p>
+      <p className={`whitespace-pre-wrap leading-6 ${state === "notFound" ? "text-[var(--color-accent-umber)]" : ""}`}>
+        {message.content}
+        {/* Caret shimmer: only while this turn is still streaming (never on
+            settled history) and gated the same way as every other
+            infinite-loop animation in this file. */}
+        {isPending && <span aria-hidden="true" className="rag-chat-caret">▍</span>}
+      </p>
       {message.citations.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
           {message.citations.map((citation) => (
-            <li key={citation.chunkId} className="flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-2 text-xs">
+            <li key={citation.chunkId} className="rag-chat-citation-enter flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-2 text-xs" style={{ ["--stagger-index" as string]: citation.ordinal }}>
               {/* Contrast fix (adversarial review finding): --color-accent-green
                   flips polarity between themes (dark green in light mode,
                   a pale green in dark mode, both tuned instead for
@@ -489,6 +829,10 @@ function CompetencyNoticeItem({ notice }: { notice: CompetencyNotice }) {
           <p className="mt-1 text-[var(--color-text-muted)]">
             Applies to: {notice.targetKind === "concept" ? "your concept map" : "your reading roadmap"}.
           </p>
+          {/* Workstream E (plan §3): extends the panel-level competency
+              disclosure down to the one place a reader might wonder WHY a
+              chat reply just changed something outside the chat itself. */}
+          <p className="mt-1 text-[var(--color-text-muted)]">This is one of the small signals used to match explanations and your roadmap to your level.</p>
           <button type="button" className="app-control mt-2 underline disabled:opacity-50" onClick={() => void undo()} disabled={busy}>
             {busy ? "Undoing…" : "Undo"}
           </button>

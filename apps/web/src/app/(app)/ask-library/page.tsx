@@ -18,7 +18,7 @@ export default async function AskLibraryPage() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <PageHeader
         title="Ask your Library"
-        description="A Socratic companion grounded only in your eligible Library sources. Every answer links to the passage it cites."
+        description="A Socratic companion grounded only in your eligible Library sources. Every answer links to the passage it cites. Conversations here also help Palimnote gauge your familiarity with each topic, so explanations and your roadmap match your level."
       />
       <div className="mt-6">
         <RagChatPanel presentation="page" />

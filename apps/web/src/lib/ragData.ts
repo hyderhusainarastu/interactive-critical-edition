@@ -23,6 +23,7 @@ import {
 } from "@ice/rag";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { processCompetencySignals, type CompetencyNoticeView } from "./competencyData";
+import { deriveRagConversationTitle } from "./ragTitle";
 
 export type RagCitationView = {
   chunkId: string;
@@ -263,7 +264,7 @@ export async function answerRagConversation(input: { userId: string; conversatio
       estimatedCostUsd: generated.cost,
     });
   }
-  const title = conversation.title === "New conversation" ? question.slice(0, 96) : conversation.title;
+  const title = deriveRagConversationTitle(conversation.title, question);
   await db.update(ragConversations).set({ title, updatedAt: new Date() }).where(eq(ragConversations.id, conversation.id));
 
   // Sub-phase 22.9b (plan §3.5): kicked off AFTER the answer is generated

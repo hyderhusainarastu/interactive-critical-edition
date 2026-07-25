@@ -694,6 +694,28 @@ body {
   @keyframes app-panel-enter { from { opacity: 0; transform: translateY(6px); } }
 }
 
+/* Workstream E (Ask Library chat upgrade): a small streaming/turn-taking
+   vocabulary layered onto the app-mount/app-panel-enter primitives above,
+   not a second motion system. Every rule here lives inside the same
+   `prefers-reduced-motion: no-preference` guard those use, and the blanket
+   `:root[data-motion="reduced"] *` override further above neutralizes it
+   for the app-level toggle — same double-gating precedent as
+   `.beta-badge::after`'s infinite shimmer and `.app-stage-marker`'s
+   infinite pulse, both already infinite-duration animations gated only
+   this way with no extra JS logic. */
+@media (prefers-reduced-motion: no-preference) {
+  .rag-chat-caret { animation: rag-chat-caret-blink 1s step-end infinite; }
+  @keyframes rag-chat-caret-blink { 50% { opacity: 0; } }
+
+  .rag-chat-dot { animation: rag-chat-dot-ripple 1.1s ease-in-out infinite; }
+  @keyframes rag-chat-dot-ripple { 0%, 80%, 100% { opacity: .25; transform: scale(.75); } 40% { opacity: 1; transform: scale(1); } }
+
+  .rag-chat-citation-enter { animation: app-mount .3s var(--spring-gentle) both; animation-delay: calc(var(--stagger-index, 0) * 70ms); }
+
+  .rag-chat-shake { animation: rag-chat-shake .38s ease-in-out; }
+  @keyframes rag-chat-shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+}
+
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);
   outline-offset: 2px;

@@ -70,6 +70,62 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await expect(chat).toContainText(/couldn't find support/i);
   });
 
+  // Workstream E (plan §1): the greeting card is client-side-only and never
+  // persisted — it's the very first thing a reader sees in a fresh
+  // conversation and disappears the moment a real message exists.
+  test("shows a greeting with suggested questions that fill the textarea on click", async ({ page }) => {
+    await page.getByRole("button", { name: "Ask Library" }).click();
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+    await expect(chat.getByText("Reading companion")).toBeVisible();
+
+    const chip = chat.getByRole("button", { name: "What should I read next to understand this?" });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await expect(chat.getByLabel("Ask a question about your Library")).toHaveValue("What should I read next to understand this?");
+
+    // Once a real turn exists, the greeting is gone — it never persists
+    // alongside actual conversation history.
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat.getByText("Library companion").last()).toBeVisible();
+    await expect(chat.getByText("Reading companion")).toBeHidden();
+  });
+
+  // Workstream E (plan §4): the conversation switcher over
+  // `GET /api/rag/conversations` — previously nothing consumed that list.
+  // Deliberately unique question wording (unlike the other tests in this
+  // file, which all share a fixed user across the whole describe block and
+  // never clean up conversations between tests) — colliding on the same
+  // question text elsewhere would give two conversations the same derived
+  // title and break this test's own name-based lookups.
+  test("lists earlier conversations and switches the active one", async ({ page }) => {
+    await page.getByRole("button", { name: "Ask Library" }).click();
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+
+    await chat.getByLabel("Ask a question about your Library").fill("What role does decision play in vice, on this account?");
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat.getByText("Library companion").last()).toBeVisible();
+
+    await chat.getByRole("button", { name: "New conversation" }).click();
+    await expect(chat.getByText("Reading companion")).toBeVisible();
+    await chat.getByLabel("Ask a question about your Library").fill("Does this passage discuss orbital mechanics of comets?");
+    await chat.getByRole("button", { name: "Ask" }).click();
+    await expect(chat).toContainText(/couldn't find support/i);
+
+    await chat.getByRole("button", { name: "Conversation history" }).click();
+    const history = chat.getByRole("dialog", { name: "Conversation history" });
+    await expect(history).toBeVisible();
+    await expect(history.getByRole("button", { name: /orbital mechanics of comets/i })).toBeVisible();
+    const firstConversation = history.getByRole("button", { name: /decision play in vice/i });
+    await expect(firstConversation).toBeVisible();
+
+    await firstConversation.click();
+    await expect(history).toBeHidden();
+    await expect(chat.getByText("What role does decision play in vice, on this account?")).toBeVisible();
+    await expect(chat).not.toContainText(/orbital mechanics of comets/i);
+  });
+
   // D-22-9: the Reader's own contextual drawer had no aria-expanded/
   // aria-controls relationship to its trigger and no Escape/focus-restore
   // lifecycle at all, unlike every other reader-shell disclosure this
