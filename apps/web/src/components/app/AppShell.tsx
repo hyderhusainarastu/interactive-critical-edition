@@ -6,12 +6,14 @@ import { useEffect, useId, useRef, useState } from "react";
 import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
 import type { WorkspacePreferences } from "@/lib/workspacePreferences";
 import { logoutAction } from "@/lib/actions";
+import { InitialsAvatar } from "@/components/charts";
 import { BetaBadge } from "@/components/shared/BetaBadge";
 import { Wordmark } from "@/components/site/Wordmark";
 import { SoundToggle } from "@/components/site/SoundToggle";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
+import { ProfileMenu } from "./ProfileMenu";
 import { ToastProvider, useToast } from "./ToastProvider";
 import { WorkspacePreferencesProvider, useWorkspacePreferences } from "./WorkspacePreferencesProvider";
 
@@ -31,7 +33,10 @@ const WORK_ROUTE_PATTERN = /^\/works\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 interface NavItem { href: string; label: string }
 
 export function AppShell({
+  userId,
   email,
+  name,
+  image,
   admin,
   writerEnabled,
   ragEnabled,
@@ -39,7 +44,10 @@ export function AppShell({
   initialReaderLevel = null,
   children,
 }: {
+  userId: string;
   email: string | null | undefined;
+  name: string | null | undefined;
+  image: string | null | undefined;
   admin: boolean;
   writerEnabled: boolean;
   ragEnabled: boolean;
@@ -50,28 +58,31 @@ export function AppShell({
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents email={email} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
+        <AppShellContents userId={userId} email={email} name={name} image={image} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ email, admin, writerEnabled, ragEnabled, initialReaderLevel, children }: { email: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
+function AppShellContents({ userId, email, name, image, admin, writerEnabled, ragEnabled, initialReaderLevel, children }: { userId: string; email: string | null | undefined; name: string | null | undefined; image: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [ragOpen, setRagOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [headerCompact, setHeaderCompact] = useState(false);
   const [readerLevel, setReaderLevel] = useState<ReaderLevel | null>(initialReaderLevel);
   const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
   const ragTriggerRef = useRef<HTMLButtonElement>(null);
+  const profileTriggerRef = useRef<HTMLButtonElement>(null);
   const focusModeExitRef = useRef<HTMLButtonElement>(null);
   const focusModeFocusRequestRef = useRef<"enter" | "exit" | null>(null);
   const preferencesMenuId = useId();
   const ragSidebarId = useId();
+  const profileMenuId = useId();
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const routeWorkId = WORK_ROUTE_PATTERN.exec(pathname)?.[1] ?? null;
   const navItems: NavItem[] = [
@@ -140,6 +151,10 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, initialRead
     setRagOpen(false);
     window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
   }
+  function closeProfile() {
+    setProfileOpen(false);
+    window.requestAnimationFrame(() => profileTriggerRef.current?.focus());
+  }
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
@@ -193,9 +208,21 @@ function AppShellContents({ email, admin, writerEnabled, ragEnabled, initialRead
                 </svg>
               </button>
             )}
-            <form action={logoutAction} className="hidden lg:block">
-              <button type="submit" className="app-control inline-flex min-h-11 min-w-11 items-center justify-center px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]">Log out</button>
-            </form>
+            <div className="relative hidden lg:block">
+              <button
+                ref={profileTriggerRef}
+                type="button"
+                className="app-control app-icon-button p-0"
+                data-tooltip="Account menu"
+                aria-label="Account menu"
+                aria-expanded={profileOpen}
+                aria-controls={profileMenuId}
+                onClick={() => (profileOpen ? closeProfile() : setProfileOpen(true))}
+              >
+                <InitialsAvatar userId={userId} name={name} imageSrc={image} size={30} />
+              </button>
+              {profileOpen && <ProfileMenu id={profileMenuId} userId={userId} name={name} email={email} image={image} onClose={closeProfile} />}
+            </div>
             <button ref={drawerTriggerRef} type="button" className="app-control app-icon-button md:hidden" data-tooltip="Open navigation" aria-label="Open navigation" aria-expanded={drawerOpen} onClick={() => setDrawerOpen(true)}>☰</button>
           </div>
         </div>

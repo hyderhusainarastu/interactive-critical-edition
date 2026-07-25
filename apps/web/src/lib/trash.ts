@@ -76,13 +76,22 @@ export async function listTrashedWorks(userId: string): Promise<TrashedWork[]> {
     .sort((a, b) => a.daysRemaining - b.daysRemaining);
 }
 
+// Re-exported so `apps/web/src/lib/accountDeletion.ts` (Workstream G) can
+// reuse the exact same per-work deletion machinery for account deletion's
+// per-work loop, instead of a second near-duplicate implementation.
+export { executeWorkDeletion };
+
 /**
  * The real side effects behind `@ice/deletion`'s pure state machine — see
  * that package's doc comment for the ordering/failure/idempotency contract.
  * The cleanup record lives in `deletion_cleanup` keyed by workId (no FK:
  * the work row is hard-deleted mid-flow and the record must outlive it).
+ *
+ * Exported (Workstream G) so `accountDeletion.ts` can build the same real
+ * effects for its own per-work deletion loop rather than re-implementing
+ * the Storage/queue/DB wiring a second time.
  */
-function deletionEffects(userId: string): WorkDeletionEffects {
+export function deletionEffects(userId: string): WorkDeletionEffects {
   return {
     async listDocuments(workId) {
       return db

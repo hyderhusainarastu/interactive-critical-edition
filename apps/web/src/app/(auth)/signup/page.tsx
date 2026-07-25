@@ -71,6 +71,20 @@ export default async function SignupPage({
                 className="rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2"
               />
             </label>
+            <label className="flex items-start gap-2 text-sm text-[var(--color-text)]">
+              <input name="policyAccepted" type="checkbox" required className="mt-0.5" />
+              <span>
+                I agree to the <Link href="/privacy" className="underline">privacy &amp; copyright policy</Link> and{" "}
+                <Link href="/terms" className="underline">terms</Link>.
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-[var(--color-text)]">
+              <input name="dataSharingEnabled" type="checkbox" className="mt-0.5" />
+              <span>
+                Share my activity with the Palimnote team for research concerning pedagogy and research practices
+                (optional, off by default — you can change this later from your profile).
+              </span>
+            </label>
             <button
               type="submit"
               className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-[var(--color-background)]"

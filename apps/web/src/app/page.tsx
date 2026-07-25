@@ -127,10 +127,21 @@ const faqs: Array<[string, string]> = [
   ],
 ];
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ deleted?: string }>;
+}) {
   const session = await auth();
   const signedIn = Boolean(session?.user?.id);
   const betaTestingMode = isBetaTestingMode();
+  const params = await searchParams;
+  // Workstream G (v.5) account deletion's landing farewell notice — the
+  // final step of `deleteAccountAction`'s `signOut({ redirectTo:
+  // "/?deleted=1" })`. Only ever appears with this exact query param, so
+  // `landing-contract.spec.ts`'s baselines (which always navigate to a bare
+  // `/`) never render it and stay byte-identical.
+  const justDeleted = params.deleted === "1";
 
   const primaryHref = signedIn ? "/dashboard" : betaTestingMode ? "/login" : "/signup";
   const primaryLabel = signedIn ? "Open your library" : betaTestingMode ? "Log in to the beta" : "Start reading";
@@ -139,6 +150,11 @@ export default async function Home() {
     <div className="pal-site pal-landing">
       <SiteHeader />
       <PublicExperience />
+      {justDeleted && (
+        <p role="status" className="mx-auto mt-4 max-w-xl rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-center text-sm text-[var(--color-text)]">
+          Your account and its data have been deleted. We&apos;re sorry to see you go.
+        </p>
+      )}
       <main id="top">
         <section className="hero section-shell" aria-labelledby="hero-title">
           <div className="hero-copy">
