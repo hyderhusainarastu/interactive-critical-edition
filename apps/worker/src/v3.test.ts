@@ -25,6 +25,7 @@ describe("v3 research sequence", () => {
       "explicit-citations", "concepts-people-debates", "lane-discovery",
       "relevance-gate", "creator-verification", "citation-graph-expansion",
       "credibility", "claims", "conservative-influence-classification",
+      "foreign-text",
     ]);
   });
 

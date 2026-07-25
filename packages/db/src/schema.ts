@@ -923,6 +923,119 @@ export const textBlocks = pgTable(
 );
 
 /**
+ * Migration 0036 (Workstream D completion, `docs/handoffs/workstream-d.md`
+ * L35-97). A foreign-script span is detected deterministically at
+ * block-insert time (`apps/worker/src/foreignSpans.ts`, script-range
+ * matching — never a model guess) and optionally translated/transliterated
+ * by a cheap-tier model between analysis and publication
+ * (`apps/worker/src/foreignText.ts`'s `processForeignText`). `sourceText` is
+ * the exact stored block substring — mojibake bytes for a `recovered` row —
+ * while `originalText` is the real original-script text, which differs from
+ * `sourceText` only for a labelled PDF glyph-mapping recovery
+ * (`packages/ingestion/src/pdfGlyphRecovery.ts`). A row never rewrites its
+ * block's bytes; the reader recomputes untranscribable markers on read and
+ * drops any that overlap a resolved `recovered` span here (else the
+ * "untranscribable" chip would shadow the recovered Greek).
+ */
+export const foreignScriptEnum = pgEnum("foreign_script", ["greek", "hebrew", "arabic", "cyrillic", "cjk"]);
+export const foreignLanguageBasisEnum = pgEnum("foreign_language_basis", [
+  "script_range",
+  "model_validated",
+  "human_verified",
+]);
+export const foreignDirectionEnum = pgEnum("foreign_direction", ["ltr", "rtl"]);
+export const foreignSpanProvenanceKindEnum = pgEnum("foreign_span_provenance_kind", [
+  "source_text",
+  "ocr_recovery",
+  "pdf_glyph_recovery",
+  "manual",
+]);
+export const foreignTranscriptionStatusEnum = pgEnum("foreign_transcription_status", ["legitimate", "recovered"]);
+export const foreignSpanStatusEnum = pgEnum("foreign_span_status", ["pending", "resolved", "deferred"]);
+export const foreignSpanDeferredReasonEnum = pgEnum("foreign_span_deferred_reason", [
+  "provider_unavailable",
+  "budget_exhausted",
+  "invalid_model_response",
+  "batch_limit",
+]);
+
+export const foreignSpans = pgTable(
+  "foreign_span",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => processingRuns.id, { onDelete: "cascade" }),
+    textBlockId: uuid("text_block_id")
+      .notNull()
+      .references(() => textBlocks.id, { onDelete: "cascade" }),
+    /** Exact stored block substring; mojibake bytes for a `recovered` row. */
+    sourceText: text("source_text").notNull(),
+    /** Original-script text; equals `sourceText` unless recovered. */
+    originalText: text("original_text").notNull(),
+    startOffset: integer("start_offset").notNull(),
+    endOffset: integer("end_offset").notNull(),
+    /** Quote-fingerprint context, same idea as highlight anchors. */
+    prefix: text("prefix").notNull().default(""),
+    suffix: text("suffix").notNull().default(""),
+    script: foreignScriptEnum("script").notNull(),
+    /** Script-derived hint only; not a language identification. */
+    languageHint: text("language_hint").notNull(),
+    /** Nullable until a validated translation resolves the real language. */
+    languageCode: text("language_code"),
+    languageLabel: text("language_label"),
+    languageBasis: foreignLanguageBasisEnum("language_basis").notNull().default("script_range"),
+    direction: foreignDirectionEnum("direction").notNull(),
+    sourceProvenanceKind: foreignSpanProvenanceKindEnum("source_provenance_kind").notNull(),
+    /** Reader-facing, factual description of how this exact text was obtained. */
+    sourceProvenanceLabel: text("source_provenance_label").notNull(),
+    /** Confidence in the transcription, not in any later translation. */
+    sourceConfidence: real("source_confidence").notNull(),
+    transcriptionStatus: foreignTranscriptionStatusEnum("transcription_status").notNull().default("legitimate"),
+    transliteration: text("transliteration"),
+    translation: text("translation"),
+    /** Nullable until resolved; `"machine_translation"` for this worker. */
+    translationProvenance: text("translation_provenance"),
+    provider: text("provider"),
+    model: text("model"),
+    promptVersion: text("prompt_version"),
+    /** 64-char SHA-256 content key; set only once a translation resolves. */
+    cacheKey: text("cache_key"),
+    status: foreignSpanStatusEnum("status").notNull().default("pending"),
+    deferredReason: foreignSpanDeferredReasonEnum("deferred_reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("foreign_span_user_idx").on(t.userId),
+    index("foreign_span_document_idx").on(t.documentId),
+    index("foreign_span_block_idx").on(t.textBlockId),
+    // Pending-batch lookup (`findPending`, ordered (textBlockId, startOffset)
+    // within a run).
+    index("foreign_span_status_run_idx").on(t.status, t.runId),
+    // Cross-run cache reuse (`getCached`) — NOT unique: many legitimately
+    // resolved occurrences of the same passage share one cache key.
+    index("foreign_span_cache_key_resolved_idx").on(t.cacheKey).where(sql`${t.status} = 'resolved'`),
+    // Owner-required identity constraint (workstream-d.md handoff L35-97):
+    // idempotent re-insertion at block-insert time keys on the exact stored
+    // substring. Must not be weakened or omitted.
+    uniqueIndex("foreign_span_document_block_source_unique").on(t.documentId, t.textBlockId, t.sourceText),
+    // Richer proposed uniqueness, kept IN ADDITION per the handoff — a
+    // recovered row can share `sourceText` with a legitimate one at a
+    // different offset within the same block.
+    uniqueIndex("foreign_span_run_block_offsets_unique").on(t.runId, t.textBlockId, t.startOffset, t.endOffset),
+    check("foreign_span_offsets_valid", sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset}`),
+    check("foreign_span_source_confidence_valid", sql`${t.sourceConfidence} >= 0 AND ${t.sourceConfidence} <= 1`),
+  ],
+);
+
+/**
  * Phase 18: owner-scoped retrieval chunks. Uploaded source blocks and
  * explicitly licensed open-access research content are deliberately kept in
  * one narrow index with a durable owner id, a stable source key, and a

@@ -24,6 +24,7 @@ describe("stage sequences", () => {
       "explicit-citations", "concepts-people-debates", "lane-discovery",
       "relevance-gate", "creator-verification", "citation-graph-expansion",
       "credibility", "claims", "conservative-influence-classification",
+      "foreign-text",
     ]);
   });
 
@@ -32,7 +33,7 @@ describe("stage sequences", () => {
       "canonical-identity", "structural-outline", "section-aware-annotations", "author-apparatus",
       "explicit-citations", "concepts-people-debates", "lightweight-work-signals", "lane-discovery",
       "relevance-gate", "creator-verification", "citation-graph-expansion", "credibility", "claims",
-      "conservative-influence-classification",
+      "conservative-influence-classification", "foreign-text",
     ]);
   });
 

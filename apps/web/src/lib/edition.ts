@@ -5,6 +5,7 @@ import {
   docFootnotes,
   editionRelations,
   evidenceSpans,
+  foreignSpans as foreignSpanTable,
   generatedClaims,
   generatedNotes,
   pages,
@@ -19,6 +20,7 @@ import {
 } from "@ice/db";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { detectUntranscribableSpans } from "@ice/ingestion";
+import { filterUntranscribableOverlaps, resolveEditionForeignSpans } from "./foreignSpans";
 
 /**
  * Assemble the full published v2 edition for a document (plan §33 §3.3): the
@@ -39,7 +41,7 @@ export async function getPublishedEdition(documentId: string) {
 
   const editionPages = await db.select().from(pages).where(eq(pages.runId, run.id)).orderBy(asc(pages.pageIndex));
   const pageIds = editionPages.map((p) => p.id);
-  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, apparatus, termRows] = await Promise.all([
+  const [blocks, authorialNotes, notes, claims, resources, creds, relations, attempts, spans, passageNotes, apparatus, termRows, resolvedForeignSpanRows] = await Promise.all([
     pageIds.length ? db.select().from(textBlocks).where(inArray(textBlocks.pageId, pageIds)).orderBy(asc(textBlocks.blockOrder)) : Promise.resolve([]),
     db.select().from(docFootnotes).where(eq(docFootnotes.runId, run.id)).orderBy(asc(docFootnotes.createdAt)),
     db.select().from(generatedNotes).where(eq(generatedNotes.runId, run.id)).orderBy(asc(generatedNotes.createdAt)),
@@ -52,6 +54,13 @@ export async function getPublishedEdition(documentId: string) {
     db.select().from(passageAnnotations).where(eq(passageAnnotations.runId, run.id)).orderBy(asc(passageAnnotations.createdAt)),
     db.select().from(documentApparatus).where(eq(documentApparatus.runId, run.id)).orderBy(asc(documentApparatus.createdAt)),
     db.select().from(termVariants).where(eq(termVariants.documentId, documentId)).orderBy(asc(termVariants.createdAt)),
+    // Migration 0036 (Workstream D completion): only real, resolved
+    // translations — a pending/deferred row has no reader content yet.
+    db
+      .select()
+      .from(foreignSpanTable)
+      .where(and(eq(foreignSpanTable.runId, run.id), eq(foreignSpanTable.status, "resolved")))
+      .orderBy(asc(foreignSpanTable.textBlockId), asc(foreignSpanTable.startOffset)),
   ]);
 
   const termVariantIds = termRows.map((term) => term.id);
@@ -220,6 +229,16 @@ export async function getPublishedEdition(documentId: string) {
     (note) => !apparatusFootprint.has(`${note.marker}\u0000${note.text.trim()}`),
   );
 
+  // Migration 0036 (Workstream D completion): validate/relocate each
+  // resolved row against the block text just fetched above, and drop
+  // anything that no longer matches (never attach a translation to the
+  // wrong phrase — same discipline as `matchNoteToBlock`).
+  const blockTextById = new Map(blocks.map((block) => [block.id, block.text]));
+  const { spans: resolvedForeignSpans, recoveredRangesByBlock } = resolveEditionForeignSpans(
+    blockTextById,
+    resolvedForeignSpanRows,
+  );
+
   return {
     run: {
       id: run.id,
@@ -244,7 +263,13 @@ export async function getPublishedEdition(documentId: string) {
     blocks: blocks.map((block) => ({
       ...block,
       pageIndex: pageIndexById.get(block.pageId) ?? 0,
-      untranscribableSpans: detectUntranscribableSpans(block.text),
+      // Migration 0036: a resolved `recovered` span's honest Greek must never
+      // be shadowed by the very "untranscribable" marker it was recovered
+      // from — drop any overlap before handing the spans to the reader.
+      untranscribableSpans: filterUntranscribableOverlaps(
+        detectUntranscribableSpans(block.text),
+        recoveredRangesByBlock.get(block.id),
+      ),
     })),
     authorialNotes: legacyAuthorialNotes.map((note) => ({
       id: note.id,
@@ -275,6 +300,10 @@ export async function getPublishedEdition(documentId: string) {
         endOffset: occurrence.endOffset,
       })),
     })),
+    // Migration 0036 (Workstream D completion): real, resolved, offset-
+    // validated translations only. Optional in `EditionPayload` so an older
+    // cached payload shape still renders; absent/empty means "none this run".
+    foreignSpans: resolvedForeignSpans,
     // Hidden (reader-dismissed) annotations are withheld from the default
     // anchored/whole-work arrays the reader renders markers and margin cards
     // from — so dismissing one removes its in-text marker on the next load —
