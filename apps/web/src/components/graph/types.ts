@@ -1,5 +1,5 @@
 import type { CurriculumStage } from "@ice/curriculum";
-import type { PriorityTier, RelationshipCategory } from "@ice/roadmap";
+import { matchesReaderLevel, type PriorityTier, type ReaderLevel, type ReaderLevelFilter, type RelationshipCategory } from "@ice/roadmap";
 
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
 export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
@@ -70,6 +70,63 @@ export interface GraphNode {
    *  fabricating a concept's stage placement would violate the grounding
    *  posture); they stay explore-only, see `roadmapSubset` below. */
   roadmap?: RoadmapAnnotation;
+
+  // ---- Data contract v2 (Graph P1, additive — see PROJECT-LOG "Graph
+  // redesign"). Every field below is optional and populated only where the
+  // underlying data actually exists; a node never fabricates a value for a
+  // field its source rows don't carry. Nothing reads these yet (P2 lands the
+  // table/inspector/filters that do; P3/P4 the 3D scene). ----
+
+  /** Union of `resource_role.reader_level` across every role targeting this
+   *  node. A role with a null level ("applies at every level") expands to
+   *  every value in `READER_LEVELS` rather than a separate sentinel, so
+   *  `readerLevels.includes(x)` alone answers "does this apply at level x".
+   *  Absent (not an empty array) when the node has no `resource_role` data
+   *  at all — callers must treat absence the same as "no scoping", never as
+   *  "matches nothing" (never punish missing data). Concept/section nodes
+   *  never carry one (resource_role only relates a work to a resource). */
+  readerLevels?: string[];
+  /** How this node relates to the work identity it is canonicalized under —
+   *  primary text, review, edition, translation, excerpt (`record_role`
+   *  enum: `research_resource.work_role` / `learning_resource.work_role`).
+   *  Null/absent when the node was never discovered via research (a
+   *  citation-only reference) or carries no merged work-identity role. */
+  workRole?: string | null;
+  /** Consolidated credibility dossier — the six separated dimensions (plan
+   *  §33/§34.2) plus score/authority/relevance/evidenceStrength/
+   *  peerReviewed/rationale/creator/popularity, drawn from the SAME winning
+   *  assessment/provider as the legacy `authority`/`credibilityScore` fields
+   *  above (kept for back-compat, never a second, possibly-inconsistent
+   *  source). Null/absent when no `credibility_assessment` row (or, for a
+   *  role-only node, no `learning_resource` credibility fact) exists. */
+  credibility?: {
+    score: number | null;
+    authority: string | null;
+    publicationRigor: number | null;
+    creatorExpertise: number | null;
+    hostProvenance: number | null;
+    pedagogicalValue: number | null;
+    relevance: number | null;
+    evidenceStrength: number | null;
+    peerReviewed: boolean | null;
+    rationale: string | null;
+    creator: unknown;
+    popularity: unknown;
+  } | null;
+  /** Raw 0–100 concept-mastery score (concept/person nodes only) — distinct
+   *  from `state`, which only expresses read/known at `KNOWN_THRESHOLD`.
+   *  Absent for every non-concept node and for a concept with no mastery row
+   *  recorded yet (never defaulted to 0 — that would misrepresent "no data"
+   *  as "definitely no understanding"). */
+  masteryScore?: number | null;
+  /** Concept summary/aliases (concept/person nodes only, from the shared
+   *  `concept` catalog) — absent for every other node type. */
+  summary?: string | null;
+  aliases?: string[];
+  /** Publication venue, when known (`learning_resource.venue`). */
+  venue?: string | null;
+  /** Digital Object Identifier, when known. */
+  doi?: string | null;
 }
 
 /**
@@ -124,6 +181,13 @@ export interface GraphLink {
   provenance?: { relationId: string; runId: string; depth: number } | null;
   evidences?: unknown[];
   provenances?: { relationId: string; runId: string; depth: number }[];
+  /** Data contract v2 (Graph P1, additive): promoted from `evidence.readerLevel`
+   *  on `resource_role`/`passage_annotation`-derived edges — the evidence copy
+   *  is kept for back-compat, this is the contract-level field new consumers
+   *  should read. Null/absent on every other edge kind (citation/concept/
+   *  outline/source-discovery/cross-library/etc.), which carries no
+   *  reader-level scoping at all. */
+  readerLevel?: string | null;
 }
 
 export interface GraphStats {
@@ -361,6 +425,24 @@ export interface GraphFilters {
    *  keep the D-21-10 exemption (they are attribute-filter-exempt), and
    *  D-21-1 edge behavior is unchanged. */
   stage: CurriculumStage | "all";
+  /** Data contract v2 (Graph P1, additive): reader-level narrowing. Shares
+   *  the `ReaderLevelFilter` vocabulary — and, deliberately, the same
+   *  "readerLevel" URL key — that `GraphView`'s pre-existing roadmap-mode
+   *  server request already uses; see that component's own comments for why
+   *  P1 does not yet wire this field to the URL (P2's "filters" sub-phase
+   *  does, per the redesign's phasing). `"all"` (the default) is a no-op. A
+   *  node whose `readerLevels` is absent/empty carries no scoping data and is
+   *  never excluded (never punish missing data) — matching
+   *  `matchesReaderLevel`'s null-materialLevel rule, reused via
+   *  `matchesAnyReaderLevel` below rather than re-derived. */
+  readerLevel: ReaderLevelFilter;
+  /** Data contract v2 (Graph P1, additive): concept-kind narrowing
+   *  (concept/doctrine/person/tradition/debate). Applies only to
+   *  concept/person-typed nodes (`GraphNode.kind`) — every other node type
+   *  has no concept kind and stays exempt (never punish missing data), the
+   *  same spirit as the D-21-10 anchor exemption for a field that is simply
+   *  inapplicable rather than absent-by-omission. */
+  conceptKind: string | "all";
 }
 
 export type CredibilityBand = "high" | "medium" | "low" | "unknown";
@@ -382,6 +464,8 @@ export const DEFAULT_GRAPH_FILTERS: GraphFilters = {
   credibilityBand: "all",
   associatedWork: "all",
   stage: "all",
+  readerLevel: "all",
+  conceptKind: "all",
 };
 
 /** True when every field is still at its default — drives the "Clear all
@@ -398,6 +482,23 @@ export function credibilityBandFor(score: number | null | undefined): Credibilit
   if (score >= 0.75) return "high";
   if (score >= 0.45) return "medium";
   return "low";
+}
+
+/**
+ * Data contract v2 (Graph P1): does ANY of a node's `readerLevels` satisfy
+ * the selected filter level, under the same cumulative semantics
+ * `@ice/roadmap`'s `matchesReaderLevel` already uses everywhere else a
+ * reader level is matched (Library, curriculum, the roadmap-mode server
+ * request) — so this filter cannot silently invent a second definition of
+ * "matches level X". A node with no `readerLevels` data at all is exempt
+ * (never punish missing data), matching `matchesReaderLevel`'s own
+ * null-materialLevel rule; this helper only adds the "any of several
+ * levels" step that a single-level match doesn't need.
+ */
+export function matchesAnyReaderLevel(node: Pick<GraphNode, "readerLevels">, selected: ReaderLevelFilter): boolean {
+  if (selected === "all") return true;
+  if (!node.readerLevels || node.readerLevels.length === 0) return true;
+  return node.readerLevels.some((level) => matchesReaderLevel(level as ReaderLevel, selected));
 }
 
 /**
@@ -436,7 +537,8 @@ export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWo
     // D-21-10: uploaded-work anchors are exempt from attribute filters.
     if (n.uploaded) return true;
     return (
-      (!normalizedSearch || `${n.label} ${n.authors ?? ""} ${n.kind ?? ""}`.toLocaleLowerCase().includes(normalizedSearch)) &&
+      (!normalizedSearch ||
+        `${n.label} ${n.authors ?? ""} ${n.kind ?? ""} ${(n.aliases ?? []).join(" ")}`.toLocaleLowerCase().includes(normalizedSearch)) &&
       (filters.state === "all" || n.state === filters.state) &&
       (filters.type === "all" || n.type === filters.type) &&
       (filters.authority === "all" || n.authority === filters.authority) &&
@@ -449,7 +551,14 @@ export function filterGraphData(data: GraphData, filters: GraphFilters, pinnedWo
       // nodes whose roadmap projection is in that stage (an unannotated node
       // has no `roadmap`, so `n.roadmap?.stage` is `undefined !== <stage>`
       // and it is hidden — correct: it has no place in a stage column).
-      (filters.stage === "all" || n.roadmap?.stage === filters.stage)
+      (filters.stage === "all" || n.roadmap?.stage === filters.stage) &&
+      // Data contract v2 (Graph P1): reader-level and concept-kind narrowing.
+      // Both default to "all" (no-op), so an unfiltered payload is unaffected.
+      matchesAnyReaderLevel(n, filters.readerLevel) &&
+      // conceptKind only applies to concept/person-typed nodes — every other
+      // type has no concept kind at all and stays exempt (never punish
+      // missing data, same spirit as the D-21-10 anchor exemption above).
+      (filters.conceptKind === "all" || (n.type !== "concept" && n.type !== "person") || n.kind === filters.conceptKind)
     );
   });
   const visibleIds = new Set(nodes.map((n) => n.id));

@@ -194,4 +194,90 @@ const roadmapFixture: GraphData = {
   assert.deepEqual(ids(subset), new Set(["work:1", "work:2"]), "with no annotations, roadmapSubset keeps only the uploaded-work anchors");
 }
 
+// ============================================================================
+// Graph P1 (data contract v2, additive): readerLevel/conceptKind filter
+// semantics and alias search. Links are deliberately empty here — none of
+// these predicates are edge-dependent, so node visibility alone is enough to
+// pin the behavior down.
+// ============================================================================
+
+const p1Fixture: GraphData = {
+  title: "Graph P1 fixture",
+  stats: { works: 1, references: 5, sources: 0, concepts: 3, people: 1, missing: 0, read: 0 },
+  nodes: [
+    node({ id: "work:1", type: "work", state: "primary", uploaded: true, associatedWorkIds: ["work:1"] }),
+    // readerLevels coverage: a single level, "all levels" (as a null-level
+    // resource_role role would expand to per graph.ts), a "research"-only
+    // node, and one with no readerLevels data at all.
+    node({ id: "external:bib:10", type: "reference", uploaded: false, associatedWorkIds: ["work:1"], readerLevels: ["undergraduate"] }),
+    node({ id: "external:bib:11", type: "reference", uploaded: false, associatedWorkIds: ["work:1"], readerLevels: ["beginner", "undergraduate", "advanced", "research"] }),
+    node({ id: "external:bib:14", type: "reference", uploaded: false, associatedWorkIds: ["work:1"], readerLevels: ["research"] }),
+    node({ id: "external:bib:12", type: "reference", uploaded: false, associatedWorkIds: ["work:1"] }),
+    // conceptKind coverage: two concept-kind nodes, one person-kind node, and
+    // a reference whose OWN `kind` (resource_type) must never be mistaken
+    // for a concept kind.
+    node({ id: "concept:1", type: "concept", uploaded: false, associatedWorkIds: ["work:1"], kind: "doctrine" }),
+    node({ id: "concept:2", type: "concept", uploaded: false, associatedWorkIds: ["work:1"], kind: "tradition" }),
+    node({ id: "person:1", type: "person", uploaded: false, associatedWorkIds: ["work:1"], kind: "person" }),
+    node({ id: "external:bib:13", type: "reference", uploaded: false, associatedWorkIds: ["work:1"], kind: "webpage" }),
+    // alias search coverage: label alone would never match "akrasia".
+    node({ id: "concept:3", type: "concept", uploaded: false, associatedWorkIds: ["work:1"], kind: "concept", label: "Weakness of will", aliases: ["akrasia"] }),
+  ],
+  links: [],
+};
+
+// --- readerLevel: cumulative matching, "all levels" always matches, missing
+//     data is never punished, uploaded anchor stays exempt ---
+{
+  const result = filterGraphData(p1Fixture, filters({ readerLevel: "undergraduate" }));
+  const resultIds = ids(result);
+  assert.ok(resultIds.has("external:bib:10"), "an undergraduate-scoped node matches an undergraduate filter");
+  assert.ok(resultIds.has("external:bib:11"), "a node whose readerLevels covers every level (a null-level role, per graph.ts) matches any selected level");
+  assert.ok(resultIds.has("external:bib:12"), "a node with no readerLevels data at all is never punished — it always matches");
+  assert.ok(resultIds.has("work:1"), "the uploaded anchor stays visible regardless (D-21-10)");
+  assert.ok(!resultIds.has("external:bib:14"), "a node scoped only to 'research' does not match an 'undergraduate' filter (cumulative semantics exclude higher levels)");
+}
+{
+  const result = filterGraphData(p1Fixture, filters({ readerLevel: "research" }));
+  assert.ok(ids(result).has("external:bib:14"), "the same 'research'-only node matches a 'research' filter (cumulative includes the exact level)");
+}
+{
+  const result = filterGraphData(p1Fixture, filters({ readerLevel: "all" }));
+  assert.deepEqual(ids(result), ids(p1Fixture), "readerLevel=all is a no-op");
+}
+
+// --- conceptKind: narrows only concept/person-typed nodes; every other type
+//     is exempt (never punish missing data), and a node's own unrelated
+//     `kind` (resource_type) is never mismatched against it ---
+{
+  const result = filterGraphData(p1Fixture, filters({ conceptKind: "doctrine" }));
+  const resultIds = ids(result);
+  assert.ok(resultIds.has("concept:1"), "a doctrine-kind concept matches");
+  assert.ok(!resultIds.has("concept:2"), "a tradition-kind concept is excluded");
+  assert.ok(!resultIds.has("person:1"), "a person-kind node ('person' !== 'doctrine') is excluded");
+  assert.ok(resultIds.has("external:bib:10"), "non-concept/person node types stay exempt from conceptKind entirely");
+  assert.ok(resultIds.has("external:bib:13"), "a reference's own unrelated `kind` (resource_type 'webpage') is never matched against conceptKind");
+  assert.ok(resultIds.has("work:1"), "the uploaded anchor stays visible (D-21-10)");
+}
+{
+  const result = filterGraphData(p1Fixture, filters({ conceptKind: "all" }));
+  assert.deepEqual(ids(result), ids(p1Fixture), "conceptKind=all is a no-op");
+}
+
+// --- search extends over aliases ---
+{
+  const result = filterGraphData(p1Fixture, filters({ search: "akrasia" }));
+  const resultIds = ids(result);
+  assert.ok(resultIds.has("concept:3"), "search matches an alias even though the label itself doesn't contain the term");
+  assert.ok(!resultIds.has("concept:1"), "a node with no matching alias/label/authors/kind is excluded");
+  assert.ok(resultIds.has("work:1"), "the uploaded anchor stays visible under search too (D-21-10)");
+}
+
+// --- byte-identity: default filters (now including readerLevel/conceptKind
+//     at "all") still return this payload completely unchanged ---
+{
+  const result = filterGraphData(p1Fixture, DEFAULT_GRAPH_FILTERS);
+  assert.deepEqual(result.nodes, p1Fixture.nodes, "default filters leave the Graph P1 fixture byte-identical");
+}
+
 console.log("filterGraphData.test.ts: all assertions passed");
