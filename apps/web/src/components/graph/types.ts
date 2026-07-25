@@ -445,6 +445,54 @@ export interface GraphFilters {
   conceptKind: string | "all";
 }
 
+/**
+ * `concept_kind` enum (`packages/db/src/schema.ts`'s `conceptKindEnum`) —
+ * mirrored here (apps/web cannot import from packages/db) purely for the
+ * display label, the same manual-sync pattern
+ * `RELATIONSHIP_CATEGORY_TO_EDGE_TYPE` above already uses. Graph P2: backs
+ * the concept-kind filter select and the accessible table's concept-kind
+ * column/text.
+ */
+export const CONCEPT_KINDS = ["concept", "doctrine", "person", "tradition", "debate"] as const;
+export type ConceptKind = (typeof CONCEPT_KINDS)[number];
+export const CONCEPT_KIND_LABEL: Record<ConceptKind, string> = {
+  concept: "Concept",
+  doctrine: "Doctrine",
+  person: "Person",
+  tradition: "Tradition",
+  debate: "Debate",
+};
+export function conceptKindLabel(kind: string | null | undefined): string | null {
+  if (!kind) return null;
+  return CONCEPT_KIND_LABEL[kind as ConceptKind] ?? kind.replace(/_/g, " ");
+}
+
+/**
+ * The six separated credibility dimensions (plan §33/§34.2) as they appear
+ * on `GraphNode.credibility` — keys match that object's field names exactly
+ * so a caller can iterate `CREDIBILITY_DIMENSIONS` and index straight into
+ * `selected.credibility[key]` with no separate mapping table to drift.
+ * Graph P2: backs the inspector's credibility dossier (text+bar meter per
+ * dimension) and the accessible table's per-row dimension text.
+ */
+export const CREDIBILITY_DIMENSIONS = [
+  "publicationRigor",
+  "creatorExpertise",
+  "hostProvenance",
+  "pedagogicalValue",
+  "relevance",
+  "evidenceStrength",
+] as const;
+export type CredibilityDimension = (typeof CREDIBILITY_DIMENSIONS)[number];
+export const CREDIBILITY_DIMENSION_LABEL: Record<CredibilityDimension, string> = {
+  publicationRigor: "Publication rigor",
+  creatorExpertise: "Creator expertise",
+  hostProvenance: "Host provenance",
+  pedagogicalValue: "Pedagogical value",
+  relevance: "Relevance",
+  evidenceStrength: "Evidence strength",
+};
+
 export type CredibilityBand = "high" | "medium" | "low" | "unknown";
 
 export const CREDIBILITY_BAND_META: Record<CredibilityBand, { label: string }> = {

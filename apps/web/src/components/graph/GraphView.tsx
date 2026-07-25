@@ -6,11 +6,11 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABEL, STAGE_ORDER, type CurriculumStage } from "@ice/curriculum";
-import { READER_LEVELS, TIER_LABEL, type ReaderLevelFilter } from "@ice/roadmap";
+import { READER_LEVELS, type ReaderLevelFilter } from "@ice/roadmap";
 import { GraphAccessibleFallback } from "./GraphAccessibleFallback";
-import { CATEGORY_META, categoryMetaFor, confidenceLabel } from "../shared/annotationMeta";
-import { RelationBadge } from "../shared/annotationPrimitives";
+import { GraphInspector, READER_LEVEL_LABEL as READER_LEVEL_CHIP_LABEL } from "./GraphInspector";
 import {
+  CONCEPT_KINDS,
   CREDIBILITY_BAND_META,
   DEFAULT_GRAPH_FILTERS,
   EDGE_FAMILY_META,
@@ -18,9 +18,9 @@ import {
   STATE_META,
   STATE_ORDER,
   TYPE_LABEL,
+  conceptKindLabel,
   credibilityBandFor,
   edgeFamilyFor,
-  edgeTypeLabel,
   filterGraphData,
   isDefaultFilters,
   roadmapSubset,
@@ -29,7 +29,6 @@ import {
   type GraphLink,
   type GraphNode,
   type NodeType,
-  type RoadmapAnnotation,
 } from "./types";
 import {
   computeFocusEmphasis,
@@ -42,13 +41,35 @@ import {
 } from "./graphFocus";
 import { nextUp, progressByStage } from "./roadmapLayout";
 
+// Reuse the inspector's reader-level chip labels for the filter select
+// (Graph P2) — one label table, not two that could drift on wording.
+const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = { ...READER_LEVEL_CHIP_LABEL, all: "Show all levels" };
+
 // WebGL + three.js — client only, so pull it in dynamically with SSR off.
 const KnowledgeGraph3D = dynamic(() => import("./KnowledgeGraph3D").then((m) => m.KnowledgeGraph3D), {
   ssr: false,
   loading: () => <div className="app-shimmer app-skeleton h-[420px] rounded-lg" role="status"><span className="sr-only">Loading 3D view…</span></div>,
 });
 
-const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork", "stage"] as const;
+// Graph P2: `readerLevel` and `conceptKind` (data contract v2, Graph P1)
+// join the URL-synced filter set here. `readerLevel` deliberately reuses the
+// EXACT SAME url key ("readerLevel") that `GraphView`'s roadmap-mode server
+// request already wrote before this phase — P1 left this coexistence as a
+// deliberate deferral (see that phase's own comments) rather than wiring it
+// naively, because two independent pieces of React state both owning one URL
+// key is a split-brain bug waiting to happen (e.g. "Clear all filters"
+// deleting the param without the OTHER state noticing). Resolved here by
+// consolidating to ONE state: `filters.readerLevel` is now the single source
+// of truth, read both by `fetchUrl` (server-side roadmap narrowing,
+// unchanged behavior) and by `filterGraphData`'s `matchesAnyReaderLevel`
+// predicate (client-side node narrowing, both layout modes). Applying the
+// predicate uniformly in roadmap mode is safe, not just convenient: it never
+// punishes missing data (a node with no `readerLevels` stays visible) and
+// uploaded-work anchors are exempt before the predicate is even reached
+// (D-21-10) — so the client filter can only ever narrow role-scoped nodes
+// that genuinely don't apply at the selected level, which is exactly what a
+// "Reader level" control should do regardless of which mode is active.
+const FILTER_KEYS = ["search", "state", "type", "authority", "provider", "relation", "credibilityBand", "associatedWork", "stage", "readerLevel", "conceptKind"] as const;
 const PINNED_WORK_PARAM = "pinnedWork";
 // Phase 22.8 (feature plan §2.3): the Roadmap layout mode is the DEFAULT for
 // every Visualization page — its absence from the URL (like every other
@@ -57,7 +78,6 @@ const PINNED_WORK_PARAM = "pinnedWork";
 // "all" idiom rather than inventing a second convention.
 const LAYOUT_PARAM = "layout";
 const ROADMAP_ROOT_PARAM = "roadmapRoot";
-const READER_LEVEL_PARAM = "readerLevel";
 // 22.8 verifier finding: `KnowledgeGraph3D`'s `showReadingThread` prop (the
 // static, reduced-motion-safe polyline through the reading sequence) was
 // implemented but never wired to any control — permanently `false`. URL-synced
@@ -71,47 +91,6 @@ function layoutModeFromParams(params: URLSearchParams): LayoutMode {
   return params.get(LAYOUT_PARAM) === "explore" ? "explore" : "roadmap";
 }
 
-function readerLevelFromParams(params: URLSearchParams): ReaderLevelFilter {
-  const raw = params.get(READER_LEVEL_PARAM);
-  return raw && ((READER_LEVELS as readonly string[]).includes(raw) || raw === "all") ? (raw as ReaderLevelFilter) : "all";
-}
-
-const READER_LEVEL_LABEL: Record<ReaderLevelFilter, string> = {
-  beginner: "Beginner",
-  undergraduate: "Undergraduate",
-  advanced: "Advanced",
-  research: "Research",
-  all: "Show all levels",
-};
-
-/**
- * Display-language override for the inspector's roadmap disclosure (feature
- * plan §2.4): the stored `relationship_category` enum value never changes —
- * `ai_inferred` keeps meaning exactly what it always has everywhere else in
- * the app (annotations, roadmap list) — only the STRING shown here, in this
- * one disclosure, is friendlier and carries no "AI" wording (owner
- * directive). Every other category reuses the shared `CATEGORY_META` label
- * so the two surfaces can't drift on wording for the other nine values.
- */
-function roadmapCategoryDisplay(category: RoadmapAnnotation["category"]): string {
-  if (category === "ai_inferred") return "Inferred connection — uncertain until you verify it by reading";
-  return CATEGORY_META[category]?.label ?? category.replace(/_/g, " ");
-}
-
-/**
- * Mechanically assembles the inspector's "why this, here" basis line from
- * fields the contract actually carries (feature plan §2.4) — category,
- * confidence, and which selected root(s) reached this node — never a model
- * call and never a fabricated field (no run/date is recorded on
- * `RoadmapAnnotation`, so none is invented here; see `remainingWork`).
- */
-function roadmapBasisLine(annotation: RoadmapAnnotation, allNodes: readonly GraphNode[]): string {
-  const rootLabels = annotation.rootWorkIds
-    .map((id) => allNodes.find((node) => node.id === id)?.label)
-    .filter((label): label is string => Boolean(label));
-  const rootPart = rootLabels.length > 0 ? ` — found via ${rootLabels.join(", ")}` : "";
-  return `Basis: ${roadmapCategoryDisplay(annotation.category)}${rootPart} · confidence ${Math.round(annotation.confidence * 100)}%`;
-}
 // Phase 21.6 (D-21-2): selection and focus-mode round-trip through the URL
 // like the filters above, but are deliberately NOT part of `FILTER_KEYS` —
 // "Clear all filters" narrows/widens which nodes exist, selection/focus-mode
@@ -175,7 +154,6 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const [roadmapRootIds, setRoadmapRootIds] = useState<string[]>(() =>
     searchParams.getAll(ROADMAP_ROOT_PARAM).filter((id) => id.startsWith(WORK_PREFIX)),
   );
-  const [readerLevel, setReaderLevelState] = useState<ReaderLevelFilter>(() => readerLevelFromParams(searchParams));
   const [showReadingThread, setShowReadingThreadState] = useState<boolean>(
     () => searchParams.get(READING_THREAD_PARAM) === "1",
   );
@@ -187,15 +165,18 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   // only ever shows the non-default values (see `setLayoutMode` etc. below),
   // matching how `filters`'s "all" defaults are never written to the URL
   // either. Explore mode sends no roadmap params at all, so its request is
-  // byte-identical to every pre-existing caller of this endpoint.
+  // byte-identical to every pre-existing caller of this endpoint. Graph P2:
+  // `readerLevel` now reads from the single `filters.readerLevel` source of
+  // truth (see the `FILTER_KEYS` comment above for why the two former,
+  // independent states were consolidated).
   const fetchUrl = useMemo(() => {
     if (layoutMode !== "roadmap") return endpoint;
     const params = new URLSearchParams();
     params.set(LAYOUT_PARAM, "roadmap");
     for (const id of roadmapRootIds) params.append(ROADMAP_ROOT_PARAM, id.startsWith(WORK_PREFIX) ? id.slice(WORK_PREFIX.length) : id);
-    if (readerLevel !== "all") params.set(READER_LEVEL_PARAM, readerLevel);
+    if (filters.readerLevel !== "all") params.set("readerLevel", filters.readerLevel);
     return `${endpoint}?${params.toString()}`;
-  }, [endpoint, layoutMode, roadmapRootIds, readerLevel]);
+  }, [endpoint, layoutMode, roadmapRootIds, filters.readerLevel]);
 
   useEffect(() => {
     let ignore = false;
@@ -358,20 +339,13 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
-  const setReaderLevel = useCallback(
-    (level: ReaderLevelFilter) => {
-      setReaderLevelState(level);
-      const params = new URLSearchParams(searchParams.toString());
-      if (level === "all") params.delete(READER_LEVEL_PARAM);
-      else params.set(READER_LEVEL_PARAM, level);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams],
-  );
+  // Graph P2: reader-level narrowing is now `updateFilter("readerLevel", …)`
+  // (below) — the same generic FILTER_KEYS handler every other filter field
+  // already uses — rather than its own bespoke URL-sync callback; see the
+  // `FILTER_KEYS` comment above for why the two were consolidated.
 
   // Off-by-default reading-thread toggle (22.8 verifier finding): same
-  // URL-sync pattern as `setReaderLevel`/`setLayoutMode` above — only the
+  // URL-sync pattern as `updateFilter`/`setLayoutMode` above — only the
   // non-default (`true`) state is ever written to the URL.
   const setShowReadingThread = useCallback(
     (value: boolean) => {
@@ -536,6 +510,13 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
     () => (data ? [...new Set(data.nodes.map((n) => credibilityBandFor(n.credibilityScore)))].sort() : []),
     [data],
   );
+  // Graph P2 (data contract v2): concept-kind option list, restricted to
+  // kinds this data actually contains — same "options come from the FULL
+  // data, not the filtered set" rule every other filter list above follows.
+  const conceptKinds = useMemo(
+    () => (data ? CONCEPT_KINDS.filter((kind) => data.nodes.some((n) => n.kind === kind)) : []),
+    [data],
+  );
   const directConnections = useMemo(() => {
     if (!displayed || !selected) return [] as { node: GraphNode; link: GraphLink }[];
     const nodesById = new Map(displayed.nodes.map((node) => [node.id, node]));
@@ -613,8 +594,8 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               <label className="flex items-center gap-1">
                 <span className="text-[var(--color-text-muted)]">Reader level</span>
                 <select
-                  value={readerLevel}
-                  onChange={(e) => setReaderLevel(e.target.value as ReaderLevelFilter)}
+                  value={filters.readerLevel}
+                  onChange={(e) => updateFilter("readerLevel", e.target.value)}
                   className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
                 >
                   {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
@@ -910,6 +891,56 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
               </label>
             )}
 
+            {/* Graph P2 (data contract v2): reader-level narrowing as an
+                explore-mode FILTER — the roadmap-mode "Reader level" control
+                above scopes what the SERVER computes; this one narrows which
+                of the ALREADY-fetched nodes are shown, over the exact same
+                `filters.readerLevel`/URL key (see the `FILTER_KEYS` comment
+                for why they're one state, not two). Shown only in explore
+                mode so the two controls never render side by side saying the
+                same thing twice. */}
+            {layoutMode === "explore" && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Reader level</span>
+                <select
+                  value={filters.readerLevel}
+                  onChange={(e) => updateFilter("readerLevel", e.target.value)}
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  {(["all", ...READER_LEVELS] as ReaderLevelFilter[]).map((level) => (
+                    <option key={level} value={level}>
+                      {READER_LEVEL_LABEL[level]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {/* D-21-11 precedent: NOT labeled "Concept kind" — Playwright's
+                (and screen readers') accessible-name lookup is substring-
+                based, and this page's pre-existing NodeType filter is
+                already named "Kind" (an e2e contract, preserved verbatim
+                per this phase's own rule), so "Concept kind" would silently
+                resolve both selects for `getByLabel("Kind")`. "Concept
+                category" describes the same field without colliding. */}
+            {conceptKinds.length > 0 && (
+              <label className="flex items-center gap-1">
+                <span className="text-[var(--color-text-muted)]">Concept category</span>
+                <select
+                  value={filters.conceptKind}
+                  onChange={(e) => updateFilter("conceptKind", e.target.value)}
+                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
+                >
+                  <option value="all">All</option>
+                  {conceptKinds.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {conceptKindLabel(kind)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             {layoutMode === "roadmap" && (
               <label className="flex items-center gap-1">
                 <span className="text-[var(--color-text-muted)]">Stage</span>
@@ -980,128 +1011,6 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
         </>
       )}
     </div>
-  );
-}
-
-function EvidenceAnchors({ evidence }: { evidence: unknown }) {
-  const record = evidence && typeof evidence === "object" ? evidence as { sourceClaims?: { claim?: string; excerpt?: string }[]; targetClaims?: { claim?: string; excerpt?: string }[] } : null;
-  if (!record) return null;
-  const anchors = [...(record.sourceClaims ?? []), ...(record.targetClaims ?? [])].slice(0, 6);
-  if (!anchors.length) return null;
-  return <ul className="mt-3 space-y-2 border-l-2 border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]" aria-label="Grounded claim evidence">
-    {anchors.map((anchor, index) => <li key={index}><span className="font-medium text-[var(--color-text)]">{anchor.claim}</span>{anchor.excerpt ? <span> — “{anchor.excerpt}”</span> : null}</li>)}
-  </ul>;
-}
-
-function GraphInspector({
-  selected,
-  selectedLink,
-  connections,
-  onSelectNode,
-  onCloseNode,
-  onCloseLink,
-  allNodes = [],
-}: {
-  selected: GraphNode | null;
-  selectedLink: GraphLink | null;
-  connections: { node: GraphNode; link: GraphLink }[];
-  onSelectNode: (node: GraphNode) => void;
-  onCloseNode: () => void;
-  onCloseLink: () => void;
-  /** The FULL, unfiltered node set — used only to resolve a roadmap
-   *  annotation's `rootWorkIds` back to human-readable work titles for the
-   *  "why this, here" basis line (feature plan §2.4); never used to change
-   *  which node is selected. */
-  allNodes?: readonly GraphNode[];
-}) {
-  return (
-    <aside className={`max-h-[520px] overflow-y-auto rounded border border-[var(--color-border)] bg-[var(--color-background)] p-3 ${selected || selectedLink ? "app-panel-enter app-selected" : ""}`} aria-label="Graph inspector" data-graph-inspector>
-      {!selected && !selectedLink && <p className="text-sm text-[var(--color-text-muted)]">Select a graph node or a table row to inspect its source, access, and provenance. Select a link for relationship evidence.</p>}
-      {selected && (
-        <div>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-medium text-[var(--color-text)]">{selected.label}</p>
-              {selected.authors && <p className="text-sm text-[var(--color-text-muted)]">{selected.authors}</p>}
-            </div>
-            <button type="button" className="app-control text-xs underline" onClick={onCloseNode}>Close</button>
-          </div>
-          <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-            {TYPE_LABEL[selected.type]} · {STATE_META[selected.state].label}{selected.year ? ` · ${selected.year}` : ""}
-          </p>
-          {selected.authority && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Authority {selected.authority}{selected.credibilityScore != null ? ` · credibility ${Math.round(selected.credibilityScore * 100)}%` : ""}</p>}
-          {selected.supplementary && <p className="mt-2 rounded border border-[var(--color-credibility-warning)] px-2 py-1 text-xs text-[var(--color-text-muted)]">Supplementary public material — useful context, not stand-alone factual support.</p>}
-          {(selected.providers?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Providers: {selected.providers!.join(", ")}</p>}
-          {selected.sourceTextStatus && (
-            <div className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs">
-              <p className="font-medium text-[var(--color-text)]">Source access</p>
-              <p className="mt-1 text-[var(--color-text-muted)]">{sourceTextLabel(selected.sourceTextStatus, selected.accessStatus)}</p>
-              {selected.license && <p className="mt-1 text-[var(--color-text-muted)]">License evidence: {selected.license}</p>}
-              {selected.sourceUrl && <a href={selected.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block underline">open licensed source ↗</a>}
-            </div>
-          )}
-          {(selected.provenances?.length ?? 0) > 0 && <div className="mt-3 text-xs text-[var(--color-text-muted)]"><p className="font-medium text-[var(--color-text)]">Provenance</p><ul className="mt-1 space-y-1">{selected.provenances!.map((provenance) => <li key={`${provenance.runId}:${provenance.provider}`}>{provenance.provider} · inspection depth {provenance.inspectionDepth}{provenance.inspectedAt ? ` · ${new Date(provenance.inspectedAt).toLocaleDateString()}` : ""}</li>)}</ul></div>}
-          {selected.destination && (
-            <p className="mt-3">
-              <Link href={selected.destination} className="text-sm underline">
-                {selected.type === "work" ? "Open work" : "View Library entry"}
-              </Link>
-            </p>
-          )}
-          {selected.url && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-sm underline">open source record ↗</a>}
-          {selected.roadmap && (
-            <details className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs" data-graph-roadmap-disclosure>
-              <summary className="cursor-pointer font-medium text-[var(--color-text)]">Why this, here</summary>
-              <p className="mt-2 text-[var(--color-text-muted)]">
-                {selected.roadmap.reason} <span className="text-[var(--color-text-muted)]">({TIER_LABEL[selected.roadmap.tier]})</span>
-              </p>
-              <p className="mt-2 text-[var(--color-text-muted)]">{roadmapBasisLine(selected.roadmap, allNodes)}</p>
-              <p className="mt-2 italic text-[var(--color-text-muted)]">{selected.roadmap.checkpoint}</p>
-              {selected.roadmap.estimatedMinutes > 0 && (
-                <p className="mt-2 text-[var(--color-text-muted)]">Estimated reading time: {Math.round(selected.roadmap.estimatedMinutes / 60) || 1}h</p>
-              )}
-            </details>
-          )}
-          <div className="mt-4 border-t border-[var(--color-border)] pt-3">
-            <p className="text-xs font-medium text-[var(--color-text)]">Direct connections</p>
-            {connections.length === 0 ? <p className="mt-1 text-xs text-[var(--color-text-muted)]">No visible direct connections under the current filters.</p> : <ul className="mt-2 space-y-1.5">{connections.map(({ node, link }) => <li key={`${node.id}:${link.edgeType}`}><button type="button" onClick={() => onSelectNode(node)} className="app-control text-left text-xs underline underline-offset-2"><span className="font-medium">{node.label}</span> · {categoryMetaFor(link.category)?.label ?? edgeTypeLabel(link.edgeType)}</button></li>)}</ul>}
-          </div>
-        </div>
-      )}
-      {selectedLink && (() => {
-        // D-21-8/D-21-9 fix: an edge that carries a relationship_category
-        // (the classification/citation/resource-role/passage-annotation
-        // edges D-21-9 populates `category` for) is presented with the
-        // SAME glyph + label + qualitative confidence band the annotation
-        // sidebars use for that category (`CATEGORY_META`/`confidenceLabel`,
-        // via `RelationBadge` — the shared presentation primitive both
-        // surfaces now draw from), never a second, diverging label for the
-        // same underlying concept. An edge with no category (source-relation,
-        // discovery, and structural edges genuinely carry none) keeps the
-        // honest, undecorated edge-type-string fallback instead of a
-        // fabricated category.
-        const meta = categoryMetaFor(selectedLink.category);
-        return (
-          <div className={selected ? "mt-5 border-t border-[var(--color-border)] pt-4" : ""} data-graph-evidence>
-            <div className="flex items-start justify-between gap-2">
-              {meta ? (
-                <RelationBadge colorVar={meta.colorVar} glyph={meta.glyph} label={meta.label} />
-              ) : (
-                <p className="font-medium text-[var(--color-text)]">{edgeTypeLabel(selectedLink.edgeType)}</p>
-              )}
-              <button type="button" className="app-control text-xs underline" onClick={onCloseLink}>Close</button>
-            </div>
-            <p className="mt-1 text-sm text-[var(--color-text-muted)]">{selectedLink.explanation ?? "Relationship evidence is recorded with the source relation."}</p>
-            <p className="mt-2 text-xs text-[var(--color-text-muted)]" data-graph-link-confidence>
-              {meta ? `${confidenceLabel(selectedLink.confidence)} · ${Math.round(selectedLink.confidence * 100)}%` : `Confidence ${Math.round(selectedLink.confidence * 100)}%`}
-              {" · "}{selectedLink.directed === false ? "bidirectional" : "directed"}{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}
-            </p>
-            {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
-            {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
-          </div>
-        );
-      })()}
-    </aside>
   );
 }
 
@@ -1244,13 +1153,6 @@ function RoadmapProgressStrip({
       </div>
     </div>
   );
-}
-
-function sourceTextLabel(status: string, accessStatus?: string | null) {
-  if (status === "open_access_indexed") return "Open-access source text indexed from license-evidenced metadata.";
-  if (status === "open_access_available") return "Open-access source confirmed; its text was not automatically indexed.";
-  if (status === "retrieval_failed") return "Open-access source confirmed; automatic retrieval failed, so it remains metadata-only.";
-  return accessStatus === "open" ? "Open source record; no eligible source text has been indexed." : "Metadata only — Palimnote did not retrieve source text without license evidence.";
 }
 
 interface ExpansionPreview {
