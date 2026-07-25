@@ -2,7 +2,7 @@
 // bare `tsx` for its unit test (no Next.js/webpack path-alias resolution
 // available there — see `graphSceneScaling.test.ts`'s own doc comment).
 import { CATEGORY_META, type RelationshipCategory } from "../shared/annotationMeta";
-import { edgeTypeLabel, isDirectedEdgeType, type NodeType } from "./types";
+import { edgeFamilyFor, edgeTypeLabel, isDirectedEdgeType, type EdgeFamily, type NodeType } from "./types";
 
 /**
  * Phase 21.4/21.5 (D-21-3, D-21-4, D-21-9's UI half, and the direction-cue
@@ -248,4 +248,81 @@ export function screenSpaceLabelScale(pixelHeight: number, fovDegrees: number, v
   const safeFov = Number.isFinite(fovDegrees) && fovDegrees > 0 ? fovDegrees : 50;
   const vFov = (safeFov * Math.PI) / 180 / 2;
   return (2 * pixelHeight * Math.tan(vFov)) / safeViewport;
+}
+
+// ---------------------------------------------------------------------------
+// Graph P3 (scene redesign core): pure, unit-tested decisions for the new
+// node/link visual language, kept out of `KnowledgeGraph3D.tsx` for the same
+// reason as everything else in this file — WebGL internals aren't
+// E2E-assertable, so the DECISION a mesh mutation applies lives here as a
+// plain function of data, proven by `graphSceneScaling.test.ts`.
+// ---------------------------------------------------------------------------
+
+/** Authority band (A best .. E worst) -> halo emissive intensity. A node
+ *  with neither an authority band nor a raw credibility score has never been
+ *  assessed at all — returns 0 (no halo), never a fabricated baseline glow,
+ *  matching the contract's "absent means no data" rule for credibility. */
+const AUTHORITY_INTENSITY: Record<string, number> = { A: 1, B: 0.75, C: 0.5, D: 0.3, E: 0.15 };
+
+export function authorityEmissiveIntensity(authority: string | null | undefined, credibilityScore: number | null | undefined): number {
+  if (authority && Object.prototype.hasOwnProperty.call(AUTHORITY_INTENSITY, authority)) return AUTHORITY_INTENSITY[authority];
+  if (credibilityScore != null && Number.isFinite(credibilityScore)) return 0.15 + Math.max(0, Math.min(1, credibilityScore)) * 0.85;
+  return 0;
+}
+
+/** 0-4 lit segments on the credibility ring — `null`/absent stays 0 (an
+ *  unlit ring), never a fabricated middling band for a node nobody has
+ *  actually assessed. A present score always lights at least 1 segment
+ *  (even a low score is a real assessment, distinct from "no data"). */
+export function credibilitySegmentCount(score: number | null | undefined): number {
+  if (score == null || !Number.isFinite(score)) return 0;
+  return Math.max(1, Math.min(4, Math.ceil(Math.max(0, Math.min(1, score)) * 4)));
+}
+
+/** Curvature per edge family (plan's link-language table): structural edges
+ *  (a work's own outline, editions/translations of itself) stay perfectly
+ *  straight; reference/influence/prerequisite bow increasingly; opposition
+ *  bows the most AND renders dashed (`edgeIsDashed` below) so a disagreement
+ *  reads as visually distinct from every other relation, not just a
+ *  different curve amount. Prerequisite curves the OPPOSITE direction
+ *  (negative) so a prerequisite chain doesn't visually blend with a
+ *  same-signed reference/influence bow running the other way through a
+ *  dense scene. */
+const EDGE_FAMILY_CURVATURE: Record<EdgeFamily, number> = {
+  structural: 0,
+  reference: 0.12,
+  influence: 0.2,
+  prerequisite: -0.2,
+  opposition: 0.3,
+};
+
+export function edgeCurvature(edgeType: string, category?: string | null): number {
+  return EDGE_FAMILY_CURVATURE[edgeFamilyFor(edgeType, category)];
+}
+
+export function edgeIsDashed(edgeType: string, category?: string | null): boolean {
+  return edgeFamilyFor(edgeType, category) === "opposition";
+}
+
+/** Directional-particle COUNT scales with the edge's own confidence
+ *  (1 low .. 3 high) — a separate decision from `edgeDirectionCue`'s
+ *  particles-vs-arrow-vs-none choice above (which governs WHETHER a moving
+ *  cue is used at all); this only governs how many particles ride it once
+ *  particles are the chosen cue. Confidence is stored 0-1 (`GraphLink.confidence`). */
+export function particleCountForConfidence(confidence: number): number {
+  const safe = Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.5;
+  return Math.max(1, Math.min(3, Math.round(safe * 3)));
+}
+
+/** Reader-level orbital beads (1-4, one per `READER_LEVELS` value the node's
+ *  role data applies at) are a CLOSE-distance-only accent — legible detail
+ *  that would just be visual noise once the camera pulls back far enough
+ *  that the node itself is barely more than a labeled dot. Deliberately
+ *  tighter than `SECONDARY_LABEL_HIDE_DISTANCE`: the secondary text line is
+ *  still readable at that distance, but four tiny orbiting spheres are not. */
+export const READER_LEVEL_BEAD_VISIBLE_DISTANCE = 200;
+
+export function readerLevelBeadsVisible(distance: number): boolean {
+  const safeDistance = Number.isFinite(distance) && distance > 0 ? distance : REFERENCE_CAMERA_DISTANCE;
+  return safeDistance < READER_LEVEL_BEAD_VISIBLE_DISTANCE;
 }

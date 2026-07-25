@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import {
+  READER_LEVEL_BEAD_VISIBLE_DISTANCE,
   REFERENCE_CAMERA_DISTANCE,
   SECONDARY_LABEL_HIDE_DISTANCE,
+  authorityEmissiveIntensity,
+  credibilitySegmentCount,
+  edgeCurvature,
   edgeDirectionCue,
+  edgeIsDashed,
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
@@ -10,6 +15,8 @@ import {
   nodeScaleForDistance,
   nodeSecondaryLabelVisible,
   nodeSizeFactorForLayout,
+  particleCountForConfidence,
+  readerLevelBeadsVisible,
   screenSpaceLabelScale,
 } from "./graphSceneScaling";
 
@@ -224,5 +231,72 @@ for (const badFov of [0, -5, Number.NaN]) {
   const result = screenSpaceLabelScale(13, badFov, 800);
   assert.ok(Number.isFinite(result) && result > 0, `fov ${badFov} must still yield a finite, positive scale`);
 }
+
+// --- Graph P3: authorityEmissiveIntensity / credibilitySegmentCount ------
+
+// Never-assessed (neither authority nor score) -> no halo at all, not a
+// fabricated baseline glow.
+assert.equal(authorityEmissiveIntensity(null, null), 0);
+assert.equal(authorityEmissiveIntensity(undefined, undefined), 0);
+// Authority band takes precedence and is monotonically decreasing A->E.
+assert.equal(authorityEmissiveIntensity("A", null), 1);
+assert.equal(authorityEmissiveIntensity("E", null), 0.15);
+assert.ok(authorityEmissiveIntensity("A", null) > authorityEmissiveIntensity("B", null));
+assert.ok(authorityEmissiveIntensity("B", null) > authorityEmissiveIntensity("C", null));
+assert.ok(authorityEmissiveIntensity("C", null) > authorityEmissiveIntensity("D", null));
+assert.ok(authorityEmissiveIntensity("D", null) > authorityEmissiveIntensity("E", null));
+// No authority band, but a raw score present -> scaled fallback, monotonic
+// in the score and always > 0 (a recorded score, however low, IS data).
+assert.ok(authorityEmissiveIntensity(null, 0) > 0);
+assert.ok(authorityEmissiveIntensity(null, 1) > authorityEmissiveIntensity(null, 0.2));
+// An unrecognized authority string degrades to the score fallback rather
+// than crashing on an unknown key.
+assert.equal(authorityEmissiveIntensity("Z", 0.5), authorityEmissiveIntensity(null, 0.5));
+
+assert.equal(credibilitySegmentCount(null), 0, "no score -> no lit segments, not a fabricated band");
+assert.equal(credibilitySegmentCount(undefined), 0);
+assert.equal(credibilitySegmentCount(0), 1, "even a low score is real data -> at least 1 segment lit");
+assert.equal(credibilitySegmentCount(1), 4, "a perfect score lights every segment");
+assert.equal(credibilitySegmentCount(0.5), 2);
+for (const bad of [-1, 2, Number.NaN]) {
+  const n = credibilitySegmentCount(bad);
+  assert.ok(n >= 0 && n <= 4 && Number.isFinite(n), `out-of-range score ${bad} must still clamp into 0..4`);
+}
+
+// --- Graph P3: edgeCurvature / edgeIsDashed -------------------------------
+
+assert.equal(edgeCurvature("outline_section"), 0, "structural edges stay straight");
+assert.equal(edgeCurvature("cites"), 0.12, "reference family");
+assert.equal(edgeCurvature("influences"), 0.2, "influence family");
+assert.equal(edgeCurvature("is_prerequisite_for"), -0.2, "prerequisite curves the opposite direction");
+assert.equal(edgeCurvature("disagrees_with"), 0.3, "opposition bows the most");
+assert.equal(edgeIsDashed("disagrees_with"), true, "opposition is the only dashed family");
+assert.equal(edgeIsDashed("cites"), false);
+assert.equal(edgeIsDashed("influences"), false);
+assert.equal(edgeIsDashed("outline_section"), false);
+
+// --- Graph P3: particleCountForConfidence ---------------------------------
+
+assert.equal(particleCountForConfidence(0), 1, "floors at 1 even for zero confidence -- a directed edge that IS shown as particles always has at least one");
+assert.equal(particleCountForConfidence(1), 3, "ceilings at 3 for full confidence");
+assert.ok(particleCountForConfidence(0.5) >= 1 && particleCountForConfidence(0.5) <= 3);
+for (const bad of [-1, 2, Number.NaN]) {
+  const n = particleCountForConfidence(bad);
+  assert.ok(n >= 1 && n <= 3, `out-of-range confidence ${bad} must still clamp into 1..3`);
+}
+// Monotonic: higher confidence never yields fewer particles.
+{
+  const samples = [0, 0.2, 0.4, 0.6, 0.8, 1].map(particleCountForConfidence);
+  for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1], "particle count must be monotonic non-decreasing in confidence");
+}
+
+// --- Graph P3: readerLevelBeadsVisible ------------------------------------
+
+assert.equal(readerLevelBeadsVisible(1), true, "close camera -> beads visible");
+assert.equal(readerLevelBeadsVisible(READER_LEVEL_BEAD_VISIBLE_DISTANCE - 1), true);
+assert.equal(readerLevelBeadsVisible(READER_LEVEL_BEAD_VISIBLE_DISTANCE), false, "beads hide at/beyond the threshold");
+assert.equal(readerLevelBeadsVisible(10000), false, "far camera -> beads hidden (visual-noise avoidance)");
+assert.ok(READER_LEVEL_BEAD_VISIBLE_DISTANCE < SECONDARY_LABEL_HIDE_DISTANCE, "beads must hide before the secondary label line does -- tighter detail hides first");
+assert.equal(readerLevelBeadsVisible(Number.NaN), false, "an invalid distance degrades to the reference distance, which is past the bead threshold");
 
 console.log("graphSceneScaling.test.ts: all assertions passed");

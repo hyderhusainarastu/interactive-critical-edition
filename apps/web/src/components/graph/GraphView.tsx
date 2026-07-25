@@ -159,6 +159,10 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   );
   const graphWorkspaceRef = useRef<HTMLDivElement>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement>(null);
+  // Graph P3: populated by KnowledgeGraph3D once its bloom composer exists
+  // — see exportPng()'s own comment for why this needs calling before a PNG
+  // export reads pixels from the canvas.
+  const graphExportRef = useRef<(() => void) | null>(null);
 
   // The internal fetch URL is the one place `layout`/`roadmapRoot`/
   // `readerLevel` actually reach the server — the browser's own address bar
@@ -369,6 +373,12 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   function exportPng() {
     const canvas = graphWorkspaceRef.current?.querySelector("canvas");
     if (!canvas) return;
+    // Graph P3: render the bloom composer fresh immediately before reading
+    // pixels — see `graphExportRef`'s own doc comment for why this call is
+    // necessary (a WebGL canvas without preserveDrawingBuffer can otherwise
+    // hand toDataURL a stale/cleared buffer once called outside the
+    // library's own animation-frame render).
+    graphExportRef.current?.();
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = "palimnote-cross-library-graph.png";
@@ -712,6 +722,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                     nextUpNodeId={nextUpNode?.id ?? null}
                     onStageHeaderClick={(stage) => updateFilter("stage", filters.stage === stage ? "all" : stage)}
                     showReadingThread={showReadingThread}
+                    exportRef={graphExportRef}
                   />
                   <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} allNodes={data.nodes} />
                 </div>
