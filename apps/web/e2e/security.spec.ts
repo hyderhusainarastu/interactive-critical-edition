@@ -129,4 +129,36 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
       await expect(page).toHaveURL(/\/login(\?|$)/, { timeout: 10000 });
     }
   });
+
+  // Workstream H (v.5): /admin-dash is a SEPARATE credential-gated area,
+  // entirely independent of the normal user session and `requireSession()`
+  // above — a caller with no `admin_dash` cookie at all (never mind no
+  // Palimnote account) must get 404, never a login redirect that would
+  // reveal the area exists, on every guarded page. Only the login page
+  // itself is intentionally reachable unauthenticated (200) — that IS the
+  // design, not a leak, since it carries no admin content.
+  test("/admin-dash's guarded pages 404 for a caller with no admin-dash session, while its login page stays reachable", async ({ page }) => {
+    for (const path of ["/admin-dash", "/admin-dash/users", "/admin-dash/users/00000000-0000-0000-0000-000000000000", "/admin-dash/feedback"]) {
+      const res = await page.request.get(path);
+      expect(res.status(), `GET ${path}`).toBe(404);
+    }
+
+    const loginPage = await page.request.get("/admin-dash/login");
+    expect(loginPage.status()).toBe(200);
+  });
+
+  test("a bad admin-dash login attempt never leaks whether the username or password was wrong", async ({ page }) => {
+    const res = await page.request.post("/api/admin-dash/login", {
+      form: { username: "not-a-real-admin", password: "not-a-real-password" },
+      maxRedirects: 0,
+    });
+    expect([302, 303]).toContain(res.status());
+    const location = res.headers()["location"] ?? "";
+    expect(location).toContain("/admin-dash/login");
+    expect(location).toContain("error=1");
+
+    // Still no session was granted — the guarded tree stays 404.
+    const overview = await page.request.get("/admin-dash");
+    expect(overview.status()).toBe(404);
+  });
 });
