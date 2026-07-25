@@ -34,8 +34,8 @@ import {
   termOccurrences,
   termVariants,
   textBlocks,
-  userDeletionArchives,
   usageEvents,
+  userDeletionArchives,
   users,
   workIdentities,
   works,
@@ -111,6 +111,17 @@ export async function createVerifiedTestUser(email: string, password: string) {
  * (`work:<hash>` from `apps/worker/src/analyze.ts`'s `identity.key`) never
  * match either pattern, so this sweep can never touch real canonical data
  * even if this helper were ever pointed at a non-test database.
+ *
+ * Workstream G (v.5): `usage_event`, `user_deletion_archive`, and
+ * `feedback` ALSO don't cascade from `users` — `usage_event`/
+ * `user_deletion_archive.user_id` are deliberately not foreign keys at all
+ * (both need to survive the very account deletion this helper simulates in
+ * some specs), and `feedback.user_id` is `set null` rather than cascade (a
+ * submitted bug report should outlive the account that filed it in
+ * production). All three are swept by user id BEFORE the user row is
+ * deleted below — `feedback` specifically has to run first, since deleting
+ * the user first would `set null` its `user_id` and this sweep would no
+ * longer be able to find those rows by id at all.
  */
 const TEST_WORK_IDENTITY_KEY_PATTERN = /^work:(test|graph-test):/;
 const TEST_LEARNING_RESOURCE_KEY_PATTERN = /^(title:|seeded-lr-)/;

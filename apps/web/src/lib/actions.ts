@@ -60,6 +60,13 @@ const registerSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.email(),
   password: z.string().min(8).max(200),
+  // Signup consent (Workstream G, v.5): the policy checkbox is required —
+  // `z.literal(true)` rejects anything else (unchecked submits no value at
+  // all, which coerces to `false` below, not `undefined`) — the optional
+  // data-sharing checkbox defaults unchecked/false, matching its own
+  // off-by-default contract on the account profile page's toggle.
+  policyAccepted: z.literal(true),
+  dataSharingEnabled: z.boolean(),
 });
 
 export async function registerAction(formData: FormData) {
@@ -84,6 +91,8 @@ export async function registerAction(formData: FormData) {
     name: formData.get("name"),
     email: formData.get("email"),
     password: formData.get("password"),
+    policyAccepted: formData.get("policyAccepted") === "on",
+    dataSharingEnabled: formData.get("dataSharingEnabled") === "on",
   });
 
   if (!parsed.success) {
@@ -107,7 +116,13 @@ export async function registerAction(formData: FormData) {
     redirect("/signup?error=1");
   }
 
-  await registerUser(parsed.data);
+  await registerUser({
+    name: parsed.data.name,
+    email: parsed.data.email,
+    password: parsed.data.password,
+    policyAccepted: parsed.data.policyAccepted,
+    dataSharingEnabled: parsed.data.dataSharingEnabled,
+  });
   redirect("/verify-email?sent=1");
 }
 

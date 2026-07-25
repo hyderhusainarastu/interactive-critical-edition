@@ -559,4 +559,41 @@ test.describe("Phase 23.2 accessibility completion", () => {
     const activeElementIsBody = await page.evaluate(() => document.activeElement === document.body);
     expect(activeElementIsBody, "focus should not silently fall back to <body> once the Undo control unmounts").toBe(false);
   });
+
+  // Workstream G (v.5): the new /account/* pages had never been scanned.
+  // Uses THIS describe block's own `zoomLogin`/`ZOOM_EMAIL` fixture, not the
+  // file-level `login`/`EMAIL` — those belong to the sibling
+  // "Accessibility sweep (Phase 19.8)" describe above and its `beforeAll`
+  // only runs when a test from THAT block is selected. Calling the wrong
+  // one silently logs in with a user that was never created whenever these
+  // tests are run in isolation (e.g. `-g "account"`) — a real bug this
+  // sweep's own live run caught.
+  test("account/profile", async ({ page }) => {
+    await zoomLogin(page);
+    await page.goto("/account/profile");
+    await expect(page.getByRole("heading", { name: "Profile" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/profile — delete-account danger zone expanded", async ({ page }) => {
+    await zoomLogin(page);
+    await page.goto("/account/profile");
+    await page.getByRole("button", { name: "Delete my account" }).click();
+    await expect(page.getByLabel(/Type your email/)).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/usage", async ({ page }) => {
+    await zoomLogin(page);
+    await page.goto("/account/usage");
+    await expect(page.getByRole("heading", { name: "Documents uploaded" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
+
+  test("account/plan", async ({ page }) => {
+    await zoomLogin(page);
+    await page.goto("/account/plan");
+    await expect(page.getByRole("heading", { name: "Beta (free)" })).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+  });
 });

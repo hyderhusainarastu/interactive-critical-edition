@@ -116,4 +116,17 @@ test.describe("Authorization / IDOR matrix (Phase 7)", () => {
     expect(libraryRes.status(), "anon POST /api/library/:id/status").toBe(401);
     await anon.dispose();
   });
+
+  // Workstream G (v.5): /account/* has no auth check of its own — it
+  // inherits `requireSession()` from `(app)/layout.tsx`, same as every
+  // other route under `(app)`. This proves that inheritance actually holds
+  // for the new route tree, using a fresh (unauthenticated) browser
+  // context so the redirect is followed exactly as a real signed-out
+  // visitor would experience it.
+  test("/account and its subpages redirect an unauthenticated visitor to login", async ({ page }) => {
+    for (const path of ["/account", "/account/profile", "/account/usage", "/account/plan"]) {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/login(\?|$)/, { timeout: 10000 });
+    }
+  });
 });

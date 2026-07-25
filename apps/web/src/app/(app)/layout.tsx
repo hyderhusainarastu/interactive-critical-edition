@@ -21,7 +21,7 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await requireSession();
-  const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, session.user.id)).limit(1);
+  const [me] = await db.select({ email: users.email, name: users.name, image: users.image }).from(users).where(eq(users.id, session.user.id)).limit(1);
   const admin = isAdminEmail(me?.email);
   const preferences = await getWorkspacePreferences(session.user.id);
   const readerLevel = await getUserReaderLevel(session.user.id);
@@ -29,7 +29,7 @@ export default async function AppLayout({
   return (
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
-      <AppShell email={session.user.email} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
+      <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
     </>
   );
 }

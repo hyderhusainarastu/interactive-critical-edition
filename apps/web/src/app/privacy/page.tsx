@@ -45,7 +45,8 @@ const sections: PolicySection[] = [
         We record content-free service events such as page-visit counts, session starts, uploads, chat-message counts,
         and feedback submissions. These records help us understand reliability and how the beta is used. Page paths
         and timestamps are retained; page contents, note text, and message text are not copied into these event
-        records.
+        records. These event records are not tied to your account by a removable link, so they may be retained after
+        account deletion.
       </p>
     ),
   },
@@ -93,9 +94,10 @@ const sections: PolicySection[] = [
           notes, roadmap, and bibliography.
         </p>
         <p>
-          We may retain a content-free aggregate record after deletion so platform totals remain accurate, such as
-          when the account was created and deleted and aggregate document or activity counts. It does not preserve
-          uploaded text, notes, or conversation transcripts.
+          We may retain a content-free aggregate record after deletion — including basic account identifiers (your
+          name and email) — so platform totals remain accurate, such as when the account was created and deleted and
+          aggregate document or activity counts. It does not preserve uploaded text, notes, or conversation
+          transcripts.
         </p>
       </>
     ),

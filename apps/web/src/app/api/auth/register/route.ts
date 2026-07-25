@@ -8,6 +8,12 @@ const registerSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.email(),
   password: z.string().min(8).max(200),
+  // Signup consent (Workstream G, v.5) — mirrors `actions.ts`'s
+  // `registerAction` schema exactly, so this alternate JSON entry point
+  // can't be used to create an account that skips the required policy
+  // checkbox. Data sharing stays optional/off-by-default here too.
+  policyAccepted: z.literal(true),
+  dataSharingEnabled: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {

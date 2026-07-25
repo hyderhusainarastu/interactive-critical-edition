@@ -16,6 +16,17 @@ export async function registerUser(params: {
   name: string;
   email: string;
   password: string;
+  /** Signup consent (Workstream G, v.5): the required policy checkbox.
+   *  `registerSchema` requires this to be `true` before it ever reaches
+   *  here — see `actions.ts`/`api/auth/register/route.ts` — so this stamps
+   *  `policyAcceptedAt` whenever the caller has already validated consent.
+   *  Left optional (default `false`) so any other caller of this function
+   *  doesn't silently start claiming an acceptance that never happened. */
+  policyAccepted?: boolean;
+  /** The optional, unchecked-by-default data-sharing opt-in (plan's
+   *  "Research data sharing is your choice" — same field the account
+   *  profile page's toggle updates later). */
+  dataSharingEnabled?: boolean;
 }) {
   const email = params.email.toLowerCase();
 
@@ -30,7 +41,13 @@ export async function registerUser(params: {
   if (existing) return;
 
   const passwordHash = await bcrypt.hash(params.password, 12);
-  await db.insert(users).values({ name: params.name, email, passwordHash });
+  await db.insert(users).values({
+    name: params.name,
+    email,
+    passwordHash,
+    policyAcceptedAt: params.policyAccepted ? new Date() : null,
+    dataSharingEnabled: params.dataSharingEnabled ?? false,
+  });
 
   const { raw, hash } = generateToken();
   await db.insert(verificationTokens).values({
