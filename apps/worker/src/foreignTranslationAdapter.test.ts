@@ -30,7 +30,10 @@ describe("createForeignTranslationAdapter", () => {
   });
 
   it("is unavailable without an OpenAI key", () => {
-    const adapter = createForeignTranslationAdapter({ client: new OpenAIResponsesClient(undefined) });
+    // Explicit empty string, not undefined: OpenAIResponsesClient's constructor default-parameters
+    // to process.env.OPENAI_API_KEY when passed undefined, which would silently pick up a real key
+    // in any environment where one is configured (as this worker's .env intentionally does).
+    const adapter = createForeignTranslationAdapter({ client: new OpenAIResponsesClient("") });
     expect(adapter.available).toBe(false);
   });
 
