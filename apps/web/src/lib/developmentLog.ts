@@ -34,6 +34,7 @@ export const developmentLog = [
       "Removed user-facing processing cost data while keeping analysis available without monetary figures.",
       "Gave Ask Library conversations a guided greeting with suggested questions, thinking and reply cues with optional sound, day-grouped messages, and a way to switch between past conversations.",
       "Added a feedback option to every page footer — report a bug, share an idea, or send praise without leaving the page.",
+      "Rebuilt the Visualization map: a plate-style backdrop with glowing emphasis, distinct shapes for works, people, and concepts, reading-state and credibility cues, curved connection lines, a concepts focus mode, and an equally capable sortable table view.",
     ],
   },
   {
