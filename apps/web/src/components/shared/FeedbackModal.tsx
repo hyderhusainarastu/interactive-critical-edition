@@ -55,6 +55,7 @@ export function FeedbackTrigger({
     <button
       type="button"
       data-sound="click"
+      data-feedback-trigger
       className={className}
       onClick={(event) => window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: event.currentTarget }))}
     >

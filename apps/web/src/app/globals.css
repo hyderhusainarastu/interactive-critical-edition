@@ -40,6 +40,27 @@
   --color-surface-strong-fg: #ffffff;
   --color-surface-strong-fg-soft: #e9e3d9;
 
+  /* D-23-53: a dedicated, explicitly-named pair for the Visualization
+     toolbar's "selected" pill buttons (Roadmap/Explore, Focus mode),
+     following the same split-token precedent as --color-status-highlight-text
+     and --color-beta-badge below. The underlying values are the already-
+     verified --color-surface-strong/-fg pair (11.66:1 light, 5.27:1 dark on
+     white) — the defect here was never the color choice, it's that plain
+     `.app-selected` (below) is an unlayered rule and always wins its
+     `background` declaration over ANY Tailwind arbitrary-value utility
+     class (Tailwind utilities live in `@layer utilities`; unlayered rules
+     beat layered ones regardless of specificity/source order), so pairing
+     `.app-selected` with `bg-[var(--color-surface-strong)]
+     text-[var(--color-surface-strong-fg)]` silently rendered white text on
+     `.app-selected`'s own pale tint instead (1.24:1, WCAG AA failure).
+     These aliases are consumed only via `[data-toolbar-selected]` (also
+     below `.app-selected` in this file, so it wins the background/color
+     tie by source order) — scoped narrowly so the many OTHER
+     `.app-selected` users (Library rows, Roadmap cards, the upload
+     dropzone) are untouched. */
+  --color-toolbar-selected-bg: var(--color-surface-strong);
+  --color-toolbar-selected-fg: var(--color-surface-strong-fg);
+
   /* Functional accents reserved specifically for credibility alerting
      (plan §36 11.2) — deliberately more saturated than the rest of the
      warm palette above, scoped to this one purpose rather than a general
@@ -488,6 +509,12 @@ body {
 .nav:hover::after, .nav:focus-visible::after, .nav[aria-current="page"]::after { transform: scaleX(1); }
 .app-shimmer { background: linear-gradient(100deg, var(--color-surface) 30%, color-mix(in srgb, var(--color-background) 72%, white) 50%, var(--color-surface) 70%); }
 .app-selected { border-inline-start: 3px solid var(--color-highlight); background: color-mix(in srgb, var(--color-highlight) 10%, var(--color-surface)); padding-inline-start: calc(.5rem + var(--depth-near)); }
+/* D-23-53: deliberately placed AFTER `.app-selected` — same (unlayered,
+   0,1,0) specificity, so this wins the `background`/`color` declarations
+   it shares with that rule purely by later source order, without needing
+   `!important` or a higher-specificity selector that could leak into
+   `.app-selected`'s other combinations. See the token comment above. */
+[data-toolbar-selected] { background: var(--color-toolbar-selected-bg); color: var(--color-toolbar-selected-fg); }
 .app-card {
   border: 1px solid var(--color-border);
   background: var(--gradient-surface);
@@ -643,6 +670,27 @@ body {
 }
 .app-control:hover { border-color: var(--color-accent-umber); }
 .app-control:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-ink) 18%, transparent); }
+
+/* D-23-54: `FeedbackTrigger` (Workstream J) is mounted, unstyled beyond a
+   `className` prop, in TWO footers with two different surrounding CSS
+   environments — `AppFooter`'s plain `.app-control` (no explicit sizing)
+   and the public `SiteFooter`'s `.pal-site nav button` reset (font-size:
+   11px, padding: 0), which together rendered the button at 16x54px, well
+   under the 44x44 touch-target floor. A single unscoped rule here (rather
+   than duplicating it once per footer, or in scoped `site-theme.css`)
+   covers both: `.pal-site nav button` never sets `display`/`min-height`/
+   `min-width`/`align-items`/`justify-content`, so there's no property
+   conflict or specificity fight to win — this rule's declarations simply
+   apply alongside it, growing the invisible hit area without changing the
+   button's font/color/text styling in either footer. */
+[data-feedback-trigger] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .app-reveal[data-reveal-ready="true"] { opacity: 0; transform: translateY(10px); }
   .app-reveal[data-revealed="true"] { animation: app-scroll-reveal .36s var(--spring-gentle) both; animation-delay: calc(var(--reveal-index, 0) * 45ms); }

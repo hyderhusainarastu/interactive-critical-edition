@@ -578,7 +578,8 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setLayoutMode("roadmap")}
                 aria-pressed={layoutMode === "roadmap"}
-                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "roadmap" ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                data-toolbar-selected={layoutMode === "roadmap" ? "" : undefined}
+                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "roadmap" ? "app-selected" : "text-[var(--color-text-muted)]"}`}
               >
                 Roadmap
               </button>
@@ -586,7 +587,8 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                 type="button"
                 onClick={() => setLayoutMode("explore")}
                 aria-pressed={layoutMode === "explore"}
-                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "explore" ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                data-toolbar-selected={layoutMode === "explore" ? "" : undefined}
+                className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${layoutMode === "explore" ? "app-selected" : "text-[var(--color-text-muted)]"}`}
               >
                 Explore
               </button>
@@ -678,7 +680,8 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                           type="button"
                           onClick={() => setFocusMode(mode)}
                           aria-pressed={focusMode === mode}
-                          className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${focusMode === mode ? "app-selected bg-[var(--color-surface-strong)] text-[var(--color-surface-strong-fg)]" : "text-[var(--color-text-muted)]"}`}
+                          data-toolbar-selected={focusMode === mode ? "" : undefined}
+                          className={`app-control app-press rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide ${focusMode === mode ? "app-selected" : "text-[var(--color-text-muted)]"}`}
                         >
                           {FOCUS_MODE_LABEL[mode]}
                         </button>
