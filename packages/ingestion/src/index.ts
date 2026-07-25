@@ -37,6 +37,14 @@ export {
   type CitationSourceInput,
 } from "./parsers/citations";
 export {
+  recognizeClassicalReference,
+  isLocusDominated,
+  BEKKER_WORK_RANGES,
+  type ClassicalAuthor,
+  type ClassicalReferenceMatch,
+  type BekkerWorkRange,
+} from "./parsers/classicalReferences";
+export {
   extractAuthorApparatus,
   type AuthorApparatusKind,
   type ApparatusBlockInput,

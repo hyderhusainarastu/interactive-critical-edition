@@ -68,6 +68,16 @@ export async function resolveCitation(
   // The actual provider calls below still always use `cleaned` — only
   // classification looks at `rawText`.
   const classificationText = opts.rawText ?? cleaned;
+
+  // Classical-citation backstop (belt-and-braces — see `types.ts`'s
+  // `looksClassical` doc comment for why this duplicates a small check
+  // rather than depending on `@ice/ingestion`). By the time a query reaches
+  // here, the extraction gate and the worker's dedicated classical-
+  // resolution branch should already have intercepted anything classical;
+  // this guarantees `resolveCitation` never spends a live provider call on
+  // a Bekker/Stephanus locus citation even so.
+  if (classifyCitationForm(classificationText) === "classical") return null;
+
   for (const source of orderSources(classificationText, sources)) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);

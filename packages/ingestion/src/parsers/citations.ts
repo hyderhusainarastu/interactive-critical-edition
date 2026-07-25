@@ -1,3 +1,5 @@
+import { isLocusDominated, recognizeClassicalReference, type ClassicalReferenceMatch } from "./classicalReferences";
+
 /**
  * Heuristic citation extraction (plan §10 step 6) — the cheap first
  * stage of the two-stage analysis pipeline. Pattern matching, not a
@@ -12,6 +14,15 @@
  * citation style, and doesn't attempt PDF layout analysis. Irregular
  * styles are where the plan's optional LLM-assisted extraction would
  * help later; the regex pass is the always-on, zero-cost baseline.
+ *
+ * Classical (Bekker/Stephanus) citations are a special case, handled by
+ * `classicalReferences.ts` and gated in at the two fallback sites below
+ * (`extractCitationMentions`'s bibliography branch and its footnote/
+ * endnote no-match fallback): a footnote citing Aristotle by locus number
+ * alone (no reference-list entry is possible — the text predates any
+ * catalogue) previously fell through this file's generic ">= 8 chars"
+ * fallback and was persisted as a junk Library row. See that module's doc
+ * comment for the full recognition design.
  */
 
 export type CitationKind = "reference" | "inline";
@@ -49,6 +60,13 @@ export interface RawCitation {
   sourceType?: CitationSourceType;
   parserConfidence?: number;
   anchor?: CitationAnchor;
+  /** Set only when `recognizeClassicalReference` identified this as a
+   *  Bekker/Stephanus primary-source citation (Aristotle/Plato). Consumed
+   *  immediately by `createCitationLibraryProjection` at extraction time —
+   *  never persisted to the `citation` row itself; `resolveCitationMetadata`
+   *  re-derives it later by re-running the recognizer on the stored
+   *  `rawText`, so there is no migration and no drift risk between the two. */
+  classical?: ClassicalReferenceMatch;
 }
 
 const SECTION_HEADING =
@@ -366,8 +384,16 @@ export function extractCitationMentions(
     // "Nicomachean Ethics"). Foot/endnotes can contain several citations, so
     // they still use the reference parser below.
     if (source.sourceType === "bibliography") {
-      const query = cleanQuery(source.text);
-      if (query.length >= 3) add(source, { text: source.text.trim(), query, kind: "reference" });
+      const classical = recognizeClassicalReference(source.text);
+      if (classical) {
+        add(source, { text: source.text.trim(), query: classical.query, kind: "reference", classical });
+      } else if (!isLocusDominated(source.text)) {
+        const query = cleanQuery(source.text);
+        if (query.length >= 3) add(source, { text: source.text.trim(), query, kind: "reference" });
+      }
+      // else: locus-dominated (junk that stripped to almost no prose, e.g. a
+      // corrupted Bekker citation) but no specific work could be identified —
+      // suppressed entirely rather than kept as an unresolvable junk row.
       continue;
     }
 
@@ -395,10 +421,22 @@ export function extractCitationMentions(
         // A structural footnote/endnote entry is itself evidence even when it
         // lacks a four-digit year or uses a catalog style the generic
         // heuristic does not recognize. Never manufacture metadata: preserve
-        // it verbatim as a low-confidence lookup candidate instead.
+        // it verbatim as a low-confidence lookup candidate instead — UNLESS
+        // it's recognizably a classical (Bekker/Stephanus) locus citation
+        // (routed to the canonical Aristotle/Plato Library entry instead of
+        // a junk fallback row), or it's locus-dominated junk with no real
+        // prose content and no identifiable work (suppressed entirely; the
+        // real production case this closes: "Needs bibliographic resolution
+        // — Af?;7.8.1151a20-8.", a corrupted abbreviation plus a Bekker
+        // number that used to clear the ">= 8 chars" bar below trivially).
         if (segmentCandidates.length === 0) {
-          const query = cleanQuery(segment);
-          if (query.length >= 8) add(source, { text: segment.trim(), query, kind: "reference" });
+          const classical = recognizeClassicalReference(segment);
+          if (classical) {
+            add(source, { text: segment.trim(), query: classical.query, kind: "reference", classical });
+          } else if (!isLocusDominated(segment)) {
+            const query = cleanQuery(segment);
+            if (query.length >= 8) add(source, { text: segment.trim(), query, kind: "reference" });
+          }
         }
       }
       continue;

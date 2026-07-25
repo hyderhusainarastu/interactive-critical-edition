@@ -156,4 +156,93 @@ describe.skipIf(!hasDb)("Phase 17 — Vice and Reason citation integrity", () =>
     expect(new Set(targets.map((target) => target.targetId)).size).toBe(22);
     cleanup.bibIds = resolved.map((citation) => citation.resolvedBibId!).filter(Boolean);
   });
+
+  // Sibling case, added deliberately alongside the fixture above: "The
+  // Archive of Lost Virtues" (fixture.unresolved) carries no locus at all,
+  // so the classical-citation fix leaves it exactly as tested above — this
+  // proves the classical PATH itself, on a citation this fixture doesn't
+  // otherwise exercise.
+  it("recognizes a classical (Bekker) locus citation, projects it onto the canonical Aristotle Library entry, and resolves it with zero live provider calls", async () => {
+    const [user] = await db.insert(users).values({ email: `vice-reason-classical-${crypto.randomUUID()}@example.com` }).returning({ id: users.id });
+    cleanup.userId = user.id;
+    const [identity] = await db.insert(workIdentities).values({
+      workKey: `fixture:vice-and-reason-classical:${crypto.randomUUID()}`,
+      canonicalTitle: "Vice and Reason",
+      authorSurname: "irwin",
+      authors: ["Terence Irwin"],
+      evidence: "Phase 17 deterministic fixture — classical sibling case",
+    }).returning({ id: workIdentities.id });
+    cleanup.identityId = identity.id;
+    const [work] = await db.insert(works).values({ userId: user.id, workIdentityId: identity.id, title: "Vice and Reason", authorName: "Terence Irwin" }).returning({ id: works.id });
+    const [document] = await db.insert(documents).values({
+      userId: user.id,
+      workId: work.id,
+      storagePath: `fixtures/${work.id}/vice-and-reason-classical.txt`,
+      originalFilename: "vice-and-reason-classical.txt",
+      mimeType: "text/plain",
+      fileSize: 100,
+      processingStatus: "ready",
+      extractedText: "seed",
+    }).returning({ id: documents.id });
+
+    // The real production fixture that motivated the fix: a corrupted
+    // abbreviation ("Af?;", what a mangled "NE" survived extraction as)
+    // plus an intact Bekker locus.
+    const mentions = extractCitationMentions([{
+      sourceType: "footnote",
+      text: "Af?;7.8.1151a20-8.",
+      pageIndex: 6,
+      blockOrder: 3,
+      marker: "classical-fixture",
+      parserConfidence: 0.92,
+    }]);
+    expect(mentions).toHaveLength(1);
+    expect(mentions[0]).toMatchObject({ query: "Aristotle, Nicomachean Ethics", classical: { author: "aristotle", work: "Nicomachean Ethics" } });
+
+    const [citation] = await db.insert(citations).values({
+      documentId: document.id,
+      rawText: mentions[0].text,
+      normalizedQuery: mentions[0].query,
+      sourceType: mentions[0].sourceType!,
+      parserConfidence: mentions[0].parserConfidence!,
+      sourceAnchor: mentions[0].anchor,
+      resolutionState: "pending",
+      resolutionSource: "unresolved",
+    }).returning({ id: citations.id });
+    await createCitationLibraryProjection({ citationId: citation.id, citation: mentions[0], workIdentityId: identity.id });
+
+    // The classical resolution branch must never call the live resolver —
+    // this is the "zero provider round-trips" guarantee, proven end-to-end
+    // through the real worker function, not just unit-level.
+    await resolveCitationMetadata(citation.id);
+    expect(resolver.resolveCitation).not.toHaveBeenCalled();
+
+    const [persistedCitation] = await db.select().from(citations).where(eq(citations.id, citation.id));
+    expect(persistedCitation).toMatchObject({ resolutionState: "resolved", resolutionSource: "classical-canon" });
+    expect(persistedCitation.resolvedBibId).toBeTruthy();
+    cleanup.bibIds = [persistedCitation.resolvedBibId!];
+
+    const [link] = await db.select().from(citationLibraryLinks).where(eq(citationLibraryLinks.citationId, citation.id));
+    expect(link).toBeDefined();
+    cleanup.resourceIds = [link!.learningResourceId];
+    const [libraryRow] = await db.select().from(learningResources).where(eq(learningResources.id, link!.learningResourceId));
+    expect(libraryRow).toMatchObject({
+      normalizedKey: "classical:aristotle:nicomachean-ethics",
+      title: "Aristotle, Nicomachean Ethics",
+      resourceType: "classical-primary-source",
+      provider: "classical-citation",
+    });
+    expect(libraryRow!.title).not.toMatch(/Needs bibliographic resolution/);
+
+    const roles = await db.select().from(resourceRoles).where(and(eq(resourceRoles.workIdentityId, identity.id), eq(resourceRoles.learningResourceId, link!.learningResourceId)));
+    expect(roles).toHaveLength(1);
+    expect(roles[0].relationship).toBe("explicit_reference");
+
+    const bibRecord = await db.select().from(bibliographicRecords).where(eq(bibliographicRecords.id, persistedCitation.resolvedBibId!));
+    expect(bibRecord[0]).toMatchObject({ source: "classical-canon", title: "Aristotle, Nicomachean Ethics" });
+
+    const edges = await db.select().from(graphEdges).where(and(eq(graphEdges.userId, user.id), eq(graphEdges.sourceId, work.id), eq(graphEdges.edgeType, "cites")));
+    expect(edges).toHaveLength(1);
+    expect(edges[0].targetId).toBe(persistedCitation.resolvedBibId);
+  });
 });

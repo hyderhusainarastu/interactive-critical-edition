@@ -198,6 +198,78 @@ describe("structurally anchored citation mentions", () => {
   });
 });
 
+describe("classical (Bekker/Stephanus) citation extraction gate", () => {
+  // The real production defect this closes: a footnote citing Aristotle by
+  // Bekker number alone, whose short abbreviation was corrupted by PDF
+  // extraction into mojibake, used to clear the generic ">= 8 chars"
+  // fallback bar and get persisted as a junk Library row —
+  // "Needs bibliographic resolution — Af?;7.8.1151a20-8.".
+  it("recognizes the real fixture as a canonical Aristotle citation, not a junk fallback candidate, in a footnote", () => {
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: "Af?;7.8.1151a20-8.", textBlockId: "note-classical-1", pageIndex: 6, blockOrder: 3, marker: "12" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      sourceType: "footnote",
+      query: "Aristotle, Nicomachean Ethics",
+      classical: { author: "aristotle", work: "Nicomachean Ethics" },
+    });
+    // The verbatim text is preserved, exactly as every other extraction path.
+    expect(found[0].text).toBe("Af?;7.8.1151a20-8.");
+    expect(found[0].query).not.toMatch(/Needs bibliographic resolution/);
+  });
+
+  it("also recognizes a classical locus citation in a bibliography-sourced entry", () => {
+    const found = extractCitationMentions([
+      { sourceType: "bibliography", text: "NE 1103a15, on moral virtue as a state of character.", textBlockId: "bib-classical-1", pageIndex: 1, blockOrder: 1 },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({ query: "Aristotle, Nicomachean Ethics", classical: { work: "Nicomachean Ethics" } });
+  });
+
+  it("suppresses a locus-dominated segment entirely when no specific work can be identified (never a junk candidate)", () => {
+    // A corrupted abbreviation plus a locus that falls on the Nicomachean
+    // Ethics / Magna Moralia boundary — recognizeClassicalReference declines
+    // to guess, and isLocusDominated's own gate keeps this from falling
+    // through to the ordinary junk fallback either, since there's almost no
+    // real prose in the segment once the locus is stripped.
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: "Xz?;3.1181a5.", textBlockId: "note-classical-2", pageIndex: 6, blockOrder: 4, marker: "13" },
+    ]);
+    expect(found).toHaveLength(0);
+  });
+
+  it("leaves a genuine, unrelated modern unresolved citation untouched (existing fallback still applies)", () => {
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: "The Archive of Lost Virtues, anonymous manuscript.", textBlockId: "note-modern-1", pageIndex: 2, blockOrder: 1, marker: "5" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0].classical).toBeUndefined();
+    expect(found[0].query).toContain("Archive of Lost Virtues");
+  });
+
+  it("does not treat a segment with a modern year alongside a Bekker-shaped locus as classical (modern-work veto reaches the extraction gate)", () => {
+    // Neither NOTE_QUOTED nor NOTE_BOOK matches this shape, so it reaches
+    // the classical-recognition fallback branch directly; the modern year
+    // vetoes it there, and it falls through to the ordinary low-confidence
+    // ">= 8 chars" fallback (also present in the text) instead of being
+    // mistaken for a primary citation of Aristotle.
+    const found = extractCitationMentions([
+      {
+        sourceType: "footnote",
+        text: "As discussed in connection with 1151a20, cf. the 2015 survey of the secondary literature.",
+        textBlockId: "note-veto-1",
+        pageIndex: 4,
+        blockOrder: 2,
+        marker: "9",
+      },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0].classical).toBeUndefined();
+    expect(found[0].query).not.toBe("Aristotle, Nicomachean Ethics");
+  });
+});
+
 describe("footnote unbundling (real strings audited from the baseline_test fixture)", () => {
   // Extracted verbatim (whitespace-flattened) from a real local GROBID
   // :8070 run against baseline-test/AristotlesAccountoftheVicious.pdf's TEI,
