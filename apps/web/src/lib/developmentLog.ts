@@ -32,6 +32,7 @@ export const developmentLog = [
       "Reworked reader marginalia so notes stay clear of the side rails, and laid the verified foundation for labelled foreign-text recovery, transliteration, and translation.",
       "Published the Beta v.5 badge and a public development timeline tracing Palimnote’s releases from foundation to the current work.",
       "Removed user-facing processing cost data while keeping analysis available without monetary figures.",
+      "Gave Ask Library conversations a guided greeting with suggested questions, thinking and reply cues with optional sound, day-grouped messages, and a way to switch between past conversations.",
     ],
   },
   {
