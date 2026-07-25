@@ -2,6 +2,7 @@ import { phase12FeatureEnabled, phase18RagEnabled, pipelineAtLeast, pipelineVers
 import { createHash } from "node:crypto";
 import { OpenAIEmbeddingsClient, estimateEmbeddingCostUsd } from "@ice/ai-adapters";
 import { indexEligibleRagSources } from "@ice/rag";
+import { RESEARCH_LIMITS } from "@ice/research";
 import {
   aiUsageLogs,
   db,
@@ -10,6 +11,7 @@ import {
   docMetadata,
   enqueueGraphExpansion,
   footnotes,
+  foreignSpans,
   graphExpansionRequests,
   processingJobs,
   processingRuns,
@@ -20,6 +22,10 @@ import { collectBoilerplateLines, detectFootnotes, downloadDocumentFile, extract
 import { reportError } from "@ice/observability";
 import { desc, eq, sql } from "drizzle-orm";
 import { analyzeEditionRun } from "./analyze";
+import { detectLegitimateForeignSpans, detectRecoveredForeignSpans, type BlockUntranscribableContext, type DetectedBlockForeignSpan } from "./foreignSpans";
+import { createForeignSpanRepository } from "./foreignSpanRepository";
+import { createForeignTranslationAdapter } from "./foreignTranslationAdapter";
+import { processForeignText } from "./foreignText";
 import { allocateEditionRun, publishEditionRun } from "./runLifecycle";
 
 /**
@@ -239,6 +245,12 @@ export async function handleEditionExtraction(documentId: string) {
     const bodyBlocks: { id: string; text: string; pageIndex: number; blockOrder: number; sectionTitle: string | null }[] = [];
     const apparatusBlocks: { blockId: string; kind: "title" | "header" | "body" | "footer" | "footnote" | "endnote" | "caption" | "bibliography" | "reference"; text: string; marker?: string; pageIndex: number; blockOrder: number; recovered?: boolean }[] = [];
     let currentSectionTitle: string | null = null;
+    // Workstream D completion: Step 1 (free, deterministic) foreign-script
+    // detection, collected at block-insert time so every candidate anchors
+    // to a real just-inserted text_block id. `blockUntranscribableContexts`
+    // doubles as this document's recovery-seam input below.
+    const foreignSpanCandidates: DetectedBlockForeignSpan[] = [];
+    const blockUntranscribableContexts: BlockUntranscribableContext[] = [];
 
     for (const parsedPage of parsed.pages) {
       const [page] = await db.insert(pages).values({
@@ -288,6 +300,14 @@ export async function handleEditionExtraction(documentId: string) {
                 sectionTitle: currentSectionTitle,
               });
             }
+            // Every block, not just body — a Greek quotation can sit in a
+            // footnote or bibliography entry as easily as in body prose (same
+            // scope as `detectUntranscribableSpans` at edition-read time).
+            const { untranscribable, spans } = detectLegitimateForeignSpans(b.id, b.text);
+            if (untranscribable.length) {
+              blockUntranscribableContexts.push({ textBlockId: b.id, blockText: b.text, untranscribable });
+            }
+            foreignSpanCandidates.push(...spans);
           }
         }
       }
@@ -307,6 +327,49 @@ export async function handleEditionExtraction(documentId: string) {
         source: block.recovered ? "text-layer-recovery" : "grobid",
       })));
     }
+
+    // Step 1 recovery seam (Brickhouse case): once per document, never once
+    // per block/page — `inspectPdfGlyphRecoveryCandidates` parses the whole
+    // PDF once. Never fails extraction (see `detectRecoveredForeignSpans`'s
+    // own try/catch); a probe error just means zero recovered spans this run.
+    if (pipelineAtLeast(pipeline, "v3") && doc.mimeType === "application/pdf") {
+      const recovered = await detectRecoveredForeignSpans(buffer, blockUntranscribableContexts);
+      foreignSpanCandidates.push(...recovered);
+    }
+    if (foreignSpanCandidates.length) {
+      await db
+        .insert(foreignSpans)
+        .values(foreignSpanCandidates.map((span) => ({
+          userId: doc.userId,
+          documentId,
+          runId: run.id,
+          textBlockId: span.textBlockId,
+          sourceText: span.sourceText,
+          originalText: span.originalText,
+          startOffset: span.startOffset,
+          endOffset: span.endOffset,
+          prefix: span.prefix,
+          suffix: span.suffix,
+          script: span.script,
+          languageHint: span.languageHint,
+          languageBasis: "script_range" as const,
+          direction: span.direction,
+          sourceProvenanceKind: span.sourceProvenance.kind,
+          sourceProvenanceLabel: span.sourceProvenance.label,
+          sourceConfidence: span.sourceProvenance.confidence,
+          transcriptionStatus: span.transcriptionStatus,
+          status: "pending" as const,
+        })))
+        // Defensive idempotency (workstream-d.md handoff): a retry within the
+        // same code path must never crash on the owner-required identity
+        // constraint. In normal operation this never fires — every run's
+        // text_block rows are freshly inserted, so (document, block, source
+        // text) is already unique per run.
+        .onConflictDoNothing({
+          target: [foreignSpans.documentId, foreignSpans.textBlockId, foreignSpans.sourceText],
+        });
+    }
+
     await db.insert(docMetadata).values({
       runId: run.id,
       title: parsed.detectedTitle,
@@ -339,6 +402,36 @@ export async function handleEditionExtraction(documentId: string) {
       apparatus = apparatus.filter((entry) => !isEntirelyBoilerplate(entry.text, boilerplateKeys));
     }
     await analyzeEditionRun({ runId: run.id, documentId, text: parsed.text, pipeline, bodyBlocks, apparatus });
+
+    // Workstream D completion, Step 2 (paid, between analyzeEditionRun and
+    // publishEditionRun): translate/transliterate whatever Step 1 found
+    // pending for THIS run. Bounded (maxSpans/batchSize) and cache-aware —
+    // a re-run of the same passage costs $0 the second time. A failure here
+    // must never block publication: the edition publishes with whatever
+    // resolved, and any pending/deferred span is simply absent from the
+    // reader until a later run resolves it.
+    if (pipelineAtLeast(pipeline, "v3") && foreignSpanCandidates.length) {
+      await db.update(processingRuns).set({ stage: "foreign-text", updatedAt: new Date() }).where(eq(processingRuns.id, run.id));
+      try {
+        const [currentRun] = await db
+          .select({ aiCostUsd: processingRuns.aiCostUsd })
+          .from(processingRuns)
+          .where(eq(processingRuns.id, run.id))
+          .limit(1);
+        await processForeignText(
+          createForeignSpanRepository({ runId: run.id, documentId }),
+          createForeignTranslationAdapter({ userId: doc.userId }),
+          {
+            maxSpans: 40,
+            batchSize: 24,
+            hardCapUsd: RESEARCH_LIMITS.costHardCapUsd,
+            currentCostUsd: currentRun?.aiCostUsd ?? 0,
+          },
+        );
+      } catch (error) {
+        reportError(error, { scope: "worker.foreignText", documentId, runId: run.id });
+      }
+    }
 
     // Reprocessing a work the reader already confirmed must not send it back
     // through metadata review just because the new extractor has lower title

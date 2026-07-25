@@ -31,6 +31,7 @@ export const V3_STAGE_SEQUENCE = [
   "credibility",
   "claims",
   "conservative-influence-classification",
+  "foreign-text",
 ] as const;
 export type V3Stage = (typeof V3_STAGE_SEQUENCE)[number];
 
@@ -51,6 +52,7 @@ export const V4_STAGE_SEQUENCE = [
   "credibility",
   "claims",
   "conservative-influence-classification",
+  "foreign-text",
 ] as const;
 export type V4Stage = (typeof V4_STAGE_SEQUENCE)[number];
 
@@ -74,6 +76,7 @@ export const STAGE_LABEL: Record<V2Stage | V3Stage | V4Stage, string> = {
   "section-aware-annotations": "Anchoring section-aware annotations",
   "author-apparatus": "Extracting author apparatus",
   "lightweight-work-signals": "Preparing cross-work signals",
+  "foreign-text": "Translating foreign-script passages",
 };
 
 /** Stage sequence for a given pipeline version. v1 has no stages to show — see the file header. */
