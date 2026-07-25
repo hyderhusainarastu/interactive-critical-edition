@@ -117,6 +117,20 @@ test.describe("Admin dashboard (Workstream H)", () => {
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
   });
 
+  test("primary interactive controls meet the 44px touch-target floor", async ({ page }) => {
+    await page.goto("/admin-dash/login");
+    const loginButton = page.getByRole("button", { name: "Log in" });
+    const loginBox = await loginButton.boundingBox();
+    expect(loginBox?.height).toBeGreaterThanOrEqual(44);
+
+    await loginAs(page, "10.9.1.9", ADMIN_USERNAME!, ADMIN_PASSWORD_PLAINTEXT!);
+    await page.goto("/admin-dash");
+    const logoutButton = page.getByRole("button", { name: "Log out" });
+    const logoutBox = await logoutButton.boundingBox();
+    expect(logoutBox?.height).toBeGreaterThanOrEqual(44);
+    expect(logoutBox?.width).toBeGreaterThanOrEqual(44);
+  });
+
   test.describe("privacy gate (data-sharing)", () => {
     const SHARED_EMAIL = `e2e-admindash-shared-${Date.now()}@example.com`;
     const PRIVATE_EMAIL = `e2e-admindash-private-${Date.now()}@example.com`;
