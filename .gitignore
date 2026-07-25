@@ -66,3 +66,9 @@ apps/worker/eng.traineddata
 
 # Local-only gold-baseline fixtures (copyrighted source PDFs must never enter git)
 baseline-test/
+
+# One-off prepared production-migration SQL (contains the drizzle ledger
+# bookkeeping insert for a specific deploy; applied by hand via
+# `supabase db query --linked`, never committed — see docs/PROJECT-LOG.md's
+# migration-application recipe).
+/prod-migration-*.sql

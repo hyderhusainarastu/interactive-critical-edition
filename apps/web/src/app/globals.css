@@ -743,3 +743,62 @@ body {
 tr[data-emphasis="dimmed"] * {
   color: var(--color-graph-dim-text);
 }
+
+/*
+  Lane 0 (v.5): hand-rolled SVG chart draw-in, gated purely in CSS so the
+  four chart components (LineChart/BarChart/Sparkline/RadarChart) can stay
+  server components with zero client JS. Every rule below lives ONLY inside
+  `@media (prefers-reduced-motion: no-preference)`, and every keyframe
+  animates FROM a hidden/collapsed state with no explicit "to" — the "to"
+  state is therefore always the element's own normal, unanimated CSS (fully
+  visible), never something only the animation itself produces. That means
+  the existing `:root[data-motion="reduced"] *` blanket override further up
+  this file (which sets `animation: none !important`) is enough on its own
+  to fully neutralize these animations too: killing the animation reverts
+  each element straight to its already-correct final appearance instead of
+  leaving it stuck mid-draw-in or invisible, covering BOTH the OS-level
+  `prefers-reduced-motion` media query and the in-app motion toggle without
+  needing a second, JS-side check (same reasoning as this file's existing
+  `reader-panel-tab-enter`/wordmark animations above).
+*/
+@media (prefers-reduced-motion: no-preference) {
+  /* Line/area/sparkline paths: rendered with `pathLength={1}` and
+     `strokeDasharray={1}` (a normalized-length dash trick, so the same rule
+     works regardless of the path's real geometry) — animating
+     `stroke-dashoffset` from 1 (fully hidden) to its default 0 (fully
+     drawn) reads as the line being traced in. */
+  .chart-draw-line {
+    animation: chart-line-draw .9s var(--spring-gentle) both;
+    animation-delay: calc(var(--chart-stagger-index, 0) * 90ms);
+  }
+  @keyframes chart-line-draw {
+    from { stroke-dashoffset: 1; }
+  }
+
+  /* Bars: `transform-box: fill-box` makes percentage transform-origin
+     resolve against the bar's OWN bounding box rather than the SVG
+     viewport, so `scaleY` from its own bottom edge grows the bar upward
+     from the baseline our geometry already placed it on
+     (`chartGeometry.ts`'s `barLayout`: every bar's `y + height` equals the
+     shared baseline). */
+  .chart-bar-grow {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: chart-bar-grow-in .55s var(--spring-gentle) both;
+    animation-delay: calc(var(--chart-stagger-index, 0) * 45ms);
+  }
+  @keyframes chart-bar-grow-in {
+    from { transform: scaleY(0); }
+  }
+
+  /* Radar polygon: grows from the chart's own center rather than from a
+     corner, matching the shape's own geometric center. */
+  .chart-radar-grow {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: chart-radar-grow-in .5s var(--spring-gentle) both;
+  }
+  @keyframes chart-radar-grow-in {
+    from { transform: scale(0); }
+  }
+}
