@@ -48,3 +48,25 @@ export function verificationEmailHtml(link: string) {
 export function passwordResetEmailHtml(link: string) {
   return `<p>Reset your ${SITE_NAME} password:</p><p><a href="${link}">${link}</a></p><p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>`;
 }
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Workstream J (v.5): the admin-inbox notification for a new feedback
+ * submission (`api/feedback/route.ts`). Unlike the two templates above,
+ * every field here is untrusted, user-authored content (the submitter picks
+ * the category and writes the body freely), so it is HTML-escaped before
+ * interpolation — the verification/reset templates above only ever embed a
+ * link this app generated itself and don't need the same care.
+ */
+export function feedbackEmailHtml(params: { category: string; body: string; email: string | null; path: string | null }): string {
+  const email = params.email ? `<p>Reply-to: ${escapeHtml(params.email)}</p>` : "";
+  const path = params.path ? `<p>Page: ${escapeHtml(params.path)}</p>` : "";
+  return `<p>New <strong>${escapeHtml(params.category)}</strong> feedback for ${SITE_NAME}:</p>${email}${path}<p>${escapeHtml(params.body).replace(/\n/g, "<br>")}</p>`;
+}

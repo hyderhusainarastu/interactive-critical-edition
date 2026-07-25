@@ -14,6 +14,7 @@ import {
   documents,
   editionRelations,
   evidenceSpans,
+  feedback,
   generatedClaims,
   generatedNotes,
   graphEdges,
@@ -33,6 +34,8 @@ import {
   termOccurrences,
   termVariants,
   textBlocks,
+  userDeletionArchives,
+  usageEvents,
   users,
   workIdentities,
   works,
@@ -155,6 +158,18 @@ export async function deleteTestUser(email: string) {
       for (const row of ownIdentityRows) if (row.id) candidateIdentityIds.add(row.id);
     }
   }
+
+  // Workstream J/H (v.5): none of these three tables cascade on user
+  // delete by design (feedback.user_id is `set null`, not cascade — meant
+  // to outlive the account; usage_event/user_deletion_archive have no FK
+  // at all — see schema.ts). feedback specifically MUST be swept before
+  // the delete below: once the user row is gone, `set null` fires and
+  // these rows can no longer be found by userId at all. The other two
+  // would work either order (no FK to null out), but are grouped here for
+  // one clear sweep rather than splitting pre/post for no reason.
+  await db.delete(feedback).where(eq(feedback.userId, user.id));
+  await db.delete(usageEvents).where(eq(usageEvents.userId, user.id));
+  await db.delete(userDeletionArchives).where(eq(userDeletionArchives.userId, user.id));
 
   await db.delete(users).where(eq(users.id, user.id));
 

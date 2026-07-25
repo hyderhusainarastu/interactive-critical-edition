@@ -185,8 +185,12 @@ html:has(.pal-site) { scroll-behavior: smooth; }
   .mark-small .mark-lines i { height: 1.5px; }
   .mark-small .mark-margin { border-width: 2px; border-left: 0; }
   nav { display: flex; gap: 30px; }
-  nav a { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-decoration: none; text-transform: uppercase; }
-  nav a:hover, nav a:focus-visible { color: var(--ink); }
+  nav a, nav button { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-decoration: none; text-transform: uppercase; }
+  nav a:hover, nav a:focus-visible, nav button:hover, nav button:focus-visible { color: var(--ink); }
+  /* `nav button` (the footer's FeedbackTrigger, Workstream J) is a real
+     <button>, not an <a> — reset the browser chrome the rule above doesn't
+     touch so it reads identically to its sibling nav links. */
+  nav button { border: none; background: none; padding: 0; cursor: pointer; font-family: inherit; }
   .nav-cta { padding-bottom: 3px; border-bottom: 1px solid var(--ink); color: var(--ink); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
 
   /* ---- theme toggle ---- */
