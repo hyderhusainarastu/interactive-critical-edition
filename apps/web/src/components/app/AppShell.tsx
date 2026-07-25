@@ -10,6 +10,7 @@ import { InitialsAvatar } from "@/components/charts";
 import { BetaBadge } from "@/components/shared/BetaBadge";
 import { Wordmark } from "@/components/site/Wordmark";
 import { SoundToggle } from "@/components/site/SoundToggle";
+import { PageTransition } from "@/components/shared/PageTransition";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
@@ -228,7 +229,14 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
         </div>
       </header>
       {drawerOpen && <MobileDrawer items={navItems} pathname={pathname} email={email} onClose={closeDrawer} />}
-      <main id="main-content" className="app-shell-main flex-1">{children}</main>
+      {/* `PageTransition` is applied HERE, around routed content only — not
+          around this whole component (see `app/layout.tsx`'s comment for
+          the full story). Every stateful trigger+panel above this line
+          (account menu, preferences menu, mobile drawer, command palette,
+          the global RAG sidebar, `AppFooter`'s feedback modal) lives outside
+          the animated boundary and is therefore immune to the phantom
+          remount that used to close them right after opening. */}
+      <main id="main-content" className="app-shell-main flex-1"><PageTransition>{children}</PageTransition></main>
       <AppFooter />
       <CommandPalette items={navItems.map((item) => ({ ...item, shortcut: item.href === "/upload" ? "U" : undefined }))} />
       {ragEnabled && ragOpen && <GlobalRagSidebar id={ragSidebarId} contextWorkId={routeWorkId} onClose={closeRag} />}
