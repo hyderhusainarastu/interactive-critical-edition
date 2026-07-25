@@ -5,7 +5,7 @@ import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
 import * as THREE from "three";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { forceCollide } from "d3-force-3d";
+import { forceCollide, forceLink } from "d3-force-3d";
 import { STAGE_LABEL, type CurriculumStage } from "@ice/curriculum";
 import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
 import {
@@ -23,6 +23,7 @@ import {
 import {
   REFERENCE_CAMERA_DISTANCE,
   authorityEmissiveIntensity,
+  collapseCurvature,
   credibilitySegmentCount,
   edgeCurvature,
   edgeDirectionCue,
@@ -30,6 +31,7 @@ import {
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
+  graphEffectsForNodeCount,
   nodePrimaryLabelVisible,
   nodeScaleForDistance,
   nodeSecondaryLabelVisible,
@@ -40,6 +42,7 @@ import {
   type NodeLabelVisibilityContext,
 } from "./graphSceneScaling";
 import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
+import { CONCEPT_ATTRACTION_STRENGTH, computeConceptAttractionPairs, type ConceptAttractionPair } from "./graphForces";
 import { assignStagePositions, stageHeaderPositions } from "./roadmapLayout";
 
 // Graph P3 (scene redesign core): a shared serif stack matching the app's
@@ -74,32 +77,45 @@ const STATE_OPACITY: Record<NodeState, number> = {
  * `mergeGeometries` bakes two offset tetrahedra into a single BufferGeometry
  * so the rest of this file's "one shape mesh per node" mutation machinery
  * (`stash.sphere`) needs no special-casing for it.
+ *
+ * Graph P4 (performance ladder): `sphereSegments` sizes every sphere this
+ * function returns (the generic type AND every non-`geometryVariety` node);
+ * `geometryVariety === false` (the ladder's ">800 nodes" tier) collapses
+ * EVERY node to the plain sphere regardless of type/kind, the single
+ * biggest geometry-cost reduction available at that scale.
  */
-function nodeShapeGeometry(node: Pick<GraphNode, "type" | "kind">, baseRadius: number): THREE.BufferGeometry {
-  if (node.type === "person") return new THREE.CapsuleGeometry(baseRadius * 0.5, baseRadius * 0.9, 4, 10);
-  if (node.type === "section") return new THREE.CylinderGeometry(baseRadius, baseRadius, baseRadius * 0.22, 20);
-  if (node.type === "concept") {
-    switch (node.kind) {
-      case "doctrine":
-        return new THREE.DodecahedronGeometry(baseRadius * 0.92);
-      case "tradition":
-        return new THREE.TorusKnotGeometry(baseRadius * 0.62, baseRadius * 0.2, 64, 8);
-      case "debate": {
-        const a = new THREE.TetrahedronGeometry(baseRadius * 0.72);
-        a.translate(-baseRadius * 0.28, 0, 0);
-        const b = new THREE.TetrahedronGeometry(baseRadius * 0.72);
-        b.rotateY(Math.PI);
-        b.translate(baseRadius * 0.28, 0, 0);
-        return mergeGeometries([a, b]) ?? new THREE.OctahedronGeometry(baseRadius);
+function nodeShapeGeometry(
+  node: Pick<GraphNode, "type" | "kind">,
+  baseRadius: number,
+  sphereSegments: readonly [number, number],
+  geometryVariety: boolean,
+): THREE.BufferGeometry {
+  if (geometryVariety) {
+    if (node.type === "person") return new THREE.CapsuleGeometry(baseRadius * 0.5, baseRadius * 0.9, 4, 10);
+    if (node.type === "section") return new THREE.CylinderGeometry(baseRadius, baseRadius, baseRadius * 0.22, 20);
+    if (node.type === "concept") {
+      switch (node.kind) {
+        case "doctrine":
+          return new THREE.DodecahedronGeometry(baseRadius * 0.92);
+        case "tradition":
+          return new THREE.TorusKnotGeometry(baseRadius * 0.62, baseRadius * 0.2, 64, 8);
+        case "debate": {
+          const a = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+          a.translate(-baseRadius * 0.28, 0, 0);
+          const b = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+          b.rotateY(Math.PI);
+          b.translate(baseRadius * 0.28, 0, 0);
+          return mergeGeometries([a, b]) ?? new THREE.OctahedronGeometry(baseRadius);
+        }
+        case "concept":
+        default:
+          return new THREE.OctahedronGeometry(baseRadius * 0.95);
       }
-      case "concept":
-      default:
-        return new THREE.OctahedronGeometry(baseRadius * 0.95);
     }
   }
-  // work, reference, peer_reviewed_source, online_source: the generic
-  // sphere -- these vary by TYPE COLOR/authority/credibility, not geometry.
-  return new THREE.SphereGeometry(baseRadius, 18, 14);
+  // work, reference, peer_reviewed_source, online_source (always), and
+  // EVERY node type once `geometryVariety` is off: the generic sphere.
+  return new THREE.SphereGeometry(baseRadius, sphereSegments[0], sphereSegments[1]);
 }
 
 // Relative node size by kind — work is the anchor, concepts next, then
@@ -305,6 +321,11 @@ type NodeGroupUserData = Partial<{
    *  Graph P4 pulled forward here since the gate is trivial to add at
    *  creation-adjacent mutation time). */
   readerLevelBeads?: THREE.Mesh[];
+  /** Graph P4 (choreography): a distinct ring shown only on a hovered
+   *  node's one-hop NEIGHBORS (never on the hovered node itself, which gets
+   *  the emissive lift instead, nor via selection) — "hover dim + emissive
+   *  lift on node + one-hop ring". */
+  hoverNeighborRing?: THREE.Mesh;
 }>;
 
 /** `userData` shape stashed on each edge-label `THREE.Sprite` by
@@ -415,6 +436,12 @@ export function KnowledgeGraph3D({
   // the two call sites below instead of fighting the generics here.
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: 800, h: 520 });
+  // Graph P4: the performance degradation ladder (`graphSceneScaling.ts`) —
+  // ONE classification every visual system in this component reads, rather
+  // than several independently-drifting node-count checks. Declared early
+  // (a pure derivation of `data.nodes.length`, no WebGL readiness needed)
+  // since the bloom-setup effect below needs it too.
+  const graphEffects = useMemo(() => graphEffectsForNodeCount(data.nodes.length), [data.nodes.length]);
   const [colors, setColors] = useState<Record<NodeState, string>>();
   const [typeColors, setTypeColors] = useState<Record<NodeType, string>>();
   const [linkColors, setLinkColors] = useState<Record<EdgeFamily, string>>();
@@ -503,20 +530,36 @@ export function KnowledgeGraph3D({
   // Immediate + next-frame retry (same pattern as every other `fgRef`-
   // dependent effect here) since the composer only exists once
   // `<ForceGraph3D>` itself has mounted.
-  const bloomAddedRef = useRef(false);
+  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
+  const BLOOM_STRENGTH = 0.9;
+  // Graph P4: the performance ladder's "half"/"off" bloom tiers are applied
+  // in this SAME effect (rather than a second one keyed only on
+  // `graphEffects.bloom`) specifically to avoid a startup race — a large
+  // graph loaded from the very first render would otherwise need the pass
+  // to already exist before a separate tier-effect's single run could find
+  // it, and `bloomPassRef.current` isn't guaranteed set until the retry-rAF
+  // below actually lands. Folding tier application into the SAME
+  // create-or-update effect (re-run whenever `graphEffects.bloom` changes
+  // too) means there is no window where the pass exists but hasn't had the
+  // current tier applied.
   useEffect(() => {
-    if (bloomAddedRef.current) return;
     const setup = () => {
       const graph = fgRef.current;
-      if (!graph || bloomAddedRef.current) return;
-      const composer = graph.postProcessingComposer();
-      composer.addPass(new UnrealBloomPass(new THREE.Vector2(Math.max(size.w, 1), Math.max(size.h, 1)), 0.9, 0.35, 0.55));
-      bloomAddedRef.current = true;
+      if (!graph) return;
+      let pass = bloomPassRef.current;
+      if (!pass) {
+        const composer = graph.postProcessingComposer();
+        pass = new UnrealBloomPass(new THREE.Vector2(Math.max(size.w, 1), Math.max(size.h, 1)), BLOOM_STRENGTH, 0.35, 0.55);
+        composer.addPass(pass);
+        bloomPassRef.current = pass;
+      }
+      pass.enabled = graphEffects.bloom !== "off";
+      pass.strength = graphEffects.bloom === "half" ? BLOOM_STRENGTH / 2 : BLOOM_STRENGTH;
     };
     setup();
     const raf = requestAnimationFrame(setup);
     return () => cancelAnimationFrame(raf);
-  }, [colors, typeColors, linkColors, labelColors, size.w, size.h]);
+  }, [colors, typeColors, linkColors, labelColors, size.w, size.h, graphEffects.bloom]);
 
   // Graph P3: hands `GraphView` a way to force a fresh composer render
   // right before it reads pixels for "Export PNG" — see `exportRef`'s own
@@ -712,6 +755,69 @@ export function KnowledgeGraph3D({
     );
   }, [graphData]);
 
+  // Graph P4 (concept clustering): a mild EXTRA attraction between a
+  // resource and any concept node it directly cites/discusses/etc — pure
+  // pair derivation in `graphForces.ts`, registered via `d3-force-3d`'s own
+  // `forceLink` (a second, independent link force alongside the base "link"
+  // force above, not a replacement for it) rather than hand-rolled force
+  // math. Explore mode ONLY: roadmap mode's nodes are fixed via fx/fy/fz
+  // with cooldown at 0 (same reasoning the collision-force comment above
+  // already gives), so an attraction force would have nothing to act on
+  // there regardless. `null` removes a previously-registered force outright
+  // (documented d3-force API), so a graph with no qualifying pairs — or a
+  // switch back to roadmap mode — cleanly clears any earlier registration.
+  //
+  // Registered in its OWN effect, deferred one animation frame AND wrapped
+  // in try/catch, rather than synchronously alongside the base forces
+  // above — found by a real test failure during this phase's own
+  // verification: `Simulation.force(name, forceFn)` calls
+  // `forceFn.initialize()` IMMEDIATELY against whatever node array the
+  // underlying (non-React) simulation already has registered, but
+  // `three-forcegraph`'s own internal sync of a freshly changed `graphData`
+  // prop is NOT guaranteed to have completed by the time this SIBLING React
+  // effect fires (a one-frame defer measurably reduces how often this races
+  // but does not eliminate it — reproduced still throwing even after adding
+  // the defer, during this same investigation). A same-tick-or-still-stale
+  // registration initializes `forceLink` against the PREVIOUS node set,
+  // throwing "node not found" for any id only present in the new one.
+  // Reproduced live: filtering the Kind select to "reference" (dropping a
+  // concept node) then clicking "Clear all filters" crashed the whole graph
+  // pane into its error boundary. The try/catch is the actual fix — same
+  // defensive posture every OTHER `scene().traverse()`-based mutation in
+  // this file already takes toward "the library's internal state might
+  // briefly lag the React props" (guard-and-skip, never assume perfect
+  // sync) — a caught failure here just means the next real `graphData`
+  // change (which will come regardless, since the underlying data did
+  // change) retries the registration; the rAF defer is kept alongside it
+  // purely to reduce how often the catch path is actually exercised.
+  useEffect(() => {
+    const registerConceptAttraction = () => {
+      const graph = fgRef.current;
+      if (!graph) return;
+      try {
+        if (layoutMode !== "explore") {
+          graph.d3Force("conceptAttraction", null);
+          return;
+        }
+        const pairs = computeConceptAttractionPairs(data.nodes, data.links);
+        graph.d3Force(
+          "conceptAttraction",
+          pairs.length > 0
+            ? forceLink<object, ConceptAttractionPair>(pairs)
+                .id((n: object) => (n as GraphNode).id)
+                .strength(CONCEPT_ATTRACTION_STRENGTH)
+                .distance(40)
+            : null,
+        );
+      } catch {
+        // The underlying simulation's node registration was still stale —
+        // skip this attempt; the next real data/layout change retries.
+      }
+    };
+    const raf = requestAnimationFrame(registerConceptAttraction);
+    return () => cancelAnimationFrame(raf);
+  }, [graphData, layoutMode, data.nodes, data.links]);
+
   // Neighbor adjacency, built once per data change rather than per hover
   // event — shared with `graphFocus.ts`'s selection-focus computation
   // rather than a second, locally-reimplemented adjacency map.
@@ -745,7 +851,7 @@ export function KnowledgeGraph3D({
     }
     return ids;
   }, [hasSelectionFocus, emphasis, hoverNode, data.links]);
-  const effectsEnabled = motionAllowed && data.nodes.length <= 140;
+  const effectsEnabled = motionAllowed && graphEffects.particles;
 
   // D-21-5: depends only on theme-resolved `typeColors`/`labelColors` —
   // never `selectedNodeId`/`pinnedWorkIds`, which used to force a full
@@ -782,7 +888,7 @@ export function KnowledgeGraph3D({
     // renders as a wireframe stroke in the dedicated wireframe token color
     // rather than the type hue, so the state reads consistently across
     // every node type/geometry, not just as a dimmer fill.
-    const shapeGeometry = nodeShapeGeometry(node, baseRadius);
+    const shapeGeometry = nodeShapeGeometry(node, baseRadius, graphEffects.sphereSegments, graphEffects.geometryVariety);
     const shapeMaterial = new THREE.MeshLambertMaterial({
       color: isMissing ? wireframeColor : color,
       wireframe: isMissing,
@@ -846,16 +952,32 @@ export function KnowledgeGraph3D({
     // Reader-level orbital beads: one per `READER_LEVELS` entry, fixed
     // position per level index so a given level always sits at the same
     // "clock position" across every node — only the visible subset differs.
+    // Graph P4: skipped entirely (not just hidden) once the performance
+    // ladder's `beads` flag is off — creation cost, not just a visibility
+    // toggle, is what the ladder exists to save at higher node counts.
     const readerLevelBeads: THREE.Mesh[] = [];
-    const beadGeometry = new THREE.SphereGeometry(Math.max(0.6, baseRadius * 0.18), 8, 6);
-    for (let i = 0; i < READER_LEVELS.length; i++) {
-      const bead = new THREE.Mesh(beadGeometry, new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.9 }));
-      const angle = (i / READER_LEVELS.length) * Math.PI * 2;
-      bead.position.set(Math.cos(angle) * baseRadius * 1.9, Math.sin(angle) * baseRadius * 1.9, 0);
-      bead.visible = false;
-      group.add(bead);
-      readerLevelBeads.push(bead);
+    if (graphEffects.beads) {
+      const beadGeometry = new THREE.SphereGeometry(Math.max(0.6, baseRadius * 0.18), 8, 6);
+      for (let i = 0; i < READER_LEVELS.length; i++) {
+        const bead = new THREE.Mesh(beadGeometry, new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.9 }));
+        const angle = (i / READER_LEVELS.length) * Math.PI * 2;
+        bead.position.set(Math.cos(angle) * baseRadius * 1.9, Math.sin(angle) * baseRadius * 1.9, 0);
+        bead.visible = false;
+        group.add(bead);
+        readerLevelBeads.push(bead);
+      }
     }
+
+    // Hover one-hop neighbor ring (Graph P4 choreography): a distinct,
+    // muted ring shown ONLY on the hovered node's direct neighbors — sized
+    // between the equatorial/progress rings and the credibility ring so it
+    // never visually collides with either.
+    const hoverNeighborRing = new THREE.Mesh(
+      new THREE.TorusGeometry(baseRadius * 1.45, Math.max(0.25, baseRadius * 0.05), 8, 28),
+      new THREE.MeshBasicMaterial({ color: ringLit, transparent: true, opacity: 0.55 }),
+    );
+    hoverNeighborRing.visible = false;
+    group.add(hoverNeighborRing);
 
     // Two SEPARATE canvas sprites (title, type/state) rather than one
     // combined texture, so the secondary line can be hidden independently
@@ -934,10 +1056,11 @@ export function KnowledgeGraph3D({
       progressArc,
       credibilitySegments,
       readerLevelBeads,
+      hoverNeighborRing,
     };
     group.userData = nodeUserData;
     return group;
-  }, [typeColors, labelColors, graphTokens]);
+  }, [typeColors, labelColors, graphTokens, graphEffects]);
 
   // D-21-4: the edge-relation label sprite. Depends only on the theme-
   // resolved `labelColors` (same accepted rebuild class as `typeColors`
@@ -991,11 +1114,13 @@ export function KnowledgeGraph3D({
   const linkWidth = useCallback(() => BASE_LINK_WIDTH, []);
 
   // Curvature per edge family (link-language table) — structural edges stay
-  // straight, opposition bows the most (and renders dashed, above).
+  // straight, opposition bows the most (and renders dashed, above). Graph
+  // P4: collapsed to the coarser 2-tier scheme at higher node counts per
+  // the performance ladder.
   const linkCurvature = useCallback((l: object) => {
     const link = l as GraphLink;
-    return edgeCurvature(link.edgeType, link.category);
-  }, []);
+    return collapseCurvature(edgeCurvature(link.edgeType, link.category), graphEffects.curvatureTiers);
+  }, [graphEffects.curvatureTiers]);
 
   // Particle COUNT scales with the edge's own confidence (1-3) once
   // particles are the chosen direction cue at all — `edgeDirectionCue`
@@ -1053,6 +1178,17 @@ export function KnowledgeGraph3D({
   // change (which already retriggers the effects that call this function).
   const nodesById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
 
+  // Graph P4 (choreography): "select keeps ... a 300ms emissive swell" — a
+  // transient extra emissiveIntensity bump on the newly-selected node that
+  // decays linearly back to baseline over 300ms, skipped under reduced
+  // motion/hidden-tab/large-graph (`effectsEnabled`) exactly like the
+  // fly-to transition's own duration already is. `applyNodeAccents` reads
+  // this ref directly (never React state) so the swell doesn't cause its
+  // own re-renders; the short-lived rAF loop driving it is registered in a
+  // dedicated effect further below, keyed on `selectedNodeId`.
+  const selectionSwellRef = useRef<{ nodeId: string; startTime: number } | null>(null);
+  const SELECTION_SWELL_MS = 300;
+
   const applyNodeAccents = useCallback(() => {
     const graph = fgRef.current;
     if (!graph) return;
@@ -1085,7 +1221,23 @@ export function KnowledgeGraph3D({
       if (shapeMaterial && node) {
         const authorityGlow = authorityEmissiveIntensity(node.authority, node.credibility?.score ?? node.credibilityScore ?? null);
         const isEmphasized = !highlightNodeIds || highlightNodeIds.has(stash.nodeId);
-        shapeMaterial.emissiveIntensity = highlightNodeIds && !isEmphasized ? Math.min(authorityGlow, 0.05) : authorityGlow + (highlightNodeIds ? 0.35 : 0.15);
+        // Graph P4: the transient selection swell — linear decay to 0 over
+        // `SELECTION_SWELL_MS`, added on top of the P3 baseline below.
+        const swell = selectionSwellRef.current && selectionSwellRef.current.nodeId === stash.nodeId
+          ? Math.max(0, 1 - (performance.now() - selectionSwellRef.current.startTime) / SELECTION_SWELL_MS) * 0.6
+          : 0;
+        shapeMaterial.emissiveIntensity = (highlightNodeIds && !isEmphasized ? Math.min(authorityGlow, 0.05) : authorityGlow + (highlightNodeIds ? 0.35 : 0.15)) + swell;
+      }
+      // Graph P4 (choreography): "hover dim + emissive lift on node +
+      // one-hop ring" — the emissive lift is the boost above (hoverNode is
+      // already unioned into `highlightNodeIds`/`highlightNodeIds` via the
+      // existing hover state); this ring is the remaining piece, shown ONLY
+      // on the hovered node's direct neighbors, never on the hovered node
+      // itself (selection uses the swell above instead of this ring).
+      if (stash.hoverNeighborRing) {
+        const isHoverNeighbor = hoverNode != null && stash.nodeId !== hoverNode.id && (neighborsByNode.get(hoverNode.id)?.has(stash.nodeId) ?? false);
+        stash.hoverNeighborRing.visible = isHoverNeighbor;
+        stash.hoverNeighborRing.scale.setScalar(nodeFactor);
       }
 
       // SELECTIVE LABELS: a bounded set of signals decides visibility —
@@ -1142,7 +1294,7 @@ export function KnowledgeGraph3D({
         });
       }
     });
-  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId, layoutSizeFactor, nodeLabelCtx, size.h, nodesById, highlightNodeIds, layoutMode, cameraDistance]);
+  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId, layoutSizeFactor, nodeLabelCtx, size.h, nodesById, highlightNodeIds, layoutMode, cameraDistance, hoverNode, neighborsByNode]);
 
   // D-21-4/D-21-5 (edge side): selection-and-hover-connected width emphasis
   // and edge-label reveal/scale, both applied by mutating the already-
@@ -1163,14 +1315,19 @@ export function KnowledgeGraph3D({
       const connected = highlightLinkIds ? highlightLinkIds.has(stash.linkId) : false;
       const widthFactor = (connected ? LINK_HOVER_WIDTH_FACTOR : 1) * nodeSceneScale.nodeScaleFactor;
       if (lineMesh?.scale) lineMesh.scale.set(widthFactor, widthFactor, lineMesh.scale.z);
-      const visible = edgeLabelVisible(cameraDistance, connected);
+      // Graph P4: edge-label sprites are visibility-gated off entirely past
+      // the performance ladder's "minimal" tier — the sprite object itself
+      // still exists (needed for the linkId tag + lineMesh width-highlight
+      // lookup above, a genuinely different feature this must not break),
+      // it simply never becomes visible at that scale.
+      const visible = graphEffects.edgeLabelSprites && edgeLabelVisible(cameraDistance, connected);
       sprite.visible = visible;
       if (visible) {
         const factor = nodeSceneScale.labelScaleFactor;
         sprite.scale.set(stash.baseScale.x * factor, stash.baseScale.y * factor, 1);
       }
     });
-  }, [highlightLinkIds, nodeSceneScale, cameraDistance]);
+  }, [highlightLinkIds, nodeSceneScale, cameraDistance, graphEffects.edgeLabelSprites]);
 
   // Both accent passes run once immediately (in case objects already exist)
   // and once more next frame (to catch objects the library hasn't finished
@@ -1181,6 +1338,27 @@ export function KnowledgeGraph3D({
     const raf = requestAnimationFrame(applyNodeAccents);
     return () => cancelAnimationFrame(raf);
   }, [applyNodeAccents, graphData]);
+
+  // Graph P4: drives the 300ms selection emissive swell — a short, bounded
+  // rAF loop (never an ongoing per-frame loop) that re-runs the mutation
+  // pass every frame ONLY for the swell's own duration after a genuinely
+  // new selection, skipped entirely under reduced motion/hidden-tab/large
+  // graphs (`effectsEnabled`, the same gate the fly-to transition's
+  // duration already uses).
+  useEffect(() => {
+    if (!selectedNodeId || !effectsEnabled) return;
+    selectionSwellRef.current = { nodeId: selectedNodeId, startTime: performance.now() };
+    let raf = 0;
+    const tick = () => {
+      applyNodeAccents();
+      const elapsed = performance.now() - (selectionSwellRef.current?.startTime ?? 0);
+      if (elapsed < SELECTION_SWELL_MS) raf = requestAnimationFrame(tick);
+      else selectionSwellRef.current = null;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `applyNodeAccents` deliberately excluded: it changes identity on nearly every render (camera distance, hover, etc.), and re-running this effect for those reasons would restart the swell's own 300ms clock instead of letting the CURRENT swell finish; only a genuinely NEW selection (or a motion-preference change) should restart it.
+  }, [selectedNodeId, effectsEnabled]);
 
   useEffect(() => {
     applyLinkAccents();
@@ -1442,7 +1620,14 @@ export function KnowledgeGraph3D({
   }, [layoutMode, showReadingThread, data.nodes]);
 
   return (
-    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
+    // Graph P4: `data-graph-effects` now reports the ACTIVE PERFORMANCE
+    // TIER ("full"/"reduced"/"minimal"/"bare") rather than a bare
+    // active/paused flag — except the pre-existing "paused" value under
+    // reduced motion/hidden-tab (`!motionAllowed`), kept EXACTLY as before
+    // since `graph.spec.ts:351` and `roadmap-graph.spec.ts:235` assert that
+    // literal string and this phase's own instructions require those specs
+    // to keep passing unmodified.
+    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={!motionAllowed ? "paused" : graphEffects.tier}>
       {colors && typeColors && linkColors && labelColors && (
         <ForceGraph3D
           ref={fgRef as never}
