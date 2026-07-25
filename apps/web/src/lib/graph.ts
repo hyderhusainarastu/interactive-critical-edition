@@ -1,8 +1,9 @@
 import { conceptMastery, db, readingRecords, understandingRatings, workRelationshipJudgments } from "@ice/db";
-import { KNOWN_THRESHOLD } from "@ice/roadmap";
+import { KNOWN_THRESHOLD, READER_LEVELS } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { edgeTypeForRelationshipCategory, isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
 import { deriveEdgeCategory } from "@/lib/graphEdgeCategory";
+import { mapConceptConceptEdges, selectVisualNodes } from "@/lib/graphConnectivity";
 
 /**
  * Builds the per-user knowledge-graph data (plan §9/§16, extended by plan
@@ -89,6 +90,8 @@ interface ConceptRow {
   id: string;
   label: string;
   kind: string;
+  summary: string | null;
+  aliases: unknown;
 }
 interface SectionRow {
   id: string;
@@ -108,6 +111,7 @@ interface SourceRow {
   authors: unknown;
   year: number | null;
   url: string | null;
+  doi: string | null;
   resource_type: string;
   provider: string;
   access_status: string;
@@ -120,6 +124,18 @@ interface SourceRow {
   provenance_provider: string | null;
   inspected_at: Date | null;
   provenance_depth: number | null;
+  // Graph P1 (data contract v2, additive): the remaining credibility
+  // dimensions (plan §33/§34.2), joined from the SAME `credibility_assessment`
+  // row `authority`/`score`/`peer_reviewed` above already come from.
+  publication_rigor: number | null;
+  creator_expertise: number | null;
+  host_provenance: number | null;
+  pedagogical_value: number | null;
+  relevance: number | null;
+  evidence_strength: number | null;
+  rationale: string | null;
+  creator: unknown;
+  popularity: unknown;
 }
 interface ResourceRelationRow {
   id: string;
@@ -149,6 +165,16 @@ interface ResourceRoleRow {
   year: number | null;
   authors: unknown;
   peer_reviewed: boolean | null;
+  // Graph P1 (data contract v2, additive): the durable `learning_resource`
+  // projection's own workRole/venue/doi/creator/popularity — available even
+  // when this run's own research pass didn't (re)discover the resource (the
+  // "role-node-added" path below has no `research_resource`/
+  // `credibility_assessment` row to join for the rest of the dimensions).
+  work_role: string;
+  venue: string | null;
+  doi: string | null;
+  creator: unknown;
+  popularity: unknown;
 }
 interface PassageAnnotationRow {
   annotation_id: string;
@@ -172,6 +198,49 @@ function displayAuthors(value: unknown): string | null {
     return names.length ? names.join(", ") : null;
   }
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+/** Graph P1 (data contract v2): jsonb string array → `string[] | undefined`
+ *  (never a fabricated empty array) — used for `concept.aliases`. */
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+  return items.length ? items : undefined;
+}
+
+/** Graph P1 (data contract v2): builds a node's `credibility` dossier from a
+ *  `credibility_assessment` row's fields, or null when no assessment exists
+ *  (`score == null`) — never a fabricated all-null object standing in for
+ *  "no data". */
+function credibilityFromAssessment(row: {
+  score: number | null;
+  authority: string | null;
+  publication_rigor: number | null;
+  creator_expertise: number | null;
+  host_provenance: number | null;
+  pedagogical_value: number | null;
+  relevance: number | null;
+  evidence_strength: number | null;
+  peer_reviewed: boolean | null;
+  rationale: string | null;
+  creator: unknown;
+  popularity: unknown;
+}): GraphNode["credibility"] {
+  if (row.score == null) return null;
+  return {
+    score: row.score,
+    authority: row.authority,
+    publicationRigor: row.publication_rigor,
+    creatorExpertise: row.creator_expertise,
+    hostProvenance: row.host_provenance,
+    pedagogicalValue: row.pedagogical_value,
+    relevance: row.relevance,
+    evidenceStrength: row.evidence_strength,
+    peerReviewed: row.peer_reviewed,
+    rationale: row.rationale,
+    creator: row.creator,
+    popularity: row.popularity,
+  };
 }
 
 export async function buildGraph(userId: string, rootWorkId?: string): Promise<GraphPayload> {
@@ -211,23 +280,52 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         `)) as unknown as RefRow[])
       : [];
 
-  // 3b) v2 research enrichment: best authority + discovering provider per bib.
+  // 3b) v2 research enrichment: best authority + discovering provider per bib,
+  // widened (Graph P1, data contract v2) to carry the full credibility
+  // dossier from the SAME winning assessment row.
+  interface EnrichRow {
+    bib_id: string;
+    authority: string | null;
+    score: number | null;
+    provider: string | null;
+    publication_rigor: number | null;
+    creator_expertise: number | null;
+    host_provenance: number | null;
+    pedagogical_value: number | null;
+    relevance: number | null;
+    evidence_strength: number | null;
+    peer_reviewed: boolean | null;
+    rationale: string | null;
+    creator: unknown;
+    popularity: unknown;
+  }
   const enrichRows =
     refIds.length > 0
       ? ((await db.execute(sql`
-          SELECT rr.bib_record_id AS bib_id, ca.authority, ca.score, rr.provider
+          SELECT rr.bib_record_id AS bib_id, ca.authority, ca.score, rr.provider,
+            ca.publication_rigor, ca.creator_expertise, ca.host_provenance, ca.pedagogical_value,
+            ca.relevance, ca.evidence_strength, ca.peer_reviewed, ca.rationale, ca.creator, ca.popularity
           FROM research_resource rr
           LEFT JOIN credibility_assessment ca ON ca.resource_id = rr.id
           WHERE rr.bib_record_id IN ${refIds}
-        `)) as unknown as { bib_id: string; authority: string | null; score: number | null; provider: string | null }[])
+        `)) as unknown as EnrichRow[])
       : [];
   const AUTH_ORDER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
-  const enrichByBib = new Map<string, { authority: string | null; credibilityScore: number | null; provider: string | null }>();
+  const enrichByBib = new Map<
+    string,
+    { authority: string | null; credibilityScore: number | null; provider: string | null; credibility: GraphNode["credibility"] }
+  >();
   for (const row of enrichRows) {
     if (!row.bib_id) continue;
     const prior = enrichByBib.get(row.bib_id);
     const better = !prior || (AUTH_ORDER[row.authority ?? "E"] ?? 4) < (AUTH_ORDER[prior.authority ?? "E"] ?? 4);
-    if (better) enrichByBib.set(row.bib_id, { authority: row.authority, credibilityScore: row.score, provider: row.provider });
+    if (better)
+      enrichByBib.set(row.bib_id, {
+        authority: row.authority,
+        credibilityScore: row.score,
+        provider: row.provider,
+        credibility: credibilityFromAssessment(row),
+      });
   }
 
   // 4) Reading state (records + ratings) for those references.
@@ -277,8 +375,10 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // a source node is never duplicated by its audit trail.
   const sourceRows = (await db.execute(sql`
     SELECT rr.id, rr.run_id, d.work_id, rr.bib_record_id, rr.normalized_key, rr.work_key, rr.work_role, rr.title, rr.authors,
-      rr.year, rr.url, rr.resource_type, rr.provider, rr.access_status,
+      rr.year, rr.url, rr.doi, rr.resource_type, rr.provider, rr.access_status,
       ca.authority, ca.score, ca.peer_reviewed,
+      ca.publication_rigor, ca.creator_expertise, ca.host_provenance, ca.pedagogical_value,
+      ca.relevance, ca.evidence_strength, ca.rationale, ca.creator, ca.popularity,
       rrc.status AS content_status, rrc.license, rrc.source_url,
       rp.provider AS provenance_provider, rp.inspected_at, rp.inspection_depth AS provenance_depth
     FROM research_resource rr
@@ -318,7 +418,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     SELECT role.id AS role_id, role.relationship, role.reader_level, role.confidence, role.rationale,
       w.id AS work_id,
       lr.id AS resource_id, lr.bib_record_id, lr.normalized_key, lr.title, lr.url,
-      lr.provider, lr.resource_type, lr.year, lr.authors, lr.peer_reviewed
+      lr.provider, lr.resource_type, lr.year, lr.authors, lr.peer_reviewed,
+      lr.work_role, lr.venue, lr.doi, lr.creator, lr.popularity
     FROM resource_role role
     JOIN work w ON w.work_identity_id = role.work_identity_id
     JOIN learning_resource lr ON lr.id = role.learning_resource_id
@@ -341,6 +442,23 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     WHERE d.user_id = ${userId} AND pr.is_published = true AND pa.related_resource_id IS NOT NULL
     ${rootWorkId ? sql`AND d.work_id = ${rootWorkId}` : sql``}
   `)) as unknown as PassageAnnotationRow[];
+
+  // 5e) Graph P1 (data contract v2, additive, forward-compat only): concept↔
+  // concept `graph_edge` rows. Verified nothing writes
+  // `source_type = 'concept'`/`target_type = 'concept'` today — the only
+  // concept-touching writer is Phase 21.2's work→concept classification
+  // (`apps/worker/src/analyze.ts`). This query exists so a FUTURE worker
+  // producer (e.g. an inter-concept "presupposes"/"related_to" pass over the
+  // concept catalog) needs no `buildGraph()` change to surface its edges; it
+  // is a guarded no-op — always zero rows — until such a producer exists.
+  // Not `rootWorkId`-scoped (concept-concept edges carry no work_id column);
+  // any row whose endpoints aren't already concept nodes in this request's
+  // scope is naturally dropped by the trailing connectivity filter below.
+  const conceptConceptEdges = (await db.execute(sql`
+    SELECT source_id, target_id, edge_type, (evidence->>'category') AS category, confidence
+    FROM graph_edge
+    WHERE user_id = ${userId} AND source_type = 'concept' AND target_type = 'concept'
+  `)) as unknown as EdgeRow[];
 
   // 6) Section outline nodes — work-scoped ONLY (see the module doc comment
   // for why this isn't attempted for the global graph). Pulled straight
@@ -467,6 +585,16 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       sourceTextStatus: current.sourceTextStatus ?? incoming.sourceTextStatus,
       license: current.license ?? incoming.license,
       sourceUrl: current.sourceUrl ?? incoming.sourceUrl,
+      // Graph P1 (data contract v2, additive): workRole/venue/doi are
+      // first-seen-wins like url/authors/year above. `credibility` is kept
+      // as a coherent whole from whichever source is currently the
+      // authority-rank winner (never mixing dimensions from two different
+      // providers), falling back to the other source's dossier only when
+      // the winner itself has none.
+      workRole: current.workRole ?? incoming.workRole,
+      doi: current.doi ?? incoming.doi,
+      venue: current.venue ?? incoming.venue,
+      credibility: incomingBetter ? (incoming.credibility ?? current.credibility) : (current.credibility ?? incoming.credibility),
       providers,
       provenances,
       provenance: provenances[0] ?? null,
@@ -493,6 +621,7 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       authors: r.authors, year: r.year, url: r.url,
       authority: enrich?.authority ?? null, credibilityScore: enrich?.credibilityScore ?? null,
       provider: enrich?.provider ?? null, kind: null,
+      credibility: enrich?.credibility ?? null,
     }, false);
   }
 
@@ -516,6 +645,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       authority: source.authority, credibilityScore: source.score, provider: source.provider,
       kind: source.resource_type, accessStatus: source.access_status,
       sourceTextStatus: source.content_status ?? "metadata_only", license: source.license, sourceUrl: source.source_url,
+      workRole: source.work_role, doi: source.doi,
+      credibility: credibilityFromAssessment(source),
       provenance: {
         runId: source.run_id, provider: source.provenance_provider ?? source.provider,
         inspectedAt: source.inspected_at ? new Date(source.inspected_at).toISOString() : null,
@@ -533,28 +664,69 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   // edge to it. On the rarer path where this run's own research pass didn't
   // (re)discover it, add a minimal node from the durable projection itself
   // rather than silently dropping the relationship.
+  //
+  // Graph P1 (data contract v2, additive): also the ONE place a node's
+  // `readerLevels` union is computed — every `resource_role` row targeting a
+  // node contributes its level (a null level, "applies at every level", per
+  // the plan, expands to every value in `READER_LEVELS` rather than a
+  // separate sentinel) — and the one place venue/doi/workRole/a
+  // learning-resource-only credibility fact get backfilled onto a node this
+  // run's own research didn't (re)discover with a fuller dossier.
   const roleNodeAdded = new Set<string>();
+  const readerLevelsByNode = new Map<string, Set<string>>();
+  const addReaderLevel = (nodeId: string, level: string | null) => {
+    const set = readerLevelsByNode.get(nodeId) ?? new Set<string>();
+    if (level == null) for (const lvl of READER_LEVELS) set.add(lvl);
+    else set.add(level);
+    readerLevelsByNode.set(nodeId, set);
+  };
   for (const role of resourceRoleRows) {
     const rawId = role.bib_record_id ? `external:bib:${role.bib_record_id}` : `external:source:${role.normalized_key ?? role.resource_id}`;
     const nodeId = canonicalNodeId(rawId);
+    addReaderLevel(nodeId, role.reader_level);
+    const roleCredibility: GraphNode["credibility"] =
+      role.peer_reviewed != null || role.creator != null || role.popularity != null
+        ? {
+            score: null, authority: null, publicationRigor: null, creatorExpertise: null,
+            hostProvenance: null, pedagogicalValue: null, relevance: null, evidenceStrength: null,
+            peerReviewed: role.peer_reviewed, rationale: null, creator: role.creator, popularity: role.popularity,
+          }
+        : null;
     if (!nodeById.has(nodeId) && !roleNodeAdded.has(nodeId)) {
       roleNodeAdded.add(nodeId);
       addNode({
         id: nodeId, label: role.title, type: resourceNodeType(role.peer_reviewed, role.resource_type), state: "unread",
         authors: displayAuthors(role.authors), year: role.year, url: role.url,
         authority: null, credibilityScore: null, provider: role.provider, kind: role.resource_type,
+        workRole: role.work_role, doi: role.doi, venue: role.venue, credibility: roleCredibility,
       });
+    } else {
+      // Node already exists from `refs`/`sourceRows` above — only backfill
+      // fields it doesn't already have, same current-wins pattern as
+      // `mergeExternal`, never overwriting a fuller dossier with this
+      // narrower one.
+      const existing = nodeById.get(nodeId);
+      if (existing) {
+        nodeById.set(nodeId, {
+          ...existing,
+          workRole: existing.workRole ?? role.work_role,
+          doi: existing.doi ?? role.doi,
+          venue: existing.venue ?? role.venue,
+          credibility: existing.credibility ?? roleCredibility,
+        });
+      }
     }
     const libraryId = (role.bib_record_id ? libraryIdByBib.get(role.bib_record_id) : undefined) ?? (role.normalized_key ? libraryIdByKey.get(role.normalized_key) : undefined);
     if (libraryId && !libraryDestinationByNodeId.has(nodeId)) libraryDestinationByNodeId.set(nodeId, `/library/${libraryId}`);
   }
 
   for (const c of conceptRows) {
-    const score = masteryByConcept.get(c.id) ?? 0;
+    const rawMastery = masteryByConcept.get(c.id);
     addNode({
       id: `concept:${c.id}`, label: c.label, type: c.kind === "person" ? "person" : "concept",
-      state: score >= KNOWN_THRESHOLD ? "read" : "unread", authors: null, year: null, url: null,
+      state: (rawMastery ?? 0) >= KNOWN_THRESHOLD ? "read" : "unread", authors: null, year: null, url: null,
       authority: null, credibilityScore: null, provider: null, kind: c.kind,
+      summary: c.summary, aliases: stringArray(c.aliases), masteryScore: rawMastery ?? null,
     });
   }
   for (const s of sectionRows) addNode({
@@ -586,7 +758,13 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
       category: pa.relationship,
       confidence: pa.confidence,
       explanation: pa.explanation,
-      evidence: { source: "passage_annotation", annotationType: pa.annotation_type, summary: pa.summary, isWholeWork: pa.is_whole_work },
+      // Graph P1 (data contract v2): `readerLevel` promoted to a top-level
+      // field — the `evidence.readerLevel` copy stays for back-compat.
+      readerLevel: pa.reader_level,
+      evidence: {
+        source: "passage_annotation", annotationType: pa.annotation_type, summary: pa.summary,
+        isWholeWork: pa.is_whole_work, readerLevel: pa.reader_level,
+      },
       provenance: { relationId: pa.annotation_id, runId: pa.run_id, depth: 0 },
     });
   }
@@ -659,10 +837,17 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
         category: role.relationship,
         confidence: role.confidence,
         explanation: role.rationale,
+        // Graph P1 (data contract v2): `readerLevel` promoted to a top-level
+        // field — the `evidence.readerLevel` copy stays for back-compat.
+        readerLevel: role.reader_level,
         evidence: { source: "resource_role", readerLevel: role.reader_level, roleId: role.role_id },
       };
     }),
     ...passageAnnotationLinks,
+    // Graph P1 (data contract v2, additive, forward-compat only) — see
+    // `mapConceptConceptEdges`'s own doc comment for why this is always a
+    // no-op today.
+    ...mapConceptConceptEdges(conceptConceptEdges, deriveEdgeCategory),
   ];
 
   // Phase 12.5: only a durable, evidence-hashed judgement becomes a
@@ -734,14 +919,21 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   }
   const deduplicatedLinks = [...linkByIdentity.values()];
   const connectedIds = new Set(deduplicatedLinks.flatMap((link) => [link.source, link.target]));
-  const visualNodes = [...nodeById.values()].filter((node) => connectedIds.has(node.id));
+  // Graph P1 (data contract v2): an UPLOADED WORK node stays visible even
+  // with zero edges — the reader's own library entry for a freshly uploaded
+  // or not-yet-analyzed work, not a research artifact that only matters via
+  // its connections. This corrects a real bug the module's own Phase 12.5
+  // comment above (`workRelationshipJudgments`) already claimed was true
+  // ("keeps an isolated work visible") but the code never actually did. See
+  // `selectVisualNodes`'s own doc comment for the full rule.
+  const workNodeIds = new Set(works.map((work) => `work:${work.id}`));
+  const visualNodes = selectVisualNodes([...nodeById.values()], connectedIds, workNodeIds);
   const visualIds = new Set(visualNodes.map((node) => node.id));
   const visualLinks = deduplicatedLinks.filter((link) => visualIds.has(link.source) && visualIds.has(link.target));
 
   // Finalization pass — the contract fields that need the complete link set
   // (plan §21.1): `uploaded`, per-node/per-edge `associatedWorkIds`, stable
   // edge ids, explicit `directed`, and the in-app `destination`.
-  const workNodeIds = new Set(works.map((work) => `work:${work.id}`));
   const associatedByNode = new Map<string, Set<string>>();
   const associate = (nodeId: string, workNodeId: string) => {
     const set = associatedByNode.get(nodeId) ?? new Set<string>();
@@ -762,6 +954,9 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     destination: workNodeIds.has(node.id)
       ? `/works/${node.id.slice("work:".length)}`
       : libraryDestinationByNodeId.get(node.id) ?? null,
+    // Graph P1 (data contract v2): sorted for a stable, testable payload —
+    // absent (not `[]`) when no `resource_role` row ever targeted this node.
+    readerLevels: readerLevelsByNode.get(node.id) ? [...readerLevelsByNode.get(node.id)!].sort() : undefined,
   }));
   const finalLinks: GraphLink[] = visualLinks.map((link) => ({
     ...link,
