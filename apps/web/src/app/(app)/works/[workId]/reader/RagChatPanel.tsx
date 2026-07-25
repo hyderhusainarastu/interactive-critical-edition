@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/ragConversationClient";
 import { canPlaySound, playSound } from "@/lib/sound";
+import { useReopenGuard } from "@/hooks/useReopenGuard";
 
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
 // Sub-phase 22.9b (plan §3.4): one quiet, collapsed line per chat-inferred
@@ -102,6 +103,9 @@ export function RagChatPanel({
   const historyTriggerRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyMenuId = useId();
+  // Same switch-bounce / trackpad double-fire guard as `AppShell.tsx`'s
+  // menus — see `useReopenGuard`'s doc comment.
+  const historyReopenGuard = useReopenGuard();
   const { preferences } = useWorkspacePreferences();
   const soundReady = canPlaySound(preferences.soundEnabled, !preferences.motionEnabled);
 
@@ -221,6 +225,7 @@ export function RagChatPanel({
 
   function openHistory() {
     setHistoryOpen(true);
+    historyReopenGuard.markOpened();
     void loadConversations();
   }
   function closeHistory() {
@@ -395,7 +400,7 @@ export function RagChatPanel({
               data-tooltip="Conversation history"
               aria-expanded={historyOpen}
               aria-controls={historyMenuId}
-              onClick={() => (historyOpen ? closeHistory() : openHistory())}
+              onClick={() => { if (historyOpen) { if (historyReopenGuard.shouldIgnoreClose()) return; closeHistory(); } else { openHistory(); } }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                 <circle cx="8" cy="8.5" r="6" fill="none" stroke="currentColor" strokeWidth="1.2" />

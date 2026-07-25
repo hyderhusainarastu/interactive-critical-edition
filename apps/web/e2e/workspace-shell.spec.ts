@@ -152,6 +152,74 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(profileDialog).toBeVisible();
   });
 
+  // Live-issue fix lane (2026-07-25, continued): a genuinely separate defect
+  // from the PageTransition remount test above. This one is the trigger's
+  // OWN toggle logic firing twice for a single physical click — on the
+  // owner's hardware (mouse switch-bounce, some macOS trackpad double-fire
+  // cases), a single physical click delivers two full pointerdown/click
+  // event pairs roughly 74-100ms apart, proven by live in-browser
+  // instrumentation: pointerdown/click → open → NODE-ADDED → ~74ms later a
+  // SECOND pointerdown/click on the SAME node → close → NODE-REMOVED. No
+  // outside-click handler exists in this codebase and no remount occurs
+  // (node identity stable) — this is purely `isOpen ? close() : open()`
+  // reading its own just-set state. Fixed by `useReopenGuard` (see that
+  // hook's doc comment): a close attempt within 250ms of the panel opening
+  // is ignored, so a genuine deliberate click-to-close still works once
+  // that window has passed (asserted below), while a bounced echo of the
+  // opening click does not close it.
+  test("survives two click events ~75ms apart on the same trigger (switch-bounce/double-fire), staying open", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    async function doubleFireClick(locator: ReturnType<typeof page.getByRole>) {
+      const box = await locator.boundingBox();
+      if (!box) throw new Error("trigger has no layout box");
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.up();
+      // The captured production timeline: ~74-100ms between the two
+      // synthetic event pairs from one physical click.
+      await page.waitForTimeout(75);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
+
+    const preferencesTrigger = page.getByRole("button", { name: "Workspace preferences" });
+    await doubleFireClick(preferencesTrigger);
+    const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
+    await expect(preferencesDialog).toBeVisible();
+    // Not just an instant-after check: the bug's second, closing event
+    // lands ~75ms after the first, which the guard window (250ms) covers,
+    // but staying visible across a longer real wait is the actual proof.
+    await page.waitForTimeout(300);
+    await expect(preferencesDialog).toBeVisible();
+
+    // A genuine, deliberate close well past the guard window must still
+    // work — the fix must not make the panel permanently sticky.
+    await page.waitForTimeout(300);
+    await preferencesTrigger.click();
+    await expect(preferencesDialog).toBeHidden();
+
+    // `exact` avoids matching the panel's own "Close account menu" button,
+    // whose accessible name otherwise substring-contains this one once the
+    // panel is open (the same ambiguity class D-19-1 fixed once already for
+    // "Theme") — this locator is reused below to click-close the panel.
+    const profileTrigger = page.getByRole("button", { name: "Account menu", exact: true });
+    await doubleFireClick(profileTrigger);
+    const profileDialog = page.getByRole("dialog", { name: "Account menu" });
+    await expect(profileDialog).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(profileDialog).toBeVisible();
+    await page.waitForTimeout(300);
+    await profileTrigger.click();
+    await expect(profileDialog).toBeHidden();
+  });
+
   test("moves focus to the exit control when focus mode hides the shell", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(EMAIL);

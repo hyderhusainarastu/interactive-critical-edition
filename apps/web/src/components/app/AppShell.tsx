@@ -11,6 +11,7 @@ import { BetaBadge } from "@/components/shared/BetaBadge";
 import { Wordmark } from "@/components/site/Wordmark";
 import { SoundToggle } from "@/components/site/SoundToggle";
 import { PageTransition } from "@/components/shared/PageTransition";
+import { useReopenGuard } from "@/hooks/useReopenGuard";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
@@ -84,6 +85,13 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
   const preferencesMenuId = useId();
   const ragSidebarId = useId();
   const profileMenuId = useId();
+  // Switch-bounce / trackpad double-fire guard (see `useReopenGuard`'s own
+  // doc comment): each of these three menus is toggled by a single trigger
+  // button, and each was observed opening then instantly closing again from
+  // one physical click on affected hardware.
+  const preferencesReopenGuard = useReopenGuard();
+  const ragReopenGuard = useReopenGuard();
+  const profileReopenGuard = useReopenGuard();
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const routeWorkId = WORK_ROUTE_PATTERN.exec(pathname)?.[1] ?? null;
   const navItems: NavItem[] = [
@@ -188,7 +196,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
               <button type="button" className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
             </div>
             <div className="relative">
-              <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => preferencesOpen ? closePreferences() : setPreferencesOpen(true)}>⚙</button>
+              <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => { if (preferencesOpen) { if (preferencesReopenGuard.shouldIgnoreClose()) return; closePreferences(); } else { setPreferencesOpen(true); preferencesReopenGuard.markOpened(); } }}>⚙</button>
               {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} readerLevel={readerLevel} onReaderLevelChange={updateReaderLevel} onClose={closePreferences} />}
             </div>
             {ragEnabled && (
@@ -200,7 +208,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
                 aria-label="Library chat sidebar"
                 aria-expanded={ragOpen}
                 aria-controls={ragSidebarId}
-                onClick={() => (ragOpen ? closeRag() : setRagOpen(true))}
+                onClick={() => { if (ragOpen) { if (ragReopenGuard.shouldIgnoreClose()) return; closeRag(); } else { setRagOpen(true); ragReopenGuard.markOpened(); } }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                   <rect x="1.5" y="2.5" width="13" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -218,7 +226,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
                 aria-label="Account menu"
                 aria-expanded={profileOpen}
                 aria-controls={profileMenuId}
-                onClick={() => (profileOpen ? closeProfile() : setProfileOpen(true))}
+                onClick={() => { if (profileOpen) { if (profileReopenGuard.shouldIgnoreClose()) return; closeProfile(); } else { setProfileOpen(true); profileReopenGuard.markOpened(); } }}
               >
                 <InitialsAvatar userId={userId} name={name} imageSrc={image} size={30} />
               </button>
