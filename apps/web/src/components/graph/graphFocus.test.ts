@@ -91,6 +91,45 @@ const data: Pick<GraphData, "nodes" | "links"> = {
   assert.deepEqual([...emphasis.emphasizedLinkIds].sort(), ["l1", "l2", "l3"], "every edge now has both endpoints emphasized");
 }
 
+// --- computeFocusEmphasis: "concepts" mode (Graph P4) ---------------------
+
+{
+  // work:1 has three one-hop neighbors of three different types: a
+  // reference (bib), a concept, and a person -- "concepts" mode must keep
+  // only the concept/person ones, not the reference, proving the mode
+  // genuinely narrows by TYPE rather than just being "focus" under another
+  // name.
+  function typedNode(id: string, label: string, type: GraphNode["type"]): GraphNode {
+    return { ...node(id, label), type };
+  }
+  const typedData: Pick<GraphData, "nodes" | "links"> = {
+    nodes: [
+      typedNode("work:1", "On the Soul", "work"),
+      typedNode("external:bib:1", "Physics", "reference"),
+      typedNode("concept:1", "Hylomorphism", "concept"),
+      typedNode("person:1", "Aristotle", "person"),
+    ],
+    links: [
+      link("l1", "work:1", "external:bib:1", "cites"),
+      link("l2", "work:1", "concept:1", "presupposes"),
+      link("l3", "work:1", "person:1", "discussed_by"),
+    ],
+  };
+  const emphasis = computeFocusEmphasis(typedData, "work:1", "concepts");
+  assert.deepEqual(
+    [...emphasis.emphasizedNodeIds].sort(),
+    ["concept:1", "person:1", "work:1"],
+    "'concepts' mode keeps the selection plus only its concept/person one-hop neighbors",
+  );
+  assert.deepEqual([...emphasis.dimmedNodeIds], ["external:bib:1"], "the reference neighbor is excluded from 'concepts' mode, unlike plain 'focus'");
+  assert.deepEqual([...emphasis.emphasizedLinkIds].sort(), ["l2", "l3"], "only edges to the kept concept/person neighbors stay emphasized");
+
+  // A selection with NO concept/person neighbors at all still emphasizes
+  // (only) itself, never falling back to "focus"'s full one-hop set.
+  const noConceptNeighbors = computeFocusEmphasis(typedData, "external:bib:1", "concepts");
+  assert.deepEqual([...noConceptNeighbors.emphasizedNodeIds], ["external:bib:1"]);
+}
+
 // --- emphasisStateForNode -------------------------------------------------
 
 {

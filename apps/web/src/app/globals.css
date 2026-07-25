@@ -82,6 +82,24 @@
      end of this file for how it's applied. */
   --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
 
+  /* Graph P3 (scene redesign core): the 3D canvas gets its OWN dark
+     "astronomical plate" backdrop in BOTH themes, framed by the ordinary
+     parchment card around it — a deliberately different surface from
+     --color-background/--color-surface so bloom/emissive-intensity
+     encodings (credibility halo, selective-emphasis glow) read as intended
+     luminance against something dark, the same reason a real observatory
+     plate or planetarium dome is never printed on white paper. Node accent
+     tokens are separate from the existing STATE_META/TYPE_META colorVars
+     (which stay theme-appropriate for the app UI) because a color tuned to
+     read on --color-background/--color-surface is not guaranteed legible
+     against this much darker plate — --color-graph-node-gold specifically
+     needs more contrast against near-black than --color-highlight (tuned
+     for the light paper) provides. */
+  --color-graph-backdrop: #0d1420;
+  --color-graph-node-gold: #e8b968; /* uploaded/pinned/next-up ring + scale accent */
+  --color-graph-node-wireframe: #a37e7e; /* missing (referenced, not acquired) node stroke */
+  --color-graph-node-ring-lit: #f2ead9; /* credibility ring's lit segments */
+
   --color-focus-ring: #263a4f;
   --gradient-hero: linear-gradient(135deg, #fbf9f4 0%, #eee8dd 48%, #e4edf1 100%);
   --gradient-accent: linear-gradient(135deg, #7a3f48, #765641 55%, #3e5d52);
@@ -117,6 +135,13 @@
   --color-beta-badge: #f0a94e; /* already >7:1 on the dark background */
   --color-status-highlight-text: #dcbd7f; /* same as --color-highlight (dark) — already ~10:1, dark mode was never the failing case */
   --color-graph-dim-text: #968e7c; /* ~5.1:1 on dark --color-surface #16202a */
+  /* Graph P3: the plate goes a shade deeper still than the already-dark app
+     background, so the canvas remains visually its own surface even in dark
+     mode rather than blending into --color-surface. */
+  --color-graph-backdrop: #05080c;
+  --color-graph-node-gold: #f0c47c;
+  --color-graph-node-wireframe: #c99b9b;
+  --color-graph-node-ring-lit: #fdf8ee;
   --color-focus-ring: #e9eff4;
   --color-surface-sunken: #202c37;
   --color-surface-strong: #4a6f93;
@@ -147,6 +172,10 @@
   --color-beta-badge: #91540a;
   --color-status-highlight-text: #8a6423; /* ~5.08:1 on --color-background */
   --color-graph-dim-text: #726a5c; /* ~4.7:1 on --color-surface #f4f0e7 */
+  --color-graph-backdrop: #0d1420;
+  --color-graph-node-gold: #e8b968;
+  --color-graph-node-wireframe: #a37e7e;
+  --color-graph-node-ring-lit: #f2ead9;
   --color-focus-ring: #263a4f;
   --color-surface-sunken: #eee8dd;
   --color-surface-strong: #263a4f;

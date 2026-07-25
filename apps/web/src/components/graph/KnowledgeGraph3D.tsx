@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph3D, { type ForceGraphMethods } from "react-force-graph-3d";
 import * as THREE from "three";
-import { forceCollide } from "d3-force-3d";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { forceCollide, forceLink } from "d3-force-3d";
 import { STAGE_LABEL, type CurriculumStage } from "@ice/curriculum";
+import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
 import {
   EDGE_FAMILY_META,
   STATE_META,
@@ -19,19 +22,101 @@ import {
 } from "./types";
 import {
   REFERENCE_CAMERA_DISTANCE,
+  authorityEmissiveIntensity,
+  collapseCurvature,
+  credibilitySegmentCount,
+  edgeCurvature,
   edgeDirectionCue,
+  edgeIsDashed,
   edgeLabelVisible,
   edgeRelationLabel,
   fitCameraToBbox,
+  graphEffectsForNodeCount,
   nodePrimaryLabelVisible,
   nodeScaleForDistance,
   nodeSecondaryLabelVisible,
   nodeSizeFactorForLayout,
+  particleCountForConfidence,
+  readerLevelBeadsVisible,
   screenSpaceLabelScale,
   type NodeLabelVisibilityContext,
 } from "./graphSceneScaling";
 import { buildNodeAdjacency, EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
+import { CONCEPT_ATTRACTION_STRENGTH, computeConceptAttractionPairs, type ConceptAttractionPair } from "./graphForces";
 import { assignStagePositions, stageHeaderPositions } from "./roadmapLayout";
+
+// Graph P3 (scene redesign core): a shared serif stack matching the app's
+// own --font-serif token (globals.css) -- canvas 2D text can't read a CSS
+// custom property, so the resolved font family is hardcoded here rather
+// than duplicated as a magic string at every `makeLabelSprite` call site.
+const LABEL_FONT_SERIF = "Georgia, 'Times New Roman', serif";
+
+// Reading-state surface opacity (plan's node-language table): "read solid,
+// reading + progress arc, unread 55% opacity, missing = wireframe,
+// structural muted". Missing's number is the WIREFRAME STROKE opacity, not
+// a fill -- its material also gets `wireframe: true` at creation time
+// (baked in, not mutated later, since state never changes without a full
+// `graphData` rebuild anyway).
+const STATE_OPACITY: Record<NodeState, number> = {
+  primary: 0.95,
+  read: 0.95,
+  reading: 0.85,
+  unread: 0.55,
+  missing: 0.55,
+  structural: 0.65,
+};
+
+/**
+ * Node GEOMETRY family (plan's node-language table): type = hue (material
+ * color, applied by the caller) + geometry family. Concept-typed nodes
+ * further vary by `concept_kind` (doctrine/tradition/debate/concept) rather
+ * than by NodeType, since `kind` is what the data contract actually attaches
+ * to a concept node (person-kind concepts are promoted to NodeType "person"
+ * upstream and get the capsule geometry via the ordinary type branch below,
+ * not a concept sub-case). "Debate" is the one composite shape --
+ * `mergeGeometries` bakes two offset tetrahedra into a single BufferGeometry
+ * so the rest of this file's "one shape mesh per node" mutation machinery
+ * (`stash.sphere`) needs no special-casing for it.
+ *
+ * Graph P4 (performance ladder): `sphereSegments` sizes every sphere this
+ * function returns (the generic type AND every non-`geometryVariety` node);
+ * `geometryVariety === false` (the ladder's ">800 nodes" tier) collapses
+ * EVERY node to the plain sphere regardless of type/kind, the single
+ * biggest geometry-cost reduction available at that scale.
+ */
+function nodeShapeGeometry(
+  node: Pick<GraphNode, "type" | "kind">,
+  baseRadius: number,
+  sphereSegments: readonly [number, number],
+  geometryVariety: boolean,
+): THREE.BufferGeometry {
+  if (geometryVariety) {
+    if (node.type === "person") return new THREE.CapsuleGeometry(baseRadius * 0.5, baseRadius * 0.9, 4, 10);
+    if (node.type === "section") return new THREE.CylinderGeometry(baseRadius, baseRadius, baseRadius * 0.22, 20);
+    if (node.type === "concept") {
+      switch (node.kind) {
+        case "doctrine":
+          return new THREE.DodecahedronGeometry(baseRadius * 0.92);
+        case "tradition":
+          return new THREE.TorusKnotGeometry(baseRadius * 0.62, baseRadius * 0.2, 64, 8);
+        case "debate": {
+          const a = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+          a.translate(-baseRadius * 0.28, 0, 0);
+          const b = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+          b.rotateY(Math.PI);
+          b.translate(baseRadius * 0.28, 0, 0);
+          return mergeGeometries([a, b]) ?? new THREE.OctahedronGeometry(baseRadius);
+        }
+        case "concept":
+        default:
+          return new THREE.OctahedronGeometry(baseRadius * 0.95);
+      }
+    }
+  }
+  // work, reference, peer_reviewed_source, online_source (always), and
+  // EVERY node type once `geometryVariety` is off: the generic sphere.
+  return new THREE.SphereGeometry(baseRadius, sphereSegments[0], sphereSegments[1]);
+}
 
 // Relative node size by kind — work is the anchor, concepts next, then
 // references, with sections (a per-work outline, often numerous) smallest.
@@ -209,12 +294,38 @@ type NodeGroupUserData = Partial<{
   sphere: THREE.Mesh;
   primarySprite: THREE.Sprite;
   secondarySprite: THREE.Sprite;
-  /** Next-up ring (Phase 22.8): created for EVERY node so it exists in the
+  /** Next-up/pinned accent ring (Phase 22.8, recolored gold and doubled up
+   *  for "pinned" in Graph P3): created for EVERY node so it exists in the
    *  scene from the start, kept invisible except by `applyNodeAccents`'s
    *  mutation pass — same "create once, mutate visibility" pattern as every
-   *  other per-node accent here, so toggling which node is next-up never
-   *  triggers the D-21-5 full-rebuild class of cost. */
+   *  other per-node accent here, so toggling which node is next-up/pinned
+   *  never triggers the D-21-5 full-rebuild class of cost. */
   ring: THREE.Mesh;
+  /** Graph P3: the "work: sphere + thin gold equatorial ring" type accent —
+   *  created ONLY for work-type nodes (always visible, no per-frame
+   *  visibility toggle needed since a node's TYPE never changes without a
+   *  full `graphData` rebuild) but still scaled alongside the shape mesh. */
+  equatorialRing?: THREE.Mesh;
+  /** Graph P3: the "reading" state's progress arc — created for every node
+   *  (its sweep angle is baked in from `masteryScore` at creation time,
+   *  never animated), visibility toggled by `applyNodeAccents` to exactly
+   *  the nodes currently in the "reading" state. */
+  progressArc?: THREE.Mesh;
+  /** Graph P3: the credibility ring's 0-4 lit segments, toggled by
+   *  `applyNodeAccents` per `credibilitySegmentCount(node.credibilityScore)`. */
+  credibilitySegments?: THREE.Mesh[];
+  /** Graph P3: up to `READER_LEVELS.length` orbital beads, one per reader
+   *  level, toggled visible only for levels the node's role data actually
+   *  applies at, only within `READER_LEVEL_BEAD_VISIBLE_DISTANCE`, and only
+   *  in explore mode (roadmap mode's fixed stage-column layout hides them —
+   *  Graph P4 pulled forward here since the gate is trivial to add at
+   *  creation-adjacent mutation time). */
+  readerLevelBeads?: THREE.Mesh[];
+  /** Graph P4 (choreography): a distinct ring shown only on a hovered
+   *  node's one-hop NEIGHBORS (never on the hovered node itself, which gets
+   *  the emissive lift instead, nor via selection) — "hover dim + emissive
+   *  lift on node + one-hop ring". */
+  hoverNeighborRing?: THREE.Mesh;
 }>;
 
 /** `userData` shape stashed on each edge-label `THREE.Sprite` by
@@ -228,6 +339,7 @@ type LinkSpriteUserData = Partial<{
   sourceId: string;
   targetId: string;
 }>;
+
 
 /**
  * The 3D force-directed knowledge graph (plan §16/§19). Built with
@@ -271,6 +383,7 @@ export function KnowledgeGraph3D({
   nextUpNodeId = null,
   onStageHeaderClick,
   showReadingThread = false,
+  exportRef,
 }: {
   data: GraphData;
   onNodeClick: (node: GraphNode) => void;
@@ -307,6 +420,14 @@ export function KnowledgeGraph3D({
    *  reading sequence, safe under reduced motion because it never animates
    *  in the first place. */
   showReadingThread?: boolean;
+  /** Graph P3: `GraphView`'s "Export PNG" button needs the bloom composer
+   *  re-rendered IMMEDIATELY before reading pixels — a WebGL canvas without
+   *  `preserveDrawingBuffer` can otherwise hand back a stale/cleared buffer
+   *  to `toDataURL()` when called from an unrelated click handler rather
+   *  than from inside the library's own animation-frame render. Populated
+   *  with a callback once the composer/bloom pass exist (see the dedicated
+   *  effect below); `GraphView` calls it right before `canvas.toDataURL()`. */
+  exportRef?: { current: (() => void) | null };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Typed loosely: the library's own generic ref shape (wrapping NodeType in
@@ -315,6 +436,12 @@ export function KnowledgeGraph3D({
   // the two call sites below instead of fighting the generics here.
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: 800, h: 520 });
+  // Graph P4: the performance degradation ladder (`graphSceneScaling.ts`) —
+  // ONE classification every visual system in this component reads, rather
+  // than several independently-drifting node-count checks. Declared early
+  // (a pure derivation of `data.nodes.length`, no WebGL readiness needed)
+  // since the bloom-setup effect below needs it too.
+  const graphEffects = useMemo(() => graphEffectsForNodeCount(data.nodes.length), [data.nodes.length]);
   const [colors, setColors] = useState<Record<NodeState, string>>();
   const [typeColors, setTypeColors] = useState<Record<NodeType, string>>();
   const [linkColors, setLinkColors] = useState<Record<EdgeFamily, string>>();
@@ -325,6 +452,11 @@ export function KnowledgeGraph3D({
   // theme, and could actually lose contrast against a light-theme resolution
   // of a themed pill if only the background changed and not the text).
   const [labelColors, setLabelColors] = useState<{ bg: string; fg: string }>();
+  // Graph P3: the astronomical-plate backdrop + the new gold/wireframe/
+  // ring-lit node accent tokens (globals.css) — resolved by the SAME
+  // MutationObserver machinery as every other themed color above, so a
+  // theme flip re-resolves these too.
+  const [graphTokens, setGraphTokens] = useState<{ backdrop: string; gold: string; wireframe: string; ringLit: string }>();
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const [motionAllowed, setMotionAllowed] = useState(true);
   // D-21-3: camera-to-origin distance, sampled on a THROTTLED interval
@@ -332,6 +464,11 @@ export function KnowledgeGraph3D({
   // only fires when the distance actually moves enough to matter.
   const [cameraDistance, setCameraDistance] = useState(REFERENCE_CAMERA_DISTANCE);
   const cameraDistanceRef = useRef(REFERENCE_CAMERA_DISTANCE);
+  // Graph P3: the opposition-edge dashed overlay group — see the dedicated
+  // rebuild effect further below and `linkThreeObject`'s own doc comment
+  // for why this lives as a fully separate scene-level object rather than
+  // being routed through the library's own link-object pipeline.
+  const dashOverlayGroupRef = useRef<THREE.Group | null>(null);
 
   // Measure the container so the canvas fills it (react-force-graph-3d
   // otherwise defaults to the full window and overflows the layout).
@@ -369,12 +506,75 @@ export function KnowledgeGraph3D({
         bg: cs.getPropertyValue("--color-surface-strong").trim() || "rgba(20,18,15,0.78)",
         fg: cs.getPropertyValue("--color-surface-strong-fg").trim() || "#ffffff",
       });
+      setGraphTokens({
+        backdrop: cs.getPropertyValue("--color-graph-backdrop").trim() || "#0d1420",
+        gold: cs.getPropertyValue("--color-graph-node-gold").trim() || "#e8b968",
+        wireframe: cs.getPropertyValue("--color-graph-node-wireframe").trim() || "#a37e7e",
+        ringLit: cs.getPropertyValue("--color-graph-node-ring-lit").trim() || "#f2ead9",
+      });
     };
     resolve();
     const obs = new MutationObserver(resolve);
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => obs.disconnect();
   }, []);
+
+  // Graph P3 (bloom): added to the library's OWN composer exactly once —
+  // `postProcessingComposer()` already exists and already renders every
+  // frame (three-render-objects creates it unconditionally with a base
+  // RenderPass), so adding this ONE extra pass is all that's needed; no
+  // separate render loop to wire up. Deliberately NOT gated on
+  // `motionAllowed` — bloom is a static per-frame luminance filter with no
+  // animation of its own, so it stays on under reduced motion exactly as
+  // the plan requires (only particles/camera transitions are motion-gated).
+  // Immediate + next-frame retry (same pattern as every other `fgRef`-
+  // dependent effect here) since the composer only exists once
+  // `<ForceGraph3D>` itself has mounted.
+  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
+  const BLOOM_STRENGTH = 0.9;
+  // Graph P4: the performance ladder's "half"/"off" bloom tiers are applied
+  // in this SAME effect (rather than a second one keyed only on
+  // `graphEffects.bloom`) specifically to avoid a startup race — a large
+  // graph loaded from the very first render would otherwise need the pass
+  // to already exist before a separate tier-effect's single run could find
+  // it, and `bloomPassRef.current` isn't guaranteed set until the retry-rAF
+  // below actually lands. Folding tier application into the SAME
+  // create-or-update effect (re-run whenever `graphEffects.bloom` changes
+  // too) means there is no window where the pass exists but hasn't had the
+  // current tier applied.
+  useEffect(() => {
+    const setup = () => {
+      const graph = fgRef.current;
+      if (!graph) return;
+      let pass = bloomPassRef.current;
+      if (!pass) {
+        const composer = graph.postProcessingComposer();
+        pass = new UnrealBloomPass(new THREE.Vector2(Math.max(size.w, 1), Math.max(size.h, 1)), BLOOM_STRENGTH, 0.35, 0.55);
+        composer.addPass(pass);
+        bloomPassRef.current = pass;
+      }
+      pass.enabled = graphEffects.bloom !== "off";
+      pass.strength = graphEffects.bloom === "half" ? BLOOM_STRENGTH / 2 : BLOOM_STRENGTH;
+    };
+    setup();
+    const raf = requestAnimationFrame(setup);
+    return () => cancelAnimationFrame(raf);
+  }, [colors, typeColors, linkColors, labelColors, size.w, size.h, graphEffects.bloom]);
+
+  // Graph P3: hands `GraphView` a way to force a fresh composer render
+  // right before it reads pixels for "Export PNG" — see `exportRef`'s own
+  // doc comment above for why this is necessary at all.
+  useEffect(() => {
+    if (!exportRef) return;
+    exportRef.current = () => {
+      const graph = fgRef.current;
+      if (!graph) return;
+      graph.postProcessingComposer().render();
+    };
+    return () => {
+      if (exportRef) exportRef.current = null;
+    };
+  }, [exportRef]);
 
   // Decorative motion is an enhancement only: stop particles/camera animation
   // for reduced-motion users, hidden browser tabs, and graphs large enough to
@@ -391,30 +591,111 @@ export function KnowledgeGraph3D({
     };
   }, []);
 
-  // D-21-3: throttled camera-distance sampling. Direct-manipulation zoom
-  // feedback (not ambient/decorative animation), so this runs regardless of
-  // `motionAllowed` — same distinction this file already draws for
-  // billboarding always facing the camera.
+  // D-21-3, migrated in Graph P4: camera-distance sampling now fires off the
+  // OrbitControls' own "change" event (dispatched on every real camera
+  // transform — drag, zoom, damping-driven inertia frames, and the
+  // programmatic `cameraPosition()` transitions this file already uses for
+  // reset/fly-to) rather than blindly polling every 180ms regardless of
+  // whether the camera actually moved. An rAF coalesces bursts of "change"
+  // events within the same frame into one sample, and the EXISTING
+  // quantization (`> 3` world units) still guards the eventual `setState`
+  // exactly as before — event-driven is a strictly closer-to-real-time
+  // replacement for the poll, not a loosening of the throttle discipline.
+  // Direct-manipulation zoom feedback (not ambient/decorative animation), so
+  // this runs regardless of `motionAllowed` — same distinction this file
+  // already draws for billboarding always facing the camera. Immediate +
+  // next-frame retry (same pattern as every other `fgRef`-dependent effect
+  // here) since `controls()` only exists once `<ForceGraph3D>` has mounted.
   useEffect(() => {
-    const sample = () => {
+    let rafPending = false;
+    let cleanupControls: (() => void) | undefined;
+    const sampleDistance = () => {
       const graph = fgRef.current;
-      if (!graph) return;
-      const camera = graph.camera();
+      const camera = graph?.camera();
       if (!camera) return;
       const distance = camera.position.length();
-      // Only setState when the change is large enough to actually move a
-      // clamped scale factor — keeps this genuinely throttled rather than
-      // firing a React update every 180ms regardless of whether anything
-      // would visually change.
       if (Math.abs(distance - cameraDistanceRef.current) > 3) {
         cameraDistanceRef.current = distance;
         setCameraDistance(distance);
       }
     };
-    sample();
-    const id = setInterval(sample, 180);
-    return () => clearInterval(id);
+    const onChange = () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        sampleDistance();
+      });
+    };
+    const setup = () => {
+      const graph = fgRef.current;
+      if (!graph) {
+        raf = requestAnimationFrame(setup);
+        return;
+      }
+      sampleDistance();
+      const controls = graph.controls() as Partial<{
+        addEventListener: (event: string, listener: () => void) => void;
+        removeEventListener: (event: string, listener: () => void) => void;
+      }>;
+      if (controls.addEventListener) {
+        controls.addEventListener("change", onChange);
+        cleanupControls = () => controls.removeEventListener?.("change", onChange);
+      }
+    };
+    let raf = requestAnimationFrame(setup);
+    return () => {
+      cancelAnimationFrame(raf);
+      cleanupControls?.();
+    };
   }, []);
+
+  // Graph P4: the opposition-edge dashed overlay's LIVE endpoint positions
+  // are a NODE-content concern, not a camera concern (unlike the distance
+  // sampling above) — nodes only move during the force simulation's own
+  // settling window (`enableNodeDrag={false}`, so there is no other source
+  // of node motion), so this is a bounded-duration interval that starts
+  // whenever `graphData` changes and stops itself once `onEngineStop` fires
+  // (below) or a generous safety timeout elapses, rather than running
+  // forever or riding the (unrelated) camera-change event above.
+  const dashOverlaySettledRef = useRef(false);
+  useEffect(() => {
+    dashOverlaySettledRef.current = false;
+    const reposition = () => {
+      const graph = fgRef.current;
+      const overlay = dashOverlayGroupRef.current;
+      if (!graph || !overlay || overlay.children.length === 0) return;
+      const positions = new Map<string, THREE.Vector3>();
+      graph.scene().traverse((object) => {
+        const stash = object.userData as NodeGroupUserData;
+        if (stash.nodeId) positions.set(stash.nodeId, object.position);
+      });
+      for (const child of overlay.children) {
+        const line = child as THREE.Line;
+        const { sourceId, targetId } = line.userData as { sourceId?: string; targetId?: string };
+        const start = sourceId ? positions.get(sourceId) : undefined;
+        const end = targetId ? positions.get(targetId) : undefined;
+        if (!start || !end) continue;
+        line.geometry.setFromPoints([start, end]);
+        line.computeLineDistances();
+      }
+    };
+    reposition();
+    const id = setInterval(() => {
+      reposition();
+      if (dashOverlaySettledRef.current) clearInterval(id);
+    }, 150);
+    const safetyTimeout = setTimeout(() => clearInterval(id), 8000);
+    return () => {
+      clearInterval(id);
+      clearTimeout(safetyTimeout);
+    };
+    // Depends on the same inputs `graphData`'s own useMemo below does
+    // (data/pinnedWorkIds/layoutMode) rather than `graphData` itself, which
+    // is declared further down this component — this effect only needs to
+    // know WHEN a new settling window starts, never the value itself
+    // (positions are read live via scene traversal inside `reposition`).
+  }, [data, pinnedWorkIds, layoutMode]);
 
   const nodeSceneScale = useMemo(() => nodeScaleForDistance(cameraDistance), [cameraDistance]);
 
@@ -474,6 +755,69 @@ export function KnowledgeGraph3D({
     );
   }, [graphData]);
 
+  // Graph P4 (concept clustering): a mild EXTRA attraction between a
+  // resource and any concept node it directly cites/discusses/etc — pure
+  // pair derivation in `graphForces.ts`, registered via `d3-force-3d`'s own
+  // `forceLink` (a second, independent link force alongside the base "link"
+  // force above, not a replacement for it) rather than hand-rolled force
+  // math. Explore mode ONLY: roadmap mode's nodes are fixed via fx/fy/fz
+  // with cooldown at 0 (same reasoning the collision-force comment above
+  // already gives), so an attraction force would have nothing to act on
+  // there regardless. `null` removes a previously-registered force outright
+  // (documented d3-force API), so a graph with no qualifying pairs — or a
+  // switch back to roadmap mode — cleanly clears any earlier registration.
+  //
+  // Registered in its OWN effect, deferred one animation frame AND wrapped
+  // in try/catch, rather than synchronously alongside the base forces
+  // above — found by a real test failure during this phase's own
+  // verification: `Simulation.force(name, forceFn)` calls
+  // `forceFn.initialize()` IMMEDIATELY against whatever node array the
+  // underlying (non-React) simulation already has registered, but
+  // `three-forcegraph`'s own internal sync of a freshly changed `graphData`
+  // prop is NOT guaranteed to have completed by the time this SIBLING React
+  // effect fires (a one-frame defer measurably reduces how often this races
+  // but does not eliminate it — reproduced still throwing even after adding
+  // the defer, during this same investigation). A same-tick-or-still-stale
+  // registration initializes `forceLink` against the PREVIOUS node set,
+  // throwing "node not found" for any id only present in the new one.
+  // Reproduced live: filtering the Kind select to "reference" (dropping a
+  // concept node) then clicking "Clear all filters" crashed the whole graph
+  // pane into its error boundary. The try/catch is the actual fix — same
+  // defensive posture every OTHER `scene().traverse()`-based mutation in
+  // this file already takes toward "the library's internal state might
+  // briefly lag the React props" (guard-and-skip, never assume perfect
+  // sync) — a caught failure here just means the next real `graphData`
+  // change (which will come regardless, since the underlying data did
+  // change) retries the registration; the rAF defer is kept alongside it
+  // purely to reduce how often the catch path is actually exercised.
+  useEffect(() => {
+    const registerConceptAttraction = () => {
+      const graph = fgRef.current;
+      if (!graph) return;
+      try {
+        if (layoutMode !== "explore") {
+          graph.d3Force("conceptAttraction", null);
+          return;
+        }
+        const pairs = computeConceptAttractionPairs(data.nodes, data.links);
+        graph.d3Force(
+          "conceptAttraction",
+          pairs.length > 0
+            ? forceLink<object, ConceptAttractionPair>(pairs)
+                .id((n: object) => (n as GraphNode).id)
+                .strength(CONCEPT_ATTRACTION_STRENGTH)
+                .distance(40)
+            : null,
+        );
+      } catch {
+        // The underlying simulation's node registration was still stale —
+        // skip this attempt; the next real data/layout change retries.
+      }
+    };
+    const raf = requestAnimationFrame(registerConceptAttraction);
+    return () => cancelAnimationFrame(raf);
+  }, [graphData, layoutMode, data.nodes, data.links]);
+
   // Neighbor adjacency, built once per data change rather than per hover
   // event — shared with `graphFocus.ts`'s selection-focus computation
   // rather than a second, locally-reimplemented adjacency map.
@@ -507,7 +851,7 @@ export function KnowledgeGraph3D({
     }
     return ids;
   }, [hasSelectionFocus, emphasis, hoverNode, data.links]);
-  const effectsEnabled = motionAllowed && data.nodes.length <= 140;
+  const effectsEnabled = motionAllowed && graphEffects.particles;
 
   // D-21-5: depends only on theme-resolved `typeColors`/`labelColors` —
   // never `selectedNodeId`/`pinnedWorkIds`, which used to force a full
@@ -521,6 +865,9 @@ export function KnowledgeGraph3D({
     const color = typeColors?.[node.type] ?? "#888";
     const labelBg = labelColors?.bg ?? "rgba(20,18,15,0.78)";
     const labelFg = labelColors?.fg ?? "#ffffff";
+    const gold = graphTokens?.gold ?? "#e8b968";
+    const wireframeColor = graphTokens?.wireframe ?? "#a37e7e";
+    const ringLit = graphTokens?.ringLit ?? "#f2ead9";
     // Phase 22.8: "known" is part of the per-node PAYLOAD (baked in by the
     // server-side roadmap projection), read directly from `node` at creation
     // time exactly like `node.label`/`node.type` above it — never part of
@@ -529,15 +876,108 @@ export function KnowledgeGraph3D({
     // i.e. a real re-fetch, the same trigger that already rebuilds every
     // node's sphere/label regardless).
     const known = node.roadmap?.known === true;
+    const isMissing = node.state === "missing";
     const group = new THREE.Group();
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(baseRadius, 18, 14),
-      // Reduced opacity for a known/already-read item — color is never the
-      // sole signal, the check glyph in the secondary label text below
-      // carries the same meaning for anyone who can't distinguish opacity.
-      new THREE.MeshLambertMaterial({ color, transparent: true, opacity: known ? 0.45 : 0.92 }),
-    );
+
+    // Graph P3: node GEOMETRY now varies by type/concept-kind (see
+    // `nodeShapeGeometry`'s own doc comment) rather than a universal sphere,
+    // and the material carries an `emissive`/`emissiveIntensity` pair for
+    // the credibility halo + selective-emphasis glow `applyNodeAccents`
+    // drives every frame — MUTATED, never recreated, same D-21-5 discipline
+    // as everything else here. "missing" (referenced-but-not-acquired)
+    // renders as a wireframe stroke in the dedicated wireframe token color
+    // rather than the type hue, so the state reads consistently across
+    // every node type/geometry, not just as a dimmer fill.
+    const shapeGeometry = nodeShapeGeometry(node, baseRadius, graphEffects.sphereSegments, graphEffects.geometryVariety);
+    const shapeMaterial = new THREE.MeshLambertMaterial({
+      color: isMissing ? wireframeColor : color,
+      wireframe: isMissing,
+      transparent: true,
+      // Reduced opacity for a known/already-read roadmap item on top of the
+      // state-driven baseline — color/wireframe is never the sole signal,
+      // the check glyph in the secondary label text below carries the same
+      // meaning for anyone who can't distinguish opacity.
+      opacity: known ? Math.min(STATE_OPACITY[node.state], 0.5) : STATE_OPACITY[node.state],
+      emissive: new THREE.Color(isMissing ? wireframeColor : color),
+      emissiveIntensity: 0, // set every frame by applyNodeAccents (authority halo + selective emphasis)
+    });
+    const sphere = new THREE.Mesh(shapeGeometry, shapeMaterial);
     group.add(sphere);
+
+    // "work: sphere + thin gold equatorial ring" — created ONLY for
+    // work-type nodes (every work node IS an uploaded work per the data
+    // contract, so this doubles as the "uploaded" accent with no separate
+    // condition needed), lying flat like a planetary ring rather than
+    // facing the camera like the credibility/next-up rings below.
+    let equatorialRing: THREE.Mesh | undefined;
+    if (node.type === "work") {
+      equatorialRing = new THREE.Mesh(
+        new THREE.TorusGeometry(baseRadius * 1.15, Math.max(0.3, baseRadius * 0.06), 8, 32),
+        new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.85 }),
+      );
+      equatorialRing.rotation.x = Math.PI / 2;
+      group.add(equatorialRing);
+    }
+
+    // "reading + progress arc": a partial ring swept to `masteryScore` when
+    // a real one is recorded (concept/person nodes), or a fixed schematic
+    // fraction otherwise — never a fabricated PERCENTAGE for a work/
+    // reference node the app has no numeric reading-progress data for, just
+    // a bounded "in progress" glyph distinguishing it from unread/read.
+    // Sweep angle is baked in at creation (never animated), so only
+    // visibility needs mutating per frame.
+    const progressFraction = node.masteryScore != null ? Math.max(0, Math.min(1, node.masteryScore / 100)) : 0.55;
+    const progressArc = new THREE.Mesh(
+      new THREE.TorusGeometry(baseRadius * 1.35, Math.max(0.3, baseRadius * 0.08), 6, 24, Math.max(0.05, progressFraction) * Math.PI * 2),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 }),
+    );
+    progressArc.visible = false;
+    group.add(progressArc);
+
+    // Credibility ring: 0-4 lit segments (`credibilitySegmentCount`),
+    // evenly spaced with a gap between each so the count reads as discrete
+    // steps rather than one continuous arc.
+    const credibilitySegments: THREE.Mesh[] = [];
+    for (let i = 0; i < 4; i++) {
+      const segment = new THREE.Mesh(
+        new THREE.TorusGeometry(baseRadius * 1.55, Math.max(0.25, baseRadius * 0.05), 6, 8, ((Math.PI * 2) / 4) * 0.78),
+        new THREE.MeshBasicMaterial({ color: ringLit, transparent: true, opacity: 0.92 }),
+      );
+      segment.rotation.z = (i * Math.PI * 2) / 4;
+      segment.visible = false;
+      group.add(segment);
+      credibilitySegments.push(segment);
+    }
+
+    // Reader-level orbital beads: one per `READER_LEVELS` entry, fixed
+    // position per level index so a given level always sits at the same
+    // "clock position" across every node — only the visible subset differs.
+    // Graph P4: skipped entirely (not just hidden) once the performance
+    // ladder's `beads` flag is off — creation cost, not just a visibility
+    // toggle, is what the ladder exists to save at higher node counts.
+    const readerLevelBeads: THREE.Mesh[] = [];
+    if (graphEffects.beads) {
+      const beadGeometry = new THREE.SphereGeometry(Math.max(0.6, baseRadius * 0.18), 8, 6);
+      for (let i = 0; i < READER_LEVELS.length; i++) {
+        const bead = new THREE.Mesh(beadGeometry, new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.9 }));
+        const angle = (i / READER_LEVELS.length) * Math.PI * 2;
+        bead.position.set(Math.cos(angle) * baseRadius * 1.9, Math.sin(angle) * baseRadius * 1.9, 0);
+        bead.visible = false;
+        group.add(bead);
+        readerLevelBeads.push(bead);
+      }
+    }
+
+    // Hover one-hop neighbor ring (Graph P4 choreography): a distinct,
+    // muted ring shown ONLY on the hovered node's direct neighbors — sized
+    // between the equatorial/progress rings and the credibility ring so it
+    // never visually collides with either.
+    const hoverNeighborRing = new THREE.Mesh(
+      new THREE.TorusGeometry(baseRadius * 1.45, Math.max(0.25, baseRadius * 0.05), 8, 28),
+      new THREE.MeshBasicMaterial({ color: ringLit, transparent: true, opacity: 0.55 }),
+    );
+    hoverNeighborRing.visible = false;
+    group.add(hoverNeighborRing);
 
     // Two SEPARATE canvas sprites (title, type/state) rather than one
     // combined texture, so the secondary line can be hidden independently
@@ -555,16 +995,23 @@ export function KnowledgeGraph3D({
     const title = node.label.length > 42 ? `${node.label.slice(0, 39)}…` : node.label;
     const { sprite: primarySprite, aspect: primaryAspect } = makeLabelSprite(
       title,
-      "600 30px system-ui, sans-serif",
+      `600 28px ${LABEL_FONT_SERIF}`,
       labelFg,
       PRIMARY_LABEL_CANVAS_HEIGHT,
       labelBg,
       { sizeAttenuation: false },
     );
-    const secondaryText = `${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}${known ? " · ✓ read" : ""}`;
+    // Reader-level chip in the secondary label (plan's "level chip in
+    // secondary label" requirement) — a short slash-joined abbreviation,
+    // absent entirely when the node carries no role-scoping data at all
+    // (never punish/misrepresent missing data as "applies nowhere").
+    const levelChip = node.readerLevels && node.readerLevels.length > 0
+      ? ` · ${node.readerLevels.map((level) => level.slice(0, 3)).join("/")}`
+      : "";
+    const secondaryText = `${node.type.replace(/_/g, " ")} · ${STATE_META[node.state].label}${known ? " · ✓ read" : ""}${levelChip}`;
     const { sprite: secondarySprite, aspect: secondaryAspect } = makeLabelSprite(
       secondaryText,
-      "22px system-ui, sans-serif",
+      `20px ${LABEL_FONT_SERIF}`,
       labelFg,
       SECONDARY_LABEL_CANVAS_HEIGHT,
       labelBg,
@@ -584,13 +1031,13 @@ export function KnowledgeGraph3D({
     secondarySprite.renderOrder = 1;
     group.add(primarySprite, secondarySprite);
 
-    // Next-up ring (Phase 22.8): created for EVERY node, hidden by default —
-    // `applyNodeAccents` toggles `.visible` for whichever node id is
-    // currently `nextUpNodeId`, the same create-once/mutate-visibility
-    // pattern D-21-5 already established for selection/pin accents.
+    // Next-up/pinned accent ring (Phase 22.8, gold per Graph P3): created
+    // for EVERY node, hidden by default — `applyNodeAccents` toggles
+    // `.visible` for whichever node is currently next-up OR pinned, the
+    // same create-once/mutate-visibility pattern D-21-5 already established.
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(baseRadius * 1.7, Math.max(0.4, baseRadius * 0.14), 8, 28),
-      new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.85 }),
+      new THREE.MeshBasicMaterial({ color: gold, transparent: true, opacity: 0.85 }),
     );
     ring.visible = false;
     group.add(ring);
@@ -605,10 +1052,15 @@ export function KnowledgeGraph3D({
       primarySprite,
       secondarySprite,
       ring,
+      equatorialRing,
+      progressArc,
+      credibilitySegments,
+      readerLevelBeads,
+      hoverNeighborRing,
     };
     group.userData = nodeUserData;
     return group;
-  }, [typeColors, labelColors]);
+  }, [typeColors, labelColors, graphTokens, graphEffects]);
 
   // D-21-4: the edge-relation label sprite. Depends only on the theme-
   // resolved `labelColors` (same accepted rebuild class as `typeColors`
@@ -617,14 +1069,22 @@ export function KnowledgeGraph3D({
   // invisible, revealed by `applyLinkAccents` below. Combined with
   // `linkThreeObjectExtend` (constant `true`, see the JSX), the library
   // keeps managing the default line/cylinder object exactly as before;
-  // this sprite is purely an additional child.
+  // this sprite is purely an additional child. MUST stay a bare Sprite
+  // (never wrapped in an extra Group here) — `applyLinkAccents` below finds
+  // the library's own default line mesh via `sprite.parent.children[0]`,
+  // which relies on `sprite.parent` being the library's OWN wrapping group
+  // (`linkThreeObjectExtend`'s `new Group(); .add(defaultObj); .add(customObj)`).
+  // The opposition-edge dashed overlay (Graph P3, `edgeIsDashed`) is
+  // therefore NOT routed through this function at all — see the dedicated
+  // `dashOverlayGroupRef` effect below, which owns it as a fully separate
+  // scene-level object precisely to avoid that coupling.
   const linkThreeObject = useCallback((value: object) => {
     const link = value as GraphLink;
     const text = edgeRelationLabel(link.edgeType, link.category);
     const clipped = text.length > 30 ? `${text.slice(0, 27)}…` : text;
     const { sprite, aspect } = makeLabelSprite(
       clipped,
-      "600 22px system-ui, sans-serif",
+      `600 20px ${LABEL_FONT_SERIF}`,
       labelColors?.fg ?? "#ffffff",
       EDGE_LABEL_CANVAS_HEIGHT,
       labelColors?.bg ?? "rgba(20,18,15,0.78)",
@@ -653,9 +1113,21 @@ export function KnowledgeGraph3D({
   // `LINK_HOVER_WIDTH_FACTOR` for why this can no longer read `hoverNode`.
   const linkWidth = useCallback(() => BASE_LINK_WIDTH, []);
 
+  // Curvature per edge family (link-language table) — structural edges stay
+  // straight, opposition bows the most (and renders dashed, above). Graph
+  // P4: collapsed to the coarser 2-tier scheme at higher node counts per
+  // the performance ladder.
+  const linkCurvature = useCallback((l: object) => {
+    const link = l as GraphLink;
+    return collapseCurvature(edgeCurvature(link.edgeType, link.category), graphEffects.curvatureTiers);
+  }, [graphEffects.curvatureTiers]);
+
+  // Particle COUNT scales with the edge's own confidence (1-3) once
+  // particles are the chosen direction cue at all — `edgeDirectionCue`
+  // still decides particles-vs-arrow-vs-none exactly as before.
   const linkDirectionalParticles = useCallback((l: object) => {
     const link = l as GraphLink;
-    return edgeDirectionCue(link.edgeType, effectsEnabled) === "particles" ? 2 : 0;
+    return edgeDirectionCue(link.edgeType, effectsEnabled) === "particles" ? particleCountForConfidence(link.confidence) : 0;
   }, [effectsEnabled]);
 
   // Direction-cue gap: a static arrowhead is the fallback the instant
@@ -698,6 +1170,25 @@ export function KnowledgeGraph3D({
   // — an ADDITIONAL multiplier on top of the zoom-driven `nodeScaleFactor`.
   const layoutSizeFactor = useMemo(() => nodeSizeFactorForLayout(layoutMode), [layoutMode]);
 
+  // Graph P3: node-data lookup for the mutation pass below (credibility,
+  // reader levels, mastery, state) — `applyNodeAccents` only has the
+  // `userData` stash's nodeId/nodeType (tagged at creation) to work from
+  // otherwise, same "no exposed graphData()" constraint documented above.
+  // Stable per fetch, so this costs nothing extra beyond a `data.nodes`
+  // change (which already retriggers the effects that call this function).
+  const nodesById = useMemo(() => new Map(data.nodes.map((n) => [n.id, n])), [data.nodes]);
+
+  // Graph P4 (choreography): "select keeps ... a 300ms emissive swell" — a
+  // transient extra emissiveIntensity bump on the newly-selected node that
+  // decays linearly back to baseline over 300ms, skipped under reduced
+  // motion/hidden-tab/large-graph (`effectsEnabled`) exactly like the
+  // fly-to transition's own duration already is. `applyNodeAccents` reads
+  // this ref directly (never React state) so the swell doesn't cause its
+  // own re-renders; the short-lived rAF loop driving it is registered in a
+  // dedicated effect further below, keyed on `selectedNodeId`.
+  const selectionSwellRef = useRef<{ nodeId: string; startTime: number } | null>(null);
+  const SELECTION_SWELL_MS = 300;
+
   const applyNodeAccents = useCallback(() => {
     const graph = fgRef.current;
     if (!graph) return;
@@ -705,14 +1196,49 @@ export function KnowledgeGraph3D({
     const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : PLACEHOLDER_FOV_DEGREES;
     const primaryScaleY = screenSpaceLabelScale(PRIMARY_LABEL_PX, fov, size.h);
     const secondaryScaleY = screenSpaceLabelScale(SECONDARY_LABEL_PX, fov, size.h);
+    const beadsAllowed = layoutMode === "explore" && readerLevelBeadsVisible(cameraDistance);
     graph.scene().traverse((object) => {
       const stash = object.userData as NodeGroupUserData;
       if (!stash.nodeId || !stash.nodeType || !stash.sphere || !stash.primarySprite || !stash.secondarySprite || stash.baseRadius == null) return;
+      const node = nodesById.get(stash.nodeId);
       const isSelected = selectedNodeId === stash.nodeId;
       const isPinned = pinnedWorkIds.includes(stash.nodeId);
       const nodeFactor = (nodeSceneScale.nodeScaleFactor + (isPinned ? PIN_SCALE_BUMP : 0) + (isSelected ? SELECTED_SCALE_BUMP : 0)) * layoutSizeFactor;
       stash.sphere.scale.setScalar(nodeFactor);
       const radiusWorld = stash.baseRadius * nodeFactor;
+
+      // Graph P3: selective emphasis + credibility halo, both applied via
+      // `material.emissiveIntensity` (never THREE layers) — the mutation
+      // this file's whole D-21-5 architecture exists to make cheap. Bloom
+      // (mounted once, see the composer effect below) then picks up
+      // whichever nodes render above its luminance threshold. When nothing
+      // is highlighted at all, every node keeps its full authority-driven
+      // halo plus a small baseline lift so the plate isn't inert; once a
+      // selection/hover focus IS active, emphasized nodes get an additional
+      // boost and everything else is suppressed toward near-zero — the same
+      // emphasize/dim split `nodeColor` below already applies to color.
+      const shapeMaterial = stash.sphere.material as THREE.MeshLambertMaterial;
+      if (shapeMaterial && node) {
+        const authorityGlow = authorityEmissiveIntensity(node.authority, node.credibility?.score ?? node.credibilityScore ?? null);
+        const isEmphasized = !highlightNodeIds || highlightNodeIds.has(stash.nodeId);
+        // Graph P4: the transient selection swell — linear decay to 0 over
+        // `SELECTION_SWELL_MS`, added on top of the P3 baseline below.
+        const swell = selectionSwellRef.current && selectionSwellRef.current.nodeId === stash.nodeId
+          ? Math.max(0, 1 - (performance.now() - selectionSwellRef.current.startTime) / SELECTION_SWELL_MS) * 0.6
+          : 0;
+        shapeMaterial.emissiveIntensity = (highlightNodeIds && !isEmphasized ? Math.min(authorityGlow, 0.05) : authorityGlow + (highlightNodeIds ? 0.35 : 0.15)) + swell;
+      }
+      // Graph P4 (choreography): "hover dim + emissive lift on node +
+      // one-hop ring" — the emissive lift is the boost above (hoverNode is
+      // already unioned into `highlightNodeIds`/`highlightNodeIds` via the
+      // existing hover state); this ring is the remaining piece, shown ONLY
+      // on the hovered node's direct neighbors, never on the hovered node
+      // itself (selection uses the swell above instead of this ring).
+      if (stash.hoverNeighborRing) {
+        const isHoverNeighbor = hoverNode != null && stash.nodeId !== hoverNode.id && (neighborsByNode.get(hoverNode.id)?.has(stash.nodeId) ?? false);
+        stash.hoverNeighborRing.visible = isHoverNeighbor;
+        stash.hoverNeighborRing.scale.setScalar(nodeFactor);
+      }
 
       // SELECTIVE LABELS: a bounded set of signals decides visibility —
       // never every node at once (label-density owner report).
@@ -739,12 +1265,36 @@ export function KnowledgeGraph3D({
       const primaryOffset = radiusWorld * 1.4;
       stash.primarySprite.position.set(0, primaryOffset, 0);
       stash.secondarySprite.position.set(0, primaryOffset + radiusWorld * 0.5, 0);
-      // Phase 22.8: the next-up ring is selection-independent — a node can
-      // be both selected AND next-up (two different signals), or next-up
-      // while nothing is selected at all.
-      if (stash.ring) stash.ring.visible = nextUpNodeId != null && stash.nodeId === nextUpNodeId;
+      // Phase 22.8/Graph P3: the accent ring is selection-independent and
+      // now doubles for "pinned" (gold ring/scale/gold torus) as well as
+      // next-up — a node can be selected, pinned, AND next-up at once, or
+      // any combination, all distinct signals.
+      if (stash.ring) {
+        stash.ring.visible = (nextUpNodeId != null && stash.nodeId === nextUpNodeId) || isPinned;
+        stash.ring.scale.setScalar(nodeFactor);
+      }
+      if (stash.equatorialRing) stash.equatorialRing.scale.setScalar(nodeFactor);
+      if (stash.progressArc) {
+        stash.progressArc.visible = node?.state === "reading";
+        stash.progressArc.scale.setScalar(nodeFactor);
+      }
+      if (stash.credibilitySegments) {
+        const lit = credibilitySegmentCount(node?.credibility?.score ?? node?.credibilityScore ?? null);
+        stash.credibilitySegments.forEach((segment, index) => {
+          segment.visible = index < lit;
+          segment.scale.setScalar(nodeFactor);
+        });
+      }
+      if (stash.readerLevelBeads) {
+        const levels = node?.readerLevels ?? [];
+        stash.readerLevelBeads.forEach((bead, index) => {
+          const level = READER_LEVELS[index] as ReaderLevel | undefined;
+          bead.visible = beadsAllowed && level != null && levels.includes(level);
+          bead.scale.setScalar(nodeFactor);
+        });
+      }
     });
-  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId, layoutSizeFactor, nodeLabelCtx, size.h]);
+  }, [selectedNodeId, pinnedWorkIds, nodeSceneScale, nextUpNodeId, layoutSizeFactor, nodeLabelCtx, size.h, nodesById, highlightNodeIds, layoutMode, cameraDistance, hoverNode, neighborsByNode]);
 
   // D-21-4/D-21-5 (edge side): selection-and-hover-connected width emphasis
   // and edge-label reveal/scale, both applied by mutating the already-
@@ -765,14 +1315,19 @@ export function KnowledgeGraph3D({
       const connected = highlightLinkIds ? highlightLinkIds.has(stash.linkId) : false;
       const widthFactor = (connected ? LINK_HOVER_WIDTH_FACTOR : 1) * nodeSceneScale.nodeScaleFactor;
       if (lineMesh?.scale) lineMesh.scale.set(widthFactor, widthFactor, lineMesh.scale.z);
-      const visible = edgeLabelVisible(cameraDistance, connected);
+      // Graph P4: edge-label sprites are visibility-gated off entirely past
+      // the performance ladder's "minimal" tier — the sprite object itself
+      // still exists (needed for the linkId tag + lineMesh width-highlight
+      // lookup above, a genuinely different feature this must not break),
+      // it simply never becomes visible at that scale.
+      const visible = graphEffects.edgeLabelSprites && edgeLabelVisible(cameraDistance, connected);
       sprite.visible = visible;
       if (visible) {
         const factor = nodeSceneScale.labelScaleFactor;
         sprite.scale.set(stash.baseScale.x * factor, stash.baseScale.y * factor, 1);
       }
     });
-  }, [highlightLinkIds, nodeSceneScale, cameraDistance]);
+  }, [highlightLinkIds, nodeSceneScale, cameraDistance, graphEffects.edgeLabelSprites]);
 
   // Both accent passes run once immediately (in case objects already exist)
   // and once more next frame (to catch objects the library hasn't finished
@@ -783,6 +1338,27 @@ export function KnowledgeGraph3D({
     const raf = requestAnimationFrame(applyNodeAccents);
     return () => cancelAnimationFrame(raf);
   }, [applyNodeAccents, graphData]);
+
+  // Graph P4: drives the 300ms selection emissive swell — a short, bounded
+  // rAF loop (never an ongoing per-frame loop) that re-runs the mutation
+  // pass every frame ONLY for the swell's own duration after a genuinely
+  // new selection, skipped entirely under reduced motion/hidden-tab/large
+  // graphs (`effectsEnabled`, the same gate the fly-to transition's
+  // duration already uses).
+  useEffect(() => {
+    if (!selectedNodeId || !effectsEnabled) return;
+    selectionSwellRef.current = { nodeId: selectedNodeId, startTime: performance.now() };
+    let raf = 0;
+    const tick = () => {
+      applyNodeAccents();
+      const elapsed = performance.now() - (selectionSwellRef.current?.startTime ?? 0);
+      if (elapsed < SELECTION_SWELL_MS) raf = requestAnimationFrame(tick);
+      else selectionSwellRef.current = null;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `applyNodeAccents` deliberately excluded: it changes identity on nearly every render (camera distance, hover, etc.), and re-running this effect for those reasons would restart the swell's own 300ms clock instead of letting the CURRENT swell finish; only a genuinely NEW selection (or a motion-preference change) should restart it.
+  }, [selectedNodeId, effectsEnabled]);
 
   useEffect(() => {
     applyLinkAccents();
@@ -850,7 +1426,13 @@ export function KnowledgeGraph3D({
   // more reliable than guessing a fixed retry-frame count (measured
   // directly: an immediate-plus-one-more-frame retry still ran before real
   // node objects existed and framed an empty scene).
-  const onEngineStop = useCallback(() => fitCameraToGraph(0), [fitCameraToGraph]);
+  const onEngineStop = useCallback(() => {
+    // Graph P4: the simulation has converged — node positions are final
+    // (no drag is possible, `enableNodeDrag={false}`), so the bounded
+    // dash-overlay reposition interval above can stop itself.
+    dashOverlaySettledRef.current = true;
+    fitCameraToGraph(0);
+  }, [fitCameraToGraph]);
 
   useEffect(() => {
     if (!resetSignal) return;
@@ -967,6 +1549,47 @@ export function KnowledgeGraph3D({
     return () => container.removeEventListener("click", onCanvasClick);
   }, [layoutMode, onCanvasClick]);
 
+  // Graph P3 (link language): rebuilds the opposition-edge dashed overlay
+  // group whenever the opposition-family link SET changes (a straight chord
+  // per edge — a deliberate, honestly-restrained simplification rather than
+  // tracing the tube mesh's own bezier curvature, see `linkThreeObject`'s
+  // own doc comment for why it can't safely mutate that shared-material mesh
+  // directly). Endpoint POSITIONS are kept live separately, on the D-21-3
+  // throttled interval above — this effect only recreates the line objects
+  // themselves when which edges are dashed actually changes.
+  useEffect(() => {
+    const graph = fgRef.current;
+    if (!graph || !linkColors) return;
+    const scene = graph.scene();
+    if (dashOverlayGroupRef.current) {
+      scene.remove(dashOverlayGroupRef.current);
+      for (const child of dashOverlayGroupRef.current.children) {
+        const line = child as THREE.Line;
+        line.geometry.dispose();
+        (line.material as THREE.Material).dispose();
+      }
+      dashOverlayGroupRef.current = null;
+    }
+    const oppositionLinks = data.links.filter((l) => edgeIsDashed(l.edgeType, l.category));
+    if (oppositionLinks.length === 0) return;
+    const group = new THREE.Group();
+    for (const link of oppositionLinks) {
+      const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+      const material = new THREE.LineDashedMaterial({
+        color: linkColors.opposition,
+        dashSize: 3,
+        gapSize: 2.4,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const line = new THREE.Line(geometry, material);
+      line.userData = { sourceId: endpointId(link.source), targetId: endpointId(link.target) };
+      group.add(line);
+    }
+    scene.add(group);
+    dashOverlayGroupRef.current = group;
+  }, [data.links, linkColors]);
+
   // Optional static reading-thread polyline (feature plan §2.4's rejected-
   // decoration list keeps this OPT-IN and non-animated): a single line
   // through the reading-sequence order, safe under reduced motion because it
@@ -997,14 +1620,26 @@ export function KnowledgeGraph3D({
   }, [layoutMode, showReadingThread, data.nodes]);
 
   return (
-    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={effectsEnabled ? "active" : "paused"}>
+    // Graph P4: `data-graph-effects` now reports the ACTIVE PERFORMANCE
+    // TIER ("full"/"reduced"/"minimal"/"bare") rather than a bare
+    // active/paused flag — except the pre-existing "paused" value under
+    // reduced motion/hidden-tab (`!motionAllowed`), kept EXACTLY as before
+    // since `graph.spec.ts:351` and `roadmap-graph.spec.ts:235` assert that
+    // literal string and this phase's own instructions require those specs
+    // to keep passing unmodified.
+    <div ref={containerRef} className={`${isFullscreen ? "h-full min-h-0" : "h-[60vh] min-h-[420px] max-h-[720px]"} w-full overflow-hidden rounded-lg border border-[var(--color-border)]`} data-graph-canvas data-graph-effects={!motionAllowed ? "paused" : graphEffects.tier}>
       {colors && typeColors && linkColors && labelColors && (
         <ForceGraph3D
           ref={fgRef as never}
           graphData={graphData}
           width={size.w}
           height={size.h}
-          backgroundColor="rgba(0,0,0,0)"
+          // Graph P3: the canvas's own dark "astronomical plate" backdrop
+          // (globals.css `--color-graph-backdrop`) — a deliberately
+          // different surface from the app card framing it, so bloom/
+          // emissive-intensity encodings read against real dark luminance
+          // rather than the app's bone-white/dark-mode background.
+          backgroundColor={graphTokens?.backdrop ?? "#0d1420"}
           // CONTROLS: orbit locks the camera's up-vector, so drag-to-rotate
           // can never introduce free roll (the default 'trackball' control
           // allows the whole scene to tilt/spin off-axis) — still no
@@ -1037,6 +1672,7 @@ export function KnowledgeGraph3D({
           }}
           linkOpacity={0.5}
           linkWidth={linkWidth}
+          linkCurvature={linkCurvature}
           linkThreeObject={linkThreeObject as never}
           linkThreeObjectExtend={true}
           linkPositionUpdate={linkPositionUpdate as never}

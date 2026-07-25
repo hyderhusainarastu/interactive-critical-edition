@@ -3,9 +3,68 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { STAGE_LABEL } from "@ice/curriculum";
-import { TIER_LABEL } from "@ice/roadmap";
-import { edgeTypeLabel, STATE_META, TYPE_LABEL, type GraphData, type GraphNode } from "./types";
+import { READER_LEVELS, TIER_LABEL, type ReaderLevel } from "@ice/roadmap";
+import {
+  conceptKindLabel,
+  credibilityBandFor,
+  CREDIBILITY_BAND_META,
+  edgeTypeLabel,
+  STATE_META,
+  TYPE_LABEL,
+  type GraphData,
+  type GraphNode,
+} from "./types";
 import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type NodeEmphasisState } from "./graphFocus";
+
+// Graph P2 (data contract v2): reader-level sort order for the new "Reader
+// level" column — a node's OWN lowest applicable level, so "Beginner" sorts
+// before "Research"; a node with no `readerLevels` data at all (never
+// treated as "matches nothing" per the contract's own rule) sorts after
+// every scoped node, same convention `sequence`'s sort already uses for
+// unannotated nodes.
+const READER_LEVEL_ORDER: Record<ReaderLevel, number> = Object.fromEntries(
+  READER_LEVELS.map((level, index) => [level, index]),
+) as Record<ReaderLevel, number>;
+
+function minReaderLevelIndex(node: Pick<GraphNode, "readerLevels">): number | null {
+  if (!node.readerLevels || node.readerLevels.length === 0) return null;
+  const indices = node.readerLevels.map((level) => READER_LEVEL_ORDER[level as ReaderLevel] ?? Number.MAX_SAFE_INTEGER);
+  return Math.min(...indices);
+}
+
+function readerLevelCellText(node: Pick<GraphNode, "readerLevels">): string {
+  if (!node.readerLevels || node.readerLevels.length === 0) return "—";
+  return node.readerLevels
+    .map((level) => level.charAt(0).toUpperCase() + level.slice(1))
+    .join(", ");
+}
+
+/**
+ * Per-row credibility summary text (Graph P2): band + score + every
+ * separated dimension the node actually carries — the accessible table's
+ * equivalent of the inspector's credibility dossier, condensed to one
+ * screen-reader-friendly string rather than six extra columns.
+ */
+function credibilityCellText(node: GraphNode): string {
+  const band = credibilityBandFor(node.credibilityScore);
+  if (band === "unknown" && !node.credibility) return "—";
+  const parts = [CREDIBILITY_BAND_META[band].label];
+  if (node.credibilityScore != null) parts.push(`${Math.round(node.credibilityScore * 100)}%`);
+  if (node.credibility) {
+    const dims: [string, number | null][] = [
+      ["publication rigor", node.credibility.publicationRigor],
+      ["creator expertise", node.credibility.creatorExpertise],
+      ["host provenance", node.credibility.hostProvenance],
+      ["pedagogical value", node.credibility.pedagogicalValue],
+      ["relevance", node.credibility.relevance],
+      ["evidence strength", node.credibility.evidenceStrength],
+    ];
+    for (const [label, value] of dims) {
+      if (value != null) parts.push(`${label} ${Math.round(value * 100)}%`);
+    }
+  }
+  return parts.join(" · ");
+}
 
 /**
  * The mandatory non-3D fallback (plan §20): the identical node/edge data
@@ -36,7 +95,7 @@ import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type No
  * (never a separate prop) so this table and `GraphView`'s own `layoutMode`
  * state can never disagree about which shape to render.
  */
-type SortKey = "label" | "state" | "type" | "connections" | "sequence";
+type SortKey = "label" | "state" | "type" | "connections" | "sequence" | "readerLevel" | "credibility";
 
 export function GraphAccessibleFallback({
   data,
@@ -126,6 +185,27 @@ export function GraphAccessibleFallback({
         if (bv == null) return -1;
         return dir * (av - bv);
       }
+      if (sortKey === "readerLevel") {
+        // Graph P2 (data contract v2): a node's own lowest applicable
+        // level; absent (no `readerLevels` data at all) sorts last, same
+        // "never punish missing data" convention `sequence` already uses.
+        const av = minReaderLevelIndex(a);
+        const bv = minReaderLevelIndex(b);
+        if (av == null && bv == null) return dir * a.label.localeCompare(b.label);
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return dir * (av - bv);
+      }
+      if (sortKey === "credibility") {
+        // Unknown credibility (no score at all) sorts last regardless of
+        // direction — same rationale as the two cases above.
+        const av = a.credibilityScore;
+        const bv = b.credibilityScore;
+        if (av == null && bv == null) return dir * a.label.localeCompare(b.label);
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return dir * (av - bv);
+      }
       return dir * String(a[sortKey]).localeCompare(String(b[sortKey]));
     });
   }, [data.nodes, sortKey, asc, connections]);
@@ -162,6 +242,17 @@ export function GraphAccessibleFallback({
               onClick={() => toggleSort("connections")}
             />
             {hasRoadmap && <th scope="col" className="py-2 pr-4 text-[10px] font-semibold uppercase tracking-wide">Why</th>}
+            {/* Graph P2 (data contract v2): sortable Reader level +
+                Credibility columns, keeping the table's equal-capability
+                guarantee with the 3D scene's own reader-level beads and
+                credibility halo/ring encodings (WCAG 2.2 AA — the table is
+                never a lesser fallback). Appended AFTER every pre-existing
+                column (rather than inserted earlier) so `roadmap-graph.spec.ts`'s
+                pre-existing `cells.nth(3..6)` Stage/Priority/Order/Known
+                assertions — which this phase's own instructions require to
+                keep passing unmodified — stay at the same column indices. */}
+            <SortHeader label="Reader level" active={sortKey === "readerLevel"} asc={asc} onClick={() => toggleSort("readerLevel")} />
+            <SortHeader label="Credibility" active={sortKey === "credibility"} asc={asc} onClick={() => toggleSort("credibility")} />
           </tr>
         </thead>
         <tbody>
@@ -296,7 +387,15 @@ function NodeRow({
           {node.url && <a href={node.url} target="_blank" rel="noopener noreferrer" className="text-xs underline" onClick={(event) => event.stopPropagation()}>open source ↗</a>}
         </div>
       </td>
-      <td className="py-2 pr-4 text-[var(--color-text-muted)]">{TYPE_LABEL[node.type]}</td>
+      <td className="py-2 pr-4 text-[var(--color-text-muted)]">
+        {TYPE_LABEL[node.type]}
+        {/* Concept-kind text (Graph P2): concept/person nodes carry a
+            `concept_kind` (doctrine/tradition/debate/…) distinct from their
+            NodeType — shown as a parenthetical so the table's "Kind" column
+            stays one place to look, not a second column most rows leave
+            empty. */}
+        {node.kind && <span> ({conceptKindLabel(node.kind)})</span>}
+      </td>
       <td className="py-2 pr-4">
         <span className="inline-flex items-center gap-1.5">
           <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: `var(${meta.colorVar})` }} />
@@ -315,6 +414,10 @@ function NodeRow({
         {connections.length === 0 ? "—" : <ul className="flex flex-col gap-0.5">{connections.map((c, i) => <li key={i}>{c}</li>)}</ul>}
       </td>
       {hasRoadmap && <td className="py-2 pr-4 text-xs text-[var(--color-text-muted)]">{node.roadmap?.reason ?? "—"}</td>}
+      {/* Graph P2: appended after every pre-existing column — see the
+          matching header comment above for why. */}
+      <td className="py-2 pr-4 text-[var(--color-text-muted)]">{readerLevelCellText(node)}</td>
+      <td className="py-2 pr-4 text-xs text-[var(--color-text-muted)]">{credibilityCellText(node)}</td>
     </tr>
   );
 }

@@ -24,16 +24,21 @@ import type { GraphData, GraphLink } from "./types";
  * set, never a second, parallel data-derivation path.
  */
 
-export type FocusMode = "focus" | "expand" | "full";
+// Graph P4: a fourth mode, "concepts" — the selection plus only its one-hop
+// concept/person neighbors (never reference/peer_reviewed_source/
+// online_source/section/work neighbors), for a reader who wants to see
+// "what ideas does this connect to" without the surrounding citation web.
+export type FocusMode = "focus" | "expand" | "full" | "concepts";
 
 export const DEFAULT_FOCUS_MODE: FocusMode = "focus";
 
-export const FOCUS_MODES: readonly FocusMode[] = ["focus", "expand", "full"];
+export const FOCUS_MODES: readonly FocusMode[] = ["focus", "expand", "full", "concepts"];
 
 export const FOCUS_MODE_LABEL: Record<FocusMode, string> = {
   focus: "Focus selected",
   expand: "Expand one hop",
   full: "Full graph",
+  concepts: "Concepts",
 };
 
 function linkEndpointId(end: GraphLink["source"] | GraphLink["target"]): string {
@@ -86,6 +91,10 @@ export const EMPTY_FOCUS_EMPHASIS: FocusEmphasis = {
  * `mode === "full"`: no focus effect at all, regardless of selection —
  * returns `EMPTY_FOCUS_EMPHASIS` so every node/link renders at full
  * emphasis (the "Return to full graph" requirement).
+ * `mode === "concepts"` (Graph P4): the selection plus only its one-hop
+ * neighbors of type `concept`/`person` — a reader-oriented "what ideas does
+ * this touch" view, deliberately narrower than `"focus"`'s every-type
+ * one-hop set.
  *
  * A `selectedNodeId` that no longer exists in `data.nodes` (e.g. a stale
  * `?selected=` URL param, or a node a filter just removed) degrades to
@@ -101,10 +110,20 @@ export function computeFocusEmphasis(
 
   const adjacency = buildNodeAdjacency(data.links);
   const oneHop = adjacency.get(selectedNodeId) ?? new Set<string>();
-  const emphasized = new Set<string>([selectedNodeId, ...oneHop]);
-  if (mode === "expand") {
-    for (const neighborId of oneHop) {
-      for (const secondHop of adjacency.get(neighborId) ?? []) emphasized.add(secondHop);
+  let emphasized: Set<string>;
+  if (mode === "concepts") {
+    const typeById = new Map(data.nodes.map((node) => [node.id, node.type]));
+    emphasized = new Set<string>([selectedNodeId]);
+    for (const id of oneHop) {
+      const type = typeById.get(id);
+      if (type === "concept" || type === "person") emphasized.add(id);
+    }
+  } else {
+    emphasized = new Set<string>([selectedNodeId, ...oneHop]);
+    if (mode === "expand") {
+      for (const neighborId of oneHop) {
+        for (const secondHop of adjacency.get(neighborId) ?? []) emphasized.add(secondHop);
+      }
     }
   }
 
