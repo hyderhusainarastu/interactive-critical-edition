@@ -158,7 +158,10 @@ test.describe("Work trash (Phase 9.7 + 20.3)", () => {
     await page.goto("/works/trash");
     const row = page.locator(`[data-trash-item="${workId}"]`);
     await expect(row).toBeVisible();
-    await expect(page.locator("ul.app-reveal")).not.toHaveAttribute("data-reveal-ready", "true");
+    // The trash list's reveal class was renamed to `.app-reveal-stagger`
+    // (commit 919218e, "polish signed-in workspace surfaces") — the
+    // `useScrollReveal` behavior under test is unchanged, only the class.
+    await expect(page.locator("ul.app-reveal-stagger")).not.toHaveAttribute("data-reveal-ready", "true");
   });
 
   test("trashing a work removes its chunks from RAG retrieval (Phase 20.3)", async ({ page }) => {

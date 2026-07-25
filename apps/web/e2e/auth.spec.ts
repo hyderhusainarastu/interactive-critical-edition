@@ -240,6 +240,11 @@ test.describe("Signup and email verification (pull-forward of Phase 19's noted g
     await page.getByLabel("Name").fill("E2E Signup");
     await page.getByLabel("Email").fill(SIGNUP_EMAIL);
     await page.getByLabel("Password").fill(PASSWORD);
+    // Workstream G (2026-07-25) added a required policy-acceptance checkbox
+    // to the signup form; without checking it, the browser's native
+    // required-field validation silently blocks submission and the button
+    // click never navigates, hanging until the test timeout.
+    await page.locator('input[name="policyAccepted"]').check();
     await page.getByRole("button", { name: "Sign up" }).click();
 
     await page.waitForURL(/\/verify-email\?sent=1/);

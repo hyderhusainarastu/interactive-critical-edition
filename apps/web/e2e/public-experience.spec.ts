@@ -25,7 +25,11 @@ test.describe("Public editorial experience", () => {
     await expect(page.getByRole("heading", { name: "Account deletion and export" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Feedback" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Development", exact: true })).toHaveAttribute("href", "/development");
-    await expect(page.getByRole("link", { name: "Feedback", exact: true })).toHaveAttribute("href", /mailto:/);
+    // Workstream J (2026-07-25) replaced the old `mailto:` "Feedback" link
+    // with a real in-app FeedbackTrigger button that opens FeedbackModal.
+    await page.getByRole("button", { name: "Feedback", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Share feedback" })).toBeVisible();
+    await page.getByRole("button", { name: "Close feedback form" }).click();
 
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations).toEqual([]);
