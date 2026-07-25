@@ -4,7 +4,7 @@
  * section). Consumed by later lanes (Workstream G's account/usage/plan
  * pages, Workstream H's admin dashboard); this lane does not wire any page.
  */
-export { AnimatedStat, type AnimatedStatProps } from "./AnimatedStat";
+export { AnimatedStat, type AnimatedStatFormat, type AnimatedStatProps } from "./AnimatedStat";
 export { BarChart, type BarChartDatum, type BarChartProps } from "./BarChart";
 export { InitialsAvatar, type InitialsAvatarProps } from "./InitialsAvatar";
 export { LineChart, type LineChartProps, type LineChartSeries } from "./LineChart";

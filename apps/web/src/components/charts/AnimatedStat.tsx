@@ -8,10 +8,31 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // itself only ever touches `window`/`document`, both already guarded.
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+/**
+ * A fixed set of presets, not an arbitrary `(value: number) => string`
+ * function — `AnimatedStat` is a Client Component, and a Server Component
+ * caller (e.g. `/admin-dash`'s overview page) cannot pass a function prop
+ * across that boundary at all ("Functions cannot be passed directly to
+ * Client Components" — this is exactly the bug this preset shape avoids).
+ * Add a new preset here rather than reaching for a function prop.
+ */
+export type AnimatedStatFormat = "integer" | "usd" | "bytes";
+
+const FORMATTERS: Record<AnimatedStatFormat, (value: number) => string> = {
+  integer: (n) => `${Math.round(n)}`,
+  usd: (n) => `$${n.toFixed(2)}`,
+  bytes: (n) => {
+    if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(2)} GB`;
+    if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+    if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${Math.round(n)} B`;
+  },
+};
+
 export interface AnimatedStatProps {
   value: number;
   label?: string;
-  format?: (value: number) => string;
+  format?: AnimatedStatFormat;
   durationMs?: number;
   className?: string;
 }
@@ -37,10 +58,11 @@ function prefersReducedMotionNow(): boolean {
 export function AnimatedStat({
   value,
   label,
-  format = (n) => `${Math.round(n)}`,
+  format = "integer",
   durationMs = 900,
   className,
 }: AnimatedStatProps) {
+  const formatValue = FORMATTERS[format];
   // Server render and the client's initial render both show the FINAL
   // value — matching output avoids a hydration mismatch. The count-up
   // itself starts from `useIsomorphicLayoutEffect`, which (on the client)
@@ -77,9 +99,9 @@ export function AnimatedStat({
   return (
     <span
       className={`tabular-nums ${className ?? ""}`}
-      aria-label={label ? `${label}: ${format(value)}` : undefined}
+      aria-label={label ? `${label}: ${formatValue(value)}` : undefined}
     >
-      {format(display)}
+      {formatValue(display)}
     </span>
   );
 }
