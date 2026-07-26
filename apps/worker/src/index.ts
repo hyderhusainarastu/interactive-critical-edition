@@ -12,6 +12,7 @@ import {
   QUEUE_EXTRACT_TEXT,
   QUEUE_EXTRACT_RESEARCH_CLAIMS,
   QUEUE_IMPORT_RESEARCH_CORPUS,
+  QUEUE_ANALYZE_CLAIM_DEBATES,
   RESEARCH_QUEUES,
   type ResearchJobPayload,
   type ResearchQueueName,
@@ -24,6 +25,7 @@ import { analyzeWork, resolveCitationMetadata } from "./analyze";
 import { activePipelineVersion, handleEditionExtraction, handleExtractText } from "./extraction";
 import { sweepAbandonedRuns } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
+import { detectRelationships } from "./research/detectRelationships";
 import { extractClaims } from "./research/extractClaims";
 import { importCorpus } from "./research/importCorpus";
 import { runResearchJob } from "./research/jobRunner";
@@ -134,15 +136,53 @@ async function main() {
     }
   });
 
-  // Phase 25.6: the remaining two research queues stay honest no-ops until
-  // their own lanes (26.2 relationships/clustering, 27 synthesis) replace
+  // Phase 26.2a: analyze-claim-debates gets its real handler for the
+  // DETERMINISTIC half only — `detect_relationships` (Stage-1 candidate
+  // retrieval + citation engagement, $0). `cluster_debates` — the other job
+  // type sharing this queue (packages/db/src/queue.ts's doc comment on why
+  // relationship detection and clustering are staged as one resumable
+  // request) — stays the honest no-op below until its own lane (26.3)
+  // replaces it. The request's OWN `jobType` decides which path a given
+  // message takes; a stale/pre-26.2a `detect_relationships` request enqueued
+  // before this shipped is handled the same as any other, since
+  // `runResearchJob` re-reads current DB state rather than trusting the
+  // queue message.
+  await boss.work<ResearchJobPayload>(QUEUE_ANALYZE_CLAIM_DEBATES, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) {
+      const [request] = await db
+        .select({ jobType: researchJobRequests.jobType })
+        .from(researchJobRequests)
+        .where(eq(researchJobRequests.id, job.data.requestId))
+        .limit(1);
+      if (!request) {
+        // Same class as the stale extract-text/analyze-work jobs D-19-2
+        // addressed: a request row deleted after enqueue. Nothing to do.
+        console.warn(`[worker] ${QUEUE_ANALYZE_CLAIM_DEBATES}: research_job_request ${job.data.requestId} not found; skipping`);
+        continue;
+      }
+      if (request.jobType === "detect_relationships") {
+        await runResearchJob(job.data.requestId, detectRelationships);
+      } else {
+        try {
+          await handleUnimplementedResearchJob(QUEUE_ANALYZE_CLAIM_DEBATES, job.data.requestId);
+        } catch (error) {
+          reportError(error, { scope: `worker.${QUEUE_ANALYZE_CLAIM_DEBATES}`, requestId: job.data.requestId });
+          throw error;
+        }
+      }
+    }
+  });
+
+  // Phase 25.6: the remaining research queues stay honest no-ops until
+  // their own lanes (26.3 clustering, 27 synthesis, 29 monitors) replace
   // this registration — see `handleUnimplementedResearchJob`'s doc comment.
   // Registering now means the queue rows and this worker's consumer set
   // exist before any web route can enqueue, so an early enqueue is dequeued
   // and answered honestly instead of sitting `created` forever with nothing
   // consuming it.
   for (const queueName of RESEARCH_QUEUES.filter(
-    (name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS && name !== QUEUE_IMPORT_RESEARCH_CORPUS,
+    (name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS && name !== QUEUE_IMPORT_RESEARCH_CORPUS && name !== QUEUE_ANALYZE_CLAIM_DEBATES,
   )) {
     await boss.work<ResearchJobPayload>(queueName, async (jobs) => {
       const batch = Array.isArray(jobs) ? jobs : [jobs];

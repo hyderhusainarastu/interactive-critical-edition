@@ -13,6 +13,7 @@
 
 export * from "./taxonomy";
 export * from "./thresholds";
+export * from "./limits";
 export * from "./anchoring";
 
 export * from "./scoring/evidenceStrength";

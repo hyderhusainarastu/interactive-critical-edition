@@ -2700,7 +2700,14 @@ export const researchRevisions = pgTable(
     // later in this incrementally-grown file (the ai_usage_log ->
     // research_job_request precedent).
     researchClaimId: uuid("research_claim_id").references((): AnyPgColumn => researchClaims.id, { onDelete: "cascade" }),
-    // 0040-0043 add the remaining six typed object FK columns listed above.
+    // 0040: second of the seven typed object FK columns — same
+    // forward-reference pattern (`claimRelationships` is declared later in
+    // this incrementally-grown file, after `researchClaimEmbeddings`).
+    claimRelationshipId: uuid("claim_relationship_id").references(
+      (): AnyPgColumn => claimRelationships.id,
+      { onDelete: "cascade" },
+    ),
+    // 0041-0043 add the remaining five typed object FK columns listed above.
     /** Monotonic per object. 0 is always the immutable generated snapshot. */
     revision: integer("revision").notNull(),
     action: researchRevisionActionEnum("action").notNull(),
@@ -2721,6 +2728,7 @@ export const researchRevisions = pgTable(
   (t) => [
     index("research_revision_user_object_idx").on(t.userId, t.objectType, t.createdAt),
     index("research_revision_claim_idx").on(t.researchClaimId),
+    index("research_revision_relationship_idx").on(t.claimRelationshipId),
     /**
      * The schema-level expression of the research-gated no-auto-endorsement
      * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
@@ -2738,23 +2746,33 @@ export const researchRevisions = pgTable(
     check("research_revision_generated_is_zero", sql`(${t.action} <> 'generated') OR (${t.revision} = 0)`),
     /**
      * The typed-target XOR CHECK the class doc comment above describes:
-     * introduced here in 0039 (the first typed FK column to exist) and
-     * extended — same constraint name, widened SQL — by each of 0040-0043 as
-     * their own typed FK column lands, exactly like
-     * `research_project_member_typed_target` above. Until a later migration
-     * adds its column, every non-`claim` `objectType` is constrained to leave
-     * `research_claim_id` null, so a mismatched assignment can never be
-     * inserted even before that type's own FK exists to check against.
+     * introduced in 0039 (the first typed FK column to exist) and extended —
+     * same constraint name, widened SQL — by each of 0040-0043 as their own
+     * typed FK column lands, exactly like
+     * `research_project_member_typed_target` above. Widened here (0040) to
+     * a per-type branch that pins EVERY typed FK column, not just the one
+     * being added: `objectType = 'claim'` now also requires
+     * `claim_relationship_id IS NULL`, so a row can never claim to be a
+     * `'claim'` while also carrying a relationship FK (or vice versa). Until
+     * 0041-0043 add their own columns, every objectType outside
+     * `{'claim','relationship'}` is constrained to leave BOTH typed FKs
+     * null, so a mismatched assignment can never be inserted even before
+     * that type's own FK exists to check against.
      */
     check(
       "research_revision_typed_target",
-      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL)
-        OR (${t.objectType} <> 'claim' AND ${t.researchClaimId} IS NULL)`,
+      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL)
+        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL)
+        OR (${t.objectType} NOT IN ('claim', 'relationship') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL)`,
     ),
     /** Per-type partial unique `(<object>_id, revision)` — the claim branch. */
     uniqueIndex("research_revision_claim_revision_unique")
       .on(t.researchClaimId, t.revision)
       .where(sql`${t.researchClaimId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the relationship branch. */
+    uniqueIndex("research_revision_relationship_revision_unique")
+      .on(t.claimRelationshipId, t.revision)
+      .where(sql`${t.claimRelationshipId} IS NOT NULL`),
   ],
 );
 
@@ -3096,5 +3114,215 @@ export const researchClaimEmbeddings = pgTable(
     index("research_claim_embedding_claim_idx").on(t.claimId),
     uniqueIndex("research_claim_embedding_claim_model_hash_unique").on(t.claimId, t.model, t.inputHash),
     index("research_claim_embedding_hnsw_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
+  ],
+);
+
+/* -------------------------------------------------------------------------
+ * Phase 26.2a (migration 0040): the DETERMINISTIC half of relationship
+ * detection — Stage-1 three-channel candidate retrieval (dense/bm25/locus)
+ * plus citation-graph engagement, both $0. `claim_pair_candidate` is the
+ * cheap/disposable retrieval output; `claim_relationship` is the paid/
+ * durable judged output, whose write path (26.2b, a later lane) is a typed
+ * TODO in `apps/worker/src/research/detectRelationships.ts` — this
+ * migration ships the table now so 26.2b is additive, not a second schema
+ * change to the same job type.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * FROZEN — do not add, remove, or rename a value here without bumping
+ * `TAXONOMY_VERSION_RELATIONSHIPS` (`@ice/claims`'s `taxonomy.ts`) and
+ * treating it as a new taxonomy version. Mirrors `CLAIM_RELATION_VALENCES`
+ * exactly: this is the eval-certified axis (macro-F1 0.788, kappa 0.683 on
+ * the ScholarLens-ported gold set) every downstream gate/gold-label file/
+ * clustering rule is written against.
+ */
+export const claimRelationValenceEnum = pgEnum("claim_relation_valence", [
+  "contradiction",
+  "support",
+  "nuance",
+  "unrelated",
+]);
+
+/** Mirrors `@ice/claims`'s `CLAIM_RELATION_CATEGORIES` exactly. */
+export const claimRelationCategoryEnum = pgEnum("claim_relation_category", [
+  "methodological",
+  "findings",
+  "theoretical",
+  "scope",
+]);
+
+/**
+ * Stage 1: a single, honest placeholder (mirrors `@ice/claims`'s
+ * `CLAIM_RELATION_MECHANISMS` exactly) — no stage of this pipeline yet
+ * infers *why* two claims relate the way they do beyond the valence itself.
+ * Stage 2 (the humanities judge gate, plan §Dual-track/§Program 27.3) adds
+ * `different_definition`, `interprets_differently`, and
+ * `different_scope_conditions` to this enum in migration 0046, ONLY once the
+ * humanities gold-set eval clears its floors — until then those three
+ * values do not exist in the Postgres type at all, so a misclassification
+ * into them cannot be persisted even if a bug tried. Stage 3 (any further
+ * mechanism refinement) would land in a still-later migration under the
+ * same discipline.
+ */
+export const claimRelationMechanismEnum = pgEnum("claim_relation_mechanism", ["unspecified"]);
+
+/**
+ * Deterministic, $0 citation-graph context for a candidate/judged pair
+ * (plan §Improvements "Citation-graph-aware disagreement judgment"):
+ * resolved via `citation.resolved_bib_id` → `bibliographic_record` →
+ * normalized-title match against the OTHER claim's own work (the
+ * `roadmap.ts`/`graph.ts` owned-work-match precedent), never inferred by a
+ * model. `direct_citation`: one work cites the other. `reciprocal_citation`:
+ * both cite each other. `shared_citation`: neither cites the other directly,
+ * but both cite some third, common bibliographic record. `none_detected`:
+ * none of the above — a checked-and-empty result, distinguishable from
+ * "never checked" by this column simply always being set.
+ */
+export const claimEngagementEnum = pgEnum("claim_engagement", [
+  "direct_citation",
+  "reciprocal_citation",
+  "shared_citation",
+  "none_detected",
+]);
+
+/** Which of the dual-track judge prompts (plan §Dual-track) produced a
+ *  `claim_relationship` row — routed by the pair's claims' `claim_nature`,
+ *  never mixed within one judged pair. */
+export const claimJudgeBranchEnum = pgEnum("claim_judge_branch", ["empirical", "humanities"]);
+
+/** Which claim of an ordered (lo, hi) pair the judge found to carry the
+ *  stronger evidence — `JudgeResult.strongerEvidence`'s `"paper_a"` maps to
+ *  `lo`, `"paper_b"` to `hi`, `"neither"` to `neither`. Deliberately NOT a
+ *  chamber "winner" (plan §Schema `evidence_chamber` "no winner/verdict/
+ *  stronger column exists, ever") — this is a per-pair judge signal used to
+ *  populate the Evidence Chamber's named-signal display, not a verdict on
+ *  the underlying scholarly question. */
+export const claimSideEnum = pgEnum("claim_side", ["lo", "hi", "neither"]);
+
+/**
+ * A cheap, disposable Stage-1 retrieval hit (plan §Pipeline "Three-channel
+ * Stage 1"): two claims from DIFFERENT works that at least one of the dense
+ * (pgvector cosine)/BM25/locus channels flagged as plausibly related. Zero
+ * AI cost — this table is a retrieval index, not a judgment. `claimLoId <
+ * claimHiId` is DB-enforced so a pair is always stored in one canonical
+ * order regardless of which claim a channel happened to find first (the
+ * `unionCandidates` dedup precedent, enforced here at the DB layer too).
+ * `(user_id, claim_lo_id, claim_hi_id)` is the whole identity — re-running
+ * detection over an unchanged claim set (or a second project sharing the
+ * same two claims) is a no-op insert, not a duplicate row; `project_id`
+ * records only which project's run first surfaced the pair.
+ */
+export const claimPairCandidates = pgTable(
+  "claim_pair_candidate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    claimLoId: uuid("claim_lo_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    claimHiId: uuid("claim_hi_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    /** `CandidatePair.retrievalSources` (`@ice/claims`'s `retrieval/union.ts`)
+     *  — every channel that independently found this pair, each with its own
+     *  score: `[{channel: "dense"|"bm25"|"locus"|"locus_section", score}]`. */
+    retrievalSources: jsonb("retrieval_sources").notNull().default([]),
+    /** `CandidatePair.bestScore` — display/ranking only, never used for dedup. */
+    bestRetrievalScore: real("best_retrieval_score").notNull(),
+    engagement: claimEngagementEnum("engagement").notNull().default("none_detected"),
+    /** The deterministic evidence behind `engagement` (which bibliographic
+     *  record / which work resolved the citation) — audit/display only,
+     *  never model-authored. Null exactly when `engagement = 'none_detected'`. */
+    engagementEvidence: jsonb("engagement_evidence"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("claim_pair_candidate_project_idx").on(t.projectId),
+    index("claim_pair_candidate_lo_idx").on(t.claimLoId),
+    index("claim_pair_candidate_hi_idx").on(t.claimHiId),
+    index("claim_pair_candidate_user_idx").on(t.userId),
+    uniqueIndex("claim_pair_candidate_user_lo_hi_unique").on(t.userId, t.claimLoId, t.claimHiId),
+    check("claim_pair_candidate_lo_hi_order", sql`${t.claimLoId} < ${t.claimHiId}`),
+  ],
+);
+
+/**
+ * A paid, durable judged relationship between two claims (plan §Schema): the
+ * output of the future 26.2b judge lane, over a `claim_pair_candidate` pair.
+ * `valence` is the FROZEN eval-certified axis (see `claimRelationValenceEnum`
+ * above) — never widen it in place. `mechanism` is nullable and, at Stage 1,
+ * constrained to `NULL`/`'unspecified'` by `claim_relationship_mechanism_matches_valence`
+ * below; that CHECK is the widening point for the Stage-2 humanities gate
+ * (migration 0046), once the enum itself gains the three stage-2 values —
+ * same constraint name, wider SQL, the `research_project_member_typed_target`
+ * precedent. `basis_hash` (covering both claims' text/excerpts/prompt
+ * version/judge branch/engagement) is this table's idempotency key, the
+ * `work_relationship_judgment.basisHash` precedent: a re-judgment under an
+ * UNCHANGED world reuses the key and inserts nothing new, while any real
+ * input change (an edited claim, a reclassified engagement, a prompt-version
+ * bump) legitimately re-judges and re-pays.
+ */
+export const claimRelationships = pgTable(
+  "claim_relationship",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    claimLoId: uuid("claim_lo_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    claimHiId: uuid("claim_hi_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    valence: claimRelationValenceEnum("valence").notNull(),
+    category: claimRelationCategoryEnum("category").notNull(),
+    mechanism: claimRelationMechanismEnum("mechanism"),
+    judgeBranch: claimJudgeBranchEnum("judge_branch").notNull(),
+    /** `JudgeResult.strongerEvidence` mapped onto the ordered pair — see `claimSideEnum` above. */
+    strongerSide: claimSideEnum("stronger_side").notNull().default("neither"),
+    explanation: text("explanation").notNull(),
+    /** `JudgeResult.resolution` — one concrete sentence on what would resolve the disagreement. */
+    resolution: text("resolution").notNull(),
+    /** Carried over from the candidate that produced this judgment (plan
+     *  §Pipeline "Citation-graph engagement": "the judge receives this as
+     *  context and the relationship row stores it") — an ablation input, not
+     *  re-derived here. */
+    engagement: claimEngagementEnum("engagement").notNull(),
+    /** A computed differential between the two claims' `claim_score` rows ON
+     *  THE SAME dimension — e.g. |scoreLo - scoreHi|. Null when either claim
+     *  lacks a score on that dimension (an honest "no gap to report", never
+     *  a fabricated one). `evidence_gap_dimension` names WHICH dimension the
+     *  gap was measured on, so an empirical gap can never be silently
+     *  compared against a textual-support one (`claim_relationship_gap_dimensioned` below). */
+    evidenceGap: real("evidence_gap"),
+    evidenceGapDimension: claimScoreDimensionEnum("evidence_gap_dimension"),
+    /** sha256 covering both claims' text/excerpts, prompt version, judge
+     *  branch, and engagement — this table's re-judge/idempotency key. */
+    basisHash: text("basis_hash").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    provider: text("provider"),
+    model: text("model"),
+    status: researchObjectStatusEnum("status").notNull().default("active"),
+    /** Reused verbatim — the `annotation`/`passage_annotation`/`research_claim` correction-workflow precedent. */
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("claim_relationship_project_idx").on(t.projectId),
+    index("claim_relationship_lo_idx").on(t.claimLoId),
+    index("claim_relationship_hi_idx").on(t.claimHiId),
+    index("claim_relationship_user_status_idx").on(t.userId, t.status),
+    uniqueIndex("claim_relationship_user_lo_hi_basis_unique").on(t.userId, t.claimLoId, t.claimHiId, t.basisHash),
+    check("claim_relationship_lo_hi_order", sql`${t.claimLoId} < ${t.claimHiId}`),
+    /**
+     * Stage-1 form: with only `'unspecified'` in the enum, this is
+     * necessarily trivial (mechanism can only ever be NULL or
+     * 'unspecified') — but the constraint NAME is the widening point for
+     * the Stage-2 humanities gate (migration 0046), which replaces the SQL
+     * here with a real per-valence mapping (`MECHANISM_VALENCE`) once
+     * `different_definition`/`interprets_differently`/
+     * `different_scope_conditions` exist in the enum, exactly like
+     * `research_project_member_typed_target`'s in-place widening.
+     */
+    check("claim_relationship_mechanism_matches_valence", sql`${t.mechanism} IS NULL OR ${t.mechanism} = 'unspecified'`),
+    check(
+      "claim_relationship_gap_dimensioned",
+      sql`${t.evidenceGap} IS NULL OR ${t.evidenceGapDimension} IS NOT NULL`,
+    ),
   ],
 );

@@ -281,6 +281,13 @@
       "when": 1785041321065,
       "tag": "0039_research_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785045175355,
+      "tag": "0040_claim_relationships",
+      "breakpoints": true
     }
   ]
 }
