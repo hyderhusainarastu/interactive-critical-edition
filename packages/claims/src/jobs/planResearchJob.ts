@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-export type ResearchJobType = "claim_extraction" | "judge_scan" | "cluster_naming" | "hypothesis_generation";
+export type ResearchJobType = "claim_extraction" | "judge_scan" | "cluster_naming" | "chamber_synthesis" | "hypothesis_generation";
 
 export interface ResearchJobScope {
   /** The work/paper ids this job would operate over — order doesn't matter,

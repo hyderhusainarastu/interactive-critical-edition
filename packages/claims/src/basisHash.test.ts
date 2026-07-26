@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeRelationshipBasisHash, type RelationshipBasisInput } from "./basisHash";
+import { computeChamberBasisHash, computeRelationshipBasisHash, type ChamberBasisInput, type RelationshipBasisInput } from "./basisHash";
 
 const BASE: RelationshipBasisInput = {
   loText: "Claim A text.",
@@ -92,5 +92,59 @@ describe("computeRelationshipBasisHash", () => {
       loExcerpt: claim.supportingExcerpt,
     });
     expect(computeRelationshipBasisHash(basisOf(beforeRebind))).toBe(computeRelationshipBasisHash(basisOf(afterRebind)));
+  });
+});
+
+const CHAMBER_BASE: ChamberBasisInput = {
+  claims: [
+    { id: "11111111-1111-1111-1111-111111111111", text: "Claim A text.", excerpt: "excerpt A" },
+    { id: "22222222-2222-2222-2222-222222222222", text: "Claim B text.", excerpt: "excerpt B" },
+  ],
+  promptVersion: "evidence-chamber-v1",
+};
+
+describe("computeChamberBasisHash", () => {
+  it("is deterministic for the same input", () => {
+    expect(computeChamberBasisHash(CHAMBER_BASE)).toBe(computeChamberBasisHash({ ...CHAMBER_BASE, claims: [...CHAMBER_BASE.claims] }));
+  });
+
+  it("produces a 64-character lowercase hex sha256 digest", () => {
+    expect(computeChamberBasisHash(CHAMBER_BASE)).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("is insensitive to the ORDER claims are supplied in — same membership, same hash", () => {
+    const reordered: ChamberBasisInput = { ...CHAMBER_BASE, claims: [...CHAMBER_BASE.claims].reverse() };
+    expect(computeChamberBasisHash(reordered)).toBe(computeChamberBasisHash(CHAMBER_BASE));
+  });
+
+  it("changes when a claim's text changes", () => {
+    const edited: ChamberBasisInput = {
+      ...CHAMBER_BASE,
+      claims: CHAMBER_BASE.claims.map((c, i) => (i === 0 ? { ...c, text: "Edited claim A text." } : c)),
+    };
+    expect(computeChamberBasisHash(edited)).not.toBe(computeChamberBasisHash(CHAMBER_BASE));
+  });
+
+  it("changes when a claim's excerpt changes", () => {
+    const edited: ChamberBasisInput = {
+      ...CHAMBER_BASE,
+      claims: CHAMBER_BASE.claims.map((c, i) => (i === 0 ? { ...c, excerpt: "different excerpt A" } : c)),
+    };
+    expect(computeChamberBasisHash(edited)).not.toBe(computeChamberBasisHash(CHAMBER_BASE));
+  });
+
+  it("changes when the cluster's membership changes (a claim added or removed)", () => {
+    const added: ChamberBasisInput = {
+      ...CHAMBER_BASE,
+      claims: [...CHAMBER_BASE.claims, { id: "33333333-3333-3333-3333-333333333333", text: "Claim C text.", excerpt: "excerpt C" }],
+    };
+    expect(computeChamberBasisHash(added)).not.toBe(computeChamberBasisHash(CHAMBER_BASE));
+
+    const removed: ChamberBasisInput = { ...CHAMBER_BASE, claims: [CHAMBER_BASE.claims[0]] };
+    expect(computeChamberBasisHash(removed)).not.toBe(computeChamberBasisHash(CHAMBER_BASE));
+  });
+
+  it("changes when promptVersion bumps", () => {
+    expect(computeChamberBasisHash({ ...CHAMBER_BASE, promptVersion: "evidence-chamber-v2" })).not.toBe(computeChamberBasisHash(CHAMBER_BASE));
   });
 });
