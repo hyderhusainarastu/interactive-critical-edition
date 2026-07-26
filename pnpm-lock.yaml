@@ -185,6 +185,10 @@ importers:
         version: 2.1.9(@types/node@24.13.3)(lightningcss@1.32.0)(terser@5.49.0)
 
   packages/ai-adapters:
+    dependencies:
+      '@ice/claims':
+        specifier: workspace:*
+        version: link:../claims
     devDependencies:
       '@types/node':
         specifier: ^24
