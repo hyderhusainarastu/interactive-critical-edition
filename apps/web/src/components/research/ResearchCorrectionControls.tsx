@@ -100,7 +100,15 @@ function RevisionEntry({ revision }: { revision: RevisionRow }) {
   );
 }
 
-export function RevisionHistoryDrawer({ objectType, objectId }: { objectType: CorrectableObjectType; objectId: string }) {
+/** `compact` mirrors `ResearchCorrectionControls`'s own prop (D-25-10): a
+ *  dense inline list (e.g. the hypotheses/gaps rows in `ResearchHypothesesView`)
+ *  stays visually dense rather than growing every toggle to the 44px floor,
+ *  marked `data-dense-controls` so the accessibility touch-target audit's
+ *  own documented exemption for information-dense secondary regions covers
+ *  it deliberately, not by omission. The standalone permalink pages (claim/
+ *  cluster/chamber) render this at full, non-dense size and DO meet the
+ *  floor. */
+export function RevisionHistoryDrawer({ objectType, objectId, compact = false }: { objectType: CorrectableObjectType; objectId: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [revisions, setRevisions] = useState<RevisionRow[] | null>(null);
@@ -128,8 +136,13 @@ export function RevisionHistoryDrawer({ objectType, objectId }: { objectType: Co
   }
 
   return (
-    <div className="mt-2">
-      <button type="button" className="app-control underline" onClick={toggle} aria-expanded={open}>
+    <div className="mt-2" data-dense-controls={compact ? "" : undefined}>
+      <button
+        type="button"
+        className={`app-control app-press underline ${compact ? "" : "inline-flex min-h-11 min-w-11 items-center justify-center px-2"}`}
+        onClick={toggle}
+        aria-expanded={open}
+      >
         {open ? "Hide history" : "History"}
       </button>
       {open && (
@@ -219,23 +232,30 @@ export function ResearchCorrectionControls({
   }
 
   const textSize = compact ? "text-[0.68rem]" : "text-xs";
+  // D-25-10: a dense inline list (hypotheses/gaps rows) stays visually
+  // dense rather than every chip/button growing to the 44px floor — marked
+  // `data-dense-controls` so the accessibility touch-target audit's own
+  // documented exemption for information-dense secondary regions covers it
+  // deliberately. The standalone permalink pages (claim/cluster/chamber)
+  // render this non-compact and DO meet the floor below.
+  const buttonSize = compact ? "" : "min-h-11 min-w-11 inline-flex items-center justify-center px-3";
 
   return (
-    <div className={`${textSize}`} data-research-correction-controls={objectType}>
+    <div className={`${textSize}`} data-research-correction-controls={objectType} data-dense-controls={compact ? "" : undefined}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5" data-verification-chip>
           {VERIFICATION_LABEL[verificationStatus] ?? verificationStatus}
         </span>
         {hidden && <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">Hidden</span>}
-        <button type="button" className="app-control app-press underline disabled:opacity-50" onClick={() => apply("verified")} disabled={busy}>
+        <button type="button" className={`app-control app-press underline disabled:opacity-50 ${buttonSize}`} onClick={() => apply("verified")} disabled={busy}>
           Verify
         </button>
-        <button type="button" className="app-control app-press underline disabled:opacity-50" onClick={() => setDisputing((v) => !v)} disabled={busy}>
+        <button type="button" className={`app-control app-press underline disabled:opacity-50 ${buttonSize}`} onClick={() => setDisputing((v) => !v)} disabled={busy}>
           Dispute
         </button>
         <button
           type="button"
-          className="app-control app-press underline disabled:opacity-50"
+          className={`app-control app-press underline disabled:opacity-50 ${buttonSize}`}
           onClick={() => apply(hidden ? "restored" : "hidden")}
           disabled={busy}
         >
@@ -254,12 +274,17 @@ export function ResearchCorrectionControls({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Why does this look wrong? (optional)"
-            className="app-control min-w-0 flex-1 rounded border border-[var(--color-border)] px-2 py-1"
+            className={`app-control min-w-0 flex-1 rounded border border-[var(--color-border)] px-2 py-1 ${compact ? "" : "min-h-11"}`}
           />
-          <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 disabled:opacity-50" onClick={() => apply("disputed", reason)} disabled={busy}>
+          <button
+            type="button"
+            className={`app-control app-press rounded border border-[var(--color-border)] px-3 py-1 disabled:opacity-50 ${compact ? "" : "min-h-11"}`}
+            onClick={() => apply("disputed", reason)}
+            disabled={busy}
+          >
             Confirm dispute
           </button>
-          <button type="button" className="app-control underline" onClick={() => setDisputing(false)}>
+          <button type="button" className={`app-control app-press underline ${buttonSize}`} onClick={() => setDisputing(false)}>
             Cancel
           </button>
         </div>
@@ -267,7 +292,7 @@ export function ResearchCorrectionControls({
 
       {error && <p className="mt-1 text-[var(--color-error,#b3261e)]">{error}</p>}
 
-      <RevisionHistoryDrawer objectType={objectType} objectId={objectId} />
+      <RevisionHistoryDrawer objectType={objectType} objectId={objectId} compact={compact} />
     </div>
   );
 }

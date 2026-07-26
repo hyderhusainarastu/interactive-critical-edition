@@ -186,17 +186,17 @@ export function ClaimCorrectionExtras({
         Correct this claim
       </h2>
 
-      <div className="mt-3 flex flex-wrap gap-3 text-sm">
-        <button type="button" className="app-control app-press underline" onClick={() => setEditing((v) => !v)}>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <button type="button" className="app-control app-press inline-flex min-h-11 min-w-11 items-center justify-center px-2 underline" onClick={() => setEditing((v) => !v)}>
           {editing ? "Cancel edit" : "Edit"}
         </button>
-        <button type="button" className="app-control app-press underline" onClick={() => setReclassifying((v) => !v)}>
+        <button type="button" className="app-control app-press inline-flex min-h-11 min-w-11 items-center justify-center px-2 underline" onClick={() => setReclassifying((v) => !v)}>
           {reclassifying ? "Cancel reclassify" : "Reclassify"}
         </button>
-        <button type="button" className="app-control app-press underline" onClick={() => setSplitting((v) => !v)}>
+        <button type="button" className="app-control app-press inline-flex min-h-11 min-w-11 items-center justify-center px-2 underline" onClick={() => setSplitting((v) => !v)}>
           {splitting ? "Cancel split" : "Split"}
         </button>
-        <button type="button" className="app-control app-press underline" onClick={() => setMerging((v) => !v)}>
+        <button type="button" className="app-control app-press inline-flex min-h-11 min-w-11 items-center justify-center px-2 underline" onClick={() => setMerging((v) => !v)}>
           {merging ? "Cancel merge" : "Merge with another claim"}
         </button>
       </div>
@@ -233,7 +233,7 @@ export function ClaimCorrectionExtras({
             />
           </div>
           <div className="flex gap-2">
-            <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={saveEdit} disabled={editBusy}>
+            <button type="button" className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={saveEdit} disabled={editBusy}>
               {editBusy ? "Saving…" : "Save"}
             </button>
           </div>
@@ -246,14 +246,14 @@ export function ClaimCorrectionExtras({
           <label className="sr-only" htmlFor="claim-reclassify-nature">
             Claim nature
           </label>
-          <select id="claim-reclassify-nature" className="app-control rounded border border-[var(--color-border)] px-2 py-1" value={natureDraft} onChange={(e) => setNatureDraft(e.target.value)}>
+          <select id="claim-reclassify-nature" className="app-control min-h-11 rounded border border-[var(--color-border)] px-2 py-1" value={natureDraft} onChange={(e) => setNatureDraft(e.target.value)}>
             {NATURE_VALUES.map((n) => (
               <option key={n} value={n}>
                 {NATURE_LABEL[n]}
               </option>
             ))}
           </select>
-          <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={saveReclassify} disabled={reclassifyBusy}>
+          <button type="button" className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={saveReclassify} disabled={reclassifyBusy}>
             {reclassifyBusy ? "Saving…" : "Save"}
           </button>
           {reclassifyError && <p className="text-xs text-[var(--color-error,#b3261e)]">{reclassifyError}</p>}
@@ -281,10 +281,10 @@ export function ClaimCorrectionExtras({
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-3 py-1.5" onClick={() => setExcerptParts((parts) => [...parts, ""])}>
+            <button type="button" className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1.5" onClick={() => setExcerptParts((parts) => [...parts, ""])}>
               Add another part
             </button>
-            <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={submitSplit} disabled={splitBusy}>
+            <button type="button" className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={submitSplit} disabled={splitBusy}>
               {splitBusy ? "Splitting…" : "Split claim"}
             </button>
           </div>
@@ -343,7 +343,7 @@ export function ClaimCorrectionExtras({
               onChange={(e) => setMergedExcerpt(e.target.value)}
             />
           </div>
-          <button type="button" className="app-control app-press rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={submitMerge} disabled={mergeBusy}>
+          <button type="button" className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1.5 disabled:opacity-50" onClick={submitMerge} disabled={mergeBusy}>
             {mergeBusy ? "Merging…" : "Merge claims"}
           </button>
           {mergeError && <p className="text-xs text-[var(--color-error,#b3261e)]">{mergeError}</p>}

@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { auditTouchTargets, createVerifiedTestUser, deleteTestUser } from "./helpers";
 
 /**
  * Phase 29.1: scheduled research monitoring web surfaces (`/research/monitors`
@@ -252,6 +252,34 @@ test.describe("Research monitoring (Phase 29.1)", () => {
       await expect(main(page).getByRole("heading", { name: "Monitors", exact: true })).toBeVisible();
       expect((await scan(page)).violations, `/research/[projectId]/monitors (${colorScheme})`).toEqual([]);
     }
+  });
+
+  // D-25-10: the Phase 30 axe sweep measured most of this page's controls
+  // (cadence selects, pause/dismiss/add-to-corpus buttons) below the 44px
+  // touch-target minimum. Fixed sizing-only (min-h-11, the D-23-41
+  // precedent); this asserts it stays fixed on both the global and
+  // project-scoped monitors page, with a real monitor + un-imported hit
+  // rendered so every control state (including "Add to corpus", not just
+  // "In corpus") is on screen.
+  test("global monitors page controls meet the 44x44 touch-target minimum", async ({ page }) => {
+    await login(page);
+    const monitorId = await seedMonitor(userId, { query: "touch target monitor" });
+    await seedHit(monitorId, { title: "Touch Target Hit" });
+
+    await page.goto("/research/monitors");
+    await expect(main(page).getByText("Touch Target Hit")).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+  });
+
+  test("project-scoped monitors page controls meet the 44x44 touch-target minimum", async ({ page }) => {
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Touch target project monitors");
+    const monitorId = await seedMonitor(userId, { query: "touch target scoped monitor", projectId });
+    await seedHit(monitorId, { title: "Touch Target Scoped Hit" });
+
+    await page.goto(`/research/${projectId}/monitors`);
+    await expect(main(page).getByText("Touch Target Scoped Hit")).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
   });
 
   // Every `research_monitor*` row this file inserts directly cascades from

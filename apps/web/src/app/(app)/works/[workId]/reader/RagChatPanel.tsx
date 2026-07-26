@@ -450,7 +450,7 @@ export function RagChatPanel({
             <label className="mt-2 flex w-fit items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
               Mode
               <select
-                className="app-control rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 text-[11px] font-normal normal-case tracking-normal text-[var(--color-text)]"
+                className="app-control min-h-11 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 text-[11px] font-normal normal-case tracking-normal text-[var(--color-text)]"
                 value={mode}
                 onChange={(event) => setMode(event.target.value as ResearchMode)}
               >
