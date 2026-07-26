@@ -32,6 +32,40 @@ export async function fetchJson<T>(
   }
 }
 
+export interface FetchTextResult {
+  ok: boolean;
+  status: number;
+  data: string | null;
+  /** Present when the request threw (network error / timeout). */
+  error?: string;
+}
+
+/** Timeout-bounded text fetch — `fetchJson`'s sibling for APIs that answer
+ *  with XML/Atom rather than JSON (arXiv's `export.arxiv.org/api/query`).
+ *  Same never-throws contract: a network error or non-2xx becomes
+ *  `{ ok:false }` so the caller can classify it into an honest status. */
+export async function fetchText(
+  url: string,
+  opts: { headers?: Record<string, string>; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<FetchTextResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);
+  if (opts.signal) {
+    if (opts.signal.aborted) controller.abort();
+    else opts.signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+  try {
+    const res = await fetch(url, { headers: opts.headers, signal: controller.signal });
+    if (!res.ok) return { ok: false, status: res.status, data: null };
+    const data = await res.text();
+    return { ok: true, status: res.status, data };
+  } catch (e) {
+    return { ok: false, status: 0, data: null, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface AttemptBody {
   resources: RawResource[];
   rateLimited?: boolean;

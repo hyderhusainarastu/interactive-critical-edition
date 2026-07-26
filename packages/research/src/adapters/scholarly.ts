@@ -1,5 +1,5 @@
 import { POLITE_EMAIL, providerEnabled } from "../config";
-import type { AdapterResult, AdapterSearchOptions, RawResource, SourceAdapter } from "../types";
+import type { AdapterResult, AdapterSearchOptions, ProviderAttempt, RawResource, SourceAdapter } from "../types";
 import { disabledAttempt, fetchJson, reconstructInvertedAbstract, runAttempt, userAgent } from "./base";
 
 /**
@@ -111,6 +111,58 @@ export class OpenAlexAdapter implements SourceAdapter {
       return { resources };
     });
   }
+}
+
+/**
+ * Direct-by-id metadata fetch (Phase 28.2's "fetch full metadata by id from
+ * its provider" corpus-import step) — a single-work OpenAlex lookup, as
+ * opposed to `OpenAlexAdapter.search()`'s ranked/fuzzy results. `openAlexId`
+ * accepts either the bare id (`"W2031754690"`) or a full `openalex.org/`
+ * URL — the same id shape `RawResource.raw.id` carries.
+ */
+export async function lookupOpenAlexById(
+  openAlexId: string,
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ resource: RawResource | null; attempt: ProviderAttempt }> {
+  if (!providerEnabled("openalex")) return { resource: null, attempt: disabledAttempt("openalex").attempt };
+  const result = await runAttempt("openalex", [openAlexId], async () => {
+    const bareId = openAlexId.replace(/^https?:\/\/openalex\.org\//i, "").trim();
+    const params = new URLSearchParams();
+    if (POLITE_EMAIL) params.set("mailto", POLITE_EMAIL);
+    const qs = params.toString();
+    const { ok, status, data, error } = await fetchJson<OpenAlexWork>(
+      `https://api.openalex.org/works/${encodeURIComponent(bareId)}${qs ? `?${qs}` : ""}`,
+      { headers: { "User-Agent": userAgent(POLITE_EMAIL) }, timeoutMs: opts.timeoutMs, signal: opts.signal },
+    );
+    if (!ok) {
+      // OpenAlex answers 404 for an unknown work id — an honest "not found",
+      // distinct from a real outage/rate-limit.
+      if (status === 404) return { resources: [] };
+      return { resources: [], rateLimited: status === 429, failed: status === 0, unavailable: status > 0 && status !== 429 && status !== 404, error };
+    }
+    if (!data || (!data.title && !data.display_name)) return { resources: [] };
+    const w = data;
+    const doi = w.doi ? w.doi.replace(/^https?:\/\/doi\.org\//, "") : null;
+    const resource: RawResource = {
+      provider: "openalex",
+      resourceType: (w.type === "book" || w.type === "monograph" ? "book" : "article") as "book" | "article",
+      title: w.title ?? w.display_name ?? "",
+      authors: (w.authorships ?? []).map((a) => a.author?.display_name ?? "").filter(Boolean),
+      year: w.publication_year ?? null,
+      url: w.best_oa_location?.landing_page_url ?? w.primary_location?.landing_page_url ?? (doi ? `https://doi.org/${doi}` : null),
+      doi,
+      isbn: null,
+      snippet: reconstructInvertedAbstract(w.abstract_inverted_index),
+      venue: w.primary_location?.source?.display_name ?? null,
+      popularity: w.cited_by_count ?? null,
+      // `id` is preserved (falling back to the requested bare id) so
+      // `corpusImport.ts` can recover the provider's own external id from
+      // `raw.id`, the same field `OpenAlexAdapter.search()`'s results carry.
+      raw: { ...w, id: w.id ?? `https://openalex.org/${bareId}` },
+    };
+    return { resources: [resource] };
+  });
+  return { resource: result.resources[0] ?? null, attempt: result.attempt };
 }
 
 // ---- Open Library (books) ----
@@ -263,4 +315,54 @@ export class SemanticScholarAdapter implements SourceAdapter {
       return { resources };
     });
   }
+}
+
+/**
+ * Direct-by-id metadata fetch (Phase 28.2's "fetch full metadata by id from
+ * its provider" corpus-import step) — a single-paper Semantic Scholar
+ * lookup, as opposed to `SemanticScholarAdapter.search()`'s ranked results.
+ * `paperId` is the S2 paperId `RawResource.raw.paperId` carries (the id
+ * `SemanticScholarAdapter.search()`'s own results are keyed by).
+ */
+export async function lookupSemanticScholarById(
+  paperId: string,
+  opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ resource: RawResource | null; attempt: ProviderAttempt }> {
+  if (!providerEnabled("semanticscholar")) return { resource: null, attempt: disabledAttempt("semanticscholar").attempt };
+  const result = await runAttempt("semanticscholar", [paperId], async () => {
+    const params = new URLSearchParams({ fields: "title,authors,year,externalIds,abstract,citationCount,url,venue" });
+    const headers: Record<string, string> = { "User-Agent": userAgent(POLITE_EMAIL) };
+    if (process.env.SEMANTIC_SCHOLAR_API_KEY) headers["x-api-key"] = process.env.SEMANTIC_SCHOLAR_API_KEY;
+    const { ok, status, data, error } = await fetchJson<SemanticScholarPaper>(
+      `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(paperId)}?${params}`,
+      { headers, timeoutMs: opts.timeoutMs, signal: opts.signal },
+    );
+    if (!ok) {
+      // Semantic Scholar answers 404 for an unknown paperId — an honest
+      // "not found", distinct from a real outage/rate-limit.
+      if (status === 404) return { resources: [] };
+      return { resources: [], rateLimited: status === 429, failed: status === 0, unavailable: status > 0 && status !== 429 && status !== 404, error };
+    }
+    if (!data?.title) return { resources: [] };
+    const p = data;
+    const resource: RawResource = {
+      provider: "semanticscholar",
+      resourceType: "article",
+      title: p.title!,
+      authors: (p.authors ?? []).map((a) => a.name ?? "").filter(Boolean),
+      year: p.year ?? null,
+      url: p.url ?? (p.externalIds?.DOI ? `https://doi.org/${p.externalIds.DOI}` : null),
+      doi: p.externalIds?.DOI ?? null,
+      isbn: null,
+      snippet: p.abstract ? p.abstract.replace(/\s+/g, " ").trim().slice(0, 600) : null,
+      venue: p.venue ?? null,
+      popularity: p.citationCount ?? null,
+      // The single-paper endpoint's own response carries no top-level
+      // `paperId` field unless explicitly requested — inject the id we
+      // looked it up by, the same field `search()`'s results carry.
+      raw: { ...p, paperId },
+    };
+    return { resources: [resource] };
+  });
+  return { resource: result.resources[0] ?? null, attempt: result.attempt };
 }

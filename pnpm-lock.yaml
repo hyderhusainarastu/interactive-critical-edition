@@ -373,6 +373,9 @@ importers:
       '@ice/bibliographic':
         specifier: workspace:*
         version: link:../bibliographic
+      fast-xml-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
     devDependencies:
       '@types/node':
         specifier: ^24
