@@ -107,8 +107,11 @@ export interface AnnotationMarkerAnchor {
   colorVar: string;
   /** Short glyph shown inside the marker. */
   glyph: string;
-  /** Distinguishes DB-anchored passage annotations from inferred note matches. */
-  markerKind?: "annotation" | "matched-note";
+  /** Distinguishes DB-anchored passage annotations from inferred note
+   *  matches, and (Phase 28.3) a DB-anchored `research_claim` from one
+   *  re-matched at render time from an `unanchored` claim's stored quote —
+   *  same solid/dashed treatment as "annotation"/"matched-note". */
+  markerKind?: "annotation" | "matched-note" | "claim" | "claim-matched";
   ariaLabel?: string;
 }
 
@@ -144,7 +147,8 @@ export function applyAnnotationMarkers(
     marker.type = "button";
     marker.dataset.annotationId = a.id;
     if (a.markerKind) marker.dataset.markerKind = a.markerKind;
-    marker.className = `reader-annotation-marker${a.markerKind === "matched-note" ? " reader-annotation-marker-matched" : ""}`;
+    const dashed = a.markerKind === "matched-note" || a.markerKind === "claim-matched";
+    marker.className = `reader-annotation-marker${dashed ? " reader-annotation-marker-matched" : ""}`;
     marker.style.setProperty("--reader-annotation-color", `var(${a.colorVar})`);
     marker.textContent = a.glyph;
     marker.setAttribute("aria-label", a.ariaLabel ?? "Automated annotation — open details");

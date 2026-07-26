@@ -20,11 +20,13 @@ import {
   type PassageAnnotationType,
 } from "./EditionReader";
 import { matchNoteToBlock } from "./matchNoteToBlock";
+import { ClaimsTab } from "./ClaimsTab";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
 import { readerScrollBehavior } from "./readerMotion";
+import type { ResearchClaimSummary } from "./researchClaims";
 import type { RelationshipCategory, VerificationStatus } from "./types";
 
-type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources";
+type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources" | "claims";
 
 /**
  * Passage annotations carry a reader-correction state (D-22-1) at parity with
@@ -79,6 +81,9 @@ export function EditionAnnotationsPanel({
   onSelectAnnotation,
   onClose,
   flushTop = false,
+  claims = [],
+  enableReaderClaimLayer = false,
+  onLocatePassage,
 }: {
   edition: EditionWithReview;
   activeId: string | null;
@@ -101,6 +106,14 @@ export function EditionAnnotationsPanel({
   /** True when the reader's distraction-reduced focus mode hides the app
    *  header — see `ReaderSidebarFrame`'s own doc comment. */
   flushTop?: boolean;
+  /** Phase 28.3, behind `readerClaimLayer`: `research_claim` rows for this
+   *  work, fetched separately from `edition` (a different table/route). */
+  claims?: ResearchClaimSummary[];
+  enableReaderClaimLayer?: boolean;
+  /** Scrolls the main reader pane to a text block — the "Locate passage"
+   *  card affordance, reusing the same `activeReaderBlockId` mechanism the
+   *  outline rail and bookmark selection already use. */
+  onLocatePassage?: (textBlockId: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("annotations");
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
@@ -110,6 +123,7 @@ export function EditionAnnotationsPanel({
   const apparatusCount = edition.authorApparatus.length;
   const suggestedTerms = edition.terms.filter((term) => term.verificationStatus === "suggested");
   const activeIsGeneratedNote = activeId ? edition.generatedNotes.some((note) => note.id === activeId) : false;
+  const activeIsClaim = activeId ? claims.some((claim) => claim.id === activeId) : false;
   const annotationTypes = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.annotationType))], [edition.passageAnnotations]);
   const relationships = useMemo(() => [...new Set(edition.passageAnnotations.map((annotation) => annotation.relationship))], [edition.passageAnnotations]);
   // Twin of the Library's `hasReaderLevelSignal`/Curriculum's
@@ -130,8 +144,8 @@ export function EditionAnnotationsPanel({
   // activeId (unchanged) snapping them back.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (activeId) setTab(activeIsGeneratedNote ? "notes" : "annotations");
-  }, [activeId, activeIsGeneratedNote]);
+    if (activeId) setTab(activeIsClaim ? "claims" : activeIsGeneratedNote ? "notes" : "annotations");
+  }, [activeId, activeIsClaim, activeIsGeneratedNote]);
 
   // D-22-xx: no `.app-reveal` here, same reasoning as `NotesSidebar.tsx` —
   // this is a fixed reader-shell panel, always in the initial viewport at
@@ -179,6 +193,7 @@ export function EditionAnnotationsPanel({
         </button>
         {enablePhase12Reader && <button type="button" aria-pressed={tab === "apparatus"} onClick={() => setTab("apparatus")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "apparatus" ? "var(--color-accent-ink)" : "transparent", color: tab === "apparatus" ? "var(--color-text)" : "var(--color-text-muted)" }}>Apparatus{apparatusCount > 0 ? ` (${apparatusCount})` : ""}</button>}
         {enablePhase12Reader && <button type="button" aria-pressed={tab === "terms"} onClick={() => setTab("terms")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "terms" ? "var(--color-accent-ink)" : "transparent", color: tab === "terms" ? "var(--color-text)" : "var(--color-text-muted)" }}>Terms{suggestedTerms.length > 0 ? ` (${suggestedTerms.length})` : ""}</button>}
+        {enableReaderClaimLayer && <button type="button" aria-pressed={tab === "claims"} onClick={() => setTab("claims")} className="app-control border-b-2 px-2.5 py-2 font-medium" style={{ borderColor: tab === "claims" ? "var(--color-accent-ink)" : "transparent", color: tab === "claims" ? "var(--color-text)" : "var(--color-text-muted)" }}>Claims{claims.length > 0 ? ` (${claims.length})` : ""}</button>}
         <button
           type="button"
           aria-pressed={tab === "sources"}
@@ -256,6 +271,8 @@ export function EditionAnnotationsPanel({
           <ApparatusTab edition={edition} kind={filters.apparatusKind} onKindChange={(apparatusKind) => onFiltersChange({ ...filters, apparatusKind })} />
         ) : tab === "terms" ? (
           <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
+        ) : tab === "claims" ? (
+          <ClaimsTab claims={claims} blocks={edition.blocks} activeId={activeId} onSelectClaim={onSelectAnnotation} onLocatePassage={onLocatePassage} />
         ) : (
           <SourcesTab edition={edition} />
         )}
