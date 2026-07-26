@@ -1,11 +1,21 @@
 import { z } from "zod";
 import { NextResponse } from "next/server";
+import { phase25FeatureEnabled } from "@ice/config";
+import { RESEARCH_MODES, isExplicitResearchMode, type ResearchMode } from "@ice/rag";
 import type { CompetencyNoticeView } from "@/lib/competencyData";
 import { answerRagConversation, getRagConversationView } from "@/lib/ragData";
 import { isRagApiError, requireRagApiUser } from "@/lib/ragApi";
 import { recordUsageEvent } from "@/lib/usageEvents";
 
-const messageSchema = z.object({ message: z.string().trim().min(2).max(2_000) });
+const messageSchema = z.object({
+  message: z.string().trim().min(2).max(2_000),
+  // Phase 28.6: an absent/undefined `mode` means the pre-existing socratic
+  // default — see `answerRagConversation`'s own `?? DEFAULT_RESEARCH_MODE`.
+  mode: z.enum(RESEARCH_MODES).optional(),
+  claimId: z.string().uuid().optional(),
+  clusterId: z.string().uuid().optional(),
+  workIdB: z.string().uuid().optional(),
+});
 
 function sse(event: string, data: unknown) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -36,6 +46,11 @@ function streamAnswer(answer: NonNullable<Awaited<ReturnType<typeof answerRagCon
       controller.enqueue(encoder.encode(sse("user", answer.user)));
       for (const token of answer.assistant.content.match(/\S+\s*/g) ?? []) controller.enqueue(encoder.encode(sse("delta", { text: token })));
       for (const citation of answer.assistant.citations) controller.enqueue(encoder.encode(sse("citation", citation)));
+      // Phase 28.6: a research-mode answer's claim citations, parallel to
+      // (never a replacement for) the chunk `citation` event above — a
+      // socratic-mode answer's `claimCitations` array is always empty, so
+      // this loop is a no-op for every pre-existing call site.
+      for (const claimCitation of answer.assistant.claimCitations) controller.enqueue(encoder.encode(sse("claimCitation", claimCitation)));
       const notices = await withCompetencyTimeout(answer.competencyPromise);
       for (const notice of notices) controller.enqueue(encoder.encode(sse("competency", notice)));
       controller.enqueue(encoder.encode(sse("done", { message: answer.assistant, notFound: answer.notFound })));
@@ -58,8 +73,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
   if (isRagApiError(userId)) return userId;
   const parsed = messageSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Ask a question between 2 and 2,000 characters." }, { status: 400 });
+  const mode: ResearchMode | undefined = parsed.data.mode;
+  // Phase 28.6: the flag gates every explicit research mode, not the
+  // endpoint itself — `socratic`/undefined always works regardless, exactly
+  // matching the plan's "the API rejects non-socratic modes" requirement
+  // when `askResearchModes` is off.
+  if (mode && isExplicitResearchMode(mode) && !phase25FeatureEnabled("askResearchModes")) {
+    return NextResponse.json({ error: "Research modes are not available." }, { status: 400 });
+  }
   const { conversationId } = await params;
-  const answer = await answerRagConversation({ userId, conversationId, question: parsed.data.message });
+  const answer = await answerRagConversation({
+    userId,
+    conversationId,
+    question: parsed.data.message,
+    mode,
+    claimId: parsed.data.claimId,
+    clusterId: parsed.data.clusterId,
+    workIdB: parsed.data.workIdB,
+  });
   if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
   recordUsageEvent({ userId, eventType: "chat_message", path: "/ask-library" });
   return new Response(streamAnswer(answer), {

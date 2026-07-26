@@ -39,10 +39,14 @@ export function GlobalRagSidebar({
   id,
   contextWorkId,
   onClose,
+  enableResearchModes = false,
 }: {
   id?: string;
   contextWorkId: string | null;
   onClose: () => void;
+  /** Phase 28.6: threaded straight through to `RagChatPanel` — behind
+   *  `askResearchModes` (plan §"Web surfaces (Ask Library)"). */
+  enableResearchModes?: boolean;
 }) {
   // Lazy initial state (not an effect + setState) so the stored width is
   // read exactly once, synchronously, before first paint — reading
@@ -106,7 +110,7 @@ export function GlobalRagSidebar({
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
       />
-      <RagChatPanel id={id} contextWorkId={contextWorkId} onClose={onClose} widthPx={width} dialogLabel="Ask Library — global sidebar" />
+      <RagChatPanel id={id} contextWorkId={contextWorkId} onClose={onClose} widthPx={width} dialogLabel="Ask Library — global sidebar" enableResearchModes={enableResearchModes} />
     </>
   );
 }

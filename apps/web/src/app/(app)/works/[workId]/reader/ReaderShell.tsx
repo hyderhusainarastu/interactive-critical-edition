@@ -45,6 +45,7 @@ export function ReaderShell({
   enablePhase12Reader = false,
   enablePhase18Rag = false,
   enableReaderClaimLayer = false,
+  enableAskResearchModes = false,
 }: {
   workId: string;
   embedded?: boolean;
@@ -55,6 +56,9 @@ export function ReaderShell({
   /** Phase 28.3: the Claims tab + in-text claim markers, behind
    *  `readerClaimLayer` (plan §"Web surfaces (reader)"). */
   enableReaderClaimLayer?: boolean;
+  /** Phase 28.6: Ask Library's per-message research modes, behind
+   *  `askResearchModes` (plan §"Web surfaces (Ask Library)"). */
+  enableAskResearchModes?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -635,7 +639,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableAskResearchModes={enableAskResearchModes} />
           </div>
         )}
       </div>
@@ -693,7 +697,7 @@ export function ReaderShell({
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" />}
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" enableResearchModes={enableAskResearchModes} />}
     </div>
   );
 }
