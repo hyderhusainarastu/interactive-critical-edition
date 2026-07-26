@@ -2,6 +2,7 @@ import {
   aiUsageLogs,
   citations,
   claimLoci,
+  claimPairCandidates,
   claimScores,
   db,
   docMetadata,
@@ -11,12 +12,14 @@ import {
   researchClaimEmbeddings,
   researchClaims,
   researchJobRequests,
+  researchProjectMembers,
+  researchProjects,
   textBlocks,
   works,
   type researchJobCoverageEnum,
 } from "@ice/db";
 import type { ExtractionBlock } from "@ice/claims";
-import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 /**
  * All Drizzle reads/writes for the Phase 26.1 claim-extraction pipeline.
@@ -447,4 +450,153 @@ export async function countActiveClaimsForRun(runId: string, promptVersion: stri
     .from(researchClaims)
     .where(and(eq(researchClaims.processingRunId, runId), eq(researchClaims.promptVersion, promptVersion), eq(researchClaims.status, "active")));
   return Number(row?.count ?? 0);
+}
+
+// ---------------------------------------------------------------------------
+// detect_relationships scope (Phase 26.2a).
+// ---------------------------------------------------------------------------
+
+export interface ResearchProjectRow {
+  id: string;
+  userId: string;
+}
+
+/** Owner-scoped project lookup — the predicate that keeps every read below
+ *  it (work members, claims) inside the requesting user's own data. */
+export async function loadResearchProjectForUser(projectId: string, userId: string): Promise<ResearchProjectRow | null> {
+  const [row] = await db
+    .select({ id: researchProjects.id, userId: researchProjects.userId })
+    .from(researchProjects)
+    .where(and(eq(researchProjects.id, projectId), eq(researchProjects.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Every `work`-typed member of a project, regardless of role
+ *  (central/supporting/background) — unlike extraction's role-gated
+ *  trigger, relationship detection scopes over every claim already
+ *  extracted for any member work. Corpus-item members are out of scope for
+ *  this lane (research_claim has no corpus-item-sourced rows yet; see
+ *  extractClaims.ts's own typed TODO for the corpus-item extraction path) —
+ *  TODO(Phase 28.2+): once corpus-item claims exist, widen this to also
+ *  return corpusItemIds and fold them into the retrieval/engagement scope. */
+export async function loadProjectWorkIds(projectId: string): Promise<string[]> {
+  const rows = await db
+    .select({ workId: researchProjectMembers.workId })
+    .from(researchProjectMembers)
+    .where(and(eq(researchProjectMembers.projectId, projectId), eq(researchProjectMembers.memberType, "work")));
+  return rows.map((r) => r.workId).filter((id): id is string => id !== null);
+}
+
+export interface ScopedClaimRow {
+  id: string;
+  userId: string;
+  workId: string;
+  claimText: string;
+  claimNature: string;
+}
+
+/** Active, non-hidden, work-sourced claims across a set of works — Stage-1
+ *  retrieval's entire input population. `userId` is asserted again here
+ *  (not just relied on transitively via `loadProjectWorkIds`'s own
+ *  ownership check) as a second, independent ownership guard on the actual
+ *  claim rows returned — the same defense-in-depth the rest of this file's
+ *  owner-scoped reads apply. */
+export async function loadScopedClaimsForRelationshipDetection(userId: string, workIds: string[]): Promise<ScopedClaimRow[]> {
+  if (workIds.length === 0) return [];
+  const rows = await db
+    .select({
+      id: researchClaims.id,
+      userId: researchClaims.userId,
+      workId: researchClaims.workId,
+      claimText: researchClaims.claimText,
+      claimNature: researchClaims.claimNature,
+    })
+    .from(researchClaims)
+    .where(
+      and(
+        eq(researchClaims.userId, userId),
+        inArray(researchClaims.workId, workIds),
+        eq(researchClaims.status, "active"),
+        eq(researchClaims.hidden, false),
+      ),
+    );
+  // `workId` is nullable at the type level (a corpus-item-sourced claim has
+  // it null instead — see `research_claim_exactly_one_source`), but every
+  // row here matched `inArray(researchClaims.workId, workIds)`, which can
+  // never match null — `.filter(Boolean)` on `workId` plus the explicit
+  // remap narrows the TS type to reflect that DB-enforced fact rather than
+  // actually filtering anything out.
+  return rows
+    .filter((r) => r.workId !== null)
+    .map((r) => ({ id: r.id, userId: r.userId, workId: r.workId as string, claimText: r.claimText, claimNature: r.claimNature }));
+}
+
+/** Embedding vectors for a set of claims, filtered to ONE model — "the
+ *  ACTIVE model" (plan §Pipeline "Three-channel Stage 1"). A claim without a
+ *  row here (never embedded, or embedded under a since-changed model)
+ *  simply has no dense-channel entry — it still participates via BM25/locus,
+ *  never silently dropped from retrieval altogether. */
+export async function loadClaimEmbeddingsForModel(claimIds: string[], model: string): Promise<Map<string, number[]>> {
+  const out = new Map<string, number[]>();
+  if (claimIds.length === 0) return out;
+  const rows = await db
+    .select({ claimId: researchClaimEmbeddings.claimId, embedding: researchClaimEmbeddings.embedding })
+    .from(researchClaimEmbeddings)
+    .where(and(inArray(researchClaimEmbeddings.claimId, claimIds), eq(researchClaimEmbeddings.model, model)));
+  for (const row of rows) out.set(row.claimId, row.embedding as unknown as number[]);
+  return out;
+}
+
+export interface ClaimLocusRow {
+  claimId: string;
+  locusKey: string;
+}
+
+/** Every distinct `(claimId, locusKey)` a set of claims carries, collapsed
+ *  across origins (`excerpt`/`block`/`footnote`/`citation`) — the locus
+ *  retrieval channel only cares THAT a claim is anchored at a given locus,
+ *  not which origin(s) corroborated it. */
+export async function loadDistinctClaimLoci(claimIds: string[]): Promise<ClaimLocusRow[]> {
+  if (claimIds.length === 0) return [];
+  const rows = await db
+    .selectDistinct({ claimId: claimLoci.claimId, locusKey: claimLoci.locusKey })
+    .from(claimLoci)
+    .where(inArray(claimLoci.claimId, claimIds));
+  return rows;
+}
+
+export interface NewClaimPairCandidate {
+  claimLoId: string;
+  claimHiId: string;
+  retrievalSources: { channel: string; score: number }[];
+  bestRetrievalScore: number;
+  engagement: string;
+  engagementEvidence: Record<string, unknown> | null;
+}
+
+/** Idempotent bulk insert on the `(user_id, claim_lo_id, claim_hi_id)`
+ *  unique — a re-run over an unchanged claim set inserts zero new rows.
+ *  Returns how many rows were ACTUALLY new (not how many were attempted),
+ *  which is what makes the "repeat run costs nothing new" canary assertion
+ *  meaningful. */
+export async function insertClaimPairCandidates(userId: string, projectId: string, candidates: NewClaimPairCandidate[]): Promise<number> {
+  if (candidates.length === 0) return 0;
+  const inserted = await db
+    .insert(claimPairCandidates)
+    .values(
+      candidates.map((c) => ({
+        userId,
+        projectId,
+        claimLoId: c.claimLoId,
+        claimHiId: c.claimHiId,
+        retrievalSources: c.retrievalSources,
+        bestRetrievalScore: c.bestRetrievalScore,
+        engagement: c.engagement as (typeof claimPairCandidates.$inferInsert)["engagement"],
+        engagementEvidence: c.engagementEvidence,
+      })),
+    )
+    .onConflictDoNothing({ target: [claimPairCandidates.userId, claimPairCandidates.claimLoId, claimPairCandidates.claimHiId] })
+    .returning({ id: claimPairCandidates.id });
+  return inserted.length;
 }
