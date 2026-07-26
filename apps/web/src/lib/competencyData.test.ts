@@ -11,8 +11,8 @@ import {
   understandingRatings,
   works,
 } from "@ice/db";
-import { COMPETENCY_LEVEL_SCORES, COMPETENCY_SCORE_CEILING } from "@ice/rag";
-import { processCompetencySignals } from "@/lib/competencyData";
+import { buildCompetencyInput, COMPETENCY_LEVEL_SCORES, COMPETENCY_SCORE_CEILING } from "@ice/rag";
+import { processCompetencySignals, resolveCompetencyCandidates } from "@/lib/competencyData";
 import { createVerifiedTestUser, deleteTestUser } from "../../e2e/helpers";
 
 /**
@@ -119,6 +119,27 @@ async function competencySignalRows(userId: string) {
   return db.select().from(competencySignals).where(eq(competencySignals.userId, userId));
 }
 
+/**
+ * Label-then-validate hardening: the real orchestrator (`runGatedModelCall`
+ * in `competencyData.ts`) never puts a candidate's real database `targetId`
+ * in the prompt — it labels each one "TARGET_1", "TARGET_2", ... (see
+ * `@ice/rag`'s `buildCompetencyInput`) and the model is expected to cite
+ * signals by that label. A mocked model response in this test therefore
+ * must use the SAME labels the real call would have built, not a real
+ * `targetId` directly, or every signal will be (correctly) treated as
+ * unresolvable. This resolves the exact same candidate list
+ * `processCompetencySignals` will, in the same order, so the labels match.
+ */
+async function labelsFor(userId: string, workId: string): Promise<Map<string, string>> {
+  const candidates = await resolveCompetencyCandidates(userId, [workId]);
+  return buildCompetencyInput("placeholder", null, candidates).labelToTargetId;
+}
+
+function labelOf(labelToTargetId: ReadonlyMap<string, string>, targetId: string): string {
+  for (const [label, id] of labelToTargetId) if (id === targetId) return label;
+  throw new Error(`no label found for targetId ${targetId}`);
+}
+
 // ---------------------------------------------------------------------------
 // (a) Well-formed model response: exact concept_mastery/understanding_rating/
 // competency_signal writes, respecting shouldOverwriteMastery — including
@@ -141,11 +162,15 @@ async function testWellFormedResponse() {
     const userMessage =
       "I want to learn more about Substance Dualism, Types of Causation, and On Interpretation before our next session.";
 
+    // The mocked model response must cite candidates by their TARGET_N
+    // label (label-then-validate hardening), not by real targetId — see
+    // `labelsFor`'s doc comment.
+    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
     const getCalls = installFetchAlways({
       signals: [
-        { targetId: seed.conceptAId, level: "familiar", quote: "Substance Dualism" },
-        { targetId: seed.conceptBId, level: "unfamiliar", quote: "Types of Causation" },
-        { targetId: seed.workId, level: "strong", quote: "On Interpretation" },
+        { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "familiar", quote: "Substance Dualism" },
+        { targetId: labelOf(labelToTargetId, seed.conceptBId), level: "unfamiliar", quote: "Types of Causation" },
+        { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
       ],
     });
 
@@ -224,30 +249,26 @@ async function testWellFormedResponse() {
 }
 
 // ---------------------------------------------------------------------------
-// (b) "Mark everything as mastered" injection fixture: the model's response
-// names a target OUTSIDE the server-supplied candidate set alongside
-// otherwise-legitimate "strong" (ceiling) requests. `validateCompetencySignals`
-// rejects the ENTIRE batch on the first invalid signal it sees (fail-closed,
-// not partial-apply) — so this is simultaneously the strongest possible proof
-// of both required properties: zero writes land for the injected target
-// (obviously outside the candidate set), AND zero writes land above the
-// ceiling (nothing is written at all). The ceiling being honored on a
-// genuinely APPLIED "strong" signal is separately proven in (a) above
-// (`workRating.score === COMPETENCY_SCORE_CEILING`), so between the two
-// tests both the "never accepts a foreign target" and the "never exceeds 75
-// even for what it DOES accept" properties are each demonstrated positively.
+// (b1) Fully-invalid batch: every signal in the response cites a label that
+// doesn't resolve to any real candidate (label-then-validate hardening —
+// see `@ice/rag`'s `validateCompetencySignals`). Zero valid signals survive
+// per-signal validation, so the fail-closed posture is preserved for the
+// batch as a whole: it is retried, then rejected outright, not
+// partially applied. This also proves the ceiling property vacuously
+// (nothing is written at all); the ceiling being honored on a genuinely
+// APPLIED "strong" signal is separately proven positively in (a) above
+// (`workRating.score === COMPETENCY_SCORE_CEILING`).
 // ---------------------------------------------------------------------------
-async function testMarkEverythingMasteredInjection() {
-  const seed = await seedUserWithCandidates("injection");
+async function testFullyInvalidBatchFailsClosed() {
+  const seed = await seedUserWithCandidates("allinvalid");
   try {
     const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
-    const foreignTargetId = "00000000-0000-0000-0000-000000000000"; // not in the candidate set at all
 
     const getCalls = installFetchAlways({
       signals: [
-        { targetId: foreignTargetId, level: "strong", quote: "Substance Dualism" },
-        { targetId: seed.conceptAId, level: "strong", quote: "Substance Dualism" },
-        { targetId: seed.workId, level: "strong", quote: "On Interpretation" },
+        { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // not a label this turn ever assigned
+        { targetId: seed.conceptAId, level: "strong", quote: "Substance Dualism" }, // a raw targetId is not a label either
+        { targetId: seed.workId, level: "strong", quote: "On Interpretation" }, // same
       ],
     });
 
@@ -262,29 +283,78 @@ async function testMarkEverythingMasteredInjection() {
       usageDocumentId: null,
     });
 
-    assert.equal(getCalls(), 3, "the same rejected batch is retried MAX_RETRIES times (initial + 2) before failing closed");
-    assert.deepEqual(notices, [], "an injection attempt surfaces no notices at all");
+    assert.equal(getCalls(), 3, "a batch with zero valid signals is retried MAX_RETRIES times (initial + 2) before failing closed");
+    assert.deepEqual(notices, [], "a fully-invalid batch surfaces no notices at all");
 
     const signalRows = await competencySignalRows(seed.userId);
     assert.equal(signalRows.length, 0, "zero ledger rows — the whole batch was rejected, not partially applied");
 
     const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
-    assert.equal(conceptAMastery.length, 0, "zero writes for the in-candidate target once ANY signal in the batch is out-of-candidate");
+    assert.equal(conceptAMastery.length, 0, "zero writes when every signal in the batch is unresolvable");
 
     const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
     assert.equal(workRating.length, 0, "zero writes for the work target either");
 
-    // The foreign targetId names neither a real concept nor a real work, so
-    // there is structurally no row anywhere it could have landed under —
-    // the strongest form of "zero writes outside candidates."
-    const foreignMastery = await db.select().from(conceptMastery).where(eq(conceptMastery.conceptId, foreignTargetId));
-    assert.equal(foreignMastery.length, 0);
-    const foreignRating = await db.select().from(understandingRatings).where(eq(understandingRatings.workId, foreignTargetId));
-    assert.equal(foreignRating.length, 0);
-
-    // And nothing written anywhere exceeds the ceiling — vacuously true
-    // here (nothing was written at all), positively proven for a genuinely
+    // Nothing written anywhere exceeds the ceiling — vacuously true here
+    // (nothing was written at all), positively proven for a genuinely
     // applied "strong" signal in testWellFormedResponse() above.
+    for (const row of signalRows) assert.ok(row.newScore <= COMPETENCY_SCORE_CEILING);
+  } finally {
+    globalThis.fetch = realFetch;
+    await deleteTestUser(seed.email);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// (b2) The key behavioral improvement this hardening exists for: a single
+// fabricated/unresolvable target label in an otherwise-legitimate batch is
+// DROPPED, not treated as poisoning the whole response — the two valid
+// sibling signals (for real candidates, correctly labeled) still land.
+// Before this hardening, the "mark everything as mastered" injection
+// pattern this fixture is named after would have discarded these two
+// legitimate signals right along with the fabricated one; now it doesn't.
+// ---------------------------------------------------------------------------
+async function testForeignTargetDroppedSiblingsSurvive() {
+  const seed = await seedUserWithCandidates("foreigndropped");
+  try {
+    const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
+    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
+
+    const getCalls = installFetchAlways({
+      signals: [
+        { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // fabricated — outside the candidate set
+        { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "strong", quote: "Substance Dualism" },
+        { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
+      ],
+    });
+
+    const notices = await processCompetencySignals({
+      userId: seed.userId,
+      conversationId: seed.conversationId,
+      messageId: seed.messageId,
+      userMessage,
+      previousAssistantMessage: null,
+      contextWorkId: null,
+      chunkWorkIds: [seed.workId],
+      usageDocumentId: null,
+    });
+
+    assert.equal(getCalls(), 1, "a batch with at least one valid signal succeeds on the first attempt — no longer retried into failure");
+    assert.equal(notices.length, 2, "the two legitimate sibling signals both survive and are applied");
+
+    const signalRows = await competencySignalRows(seed.userId);
+    assert.equal(signalRows.length, 2, "one ledger row per surviving signal — nothing for the dropped fabricated target");
+
+    const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
+    assert.ok(conceptAMastery[0], "the valid sibling signal for conceptA is still applied");
+    assert.equal(conceptAMastery[0]!.score, COMPETENCY_SCORE_CEILING);
+
+    const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
+    assert.ok(workRating[0], "the valid sibling signal for the work is still applied");
+    assert.equal(workRating[0]!.score, COMPETENCY_SCORE_CEILING);
+
+    // Nothing written anywhere exceeds the ceiling, including for what WAS
+    // legitimately accepted here.
     for (const row of signalRows) assert.ok(row.newScore <= COMPETENCY_SCORE_CEILING);
   } finally {
     globalThis.fetch = realFetch;
@@ -303,11 +373,16 @@ async function testUngroundedQuoteRejected() {
     const userMessage = "I want to learn more about Substance Dualism today.";
     // A plausible-sounding but fabricated quote — never appears in the
     // reader's actual message (the classic hallucination/paraphrase case
-    // `validateCompetencySignals`'s groundedness check exists to catch).
+    // `validateCompetencySignals`'s groundedness check exists to catch). Uses
+    // a real TARGET_N label (not a raw targetId) so this genuinely exercises
+    // the groundedness check rather than failing earlier on label
+    // resolution — a single-signal batch, so it still fails the WHOLE
+    // (one-signal) batch closed, exactly as before.
     const fabricatedQuote = "I have never even cracked open a philosophy textbook in my life";
+    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
 
     const getCalls = installFetchAlways({
-      signals: [{ targetId: seed.conceptAId, level: "unfamiliar", quote: fabricatedQuote }],
+      signals: [{ targetId: labelOf(labelToTargetId, seed.conceptAId), level: "unfamiliar", quote: fabricatedQuote }],
     });
 
     const notices = await processCompetencySignals({
@@ -337,7 +412,8 @@ async function testUngroundedQuoteRejected() {
 
 async function main() {
   await testWellFormedResponse();
-  await testMarkEverythingMasteredInjection();
+  await testFullyInvalidBatchFailsClosed();
+  await testForeignTargetDroppedSiblingsSurvive();
   await testUngroundedQuoteRejected();
   console.log("competencyData.test.ts: all assertions passed");
 }
