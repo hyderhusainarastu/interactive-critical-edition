@@ -9,22 +9,28 @@
   },
   "updated": "2026-07-25",
   "current": {
-    "phase": 23,
-    "headline": "Phase 23 remains COMPLETE (tagged phase-23-complete); the live-issue fix program (Lanes A-I) also remains complete and production-verified as previously recorded. Since then, a v.5 UX-redesign completion program executed 2026-07-25 -- Workstream D (foreign-script recovery wired end-to-end), the Bekker/classical-citation fix (extraction, resolution, canonical Library projection), Workstream E (Ask Library chat upgrade), Graph redesign P0-P4 (dependency decision, data contract v2, accessible surface, scene redesign, choreography), Workstream K (monetization proposals, docs only), Lane 0 (migration 0037, charts package, InitialsAvatar), Workstream G (account pages, profile menu, signup consent, delete account), Workstream J (feedback mechanism), Workstream H (credential-gated admin dashboard + telemetry), plus a live-regression fix scoping PageTransition to main content (toolbar menus were flickering closed on open). Migrations 0036 (foreign_span) and 0037 (accounts/admin/feedback tables) were both applied to production via supabase db query --linked with the drizzle ledger insert BEFORE their code push, per the standing D-23-34 rule. This session (2026-07-25) ran the full serialized Playwright suite (39 spec files, 354 tests total) against a built production server + local worker + local Postgres and synced this tracker. Triage: 305 passed clean, 3 flaky-recovered (edition.spec.ts, trash.spec.ts x2 -- timing/load, not product defects), 46 failed on first pass. Of the 46: 3 matched the documented pre-existing D-19-6 live-pipeline-latency class (reader.spec.ts:79, roadmap.spec.ts:52, annotations.spec.ts legacy-v1-panel) and were left as-is; 36 were test-drift/stale-baseline from this program's own shipped UI changes (a required signup policy checkbox, the footer mailto Feedback link becoming a FeedbackTrigger button, a trash-list reveal class rename, and pervasive header/footer/toolbar changes -- ProfileMenu avatar, Beta v.5 badge, sound toggle, Development/Feedback footer links, Graph P2-P4 toolbar regrouping) and were fixed test-only (3 spec edits) or regenerated (33 baseline PNGs across responsive-visual.spec.ts and visual.spec.ts), all re-verified green; 7 are NEW, real, NOT-yet-fixed product defects found by this verification pass in accessibility-sweep.spec.ts -- 3 WCAG AA color-contrast failures (1.24:1 vs 4.5:1 required) on '.app-control.app-selected' Roadmap/Focus-selected toolbar buttons (white text on tan background, likely introduced by the Graph/Roadmap redesign), and 4 touch-target-size failures (16x54px vs the 44x44px minimum) on the new footer Feedback button (FeedbackTrigger, Workstream J) appearing on reader/Library/Visualization/RAG-sidebar pages. Outstanding from the v.5 program itself: production Bekker-stub cleanup script run + a Brickhouse reprocess canary are both written and locally verified but deferred to owner execution; admin-dash production env-var configuration (ADMIN_DASH_USERNAME/PASSWORD_HASH/SECRET) is coded to 404 safely until set, and is handed to the owner. Phase 24 (Final End-to-End Verification and Program Sign-off) remains owner-gated and NOT started -- this session's suite run is this program's own closeout verification, not Phase 24 itself. Beta-testing mode remains on pending an explicit owner decision to end it. **A11y-repair follow-up (2026-07-25):** the 7 accessibility findings this session's verification pass reported (3 contrast, 4 touch-target) were fixed in a dedicated repair pass -- new `--color-toolbar-selected-bg`/`-fg` tokens plus a `[data-toolbar-selected]` rule fix the Visualization toolbar contrast (D-23-40), and a `data-feedback-trigger` attribute plus one `[data-feedback-trigger]` CSS rule fixes both footers' Feedback-trigger touch target (D-23-41); `accessibility-sweep.spec.ts` and `feedback.spec.ts` re-verified green. That same repair's full-file verification also surfaced a third, previously-masked, pre-existing defect (D-23-42, open, P3): the reader's own selection-toolbar swatches/buttons measure 42px instead of 44px, confirmed unrelated to D-23-40/D-23-41 via a scratch test against the unmodified build -- left open, out of scope for this repair pass.",
+    "phase": 25,
+    "headline": "Phases 25-30 (ScholarLens integration program) adopted and started 2026-07-25 per the owner-approved plan at docs/architecture/scholarlens-integration-plan.md: a full TypeScript port of the licensed ScholarLens claims-and-debates engine into a new Palimnote Research workspace, with a dual-track empirical+humanities evidence model, improvements grounded in the owner's research project (trust calibration, citation-graph-aware judgment, locus-based retrieval), reverse-direction improvements to existing Palimnote, and Phase 24 final verification executing at program close over the merged product. Phase 23 remains COMPLETE (tagged phase-23-complete) and the v.5 UX-redesign program record below is unchanged. Phase 25 (Research Foundations) is in progress.",
     "summary": "v.5 UX-redesign completion program (2026-07-25), condensed: Workstream D wires foreign-script/untranscribable-passage recovery end to end (migration 0036, free deterministic detection + a paid gpt-5.4-nano translation stage, v3/v4-scoped). The Bekker/classical-citation fix adds a pure classical-reference recognizer and a canonical deterministic Library projection, eliminating junk 'Needs bibliographic resolution' Library entries for Aristotle-style locus citations; a production cleanup script exists but its run is deferred to owner execution alongside a Brickhouse reprocess canary. Graph redesign P0-P4 keeps react-force-graph-3d (P0), widens the data contract (P1), adds reader-level/concept-kind filters and a fuller inspector to the accessible table (P2), restyles the 3D scene with an astronomical-plate backdrop and bloom (P3), and adds hover/select choreography plus a Concepts focus mode (P4). Workstream J adds a real in-app FeedbackModal/FeedbackTrigger (replacing the old mailto link) in both signed-in and public footers. Workstream H adds a wholly separate HMAC-cookie-gated /admin-dash tree (overview/users/feedback) plus site-wide telemetry, coded to 404 until its three env vars are set in production. Workstream G adds /account (profile/usage/plan), a ProfileMenu, signup consent checkboxes, and a full delete-account flow verified against real Storage. Lane 0 lands migration 0037 (data_sharing_enabled/policy_accepted_at, user_deletion_archive, usage_event, feedback) and a new hand-rolled charts package. Workstream E upgrades Ask Library with a greeting card, sounds, citation stagger, and a conversation-history switcher. Workstream K adds monetization/payments proposal docs only, no code. A live-regression fix (found immediately after the day's deploys) scoped the root layout's PageTransition to #main-content only, since wrapping the entire app shell in AnimatePresence was silently remounting open menus. Both migrations (0036, 0037) were applied to production before their dependent code shipped, per the D-23-34 rule. This session's full-suite verification (354 tests, 39 spec files, built prod server + local worker): 305 passed / 3 flaky-recovered / 46 initially failed -> 3 documented-pre-existing (D-19-6 class, left as-is) + 36 fixed (test-drift/baseline regeneration, all re-verified green) + 7 new real product defects reported, not fixed (3 WCAG contrast + 4 touch-target-size, both traced to this program's own shipped UI). Tracker (docs/project-status.json) updated and progress-checklist.html regenerated/validated in the same pass. **A11y-repair follow-up (2026-07-25):** the 7 reported-not-fixed accessibility findings above are now fixed (D-23-40 contrast, D-23-41 touch-target), each via a narrowly-scoped CSS/token fix rather than a broader redesign; verification also surfaced one new, previously-masked, pre-existing defect (D-23-42, open, P3, reader selection-toolbar controls at 42px instead of 44px) left open as out of scope for this repair pass.",
-    "nextAction": "Owner execution items outstanding from the v.5 program: run the Bekker classical-citation-stub production cleanup script and the deferred Brickhouse reprocess canary (both written and locally verified); set the three admin-dash production env vars (ADMIN_DASH_USERNAME/ADMIN_DASH_PASSWORD_HASH/ADMIN_DASH_SECRET) so /admin-dash stops 404ing in production. The 7 accessibility findings from this session's verification pass (3 contrast, 4 touch-target) are now fixed (D-23-40/D-23-41, 2026-07-25 a11y-repair pass) -- no longer outstanding. New from that repair pass: D-23-42 (open, P3) -- the reader's own selection-toolbar swatches/buttons measure 42px instead of the 44px floor, newly exposed once D-23-41's fix let the existing test reach that assertion; needs root-cause diagnosis and a fix, not yet scheduled to a phase/lane. The D-23-37 surname-fragmentation residual remains open and unscheduled; the 50 held fuzzy identity-merge suggestions from the collapse run still await owner review. Phase 24 (Final End-to-End Verification and Program Sign-off) remains owner-gated and NOT started. Beta-testing mode remains on pending an explicit owner decision to end it."
+    "nextAction": "Execute Phase 25: parallel lanes 25.1-25.4 + 25.7, then the paid calibration/judge spikes (25.5), then migration 0038 + queues (25.6, applied to production before its code push per D-23-34)."
   },
   "program": {
-    "name": "Phases 19-24 completion program",
-    "planSource": "palimnote_phases_19_23_plan_revised.md",
-    "note": "Owner-approved 2026-07-22: adopts the revised Phases 19-23 plan verbatim (with the documented Stitch MCP / Uncodixify substitutions already recorded in docs/audits/phase-19-frontend-tooling.md), adds a new Phase 24 final end-to-end verification and sign-off phase, and assigns a cost-efficient model to every phase/sub-phase. Standing owner authorizations: full autonomy; D-19-11 + test-reader cleanup approved; paid production canaries at phase gates approved within the existing $1 normal / $5 hard cost caps; no new subscriptions, signups, or payment-setting changes anywhere.",
+    "name": "Phases 19-24 completion program + Phases 25-30 ScholarLens integration program",
+    "planSource": "palimnote_phases_19_23_plan_revised.md (Phases 19-24); docs/architecture/scholarlens-integration-plan.md (Phases 25-30, owner-approved 2026-07-25)",
+    "note": "Owner-approved 2026-07-22: adopts the revised Phases 19-23 plan verbatim (with the documented Stitch MCP / Uncodixify substitutions already recorded in docs/audits/phase-19-frontend-tooling.md), adds a new Phase 24 final end-to-end verification and sign-off phase, and assigns a cost-efficient model to every phase/sub-phase. Standing owner authorizations: full autonomy; D-19-11 + test-reader cleanup approved; paid production canaries at phase gates approved within the existing $1 normal / $5 hard cost caps; no new subscriptions, signups, or payment-setting changes anywhere. EXTENDED 2026-07-25: the owner approved the ScholarLens integration plan (docs/architecture/scholarlens-integration-plan.md) adding Phases 25-30 -- a full TypeScript port of the licensed ScholarLens claims-and-debates engine into a new Palimnote Research workspace (claims, relationships, debate clusters, Evidence Chambers, hypotheses, corpus import, monitoring) with a dual-track empirical+humanities evidence model, eval-gated promotion, and Phase 24 final verification executing at program close over the merged product. Owner directives 2026-07-25: ultracode orchestration; continue through all phases without stopping; humanities gold sets agent-drafted and owner-ratified; Anthropic structured-output path built now; pgvector adopted for claim embeddings; monitoring in-app only.",
     "phases": [
       19,
       20,
       21,
       22,
       23,
-      24
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30
     ],
     "modelLegend": {
       "haiku": "Haiku 4.5 - mechanical work (doc syncs, label audits, link checks, closeout chores)",
@@ -878,6 +884,240 @@
         }
       ],
       "nextAction": "Begins after Phase 23; closes the Phases 19-24 program."
+    },
+    {
+      "number": 25,
+      "title": "Research Foundations (ScholarLens integration)",
+      "state": "in_progress",
+      "summary": "Foundation phase of the ScholarLens integration program: gold-set port with provenance, humanities gold-set drafting (owner-ratified), the pure @ice/claims package skeleton (verbatim evidence-strength port, new textual-support scorer, metrics/split/BM25/cosine/taxonomy/thresholds/limits), the embedding provider seam + embedMany + Anthropic tool-use structured output, the paid calibration and judge-eval spikes that fix thresholds and judge-model routing before any schema exists, migration 0038 (research_project/research_job_request/research_revision + queues + flags + migration-ledger CI check), and the research-project quick-wins lane.",
+      "confirmation": "All pure modules unit-tested green; spike reports recorded in docs/eval/research-claims/ with per-domain breakdowns; thresholds and TASK_ROUTES set from measurement or the documented BM25+locus-only fallback; migration 0038 applied to production before its code push; worker boots logging all queues; typecheck/lint/test/build green.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "25.1",
+          "title": "Gold-set port + PROVENANCE",
+          "state": "planned",
+          "model": "haiku",
+          "summary": "Transcribe ScholarLens eval/gold_claims.json (42 pairs) and gold_search.json into packages/claims/src/eval/gold/ with PROVENANCE.md (MIT + owner permission, per-file attribution); Opus-tier review of fidelity."
+        },
+        {
+          "id": "25.2",
+          "title": "Humanities gold-set drafts (owner-ratified)",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Agent-drafted candidate labels with source passages attached: ~20 retrieval negatives, 30-40 relationship pairs, ~64 claim-nature examples from the Aristotle-vice corpus (baseline-test/, docs/eval/irwin-vice-and-reason/). PROVISIONAL until owner ratification; nothing is treated as gold before that."
+        },
+        {
+          "id": "25.3",
+          "title": "@ice/claims pure skeleton",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Zero-dependency package: taxonomy.ts, thresholds.ts (calibratedFor guard, NaN defaults), limits.ts, scoring/ (verbatim evidenceStrength port + textualSupport + dimension discriminator), retrieval/ (cosine, BM25, locus, union), clustering.ts, novelty.ts, mapReduce.ts, prompts/ (schema + validate per task; Evidence Chamber schema has no winner field), jobs/planResearchJob.ts, eval/ metrics with hand-computed fixtures."
+        },
+        {
+          "id": "25.4",
+          "title": "Embedding seam + Anthropic structured output",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "packages/ai-adapters: embedMany() batching, EmbeddingProvider seam (OpenAI default, double-gated Voyage stub, honest Null provider), Anthropic tool-use structured-output path at parity with OpenAIResponsesClient, 5 new cheap-first TaskType routes."
+        },
+        {
+          "id": "25.5",
+          "title": "Calibration + judge-eval spikes (paid)",
+          "state": "planned",
+          "model": "opus",
+          "summary": "Embedding class-separation measurement (3-small vs 3-large, ~$0.001) with decision criteria written before running; judge eval ladder nano/mini/haiku (~$0.20) incl. the citation-engagement ablation and the base-judge-on-humanities baseline. Re-plan point if all models fail."
+        },
+        {
+          "id": "25.6",
+          "title": "Migration 0038 + queues + flags + CI ledger check",
+          "state": "planned",
+          "model": "opus",
+          "summary": "research_project(+question,+member), research_job_request, research_revision (no-auto-endorsement CHECK), ai_usage_log.research_request_id; four pg-boss queues with no-op handlers; packages/config/src/phase25.ts flags (all default false); the ~20-line CI check failing builds whose migrations are absent from the production ledger. Applied to production before the code push (D-23-34)."
+        },
+        {
+          "id": "25.7",
+          "title": "Quick-wins lane",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "From the research project Tier 1 checklist: wire the existing text footnote heuristic into the GROBID-unavailable PDF fallback path; port the two-column gutter-detection heuristic to the same path; verify keyed discovery-adapter production config (read-only). Owner-manual items (competency flags decision, VoiceOver pass, real Writer project) surfaced, not agent tasks."
+        }
+      ],
+      "nextAction": "Execute 25.1-25.4 and 25.7 as parallel lanes, then the 25.5 spikes, then 25.6 schema."
+    },
+    {
+      "number": 26,
+      "title": "Claims Engine",
+      "state": "planned",
+      "summary": "The core pipeline, serial on the shared worker/schema surface: map-reduce claim extraction over GROBID text_block structure with dual-track scoring, locus harvesting, embeddings (pgvector, dimension typed by the 25.5 spike), and deterministic rebind-on-republish (migration 0039); three-channel Stage-1 retrieval (dense/BM25/locus) + citation-graph engagement pre-join + structured judge with basis-hash idempotency (0040); BFS debate clustering with member-hash idempotent naming (0041).",
+      "confirmation": "Paid canaries: extraction on a real work <=$0.30 with every supporting_excerpt proven a literal substring (zero tolerance) and apparatus-block claims structurally impossible; 2-work relationship scope <=$0.50 with a repeat run costing $0.00; clustering repeat run naming zero new clusters; the locus channel demonstrably surfaces a pair dense retrieval missed on the Aristotle corpus.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "26.1",
+          "title": "Claim extraction + migration 0039",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "extract-research-claims queue handler: structural map-reduce (body-block allowlist), HARD-RULES prompt with humanities BAD/GOOD extensions, dual scoring, claim_locus harvest, research_claim_embedding writes, coverage honesty (full/partial/sampled), rebind via shared findQuoteOffset."
+        },
+        {
+          "id": "26.2",
+          "title": "Relationship detection + migration 0040",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "claim_pair_candidate (lo<hi CHECK) + claim_relationship (frozen 4-way valence, staged mechanism dropped-to-null when out of valence, evidence_gap dimension CHECK); three-channel union with per-channel scores; deterministic citation-engagement context; budget-capped judging."
+        },
+        {
+          "id": "26.3",
+          "title": "Debate clustering + migration 0041",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "BFS connected components over non-unrelated relationships; member_hash idempotent LLM naming with deterministic fallback; staleness on membership change (never delete: user verifications survive)."
+        }
+      ],
+      "nextAction": "Begins after Phase 25 gates."
+    },
+    {
+      "number": 27,
+      "title": "Synthesis (Evidence Chambers, Hypotheses, Humanities Gate)",
+      "state": "planned",
+      "summary": "Parallel worktree lanes with pre-reserved migrations: the Evidence Chamber (no-winner enforced at schema, validator, and rendering layers; two-level credibility never collapsed) + hypotheses/gaps (CONFLICT_N label-then-validate, model-matched computed novelty, run_hash idempotency); then the eval-gated humanities judge branch (enum-widening migration 0046 only on a passed gate over the owner-ratified humanities gold set).",
+      "confirmation": "Adversarial verification includes a test proving a model output containing any winner-ish field is rejected; canaries <=$0.30 per lane; humanities promotion requires all four floor conditions and owner ratification of the gold set.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "27.1",
+          "title": "Evidence Chamber + migration 0042",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "synthesize-research-output handler for chambers; positions with ordinal rendering; two-level credibility assembly; additive view contract."
+        },
+        {
+          "id": "27.2",
+          "title": "Hypotheses + gaps + migration 0043",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Conflict-grounded hypothesis generation with fabricated-label dropping; recalibrated novelty tiers (never the Voyage-calibrated 0.30/0.12); research_gap objects."
+        },
+        {
+          "id": "27.3",
+          "title": "Humanities judge gate + migration 0046",
+          "state": "planned",
+          "model": "opus",
+          "summary": "Base-judge-on-humanities baseline, branch eval against the four promotion floors, enum widening + flag flip only on pass with owner-ratified gold. Until then humanities pairs run the base judge."
+        }
+      ],
+      "nextAction": "Begins after Phase 26 gates."
+    },
+    {
+      "number": 28,
+      "title": "Research Surfaces",
+      "state": "planned",
+      "summary": "The user-facing workspace, parallel lanes behind PHASE_25_* flags (default false): /research project routes + zero-LLM insight feed; corpus import with the new arXiv adapter and canonical-identity dedup; the reader Claims tab (single-point markers, dashed unanchored re-matching); the graph debate layer with load-bearing progressive disclosure (debate nodes at default zoom, claims only via explicit expand, accessible table covering both); Writer evidence insertion (real bibliographic CSL only); Ask Library research modes with claim-citation allowlist validation (migration 0044).",
+      "confirmation": "Axe wcag2a/wcag2aa zero violations on every new surface; accessible-table parity for the debate layer; graph lane serialized against other graph work; owner-scoped 404-not-403 on every route.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "28.1",
+          "title": "Research project UI + insight feed",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "/research routes, project CRUD + membership, jobs dispatch via planResearchJob, pure-SQL insight feed."
+        },
+        {
+          "id": "28.2",
+          "title": "Corpus import + arXiv adapter",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "packages/research arXiv adapter; provider search/import routes; research_corpus_item populated only from real provider payloads."
+        },
+        {
+          "id": "28.3",
+          "title": "Reader claim layer",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Claims tab sibling to annotations/Ask; superscript single-point markers; passage-claim-debate bidirectional links; verifiable-offloading cards (confidence + provenance + jump-to-passage mandatory in the view types)."
+        },
+        {
+          "id": "28.4",
+          "title": "Graph debate layer",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "NodeType claim/debate (additive), synthetic edge strings + EDGE_TYPE_FAMILY entries, progressive-disclosure expand endpoint with caps, accessible-table coverage."
+        },
+        {
+          "id": "28.5",
+          "title": "Writer evidence insertion",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Evidence panel; blockquote nodes with researchClaimId attrs; writer_citation.research_claim_id; unanchored claims visibly marked."
+        },
+        {
+          "id": "28.6",
+          "title": "Ask Library research modes + migration 0044",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Per-message mode; graph-based retrieval for counterarguments/disagreement; >=1 claim per side or not-found; rag_message_claim_citation with allowlist validation; shared daily cost pool."
+        }
+      ],
+      "nextAction": "Begins after Phase 27 core lanes."
+    },
+    {
+      "number": 29,
+      "title": "Monitoring, Review UX, Reverse-Direction Improvements",
+      "state": "planned",
+      "summary": "Research monitoring (in-app only, cadence defaults paused, flag off; citation alerts + author-follow via Semantic Scholar; migration 0045); the full correction UX (verify/dispute/edit/split/merge/hide/restore/reclassify + revision history) over research_revision with the no-auto-endorsement invariant; and the ScholarLens-to-Palimnote lane: hybrid dense+BM25 RAG retrieval (fixing the unused-embeddings finding, eval-gated), label-then-validate hardening of existing LLM id citations, eval-discipline retrofit to existing classifiers, Writer export formats (BibTeX/RIS/APA/Chicago), the zero-LLM dashboard insight module, and evidence-strength chips on existing surfaces.",
+      "confirmation": "Monitor scan is zero-AI-cost and honestly reports per-source failures; correction paths write revisions in the same transaction; hybrid-RAG recall improvement measured against the ported search gold set before shipping.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "29.1",
+          "title": "Monitors + migration 0045",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "research_monitor/research_monitor_hit; boss.schedule with in-handler cadence predicate; in-app delivery only."
+        },
+        {
+          "id": "29.2",
+          "title": "Correction UX",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "applyResearchCorrection as the only mutation path across all seven object types; history views; split/merge with related_object_ids."
+        },
+        {
+          "id": "29.3",
+          "title": "Reverse-direction improvements lane",
+          "state": "planned",
+          "model": "sonnet",
+          "summary": "Hybrid RAG retrieval, label-then-validate hardening, classifier eval retrofit, Writer export formats, dashboard insight module, evidence-strength chips."
+        }
+      ],
+      "nextAction": "Begins after Phase 28."
+    },
+    {
+      "number": 30,
+      "title": "Program Verification + Phase 24 Execution",
+      "state": "planned",
+      "summary": "Full local matrix (clean install, typecheck, lint, unit, build, status validation); full serialized E2E including the new research specs; end-to-end paid canary on a 3-work research project <=$1.00 with cost reconciliation against ai_usage_log; axe sweep across all new routes; then Phase 24 executes over the merged product (production smoke + final canary + program closeout) per its standing definition.",
+      "confirmation": "Every gate green or honestly documented; Phase 24 confirmation gates satisfied over the merged product; register/tracker/log synced; program closeout recorded.",
+      "evidence": [],
+      "subphases": [
+        {
+          "id": "30.1",
+          "title": "Merged-product verification",
+          "state": "planned",
+          "model": "opus",
+          "summary": "Full matrix + serialized E2E + research canary + axe + cost reconciliation."
+        },
+        {
+          "id": "30.2",
+          "title": "Phase 24 execution + closeout",
+          "state": "planned",
+          "model": "opus",
+          "summary": "Production smoke, final canary, program sign-off, tags."
+        }
+      ],
+      "nextAction": "Begins after Phase 29."
     }
   ],
   "operationalAudit": {
