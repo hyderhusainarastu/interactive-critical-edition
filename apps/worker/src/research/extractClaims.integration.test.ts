@@ -10,6 +10,7 @@ import {
   processingRuns,
   researchClaimEmbeddings,
   researchClaims,
+  researchCorpusItems,
   researchJobRequests,
   textBlocks,
   users,
@@ -18,7 +19,7 @@ import {
 import type { StructuredCaller } from "@ice/research";
 import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
-import { extractClaimsForWork, rebindClaimsForWork } from "./extractClaims";
+import { extractClaims, extractClaimsForCorpusItem, extractClaimsForWork, rebindClaimsForWork } from "./extractClaims";
 import { runResearchJob } from "./jobRunner";
 import { loadWorkExtractionScope } from "./repository";
 
@@ -152,6 +153,41 @@ async function seedJobRequest(userId: string, workId: string) {
   const [request] = await db
     .insert(researchJobRequests)
     .values({ userId, jobType: "extract_claims", scope: { workId }, idempotencyKey: crypto.randomUUID(), status: "planned" })
+    .returning({ id: researchJobRequests.id });
+  return request.id;
+}
+
+/** A user + one imported `research_corpus_item` — the abstract-source
+ *  extraction path's seed (Phase 30 fix lane, D-25-13). Cascades to nothing
+ *  else (a corpus item has no document/pages/text_blocks of its own). */
+async function seedCorpusItem(abstract: string | null, title = "A Paper With An Abstract") {
+  const [user] = await db.insert(users).values({ email: `ec-corpus-${crypto.randomUUID()}@example.com` }).returning({ id: users.id });
+  const [item] = await db
+    .insert(researchCorpusItems)
+    .values({
+      userId: user.id,
+      source: "openalex",
+      externalId: `W${crypto.randomUUID()}`,
+      dedupKey: crypto.randomUUID(),
+      title,
+      authors: ["A. Scholar"],
+      abstract,
+      raw: {},
+    })
+    .returning({ id: researchCorpusItems.id });
+  return { userId: user.id, corpusItemId: item.id };
+}
+
+async function seedCorpusJobRequest(userId: string, corpusItemId: string, scopeOverride?: unknown) {
+  const [request] = await db
+    .insert(researchJobRequests)
+    .values({
+      userId,
+      jobType: "extract_claims",
+      scope: scopeOverride ?? { corpusItemId },
+      idempotencyKey: crypto.randomUUID(),
+      status: "planned",
+    })
     .returning({ id: researchJobRequests.id });
   return request.id;
 }
@@ -535,5 +571,261 @@ describe.skipIf(!hasDb)("extract_claims (integration)", () => {
     expect(claims).toHaveLength(1);
     const embeddings = await db.select().from(researchClaimEmbeddings).where(eq(researchClaimEmbeddings.claimId, claims[0].id));
     expect(embeddings).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Corpus-item (abstract-source) extraction path (Phase 28.2/30 fix lane,
+// D-25-13) — the sibling of the uploaded-work suite above.
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!hasDb)("extract_claims corpus-item abstract-source path (integration)", () => {
+  const cleanupUsers: string[] = [];
+  const cleanupRequests: string[] = [];
+  afterEach(async () => {
+    while (cleanupRequests.length) {
+      const id = cleanupRequests.pop()!;
+      await db.delete(aiUsageLogs).where(eq(aiUsageLogs.researchRequestId, id));
+    }
+    while (cleanupUsers.length) await db.delete(users).where(eq(users.id, cleanupUsers.pop()!));
+  });
+
+  it("happy path: extracts, scores, harvests loci, and embeds a claim from an abstract end-to-end via runResearchJob", async () => {
+    const abstract =
+      "This paper argues that the akratic agent's practical syllogism, discussed at NE 7.3.1147a24-b19, is incomplete at the moment of action.";
+    const { userId, corpusItemId } = await seedCorpusItem(abstract);
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(requestId);
+
+    const excerpt = "the akratic agent's practical syllogism, discussed at NE 7.3.1147a24-b19, is incomplete";
+    const caller = new MockStructuredCaller(() => claimsResponse([{ text: "The paper argues akrasia leaves the practical syllogism incomplete.", supportingExcerpt: excerpt }]));
+    const embedder = new MockEmbeddingProvider();
+
+    let outcome!: Awaited<ReturnType<typeof extractClaimsForCorpusItem>>;
+    await runResearchJob(requestId, async (ctx) => {
+      outcome = await extractClaimsForCorpusItem(caller, embedder, ctx, corpusItemId);
+      return outcome;
+    });
+
+    expect(outcome.coverage).toBe("full");
+    expect(outcome.claimsExtracted).toBe(1);
+
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("complete");
+
+    const claims = await db.select().from(researchClaims).where(eq(researchClaims.corpusItemId, corpusItemId));
+    expect(claims).toHaveLength(1);
+    expect(claims[0]).toMatchObject({
+      workId: null,
+      corpusItemId,
+      textBlockId: null,
+      quote: null,
+      prefix: null,
+      suffix: null,
+      anchorState: "unanchored",
+      sourceScope: "abstract",
+      excerptVerified: true,
+      status: "active",
+    });
+
+    // Locus harvest fires on the excerpt/abstract text even with no
+    // text_block to anchor to — the synthetic BlockMeta stand-in.
+    const loci = await db.select().from(claimLoci).where(eq(claimLoci.claimId, claims[0].id));
+    expect(loci.some((l) => l.locusKey === "aristotle:nicomachean-ethics:1147a")).toBe(true);
+
+    const embeddings = await db.select().from(researchClaimEmbeddings).where(eq(researchClaimEmbeddings.claimId, claims[0].id));
+    expect(embeddings).toHaveLength(1);
+
+    const usage = await db.select().from(aiUsageLogs).where(eq(aiUsageLogs.researchRequestId, requestId));
+    expect(usage.some((u) => u.task === "claim_extraction")).toBe(true);
+  });
+
+  it("honest failed request: a corpus item with no abstract fails the job rather than silently succeeding with 0 claims", async () => {
+    const { userId, corpusItemId } = await seedCorpusItem(null);
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(requestId);
+
+    const caller = new MockStructuredCaller(() => claimsResponse([]));
+    const embedder = new MockEmbeddingProvider();
+    // `runResearchJob` marks the row failed AND rethrows (jobRunner.ts's own
+    // crash-safety contract) — the throw must be awaited/caught here, not
+    // left as an unhandled rejection.
+    await expect(runResearchJob(requestId, (ctx) => extractClaimsForCorpusItem(caller, embedder, ctx, corpusItemId))).rejects.toThrow(/no abstract to extract from/);
+
+    expect(caller.callCount).toBe(0); // never even attempted a model call over nothing
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("failed");
+    expect(request.error).toContain("no abstract to extract from");
+  });
+
+  it("literal-substring drop: a fabricated excerpt is dropped, never inserted, and the run still completes honestly", async () => {
+    const { userId, corpusItemId } = await seedCorpusItem("A short abstract about method and results in a controlled trial.");
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(requestId);
+
+    const caller = new MockStructuredCaller(() => claimsResponse([{ text: "A fabricated claim.", supportingExcerpt: "this exact phrase does not appear in the abstract at all" }]));
+    const embedder = new MockEmbeddingProvider();
+
+    let outcome!: Awaited<ReturnType<typeof extractClaimsForCorpusItem>>;
+    await runResearchJob(requestId, async (ctx) => {
+      outcome = await extractClaimsForCorpusItem(caller, embedder, ctx, corpusItemId);
+      return outcome;
+    });
+
+    // With only one possible "block" (the abstract itself), a fabricated
+    // excerpt is caught by `validateClaimExtraction`'s chunk-wide check
+    // inside the mocked `caller.call()` — the SAME check `extractOneChunk`'s
+    // multi-block case also runs first — so this drops via the "extraction
+    // failed validation" concern, not the second, block-specific
+    // re-verification step (which only has something distinct to catch when
+    // there's more than one candidate block, unlike here).
+    expect(outcome.claimsExtracted).toBe(0);
+    expect(outcome.concerns.some((c) => c.includes("dropped"))).toBe(true);
+    const claims = await db.select().from(researchClaims).where(eq(researchClaims.corpusItemId, corpusItemId));
+    expect(claims).toHaveLength(0);
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("complete"); // an honest zero-claims outcome, not a failure
+  });
+
+  it("dedup idempotency: re-running extraction over the same abstract inserts zero new claims/scores/loci/embeddings", async () => {
+    const { userId, corpusItemId } = await seedCorpusItem("Virtue, on this account, is a mean state between two vices.");
+    cleanupUsers.push(userId);
+
+    const excerpt = "a mean state between two vices";
+    const caller = () => new MockStructuredCaller(() => claimsResponse([{ text: "Virtue is defined as a mean.", supportingExcerpt: excerpt }]));
+    const embedder = new MockEmbeddingProvider();
+
+    const firstRequestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(firstRequestId);
+    await runResearchJob(firstRequestId, (ctx) => extractClaimsForCorpusItem(caller(), embedder, ctx, corpusItemId));
+    const afterFirst = await db.select().from(researchClaims).where(eq(researchClaims.corpusItemId, corpusItemId));
+    expect(afterFirst).toHaveLength(1);
+
+    const secondRequestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(secondRequestId);
+    let secondOutcome!: Awaited<ReturnType<typeof extractClaimsForCorpusItem>>;
+    await runResearchJob(secondRequestId, async (ctx) => {
+      secondOutcome = await extractClaimsForCorpusItem(caller(), embedder, ctx, corpusItemId);
+      return secondOutcome;
+    });
+
+    expect(secondOutcome.claimsExtracted).toBe(0); // dedup hit — nothing new
+    const afterSecond = await db.select().from(researchClaims).where(eq(researchClaims.corpusItemId, corpusItemId));
+    expect(afterSecond).toHaveLength(1);
+    const embeddings = await db.select().from(researchClaimEmbeddings).where(eq(researchClaimEmbeddings.claimId, afterSecond[0].id));
+    expect(embeddings).toHaveLength(1); // still exactly one, not duplicated
+  });
+
+  it("caps accepted claims at MAX_CLAIMS_FOR_ABSTRACT even when the model returns more", async () => {
+    const abstract = "Sentence one is about method. Sentence two is about results. Sentence three is about conclusions. Sentence four wraps up.";
+    const { userId, corpusItemId } = await seedCorpusItem(abstract);
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, corpusItemId);
+    cleanupRequests.push(requestId);
+
+    const caller = new MockStructuredCaller(() =>
+      claimsResponse([
+        { text: "Claim 1 about method.", supportingExcerpt: "Sentence one is about method" },
+        { text: "Claim 2 about results.", supportingExcerpt: "Sentence two is about results" },
+        { text: "Claim 3 about conclusions.", supportingExcerpt: "Sentence three is about conclusions" },
+        { text: "Claim 4 wraps up.", supportingExcerpt: "Sentence four wraps up" },
+        { text: "Claim 5 extra.", supportingExcerpt: "Sentence one is about method" },
+        { text: "Claim 6 extra.", supportingExcerpt: "Sentence two is about results" },
+        { text: "Claim 7 over the cap.", supportingExcerpt: "Sentence three is about conclusions" },
+      ]),
+    );
+    const embedder = new MockEmbeddingProvider();
+
+    let outcome!: Awaited<ReturnType<typeof extractClaimsForCorpusItem>>;
+    await runResearchJob(requestId, async (ctx) => {
+      outcome = await extractClaimsForCorpusItem(caller, embedder, ctx, corpusItemId);
+      return outcome;
+    });
+
+    expect(outcome.claimsExtracted).toBeLessThanOrEqual(6);
+    expect(outcome.concerns.some((c) => c.includes("capped at"))).toBe(true);
+  });
+
+  it("ownership: throws when the corpus item does not belong to the requesting user", async () => {
+    const { userId: ownerId, corpusItemId } = await seedCorpusItem("An abstract belonging to someone else.");
+    cleanupUsers.push(ownerId);
+    const { userId: otherUserId } = await seedCorpusItem("A different corpus item, owned by the requester instead.");
+    cleanupUsers.push(otherUserId);
+
+    const requestId = await seedCorpusJobRequest(otherUserId, corpusItemId);
+    cleanupRequests.push(requestId);
+
+    const caller = new MockStructuredCaller(() => claimsResponse([]));
+    const embedder = new MockEmbeddingProvider();
+    await expect(runResearchJob(requestId, (ctx) => extractClaimsForCorpusItem(caller, embedder, ctx, corpusItemId))).rejects.toThrow(/does not belong to the requesting user/);
+
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("failed");
+    expect(request.error).toContain("does not belong to the requesting user");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extract_claims wrapper dispatch (Phase 30 fix lane, D-25-13/D-25-14) — the
+// real scope-parsing/legacy-shape/error-message behavior wired into the
+// worker's queue handler, exercised against real `research_job_request` rows
+// (not just the pure `parseExtractClaimsScope` unit tests in
+// `packages/claims/src/jobs/scope.test.ts`).
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!hasDb)("extract_claims() wrapper dispatch (integration)", () => {
+  const cleanupUsers: string[] = [];
+  const cleanupRequests: string[] = [];
+  afterEach(async () => {
+    while (cleanupRequests.length) {
+      const id = cleanupRequests.pop()!;
+      await db.delete(aiUsageLogs).where(eq(aiUsageLogs.researchRequestId, id));
+    }
+    while (cleanupUsers.length) await db.delete(users).where(eq(users.id, cleanupUsers.pop()!));
+  });
+
+  // NOTE: a happy-path "{corpusItemId} scope reaches the corpus-item path"
+  // dispatch test deliberately does NOT live here — `extractClaims()`
+  // constructs a REAL `OpenAIResponsesClient` from whatever `OPENAI_API_KEY`
+  // is in the ambient environment, and this repo's local `.env` carries a
+  // real key, so actually invoking it here would risk a real paid call
+  // outside the `MockStructuredCaller` DI seam every other test in this file
+  // uses. That path is already covered honestly two ways instead: the
+  // `extractClaimsForCorpusItem` core tests above (DI'd mocks, $0) prove the
+  // corpus path itself works, and `parseExtractClaimsScope`'s own round-trip
+  // tests (`packages/claims/src/jobs/scope.test.ts`) prove `{corpusItemId}`
+  // parses correctly — together they cover everything the wrapper's
+  // dispatch `if` does for the success case without ever risking a real
+  // network call. The two tests below are safe specifically because both
+  // throw BEFORE `extractClaims()` ever constructs a provider client.
+
+  it("reports the pre-fix D-25-14 legacy shape ({workIds: [...]}) as a distinct, actionable error, never the old corpus-TODO message", async () => {
+    const { userId, workId } = await seedPublishedWork(["Legacy-shape dispatch test text."]);
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, workId, { workIds: [workId] });
+    cleanupRequests.push(requestId);
+
+    await expect(runResearchJob(requestId, extractClaims)).rejects.toThrow(/pre-fix dispatch shape/);
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("failed");
+    expect(request.error).toContain("pre-fix dispatch shape");
+    expect(request.error).not.toContain("not yet implemented");
+  });
+
+  it("reports an unrecognized scope shape distinctly from the legacy shape", async () => {
+    const { userId } = await seedCorpusItem("An abstract, unused by this test.");
+    cleanupUsers.push(userId);
+    const requestId = await seedCorpusJobRequest(userId, "unused", { somethingElse: true });
+    cleanupRequests.push(requestId);
+
+    await expect(runResearchJob(requestId, extractClaims)).rejects.toThrow(/scope must be/);
+    const [request] = await db.select().from(researchJobRequests).where(eq(researchJobRequests.id, requestId));
+    expect(request.status).toBe("failed");
+    expect(request.error).toContain('"workId"');
+    expect(request.error).toContain('"corpusItemId"');
+    expect(request.error).not.toContain("pre-fix dispatch shape");
   });
 });

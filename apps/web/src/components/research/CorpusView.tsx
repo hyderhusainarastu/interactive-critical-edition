@@ -17,6 +17,7 @@ interface CorpusItem {
   url: string | null;
   venue: string | null;
   createdAt: string | Date;
+  hasAbstract: boolean;
 }
 
 interface ImportJobRow {
@@ -107,8 +108,46 @@ export function CorpusView({
   const [importedKeys, setImportedKeys] = useState<Set<string>>(new Set());
   const [importError, setImportError] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState<Record<string, boolean>>({});
+  const [extractError, setExtractError] = useState<Record<string, string>>({});
+  const [extractStatus, setExtractStatus] = useState<Record<string, string>>({});
+  const [pendingExtractConfirm, setPendingExtractConfirm] = useState<Record<string, { reason: string; estimatedUnits: number }>>({});
 
   const importedDedupKeys = new Set(items.map((item) => `${item.source}:${item.externalId}`));
+
+  /** Mirrors `ResearchProjectOverview.tsx`'s `extractClaims()` — the same
+   *  dispatch/confirm/error flow, scoped to a corpus item instead of a work
+   *  (Phase 30 fix lane, D-25-13). */
+  async function extractClaims(corpusItemId: string, confirm = false) {
+    setExtracting((current) => ({ ...current, [corpusItemId]: true }));
+    setExtractError((current) => ({ ...current, [corpusItemId]: "" }));
+    try {
+      const response = await fetch(`/api/research/projects/${project.id}/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobType: "extract_claims", corpusItemId, confirm }),
+      });
+      const body = await response.json();
+      if (response.status === 409 && body.needsConfirmation) {
+        setPendingExtractConfirm((current) => ({ ...current, [corpusItemId]: { reason: body.error, estimatedUnits: body.estimatedUnits } }));
+        return;
+      }
+      if (!response.ok) throw new Error(body.error ?? "Could not start claim extraction.");
+      setPendingExtractConfirm((current) => {
+        const next = { ...current };
+        delete next[corpusItemId];
+        return next;
+      });
+      setExtractStatus((current) => ({
+        ...current,
+        [corpusItemId]: body.reused ? "An extraction from this abstract is already in progress." : "Extraction started — results will appear on the project's Claims page, labeled “from abstract.”",
+      }));
+    } catch (error) {
+      setExtractError((current) => ({ ...current, [corpusItemId]: error instanceof Error ? error.message : "Could not start claim extraction." }));
+    } finally {
+      setExtracting((current) => ({ ...current, [corpusItemId]: false }));
+    }
+  }
 
   async function runSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -321,6 +360,34 @@ export function CorpusView({
                 {` · ${PROVIDER_LABEL[item.source] ?? item.source}`}
                 {item.doi ? ` · DOI ${item.doi}` : ""}
               </p>
+              <div className="mt-3 flex items-center gap-2">
+                {item.hasAbstract ? (
+                  <button
+                    type="button"
+                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 text-xs disabled:opacity-50"
+                    onClick={() => extractClaims(item.id)}
+                    disabled={Boolean(extracting[item.id])}
+                  >
+                    {extracting[item.id] ? "Starting…" : "Extract claims"}
+                  </button>
+                ) : (
+                  <span className="text-xs text-[var(--color-text-muted)]">No abstract available to extract claims from.</span>
+                )}
+              </div>
+              {pendingExtractConfirm[item.id] && (
+                <div className="app-panel-enter mt-2 rounded border border-[var(--color-accent)] p-2 text-xs">
+                  <p>{pendingExtractConfirm[item.id].reason}</p>
+                  <button
+                    type="button"
+                    className="app-control app-press mt-2 min-h-11 rounded bg-[var(--color-accent-ink)] px-3 text-[var(--color-background)]"
+                    onClick={() => extractClaims(item.id, true)}
+                  >
+                    Confirm and extract
+                  </button>
+                </div>
+              )}
+              {extractStatus[item.id] && <p className="mt-2 text-xs text-[var(--color-text-muted)]">{extractStatus[item.id]}</p>}
+              {extractError[item.id] && <p className="mt-2 text-xs text-[var(--color-error,#b3261e)]">{extractError[item.id]}</p>}
             </li>
           ))}
           {!items.length && (

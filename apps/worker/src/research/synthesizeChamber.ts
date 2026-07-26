@@ -3,6 +3,7 @@ import {
   EVIDENCE_CHAMBER_PROMPT_VERSION,
   buildEvidenceChamberPrompt,
   computeChamberBasisHash,
+  parseSynthesizeChamberScope,
   validateEvidenceChamberResponse,
   type EvidenceChamberResult,
 } from "@ice/claims";
@@ -32,15 +33,6 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  * simply skipped this run — never a fabricated placeholder synthesis.
  */
 
-interface SynthesizeChamberScope {
-  clusterId: string;
-}
-
-function parseSynthesizeChamberScope(scope: unknown): SynthesizeChamberScope | null {
-  const s = scope as { clusterId?: unknown } | null;
-  if (s && typeof s.clusterId === "string" && s.clusterId.length > 0) return { clusterId: s.clusterId };
-  return null;
-}
 
 // Conservative per-chamber upper bound (a longer prompt than judge/naming —
 // up to `EVIDENCE_CHAMBER_MAX_CLAIMS` claims — plus a much longer structured

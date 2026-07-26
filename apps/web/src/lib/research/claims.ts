@@ -3,11 +3,12 @@ import {
   claimScores,
   db,
   researchClaims,
+  researchCorpusItems,
   researchProjectMembers,
   researchProjects,
   works,
 } from "@ice/db";
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or } from "drizzle-orm";
 
 /**
  * Owner-scoped reads over `research_claim` (Phase 28.1). Ownership is a SQL
@@ -27,6 +28,11 @@ export interface ResearchClaimListRow {
   id: string;
   workId: string | null;
   workTitle: string | null;
+  /** Non-null only for a corpus-item-sourced claim (Phase 30 fix lane,
+   *  D-25-13) — the exact `workId`/`corpusItemId` XOR the DB enforces on
+   *  `research_claim` itself. */
+  corpusItemId: string | null;
+  corpusItemTitle: string | null;
   claimText: string;
   claimNature: string;
   confidence: string;
@@ -50,11 +56,14 @@ const MAX_PAGE_SIZE = 100;
 
 /**
  * Lists a project's claims — scoped through `research_project_member` so a
- * claim only appears here if its work is actually a member of a project the
- * caller owns, never by trusting a bare `projectId` string. Only `active`
- * claims are listed by default: a `superseded` row is reprocess history, not
- * something the claims table itself needs to surface (plan §Schema
- * `research_object_status` — "never delete, always mark").
+ * claim only appears here if its WORK OR CORPUS ITEM (Phase 30 fix lane,
+ * D-25-13 — corpus-item-sourced claims used to have no membership join to
+ * match at all, so they never appeared here even after extraction existed)
+ * is actually a member of a project the caller owns, never by trusting a
+ * bare `projectId` string. Only `active` claims are listed by default: a
+ * `superseded` row is reprocess history, not something the claims table
+ * itself needs to surface (plan §Schema `research_object_status` — "never
+ * delete, always mark").
  */
 export async function listResearchClaims(
   userId: string,
@@ -78,11 +87,23 @@ export async function listResearchClaims(
     conditions.push(eq(researchClaims.verificationStatus, filters.verificationStatus as (typeof researchClaims.$inferSelect)["verificationStatus"]));
   }
 
+  // Matches a `research_project_member` row for EITHER source kind — a work
+  // member matched by `workId` (memberType 'work'), or a corpus-item member
+  // matched by `corpusItemId` (memberType 'corpus_item'). Never both at once
+  // per row (the `research_claim_exactly_one_source` CHECK), so this OR
+  // never double-counts.
+  const membershipJoin = or(
+    and(eq(researchProjectMembers.workId, researchClaims.workId), eq(researchProjectMembers.memberType, "work")),
+    and(eq(researchProjectMembers.corpusItemId, researchClaims.corpusItemId), eq(researchProjectMembers.memberType, "corpus_item")),
+  );
+
   const baseQuery = db
     .select({
       id: researchClaims.id,
       workId: researchClaims.workId,
       workTitle: works.title,
+      corpusItemId: researchClaims.corpusItemId,
+      corpusItemTitle: researchCorpusItems.title,
       claimText: researchClaims.claimText,
       claimNature: researchClaims.claimNature,
       confidence: researchClaims.confidence,
@@ -95,9 +116,10 @@ export async function listResearchClaims(
       supportingExcerpt: researchClaims.supportingExcerpt,
     })
     .from(researchClaims)
-    .innerJoin(researchProjectMembers, eq(researchProjectMembers.workId, researchClaims.workId))
+    .innerJoin(researchProjectMembers, membershipJoin)
     .innerJoin(researchProjects, eq(researchProjects.id, researchProjectMembers.projectId))
     .leftJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(researchCorpusItems, eq(researchCorpusItems.id, researchClaims.corpusItemId))
     .where(and(...conditions));
 
   const [rows, [{ value: total }]] = await Promise.all([
@@ -108,7 +130,7 @@ export async function listResearchClaims(
     db
       .select({ value: count() })
       .from(researchClaims)
-      .innerJoin(researchProjectMembers, eq(researchProjectMembers.workId, researchClaims.workId))
+      .innerJoin(researchProjectMembers, membershipJoin)
       .innerJoin(researchProjects, eq(researchProjects.id, researchProjectMembers.projectId))
       .where(and(...conditions)),
   ]);
@@ -143,6 +165,8 @@ export async function getResearchClaimDetail(userId: string, claimId: string): P
       id: researchClaims.id,
       workId: researchClaims.workId,
       workTitle: works.title,
+      corpusItemId: researchClaims.corpusItemId,
+      corpusItemTitle: researchCorpusItems.title,
       claimText: researchClaims.claimText,
       claimNature: researchClaims.claimNature,
       confidence: researchClaims.confidence,
@@ -162,6 +186,7 @@ export async function getResearchClaimDetail(userId: string, claimId: string): P
     })
     .from(researchClaims)
     .leftJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(researchCorpusItems, eq(researchCorpusItems.id, researchClaims.corpusItemId))
     .where(and(eq(researchClaims.id, claimId), eq(researchClaims.userId, userId)))
     .limit(1);
   if (!claim) return null;
@@ -193,7 +218,13 @@ export async function listResearchClaimNaturesInUse(userId: string, projectId: s
   const rows = await db
     .selectDistinct({ claimNature: researchClaims.claimNature })
     .from(researchClaims)
-    .innerJoin(researchProjectMembers, eq(researchProjectMembers.workId, researchClaims.workId))
+    .innerJoin(
+      researchProjectMembers,
+      or(
+        and(eq(researchProjectMembers.workId, researchClaims.workId), eq(researchProjectMembers.memberType, "work")),
+        and(eq(researchProjectMembers.corpusItemId, researchClaims.corpusItemId), eq(researchProjectMembers.memberType, "corpus_item")),
+      ),
+    )
     .innerJoin(researchProjects, eq(researchProjects.id, researchProjectMembers.projectId))
     .where(and(eq(researchProjects.id, projectId), eq(researchProjects.userId, userId), eq(researchClaims.userId, userId), eq(researchClaims.status, "active")));
   return rows.map((r) => r.claimNature);

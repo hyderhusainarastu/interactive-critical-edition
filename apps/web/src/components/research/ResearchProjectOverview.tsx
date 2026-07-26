@@ -52,8 +52,14 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+/** Reads the work id a job's scope names, for display only (looking up its
+ *  title in `memberByWorkId`). Checks the canonical `{workId}` singular key
+ *  first (Phase 30 fix lane, D-25-14); the `workIds` array fallback is for
+ *  any `research_job_request` row dispatched before that fix, so an old row
+ *  still shows a work title here instead of just its bare job type. */
 function jobWorkId(scope: unknown): string | null {
-  const value = scope as { workIds?: unknown } | null;
+  const value = scope as { workId?: unknown; workIds?: unknown } | null;
+  if (typeof value?.workId === "string") return value.workId;
   const ids = Array.isArray(value?.workIds) ? (value.workIds as unknown[]) : [];
   return typeof ids[0] === "string" ? ids[0] : null;
 }

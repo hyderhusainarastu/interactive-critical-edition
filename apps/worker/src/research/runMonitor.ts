@@ -1,3 +1,4 @@
+import { parseRunMonitorScope, type RunMonitorScope } from "@ice/claims";
 import {
   db,
   enqueueImportResearchCorpus,
@@ -27,7 +28,10 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  * `ctx.logUsage()` because nothing here spends against the research budget
  * (the `import_corpus` precedent, `importCorpus.ts`'s own doc comment).
  *
- * Scope shape: `{ monitorId?: string }`.
+ * Scope shape: `{ monitorId?: string }` (`RunMonitorScope`/
+ * `parseRunMonitorScope`, the canonical `@ice/claims` scope contract, Phase
+ * 30 fix lane D-25-14 — re-exported here so this file's own existing
+ * consumers/tests keep importing from `./runMonitor` unchanged).
  *  - `monitorId` set: scan exactly that one monitor NOW, regardless of
  *    whether its cadence says it's due — an explicit "scan now" action
  *    always runs (the `dispatchExtractClaimsJob`-style "explicit action"
@@ -37,17 +41,8 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  *    that a "scan my due monitors now" UI action could reuse identically).
  */
 
-export interface RunMonitorScope {
-  monitorId?: string;
-}
-
-export function parseRunMonitorScope(scope: unknown): RunMonitorScope | null {
-  if (scope === null || typeof scope !== "object" || Array.isArray(scope)) return null;
-  const s = scope as { monitorId?: unknown };
-  if (s.monitorId === undefined) return {};
-  if (typeof s.monitorId !== "string" || s.monitorId.length === 0) return null;
-  return { monitorId: s.monitorId };
-}
+export { parseRunMonitorScope };
+export type { RunMonitorScope };
 
 const TOPIC_SCAN_LIMIT = 10;
 const CITATION_SCAN_LIMIT = 10;

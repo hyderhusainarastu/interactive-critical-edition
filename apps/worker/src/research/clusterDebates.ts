@@ -4,6 +4,7 @@ import {
   buildClusterNamingPrompt,
   deterministicFallbackName,
   findClaimClusters,
+  parseClusterDebatesScope,
   validateClusterNamingResponse,
   type ClaimRelationEdge,
 } from "@ice/claims";
@@ -35,16 +36,6 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  * (never deleted — a user's verification of that debate survives) and a
  * new row is named for the new membership.
  */
-
-interface ClusterDebatesScope {
-  projectId: string;
-}
-
-function parseClusterDebatesScope(scope: unknown): ClusterDebatesScope | null {
-  const s = scope as { projectId?: unknown } | null;
-  if (s && typeof s.projectId === "string" && s.projectId.length > 0) return { projectId: s.projectId };
-  return null;
-}
 
 // Small, structured, sampled to 6 claims (buildClusterNamingPrompt's own
 // cap) — cheaper than a judge call.

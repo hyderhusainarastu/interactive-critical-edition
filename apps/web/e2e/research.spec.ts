@@ -333,6 +333,19 @@ test.describe("Research workspace (Phase 28.1)", () => {
     // The two seeded fixture requests already render "Complete"/"Failed" —
     // "Queued" only appears for the request this click just created.
     await expect(main(page).getByText("Queued").first()).toBeVisible({ timeout: 10_000 });
+
+    // D-25-14 seam check: the row this real dispatch just created must carry
+    // the CANONICAL `{workId}` scope `@ice/claims`'s `parseExtractClaimsScope`
+    // (the worker's own parser) accepts — not the pre-fix `{workIds: [...]}`
+    // array shape that silently failed to parse and surfaced a misleading
+    // "corpus-item path not implemented" error for an ordinary work
+    // extraction. A UI assertion alone ("Queued" renders) proved the ROW got
+    // created, but never proved the worker could actually read it back — this
+    // is the DB-level half that closes that gap.
+    const allExtractRequests = await db.select().from(researchJobRequests).where(eq(researchJobRequests.jobType, "extract_claims"));
+    const dispatched = allExtractRequests.find((r) => (r.scope as { workId?: unknown } | null)?.workId === fixture.workId);
+    expect(dispatched, "no extract_claims row carries the canonical {workId} scope for the dispatched work").toBeTruthy();
+    expect(dispatched!.scope).not.toHaveProperty("workIds");
   });
 
   test("archives and restores a project, and does not disclose another user's project", async ({ page, browser }) => {

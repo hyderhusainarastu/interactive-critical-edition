@@ -556,6 +556,100 @@ export async function findBibliographicRecordByDoi(doi: string): Promise<{ id: s
   return row ?? null;
 }
 
+/** Every DOI a set of corpus items carry (lowercased, `null` when a corpus
+ *  item has none) — `detectRelationships.ts`'s work↔corpus-item citation
+ *  engagement pre-join input (the other half is `loadCitationEngagementDoisForWorks`
+ *  in `citationEngagement.ts`). No corpus↔corpus engagement is ever derived
+ *  from this alone (a corpus item's own outbound citations are never known —
+ *  only its abstract was ever fetched, never a references list). */
+export async function loadCorpusItemDois(corpusItemIds: string[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (corpusItemIds.length === 0) return out;
+  const rows = await db
+    .select({ id: researchCorpusItems.id, doi: researchCorpusItems.doi })
+    .from(researchCorpusItems)
+    .where(inArray(researchCorpusItems.id, corpusItemIds));
+  for (const row of rows) out.set(row.id, row.doi ? row.doi.toLowerCase() : null);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// extract_claims — corpus-item (abstract-source) path (Phase 30 fix lane,
+// D-25-13). Sibling of the "Work extraction scope"/"research_claim writes"
+// sections above, scoped to a single `research_corpus_item` instead of an
+// uploaded work's published run.
+// ---------------------------------------------------------------------------
+
+export interface CorpusItemExtractionScope {
+  userId: string;
+  corpusItemId: string;
+  title: string;
+  /** Null when the provider never supplied one — the caller's honest
+   *  "nothing to extract from" failure, not this loader's concern. */
+  abstract: string | null;
+}
+
+export async function loadCorpusItemForExtraction(corpusItemId: string): Promise<CorpusItemExtractionScope | null> {
+  const [row] = await db
+    .select({ userId: researchCorpusItems.userId, title: researchCorpusItems.title, abstract: researchCorpusItems.abstract })
+    .from(researchCorpusItems)
+    .where(eq(researchCorpusItems.id, corpusItemId))
+    .limit(1);
+  if (!row) return null;
+  return { userId: row.userId, corpusItemId, title: row.title, abstract: row.abstract };
+}
+
+export interface NewCorpusResearchClaim {
+  userId: string;
+  corpusItemId: string;
+  claimText: string;
+  claimNature: string;
+  confidence: string;
+  section: string;
+  supportingExcerpt: string;
+  contentHash: string;
+  promptVersion: string;
+}
+
+/**
+ * Inserts one corpus-item-sourced claim — the abstract-source sibling of
+ * `insertResearchClaim` below. Per `research_claim`'s own schema doc comment,
+ * a corpus-item claim is grounded via `source_scope = 'abstract'` alone
+ * (`research_claim_grounded` CHECK) with no `text_block_id` to anchor to (no
+ * text_block exists for an abstract) — `anchor_state` is `unanchored`, the
+ * exact case that enum value's own doc comment names ("a corpus-item-sourced
+ * claim was never anchored to any block at all"), distinct from the
+ * lost-anchor-after-reprocess case work-sourced claims use it for.
+ * `quote`/`prefix`/`suffix` stay SQL NULL (never a fabricated anchor).
+ * Dedup respects `research_claim_corpus_item_dedup_unique`
+ * (`corpus_item_id, content_hash, prompt_version`), the exact partial-unique
+ * counterpart to `insertResearchClaim`'s work-scoped one.
+ */
+export async function insertResearchClaimForCorpusItem(claim: NewCorpusResearchClaim): Promise<string | null> {
+  const [inserted] = await db
+    .insert(researchClaims)
+    .values({
+      userId: claim.userId,
+      corpusItemId: claim.corpusItemId,
+      anchorState: "unanchored",
+      claimText: claim.claimText,
+      claimNature: claim.claimNature as (typeof researchClaims.$inferInsert)["claimNature"],
+      confidence: claim.confidence,
+      section: claim.section,
+      sourceScope: "abstract",
+      supportingExcerpt: claim.supportingExcerpt,
+      excerptVerified: true,
+      contentHash: claim.contentHash,
+      promptVersion: claim.promptVersion,
+    })
+    .onConflictDoNothing({
+      target: [researchClaims.corpusItemId, researchClaims.contentHash, researchClaims.promptVersion],
+      where: sql`${researchClaims.corpusItemId} is not null`,
+    })
+    .returning({ id: researchClaims.id });
+  return inserted?.id ?? null;
+}
+
 /** Ownership check for the optional `projectId` scope field — a research
  *  project is user-scoped, so importing into someone else's project must
  *  fail loudly rather than silently succeed against the wrong project. */
@@ -604,11 +698,9 @@ export async function loadResearchProjectForUser(projectId: string, userId: stri
 /** Every `work`-typed member of a project, regardless of role
  *  (central/supporting/background) — unlike extraction's role-gated
  *  trigger, relationship detection scopes over every claim already
- *  extracted for any member work. Corpus-item members are out of scope for
- *  this lane (research_claim has no corpus-item-sourced rows yet; see
- *  extractClaims.ts's own typed TODO for the corpus-item extraction path) —
- *  TODO(Phase 28.2+): once corpus-item claims exist, widen this to also
- *  return corpusItemIds and fold them into the retrieval/engagement scope. */
+ *  extracted for any member work. See `loadProjectCorpusItemIds` below for
+ *  the corpus-item-member sibling this is always called alongside now
+ *  (Phase 30 fix lane, D-25-13). */
 export async function loadProjectWorkIds(projectId: string): Promise<string[]> {
   const rows = await db
     .select({ workId: researchProjectMembers.workId })
@@ -617,27 +709,55 @@ export async function loadProjectWorkIds(projectId: string): Promise<string[]> {
   return rows.map((r) => r.workId).filter((id): id is string => id !== null);
 }
 
+/** Every `corpus_item`-typed member of a project — the corpus-item half of
+ *  `detectRelationships.ts`'s retrieval/engagement scope, alongside
+ *  `loadProjectWorkIds` above. */
+export async function loadProjectCorpusItemIds(projectId: string): Promise<string[]> {
+  const rows = await db
+    .select({ corpusItemId: researchProjectMembers.corpusItemId })
+    .from(researchProjectMembers)
+    .where(and(eq(researchProjectMembers.projectId, projectId), eq(researchProjectMembers.memberType, "corpus_item")));
+  return rows.map((r) => r.corpusItemId).filter((id): id is string => id !== null);
+}
+
 export interface ScopedClaimRow {
   id: string;
   userId: string;
-  workId: string;
+  /** Exactly one of `workId`/`corpusItemId` is non-null (the
+   *  `research_claim_exactly_one_source` CHECK) — both are carried here
+   *  (rather than narrowed to a single required field the way this row used
+   *  to be) so `detectRelationships.ts` can tell the two source kinds apart
+   *  for cross-source pairing and citation-engagement resolution. */
+  workId: string | null;
+  corpusItemId: string | null;
   claimText: string;
   claimNature: string;
 }
 
-/** Active, non-hidden, work-sourced claims across a set of works — Stage-1
- *  retrieval's entire input population. `userId` is asserted again here
- *  (not just relied on transitively via `loadProjectWorkIds`'s own
- *  ownership check) as a second, independent ownership guard on the actual
- *  claim rows returned — the same defense-in-depth the rest of this file's
- *  owner-scoped reads apply. */
-export async function loadScopedClaimsForRelationshipDetection(userId: string, workIds: string[]): Promise<ScopedClaimRow[]> {
-  if (workIds.length === 0) return [];
+/** Active, non-hidden claims across a set of works AND/OR corpus items —
+ *  Stage-1 retrieval's entire input population. Owner-scoped by `userId` as
+ *  a second, independent guard on the actual claim rows returned (not just
+ *  relied on transitively via `loadProjectWorkIds`/`loadProjectCorpusItemIds`'s
+ *  own ownership checks) — the same defense-in-depth the rest of this file's
+ *  owner-scoped reads apply. Either id array may be empty (a project with
+ *  only corpus-item members, or only work members); both empty returns `[]`
+ *  without querying. */
+export async function loadScopedClaimsForRelationshipDetection(
+  userId: string,
+  workIds: string[],
+  corpusItemIds: string[] = [],
+): Promise<ScopedClaimRow[]> {
+  if (workIds.length === 0 && corpusItemIds.length === 0) return [];
+  const sourceConditions = [];
+  if (workIds.length > 0) sourceConditions.push(inArray(researchClaims.workId, workIds));
+  if (corpusItemIds.length > 0) sourceConditions.push(inArray(researchClaims.corpusItemId, corpusItemIds));
+
   const rows = await db
     .select({
       id: researchClaims.id,
       userId: researchClaims.userId,
       workId: researchClaims.workId,
+      corpusItemId: researchClaims.corpusItemId,
       claimText: researchClaims.claimText,
       claimNature: researchClaims.claimNature,
     })
@@ -645,20 +765,12 @@ export async function loadScopedClaimsForRelationshipDetection(userId: string, w
     .where(
       and(
         eq(researchClaims.userId, userId),
-        inArray(researchClaims.workId, workIds),
+        or(...sourceConditions),
         eq(researchClaims.status, "active"),
         eq(researchClaims.hidden, false),
       ),
     );
-  // `workId` is nullable at the type level (a corpus-item-sourced claim has
-  // it null instead — see `research_claim_exactly_one_source`), but every
-  // row here matched `inArray(researchClaims.workId, workIds)`, which can
-  // never match null — `.filter(Boolean)` on `workId` plus the explicit
-  // remap narrows the TS type to reflect that DB-enforced fact rather than
-  // actually filtering anything out.
-  return rows
-    .filter((r) => r.workId !== null)
-    .map((r) => ({ id: r.id, userId: r.userId, workId: r.workId as string, claimText: r.claimText, claimNature: r.claimNature }));
+  return rows;
 }
 
 /** Embedding vectors for a set of claims, filtered to ONE model — "the
@@ -765,7 +877,14 @@ export async function loadClaimPairCandidatesForProject(userId: string, projectI
 
 export interface ClaimJudgeDetail {
   id: string;
-  workId: string;
+  workId: string | null;
+  corpusItemId: string | null;
+  /** The owning WORK's title, or the owning CORPUS ITEM's title when
+   *  `workId` is null — kept as one field (not split into two) because
+   *  `JudgeClaimInput.workTitle` (`@ice/claims`'s judge-prompt contract) is a
+   *  single generic "name this source" slot the prompt's "Work A: <title>"
+   *  framing applies to either kind of source equally; renaming that pure
+   *  package's field for one caller wasn't worth the churn. */
   workTitle: string;
   claimText: string;
   supportingExcerpt: string;
@@ -773,12 +892,15 @@ export interface ClaimJudgeDetail {
 }
 
 /** Judge-input detail for a set of claims — text, excerpt, nature, and the
- *  OWNING WORK's title (`JudgeClaimInput.workTitle`; `work.title` rather
- *  than `doc_metadata.title` — simpler than `loadWorkExtractionScope`'s
- *  resolved-run title and sufficient for naming a work in a judge prompt). A
- *  corpus-item-sourced claim (`work_id` null) is silently absent from the
- *  returned map — Stage 1 retrieval never surfaces one today (Phase 28.2's
- *  own typed TODO), so this is unreachable in practice, not silently wrong. */
+ *  owning source's title, whether that source is a work or a corpus item
+ *  (Phase 30 fix lane, D-25-13 — corpus-item-sourced claims used to be
+ *  silently absent here since Stage 1 retrieval never surfaced one before
+ *  this lane; now that it can, both `leftJoin`s below are exercised for
+ *  real). Exactly one of the two joins matches per row (the
+ *  `research_claim_exactly_one_source` CHECK), so `workId ? workTitle :
+ *  corpusItemTitle` always resolves to a real title; a row where somehow
+ *  neither did is skipped defensively rather than inserted with an empty
+ *  display title. */
 export async function loadClaimJudgeDetails(claimIds: string[]): Promise<Map<string, ClaimJudgeDetail>> {
   const out = new Map<string, ClaimJudgeDetail>();
   if (claimIds.length === 0) return out;
@@ -786,17 +908,29 @@ export async function loadClaimJudgeDetails(claimIds: string[]): Promise<Map<str
     .select({
       id: researchClaims.id,
       workId: researchClaims.workId,
+      corpusItemId: researchClaims.corpusItemId,
       workTitle: works.title,
+      corpusItemTitle: researchCorpusItems.title,
       claimText: researchClaims.claimText,
       supportingExcerpt: researchClaims.supportingExcerpt,
       claimNature: researchClaims.claimNature,
     })
     .from(researchClaims)
-    .innerJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(researchCorpusItems, eq(researchCorpusItems.id, researchClaims.corpusItemId))
     .where(inArray(researchClaims.id, claimIds));
   for (const row of rows) {
-    if (!row.workId) continue;
-    out.set(row.id, { id: row.id, workId: row.workId, workTitle: row.workTitle, claimText: row.claimText, supportingExcerpt: row.supportingExcerpt, claimNature: row.claimNature });
+    const title = row.workId ? row.workTitle : row.corpusItemTitle;
+    if (!title) continue;
+    out.set(row.id, {
+      id: row.id,
+      workId: row.workId,
+      corpusItemId: row.corpusItemId,
+      workTitle: title,
+      claimText: row.claimText,
+      supportingExcerpt: row.supportingExcerpt,
+      claimNature: row.claimNature,
+    });
   }
   return out;
 }

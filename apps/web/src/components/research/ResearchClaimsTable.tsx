@@ -9,6 +9,8 @@ type ClaimRow = {
   id: string;
   workId: string | null;
   workTitle: string | null;
+  corpusItemId: string | null;
+  corpusItemTitle: string | null;
   claimText: string;
   claimNature: string;
   confidence: string;
@@ -158,9 +160,12 @@ export function ResearchClaimsTable({
                 <td className="py-2 pr-4">
                   <Link href={`/research/claims/${claim.id}`} className="app-control underline">{claim.claimText}</Link>
                 </td>
-                <td className="py-2 pr-4">{claim.workTitle ?? "—"}</td>
+                <td className="py-2 pr-4">{claim.workTitle ?? claim.corpusItemTitle ?? "—"}</td>
                 <td className="py-2 pr-4">
                   <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">{NATURE_LABEL[claim.claimNature] ?? claim.claimNature}</span>
+                  {claim.sourceScope === "abstract" && (
+                    <span className="app-control ml-1 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)]">From abstract</span>
+                  )}
                 </td>
                 <td className="py-2 pr-4">{ANCHOR_LABEL[claim.anchorState] ?? claim.anchorState}</td>
                 <td className="py-2 pr-4">{VERIFICATION_LABEL[claim.verificationStatus] ?? claim.verificationStatus}</td>
