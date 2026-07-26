@@ -13,6 +13,7 @@ import {
   QUEUE_EXTRACT_RESEARCH_CLAIMS,
   QUEUE_IMPORT_RESEARCH_CORPUS,
   QUEUE_ANALYZE_CLAIM_DEBATES,
+  QUEUE_SYNTHESIZE_RESEARCH,
   RESEARCH_QUEUES,
   type ResearchJobPayload,
   type ResearchQueueName,
@@ -28,6 +29,7 @@ import { expandCrossLibraryGraph } from "./crossLibraryGraph";
 import { clusterDebates } from "./research/clusterDebates";
 import { detectRelationships } from "./research/detectRelationships";
 import { extractClaims } from "./research/extractClaims";
+import { generateHypotheses } from "./research/generateHypotheses";
 import { importCorpus } from "./research/importCorpus";
 import { runResearchJob } from "./research/jobRunner";
 import "./sentry";
@@ -178,15 +180,49 @@ async function main() {
     }
   });
 
+  // Phase 27.2: synthesize-research-output gets its real handler for
+  // `generate_hypotheses` jobs. `synthesize_chamber` (27.1, a parallel,
+  // not-yet-landed lane in this worktree) shares this SAME queue (plan
+  // §Pipeline: "Evidence Chamber + hypotheses, explicit action only") but
+  // falls through to the honest no-op below exactly as it did before this
+  // lane, the same `QUEUE_ANALYZE_CLAIM_DEBATES` dispatch-on-jobType pattern.
+  await boss.work<ResearchJobPayload>(QUEUE_SYNTHESIZE_RESEARCH, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) {
+      const [request] = await db
+        .select({ jobType: researchJobRequests.jobType })
+        .from(researchJobRequests)
+        .where(eq(researchJobRequests.id, job.data.requestId))
+        .limit(1);
+      if (!request) {
+        console.warn(`[worker] ${QUEUE_SYNTHESIZE_RESEARCH}: research_job_request ${job.data.requestId} not found; skipping`);
+        continue;
+      }
+      if (request.jobType === "generate_hypotheses") {
+        await runResearchJob(job.data.requestId, generateHypotheses);
+        continue;
+      }
+      try {
+        await handleUnimplementedResearchJob(QUEUE_SYNTHESIZE_RESEARCH, job.data.requestId);
+      } catch (error) {
+        reportError(error, { scope: `worker.${QUEUE_SYNTHESIZE_RESEARCH}`, requestId: job.data.requestId });
+        throw error;
+      }
+    }
+  });
+
   // Phase 25.6: the remaining research queues stay honest no-ops until
-  // their own lanes (26.3 clustering, 27 synthesis, 29 monitors) replace
-  // this registration — see `handleUnimplementedResearchJob`'s doc comment.
-  // Registering now means the queue rows and this worker's consumer set
-  // exist before any web route can enqueue, so an early enqueue is dequeued
-  // and answered honestly instead of sitting `created` forever with nothing
-  // consuming it.
+  // their own lanes (29 monitors) replace this registration — see
+  // `handleUnimplementedResearchJob`'s doc comment. Registering now means
+  // the queue rows and this worker's consumer set exist before any web
+  // route can enqueue, so an early enqueue is dequeued and answered
+  // honestly instead of sitting `created` forever with nothing consuming it.
   for (const queueName of RESEARCH_QUEUES.filter(
-    (name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS && name !== QUEUE_IMPORT_RESEARCH_CORPUS && name !== QUEUE_ANALYZE_CLAIM_DEBATES,
+    (name) =>
+      name !== QUEUE_EXTRACT_RESEARCH_CLAIMS &&
+      name !== QUEUE_IMPORT_RESEARCH_CORPUS &&
+      name !== QUEUE_ANALYZE_CLAIM_DEBATES &&
+      name !== QUEUE_SYNTHESIZE_RESEARCH,
   )) {
     await boss.work<ResearchJobPayload>(queueName, async (jobs) => {
       const batch = Array.isArray(jobs) ? jobs : [jobs];

@@ -47,3 +47,17 @@ export const RETRIEVAL_LIMITS: ClaimsRetrievalLimits = {
  */
 export const AUTO_APPROVE_MAX_CHUNKS = 12;
 export const HARD_STOP_MAX_CHUNKS = 50;
+
+/**
+ * `generate_hypotheses` caps (Phase 27.2, plan §Program 27.2 "maxHypotheses
+ * <=5"). `maxHypothesesPerRequest` is the hard ceiling `generateHypotheses.ts`
+ * clamps a caller-supplied `maxHypotheses` scope field to, regardless of what
+ * value is requested. `maxConflictsForHypothesisContext` bounds how many
+ * `[CONFLICT_N]`-labeled conflicts are ever assembled into one prompt — a
+ * project with hundreds of undisputed conflicts must not blow up the prompt
+ * (or the cost) just because they all exist; the highest-value context still
+ * makes it in (the caller ranks before truncating), the rest are simply
+ * outside this run's hypothesis-generation window, not silently corrupted.
+ */
+export const MAX_HYPOTHESES_PER_REQUEST = Number(process.env.CLAIMS_MAX_HYPOTHESES_PER_REQUEST ?? 5);
+export const MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT = Number(process.env.CLAIMS_MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT ?? 30);

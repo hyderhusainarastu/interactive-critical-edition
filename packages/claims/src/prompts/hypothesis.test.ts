@@ -119,4 +119,32 @@ describe("validateHypothesisResponse", () => {
     const result = validateHypothesisResponse([{ statement: "x", challenges: ["ok", 42, null] }], new Map());
     expect(result[0].challenges).toEqual(["ok"]);
   });
+
+  it("counts a fabricated label that was dropped", () => {
+    const labelToReal = new Map([["CONFLICT_1", "real-id-1"]]);
+    const result = validateHypothesisResponse(
+      [{ statement: "x", sourceConflictLabels: ["CONFLICT_1", "CONFLICT_99"] }],
+      labelToReal,
+    );
+    expect(result[0].sourceConflictIds).toEqual(["real-id-1"]);
+    expect(result[0].fabricatedLabelCount).toBe(1);
+  });
+
+  it("reports zero fabricated labels when every label resolves", () => {
+    const labelToReal = new Map([["CONFLICT_1", "real-id-1"], ["CONFLICT_2", "real-id-2"]]);
+    const result = validateHypothesisResponse(
+      [{ statement: "x", sourceConflictLabels: ["CONFLICT_1", "CONFLICT_2"] }],
+      labelToReal,
+    );
+    expect(result[0].fabricatedLabelCount).toBe(0);
+  });
+
+  it("counts every fabricated label when none resolve", () => {
+    const result = validateHypothesisResponse(
+      [{ statement: "x", sourceConflictLabels: ["CONFLICT_1", "CONFLICT_2"] }],
+      new Map(),
+    );
+    expect(result[0].sourceConflictIds).toEqual([]);
+    expect(result[0].fabricatedLabelCount).toBe(2);
+  });
 });

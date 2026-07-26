@@ -193,9 +193,14 @@ export function ResearchProjectOverview({
           <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
           {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
         </div>
-        <Link href={`/research/${project.id}/claims`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-          View claims
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/research/${project.id}/claims`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
+            View claims
+          </Link>
+          <Link href={`/research/${project.id}/hypotheses`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
+            Hypotheses &amp; gaps
+          </Link>
+        </div>
       </div>
 
       {/* Insight feed — zero-LLM, pure DB reads (see lib/research/feed.ts). */}

@@ -29,12 +29,14 @@ export * from "./retrieval/union";
 export * from "./clustering";
 export * from "./novelty";
 export * from "./mapReduce";
+export * from "./hypothesisRunHash";
 
 export * from "./prompts/claimExtraction";
 export * from "./prompts/judge";
 export * from "./prompts/clusterNaming";
 export * from "./prompts/evidenceChamber";
 export * from "./prompts/hypothesis";
+export * from "./prompts/researchGap";
 
 export * from "./jobs/planResearchJob";
 
