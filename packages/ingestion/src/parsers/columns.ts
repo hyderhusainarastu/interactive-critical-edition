@@ -77,8 +77,12 @@ export function findColumnSplit(xOrigins: readonly number[], pageWidth: number):
  * unpdf's own flattening (see `parsers/pdf.ts`) — no regression risk for the
  * overwhelming majority (and every existing fixture), which is single-column.
  */
-export function orderItemsForColumns(items: readonly PositionedTextItem[], pageWidth: number): PositionedTextItem[] {
-  const split = findColumnSplit(items.map((item) => item.x), pageWidth);
+export function orderItemsForColumns(
+  items: readonly PositionedTextItem[],
+  pageWidth: number,
+  precomputedSplit?: number | null,
+): PositionedTextItem[] {
+  const split = precomputedSplit !== undefined ? precomputedSplit : findColumnSplit(items.map((item) => item.x), pageWidth);
   if (split === null) return [...items];
 
   const left = items.filter((item) => item.x < split).sort((a, b) => b.y - a.y);

@@ -153,7 +153,7 @@ async function extractColumnAwarePageText(
       viewport.width,
     );
     if (split === null) return unpdfPageText; // single column — keep unpdf's own text byte-for-byte
-    return joinPositionedItems(orderItemsForColumns(items, viewport.width));
+    return joinPositionedItems(orderItemsForColumns(items, viewport.width, split));
   } catch {
     // Best-effort probe — never fail extraction over a column-detection pass.
     return unpdfPageText;
