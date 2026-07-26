@@ -351,6 +351,9 @@ importers:
       '@ice/ai-adapters':
         specifier: workspace:*
         version: link:../ai-adapters
+      '@ice/claims':
+        specifier: workspace:*
+        version: link:../claims
       '@ice/db':
         specifier: workspace:*
         version: link:../db

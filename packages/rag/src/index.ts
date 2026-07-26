@@ -8,6 +8,20 @@ import { estimateEmbeddingCostUsd, type EmbeddingResult } from "@ice/ai-adapters
 // caller still imports from `@ice/rag`.
 export * from "./competency";
 
+// The deterministic lexical-only scorer (`lexicalScore`/`rankLexically`)
+// moved to its own module in Phase 29.3 so `hybridRetrieval.ts` can reuse it
+// as the flag-off/no-provider fallback without a circular import; still
+// re-exported here so every existing caller is unaffected.
+export * from "./lexicalRetrieval";
+import { rankLexically } from "./lexicalRetrieval";
+
+// Phase 29.3 (ScholarLens reverse-direction lane): hybrid dense+BM25
+// retrieval, behind `RAG_HYBRID_RETRIEVAL` (default off — see
+// `ragHybridRetrievalEnabled`). See `hybridRetrieval.ts` for the full
+// rationale; re-exported here for the same reason as above.
+export * from "./hybridRetrieval";
+import { ragHybridRetrievalEnabled, rankOwnerChunks, type EmbedQuery } from "./hybridRetrieval";
+
 export const RAG_MAX_CHARS_PER_CHUNK = 1_400;
 export const RAG_MAX_CHUNKS_PER_DOCUMENT = 256;
 export const RAG_MAX_AUTOMATIC_EMBEDDINGS = 32;
@@ -73,36 +87,6 @@ export function chunkText(text: string, maxChars = RAG_MAX_CHARS_PER_CHUNK): Chu
 
 export function ragContentHash(text: string): string {
   return createHash("sha256").update(text).digest("hex");
-}
-
-function words(value: string): string[] {
-  return [...new Set(value.toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}'’-]{1,}/gu) ?? [])]
-    .filter((word) => !new Set(["about", "after", "also", "and", "are", "can", "does", "for", "from", "how", "into", "not", "of", "the", "this", "that", "their", "then", "they", "what", "when", "where", "which", "with", "would", "your"]).has(word));
-}
-
-/** Deterministic retrieval baseline. A query needs real lexical evidence; a
- * zero-score row is never smuggled into a response simply to make an answer. */
-export function lexicalScore(query: string, content: string): number {
-  const queryWords = words(query);
-  if (!queryWords.length) return 0;
-  const haystack = content.toLowerCase();
-  let score = 0;
-  for (const word of queryWords) {
-    const occurrences = haystack.split(word).length - 1;
-    score += Math.min(3, occurrences);
-  }
-  const phrase = query.trim().toLowerCase();
-  if (phrase.length > 8 && haystack.includes(phrase)) score += 4;
-  return score / Math.sqrt(Math.max(1, content.length / 240));
-}
-
-export function rankLexically<T extends { content: string }>(query: string, rows: readonly T[], limit = RAG_RETRIEVAL_LIMIT): T[] {
-  return rows
-    .map((row, index) => ({ row, index, score: lexicalScore(query, row.content) }))
-    .filter((result) => result.score > 0)
-    .sort((left, right) => right.score - left.score || left.index - right.index)
-    .slice(0, limit)
-    .map((result) => result.row);
 }
 
 export type EmbedChunk = (text: string) => Promise<EmbeddingResult>;
@@ -330,38 +314,71 @@ export async function canonicalWorkDisplayTitles(userId: string, workIds: readon
   return titles;
 }
 
-/** Owner scope is part of the SQL predicate, not a post-query filter. */
-export async function retrieveOwnerRagChunks(userId: string, query: string, limit = RAG_RETRIEVAL_LIMIT): Promise<RetrievedRagChunk[]> {
+/**
+ * Owner scope is part of the SQL predicate, not a post-query filter.
+ *
+ * Ranking is `rankLexically` unless `RAG_HYBRID_RETRIEVAL` is on
+ * (`ragHybridRetrievalEnabled`, Phase 29.3) — the flag-off path below is
+ * unchanged from before that lane. When the flag is on, each chunk's stored
+ * `embedding`/`embeddingModel` is additionally selected (never fetched, let
+ * alone recomputed, when the flag is off) and `rankOwnerChunks` decides
+ * between the hybrid dense+BM25 union and the same lexical fallback,
+ * honestly, per `hybridRetrieval.ts`'s doc comments. `options.embedQuery` is
+ * an injection seam for tests only; production callers never pass it.
+ */
+export async function retrieveOwnerRagChunks(
+  userId: string,
+  query: string,
+  limit = RAG_RETRIEVAL_LIMIT,
+  options: { embedQuery?: EmbedQuery } = {},
+): Promise<RetrievedRagChunk[]> {
   const [{ db, ragChunks, works }, { and, eq, isNull }] = await Promise.all([
     import("@ice/db"),
     import("drizzle-orm"),
   ]);
+  const baseSelection = {
+    id: ragChunks.id,
+    content: ragChunks.content,
+    anchor: ragChunks.anchor,
+    sourceType: ragChunks.sourceType,
+    sourceUrl: ragChunks.sourceUrl,
+    license: ragChunks.license,
+    workTitle: works.title,
+    workId: ragChunks.workId,
+    documentId: ragChunks.documentId,
+  };
+  // A trashed work is hidden from RAG retrieval (Phase 20.3): its chunks
+  // stay in place for restore, but Ask Library must not answer from them.
+  const ownerScope = and(eq(ragChunks.userId, userId), isNull(works.deletedAt));
+
+  if (!ragHybridRetrievalEnabled()) {
+    const rows = await db.select(baseSelection).from(ragChunks).innerJoin(works, eq(ragChunks.workId, works.id)).where(ownerScope);
+    // Phase 20.6: citations display under the canonical work entry, so two
+    // uploads of the same work never present as two different sources.
+    const canonicalTitles = await canonicalWorkDisplayTitles(userId, rows.map((row) => row.workId));
+    return rankLexically(query, rows.map((row) => ({
+      ...row,
+      workTitle: canonicalTitles.get(row.workId) ?? row.workTitle,
+      anchor: row.anchor as RagAnchor,
+      sourceType: row.sourceType as "uploaded" | "open_access",
+    })), limit);
+  }
+
   const rows = await db
-    .select({
-      id: ragChunks.id,
-      content: ragChunks.content,
-      anchor: ragChunks.anchor,
-      sourceType: ragChunks.sourceType,
-      sourceUrl: ragChunks.sourceUrl,
-      license: ragChunks.license,
-      workTitle: works.title,
-      workId: ragChunks.workId,
-      documentId: ragChunks.documentId,
-    })
+    .select({ ...baseSelection, embedding: ragChunks.embedding, embeddingModel: ragChunks.embeddingModel })
     .from(ragChunks)
     .innerJoin(works, eq(ragChunks.workId, works.id))
-    // A trashed work is hidden from RAG retrieval (Phase 20.3): its chunks
-    // stay in place for restore, but Ask Library must not answer from them.
-    .where(and(eq(ragChunks.userId, userId), isNull(works.deletedAt)));
-  // Phase 20.6: citations display under the canonical work entry, so two
-  // uploads of the same work never present as two different sources.
+    .where(ownerScope);
   const canonicalTitles = await canonicalWorkDisplayTitles(userId, rows.map((row) => row.workId));
-  return rankLexically(query, rows.map((row) => ({
+  const mapped = rows.map((row) => ({
     ...row,
     workTitle: canonicalTitles.get(row.workId) ?? row.workTitle,
     anchor: row.anchor as RagAnchor,
     sourceType: row.sourceType as "uploaded" | "open_access",
-  })), limit);
+    embedding: (row.embedding as number[] | null) ?? null,
+  }));
+  const ranked = await rankOwnerChunks(query, mapped, limit, { hybridEnabled: true, embedQuery: options.embedQuery });
+  return ranked.map(({ embedding: _embedding, embeddingModel: _embeddingModel, ...chunk }) => chunk);
 }
 
 export const SOCRATIC_SYSTEM_PROMPT = [

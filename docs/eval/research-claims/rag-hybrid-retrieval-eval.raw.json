@@ -1,0 +1,400 @@
+{
+  "generatedAt": "2026-07-26T05:53:44.971Z",
+  "goldCount": 25,
+  "embeddingModel": "text-embedding-3-small",
+  "costUsd": 0.00007394,
+  "inputTokens": 3697,
+  "ndcgK": 5,
+  "mrrRelevanceThreshold": 2,
+  "meaningfulDeltaThreshold": 0.02,
+  "summary": {
+    "lexical": {
+      "ndcg5": 0.8977192178179675,
+      "mrr": 0.96
+    },
+    "hybrid": {
+      "ndcg5": 0.9350148750588866,
+      "mrr": 0.98
+    },
+    "ndcgDelta": 0.0372956572409191,
+    "mrrDelta": 0.020000000000000018,
+    "verdict": "Hybrid retrieval shows a measurable improvement (nDCG@5 delta 0.0373, MRR delta 0.0200) — a real, if modest, recall gain over lexical-only ranking on this 25-query gold set."
+  },
+  "perQuery": [
+    {
+      "id": "s1",
+      "query": "Does giving an LLM a structured negotiation script improve a human's bargaining outcomes (deal value)?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 0.6828474907842743,
+        "mrr": 0.5,
+        "nReturned": 7
+      },
+      "hybrid": {
+        "ndcg5": 0.902688816176951,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s2",
+      "query": "What sample sizes are typical in studies measuring AI coaching effects on negotiation skill?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 0.8778437798371495,
+        "mrr": 1,
+        "nReturned": 7
+      },
+      "hybrid": {
+        "ndcg5": 0.902688816176951,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s3",
+      "query": "Do LLM negotiation agents concede too quickly compared to humans?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.6587179082463899,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.8714144011561614,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s4",
+      "query": "How is the novelty of an AI-generated research hypothesis evaluated?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.8627089570214734,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s5",
+      "query": "Does hybrid lexical-plus-dense retrieval improve recall of contradicting scientific claims?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.7037281178154927,
+        "mrr": 1,
+        "nReturned": 4
+      },
+      "hybrid": {
+        "ndcg5": 0.9211214295914947,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s6",
+      "query": "Does chain-of-thought prompting improve accuracy on multi-step arithmetic?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.9363759000898353,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.902688816176951,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s7",
+      "query": "Does self-consistency (sampling multiple chains and majority-voting) raise reasoning accuracy?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 0.9574784666412695,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s8",
+      "query": "Does retrieval-augmented generation reduce factual hallucination?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.5244551632082282,
+        "mrr": 1,
+        "nReturned": 1
+      },
+      "hybrid": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s9",
+      "query": "How does embedding dimensionality affect retrieval accuracy?",
+      "nCandidates": 5,
+      "lexical": {
+        "ndcg5": 0.9941825709069458,
+        "mrr": 1,
+        "nReturned": 4
+      },
+      "hybrid": {
+        "ndcg5": 0.9340764506431116,
+        "mrr": 1,
+        "nReturned": 5
+      }
+    },
+    {
+      "id": "s10",
+      "query": "Do cross-encoder rerankers produce more relevant rankings than bi-encoders?",
+      "nCandidates": 5,
+      "lexical": {
+        "ndcg5": 0.7482484020681008,
+        "mrr": 0.5,
+        "nReturned": 4
+      },
+      "hybrid": {
+        "ndcg5": 0.9340764506431116,
+        "mrr": 1,
+        "nReturned": 4
+      }
+    },
+    {
+      "id": "s11",
+      "query": "Does practicing with a simulated AI conflict partner transfer to real unaided conflict performance?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.9896122751286358,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 0.9896122751286358,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s12",
+      "query": "Did the static handbook outperform the interactive AI coach on usability and empowerment?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.9607618369839247,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.9896122751286358,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s13",
+      "query": "How did experienced humanitarian negotiators react to occasional LLM hallucinations?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.929598662369832,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.9211214295914947,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s14",
+      "query": "Does query expansion improve recall for short, underspecified queries?",
+      "nCandidates": 5,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 4
+      },
+      "hybrid": {
+        "ndcg5": 0.9363759000898353,
+        "mrr": 1,
+        "nReturned": 5
+      }
+    },
+    {
+      "id": "s15",
+      "query": "Is structured feedback necessary for people to improve at negotiation?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.850155667654792,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s16",
+      "query": "Does an SGLT2 inhibitor reduce all-cause mortality in heart failure?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 0.8104630295247773,
+        "mrr": 1,
+        "nReturned": 7
+      },
+      "hybrid": {
+        "ndcg5": 0.9521647631373776,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s17",
+      "query": "Does mindfulness-based stress reduction lower clinical anxiety?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 0.9404742154697056,
+        "mrr": 1,
+        "nReturned": 3
+      },
+      "hybrid": {
+        "ndcg5": 0.9618670759464965,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s18",
+      "query": "Does large-scale reforestation provide durable long-term carbon sequestration?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.9617374216635709,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s19",
+      "query": "How frequent are CRISPR-Cas9 off-target edits in human cells?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.996450709094314,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s20",
+      "query": "Does raising the minimum wage reduce employment?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.902688816176951,
+        "mrr": 1,
+        "nReturned": 4
+      },
+      "hybrid": {
+        "ndcg5": 0.902688816176951,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s21",
+      "query": "Does sleep after learning improve memory consolidation?",
+      "nCandidates": 7,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 7
+      }
+    },
+    {
+      "id": "s22",
+      "query": "Does spaced repetition improve long-term retention compared with massed practice?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 0.9363759000898353,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 0.9363759000898353,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s23",
+      "query": "Have perovskite solar cells achieved long-term operational stability?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 0.8778437798371495,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s24",
+      "query": "Does high dietary fiber intake reduce colorectal cancer risk?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 5
+      },
+      "hybrid": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      }
+    },
+    {
+      "id": "s25",
+      "query": "Do larger touch targets reduce error rates on mobile interfaces?",
+      "nCandidates": 6,
+      "lexical": {
+        "ndcg5": 1,
+        "mrr": 1,
+        "nReturned": 6
+      },
+      "hybrid": {
+        "ndcg5": 0.7570296354547074,
+        "mrr": 0.5,
+        "nReturned": 6
+      }
+    }
+  ]
+}
