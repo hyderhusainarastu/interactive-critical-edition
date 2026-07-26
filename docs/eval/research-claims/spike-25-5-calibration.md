@@ -120,3 +120,8 @@ These sit cleanly inside the gap between the two clusters (0.243–0.659), so a 
 1. **The empirical-only (ratified, 42-pair) subset trips the heavy-overlap honesty guard on its own** — the ship decision rests on the pooled set (empirical + humanities + negatives), which is clean. This is expected behavior given the same-paper-unrelated-pair confound documented above, not a data-quality problem, but it means the retrieval-negatives file is load-bearing for this decision, not a nice-to-have.
 2. **Humanities/cross-domain numbers are PROVISIONAL** (owner has not ratified `relationshipPairs.humanities.json` or `retrievalNegatives.json`). The ship recommendation leans on the pooled set which includes these — worth re-running this spike after ratification if any label changes.
 3. Novelty percentiles are from 20 hand-written synthetic statements, not real corpus output — a sanity-check calibration, not a final one.
+
+## Moderator gate note (2026-07-26)
+
+1. The empirical-only overlap-guard trip is a gold-set composition artifact — its "unrelated" pairs are largely SAME-paper method-vs-finding pairs, while production Stage-1 only compares CROSS-work pairs, so production rejection behavior is better than that subset suggests. The pooled decision (threshold 0.35 on `text-embedding-3-small`) stands, with the humanities rows' provisional status noted.
+2. Novelty tiers 0.174/0.725 are provisional pseudo-corpus calibration; re-measurement is scheduled at the Phase 27 hypotheses canary.
