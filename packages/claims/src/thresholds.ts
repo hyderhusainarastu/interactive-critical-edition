@@ -1,17 +1,18 @@
 /**
  * Env-derived thresholds for retrieval and novelty scoring.
  *
- * `denseMin`/`denseStrong`/`NOVELTY_THRESHOLDS.high`/`.low` default to NaN
- * rather than a guessed number. NaN propagates through every comparison as
- * false, so a threshold nobody has calibrated yet fails LOUDLY
- * (`assertThresholdsSet` throws) instead of silently gating retrieval or
- * novelty tiering on an invented cutoff. Real numbers are set via env vars
- * once the Phase 25 calibration spike measures them against a held-out
- * sample — the same discipline the ScholarLens port's `bm25MinScore=0.25`/
- * `bm25TopK=5`/`locus` scores below already reflect: those are fixed because
- * they were already calibrated (against ScholarLens's own corpus for the
- * BM25 constants; by definition for the locus/section scores), not because
- * they're less important to get right.
+ * `denseMin`/`NOVELTY_THRESHOLDS.high`/`.low` now default to the Phase 25.5
+ * calibration spike's measured values (see below) rather than NaN — the
+ * spike that was supposed to set them has run. `denseStrong` remains NaN:
+ * the spike measured the "surface at all" cutoff (`denseMin`) but never
+ * measured a "strong enough to skip BM25 corroboration" cutoff, so it stays
+ * unset (and still fails loudly via `assertThresholdsSet`) rather than
+ * guessed. Real numbers are still env-overridable — the same discipline the
+ * ScholarLens port's `bm25MinScore=0.25`/`bm25TopK=5`/`locus` scores below
+ * already reflect: those are fixed because they were already calibrated
+ * (against ScholarLens's own corpus for the BM25 constants; by definition
+ * for the locus/section scores), not because they're less important to get
+ * right.
  */
 
 export interface RetrievalThresholds {
@@ -39,8 +40,14 @@ export interface RetrievalThresholds {
   calibratedFor: string;
 }
 
+// denseMin=0.35: docs/eval/research-claims/spike-25-5-calibration.md,
+// 2026-07-26, calibrated for text-embedding-3-small (pooled 100-pair set:
+// recall 0.968, rejection 0.946, F1 0.968 at this threshold — the best-F1
+// qualifying operating point of the sweep; text-embedding-3-large measured
+// at the same spike did not clear the promotion bar). Recalibrate if the
+// embedding model changes (guarded below by `calibratedFor`).
 export const RETRIEVAL_THRESHOLDS: RetrievalThresholds = {
-  denseMin: Number(process.env.CLAIMS_DENSE_MIN ?? NaN),
+  denseMin: Number(process.env.CLAIMS_DENSE_MIN ?? 0.35),
   denseStrong: Number(process.env.CLAIMS_DENSE_STRONG ?? NaN),
   bm25TopK: 5,
   bm25MinScore: 0.25,
@@ -57,9 +64,19 @@ export interface NoveltyThresholds {
   calibratedFor: string;
 }
 
+// low=0.174 (33rd pct)/high=0.725 (67th pct): docs/eval/research-claims/
+// spike-25-5-calibration.md, 2026-07-26, calibrated for
+// text-embedding-3-small. PROVISIONAL — measured from 20 hand-written
+// synthetic hypothesis statements (10 near-duplicate paraphrases, 10
+// genuinely novel, cosine distance to a 42-claim pseudo-corpus), not real
+// pipeline output; a sanity-check calibration, not a final one. Clean
+// bimodal separation observed (near-duplicate max 0.243, genuinely-novel min
+// 0.659), so these percentile cutoffs sit safely inside that gap.
+// Recalibration against real hypothesis output is due at the Phase 27
+// canary — do not treat these as load-bearing beyond that.
 export const NOVELTY_THRESHOLDS: NoveltyThresholds = {
-  high: Number(process.env.CLAIMS_NOVELTY_HIGH ?? NaN),
-  low: Number(process.env.CLAIMS_NOVELTY_LOW ?? NaN),
+  high: Number(process.env.CLAIMS_NOVELTY_HIGH ?? 0.725),
+  low: Number(process.env.CLAIMS_NOVELTY_LOW ?? 0.174),
   calibratedFor: process.env.RESEARCH_EMBEDDING_MODEL ?? "text-embedding-3-small",
 };
 

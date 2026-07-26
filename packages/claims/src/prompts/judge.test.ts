@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildJudgePrompt, validateJudgeResponse } from "./judge";
+import { buildJudgePrompt, buildJudgePromptVariant, validateJudgeResponse, JUDGE_PROMPT_VERSION } from "./judge";
 
 const CLAIM_A = { text: "ACE feedback produced greater deal prices (p<0.001).", workTitle: "ACE Paper" };
 const CLAIM_B = { text: "Dialogue metrics predicted outcomes with r=0.67.", workTitle: "Metrics Paper" };
@@ -24,6 +24,75 @@ describe("buildJudgePrompt — empirical branch", () => {
     const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
     expect(prompt).not.toContain("first determine whether the two claims share");
     expect(prompt).not.toContain('"mechanism"');
+  });
+
+  it("does NOT include the decision-tree preamble — the Phase 25.5b variant selection found few-shot alone scored higher on train (0.582 vs 0.540 for the full combination)", () => {
+    const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(prompt).not.toContain("DECISION TREE");
+    expect(prompt).not.toContain("ORTHOGONAL");
+  });
+
+  it("includes the anti-catch-all instruction for nuance", () => {
+    const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(prompt).toContain("SPECIFIC boundary condition");
+    expect(prompt).toContain("If you cannot name");
+  });
+
+  it("includes 4-6 boundary-case few-shot examples from domains outside the gold set", () => {
+    const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(prompt).toContain("FEW-SHOT EXAMPLES");
+    // Domains not present in relationshipPairs.empirical.json or .humanities.json.
+    expect(prompt).toContain("shift workers");
+    expect(prompt).toContain("Minimum-wage");
+    expect(prompt).not.toContain("Aristotle");
+    const exampleCount = (prompt.match(/→ `(nuance|contradiction|support|unrelated)`/g) ?? []).length;
+    expect(exampleCount).toBeGreaterThanOrEqual(4);
+    expect(exampleCount).toBeLessThanOrEqual(6);
+  });
+
+  it("keeps the HARD RULES and JSON-schema instructions unchanged from v1", () => {
+    const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(prompt).toContain("HARD RULES FOR THE EXPLANATION FIELD");
+    expect(prompt).toContain('Return ONLY valid JSON with these fields');
+    expect(prompt).toContain('"strongerEvidence": "paper_a", "paper_b", or "neither"');
+    expect(prompt).toContain("No preamble, no markdown fences.");
+  });
+});
+
+describe("buildJudgePromptVariant — the Phase 25.5b A/B harness's toggle surface", () => {
+  it("with includeDecisionTree:true, includes the decision-tree preamble before DECISION GUIDE", () => {
+    const prompt = buildJudgePromptVariant(
+      { claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" },
+      { includeDecisionTree: true, includeAntiCatchAll: true, includeFewShot: true },
+    );
+    expect(prompt).toContain("DECISION TREE");
+    expect(prompt).toContain("ORTHOGONAL");
+    expect(prompt).toContain("Step 1");
+    expect(prompt).toContain("Step 2");
+    expect(prompt).toContain("Step 3");
+    expect(prompt.indexOf("DECISION TREE")).toBeLessThan(prompt.indexOf("DECISION GUIDE"));
+  });
+
+  it("with includeFewShot:false, omits the few-shot examples block", () => {
+    const prompt = buildJudgePromptVariant(
+      { claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" },
+      { includeDecisionTree: true, includeAntiCatchAll: true, includeFewShot: false },
+    );
+    expect(prompt).not.toContain("FEW-SHOT EXAMPLES");
+  });
+
+  it("with every flag omitted, defaults to all three blocks on (variant C, the 'kitchen sink' combination the harness measured — NOT what buildJudgePrompt ships)", () => {
+    const allDefaults = buildJudgePromptVariant({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(allDefaults).toContain("DECISION TREE");
+    expect(allDefaults).toContain("FEW-SHOT EXAMPLES");
+    expect(allDefaults).toContain("SPECIFIC boundary condition");
+  });
+});
+
+describe("JUDGE_PROMPT_VERSION", () => {
+  it("is bumped to a v2 identifier reflecting the shipped few-shot/anti-catch-all iteration", () => {
+    expect(JUDGE_PROMPT_VERSION).not.toBe("v1");
+    expect(JUDGE_PROMPT_VERSION).toMatch(/v2/);
   });
 });
 
@@ -50,20 +119,32 @@ describe("buildJudgePrompt — engagement context", () => {
     expect(prompt).toContain("as shown in Smith (2020)");
   });
 
-  it("includes the none-detected framing that forbids assuming either author read the other", () => {
+  it("omits any block for kind=none_detected — the framing text was measured non-neutral (2/10 flips) and is dropped entirely", () => {
     const prompt = buildJudgePrompt({
       claimA: CLAIM_A,
       claimB: CLAIM_B,
       branch: "empirical",
       engagement: { kind: "none_detected" },
     });
-    expect(prompt).toContain("No citation link was found — do not assume either author read the other.");
+    expect(prompt).not.toContain("citation link was found");
+    expect(prompt).not.toContain("explicitly cites");
   });
 
   it("omits any engagement block when none is provided", () => {
     const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
     expect(prompt).not.toContain("citation link was found");
     expect(prompt).not.toContain("explicitly cites");
+  });
+
+  it("produces byte-identical output for omitted engagement and kind=none_detected", () => {
+    const omitted = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    const noneDetected = buildJudgePrompt({
+      claimA: CLAIM_A,
+      claimB: CLAIM_B,
+      branch: "empirical",
+      engagement: { kind: "none_detected" },
+    });
+    expect(noneDetected).toBe(omitted);
   });
 });
 

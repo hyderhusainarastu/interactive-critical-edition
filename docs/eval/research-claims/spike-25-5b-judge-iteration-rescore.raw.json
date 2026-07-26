@@ -1,0 +1,1536 @@
+{
+  "generatedAt": "2026-07-26T04:53:32.531Z",
+  "rungScores": {
+    "gpt-5.4-nano": {
+      "macroF1": 0.5632532218739116,
+      "kappa": 0.43875278396436523,
+      "contradictionRecall": 1,
+      "binaryTensionF1": 0.8235294117647058,
+      "perClass": [
+        {
+          "className": "contradiction",
+          "precision": 0.45,
+          "recall": 1,
+          "f1": 0.6206896551724138,
+          "support": 9
+        },
+        {
+          "className": "support",
+          "precision": 1,
+          "recall": 0.25,
+          "f1": 0.4,
+          "support": 12
+        },
+        {
+          "className": "nuance",
+          "precision": 0.5,
+          "recall": 0.4166666666666667,
+          "f1": 0.45454545454545453,
+          "support": 12
+        },
+        {
+          "className": "unrelated",
+          "precision": 0.7777777777777778,
+          "recall": 0.7777777777777778,
+          "f1": 0.7777777777777778,
+          "support": 9
+        }
+      ],
+      "testSplit": {
+        "n": 10,
+        "macroF1": 0.42500000000000004,
+        "kappa": 0.23076923076923078,
+        "contradictionRecall": 1,
+        "binaryTensionF1": 0.7272727272727273,
+        "perClass": [
+          {
+            "className": "contradiction",
+            "precision": 0.25,
+            "recall": 1,
+            "f1": 0.4,
+            "support": 1
+          },
+          {
+            "className": "support",
+            "precision": 1,
+            "recall": 0.3333333333333333,
+            "f1": 0.5,
+            "support": 3
+          },
+          {
+            "className": "nuance",
+            "precision": 0,
+            "recall": 0,
+            "f1": 0,
+            "support": 3
+          },
+          {
+            "className": "unrelated",
+            "precision": 1,
+            "recall": 0.6666666666666666,
+            "f1": 0.8,
+            "support": 3
+          }
+        ]
+      },
+      "perDomainMacroF1": {
+        "empirical": 0.44417104634495935,
+        "information_retrieval": 0.8333333333333333,
+        "llm_reasoning": 0.8666666666666666
+      },
+      "passedGates": false,
+      "nFailed": 0,
+      "failedIds": []
+    },
+    "claude-haiku-4-5": {
+      "macroF1": 0.6944444444444444,
+      "kappa": 0.5844748858447488,
+      "contradictionRecall": 0.6666666666666666,
+      "binaryTensionF1": 0.8750000000000001,
+      "perClass": [
+        {
+          "className": "contradiction",
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "f1": 0.6666666666666666,
+          "support": 9
+        },
+        {
+          "className": "support",
+          "precision": 0.8333333333333334,
+          "recall": 0.4166666666666667,
+          "f1": 0.5555555555555556,
+          "support": 12
+        },
+        {
+          "className": "nuance",
+          "precision": 0.5555555555555556,
+          "recall": 0.8333333333333334,
+          "f1": 0.6666666666666667,
+          "support": 12
+        },
+        {
+          "className": "unrelated",
+          "precision": 0.8888888888888888,
+          "recall": 0.8888888888888888,
+          "f1": 0.8888888888888888,
+          "support": 9
+        }
+      ],
+      "testSplit": {
+        "n": 10,
+        "macroF1": 0.5,
+        "kappa": 0.4444444444444444,
+        "contradictionRecall": 0,
+        "binaryTensionF1": 0.8,
+        "perClass": [
+          {
+            "className": "contradiction",
+            "precision": 0,
+            "recall": 0,
+            "f1": 0,
+            "support": 1
+          },
+          {
+            "className": "support",
+            "precision": 1,
+            "recall": 0.3333333333333333,
+            "f1": 0.5,
+            "support": 3
+          },
+          {
+            "className": "nuance",
+            "precision": 0.4,
+            "recall": 0.6666666666666666,
+            "f1": 0.5,
+            "support": 3
+          },
+          {
+            "className": "unrelated",
+            "precision": 1,
+            "recall": 1,
+            "f1": 1,
+            "support": 3
+          }
+        ]
+      },
+      "perDomainMacroF1": {
+        "empirical": 0.6276983885679538,
+        "information_retrieval": 1,
+        "llm_reasoning": 0.5333333333333333
+      },
+      "passedGates": false,
+      "nFailed": 0,
+      "failedIds": []
+    }
+  },
+  "cheapestPassingRung": null,
+  "humanitiesBaseline": null,
+  "cost": {
+    "totalUsd": 0.1846775,
+    "ledger": [
+      {
+        "stage": "corrected-final-scoring-42",
+        "rung": "gpt-5.4-nano",
+        "costUsd": 0.023362499999999994,
+        "calls": 42
+      },
+      {
+        "stage": "corrected-final-scoring-42",
+        "rung": "claude-haiku-4-5",
+        "costUsd": 0.16131500000000001,
+        "calls": 42
+      }
+    ]
+  },
+  "rawRecordsByRung": {
+    "gpt-5.4-nano": [
+      {
+        "id": "eval_001",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System reports that targeted turn-by-turn feedback improved negotiation performance between trials (t=2.97, p=0.003, d=0.38), whereas ACE: A LLM-based Negotiation Coaching System states that zero-shot GPT-4 feedback produced no significant improvement and was not different from the no-feedback control. Under the same coaching-feedback comparison framework, these two claims are about mutually exclusive outcomes for essentially the feedback interventions (effective targeted feedback vs. ineffective zero-shot GPT-4), so the direction of effects cannot both be correct if they are being asserted over the same feedback type/setting. The contradiction lies in whether the (zero-shot GPT-4) condition truly shows no effect or whether feedback-guided coaching does show the reported statistically significant improvement.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Report the exact experimental condition mapping (what counts as “targeted turn-by-turn feedback” vs the “zero-shot GPT-4” variant) including the same outcome measure, participant set, and statistical comparisons for each condition.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1505,
+        "completionTokens": 247,
+        "costUsd": 0.00060975
+      },
+      {
+        "id": "eval_002",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? claims that AI negotiation coaching is most effective for psychological preparation outcomes (e.g., fear reduction and increased willingness to initiate) rather than tactical skill improvement. ACE: A LLM-based Negotiation Coaching System reports significant objective improvements in negotiation deal outcomes (specifically lower prices) with transfer to a novel scenario, which directly indicates tactical/behavioral skill transfer rather than only psychological gains. These assertions are incompatible about whether coaching effects are predominantly tactical-performance versus psychological-preparation, and no named boundary condition reconciles “no tactical improvement” with “objective deal outcome improvement.”",
+          "strongerEvidence": "paper_b",
+          "resolution": "Provide a direct side-by-side evaluation within the same coaching system and participant setup that measures both psychological outcomes (fear/willingness) and tactical skill outcomes (e.g., tactics and deal outcomes like price) to test whether fear reduction mediates or co-occurs with tactical transfer.",
+          "mechanism": null
+        },
+        "promptTokens": 1491,
+        "completionTokens": 217,
+        "costUsd": 0.00056945
+      },
+      {
+        "id": "eval_003",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution asserts that rehearsal participants showed a 67% reduction in competitive strategies and a doubling of cooperative strategies in a real unaided conflict, indicating improved conflict-behavior outcomes. In contrast, Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that simulated conflict practice does not significantly improve strategy recognition or recall versus a lecture control, directly contradicting the implied effectiveness of the same training on at least related strategy-related outcomes. The pair is incompatible because both outcomes are measured as effects of the same rehearsal training relative to a lecture control/unaided conflict benchmark, leaving no named boundary condition that could make both true simultaneously.",
+          "strongerEvidence": "neither",
+          "resolution": "Report the exact outcome measures, statistical significance thresholds, and the mapping between “competitive/cooperative strategy use in real unaided conflict” and “strategy recognition/recall” (including whether they are assessed in the same participants and at the same time points) to determine whether these are different constructs or whether one set of results is a measurement/analysis discrepancy.",
+          "mechanism": null
+        },
+        "promptTokens": 1500,
+        "completionTokens": 245,
+        "costUsd": 0.00060625
+      },
+      {
+        "id": "eval_004",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Both Rehearsal: Simulating Conflict to Teach Conflict Resolution and ACE: A LLM-based Negotiation Coaching System assert that LLM-based negotiation/conflict interaction is characterized by excessive agreeableness: the rehearsal setup yields responses that are “too agreeable” and “quickly capitulate,” while the ACE system yields agents that are “not hardball bargainers” and respond “passively” rather than driving terms. Since both describe the same directional behavioral failure mode (capitulation/passivity to the user’s stance) for negotiation-oriented LLM agents, they reinforce each other rather than disagree.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a head-to-head evaluation of both systems on the same standardized negotiation/conflict scenarios with paired scoring of (i) degree of concession, (ii) assertiveness/hardball behaviors, and (iii) time-to-capitulation to directly compare whether the magnitude of passivity matches.",
+          "mechanism": null
+        },
+        "promptTokens": 1500,
+        "completionTokens": 215,
+        "costUsd": 0.00056875
+      },
+      {
+        "id": "eval_005",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System specifies how its dataset was collected—50 MBA students conducting used car negotiations, transcribed with OpenAI Whisper and manually edited—rather than reporting an outcome like fear reduction. Does AI Coaching Prepare us for Workplace Negotiations? reports a largest reduction in negotiation-related fear among all tested conditions for its theory-driven AI coach. These claims can both be true because one concerns dataset creation from a particular population/task, while the other concerns an experimental coaching effect on a specific psychological outcome under tested conditions.",
+          "strongerEvidence": "neither",
+          "resolution": "Report, in ACE: A LLM-based Negotiation Coaching System, the negotiation-related fear outcomes (with the exact conditions tested) and align the coaching setup/population so the fear-reduction finding can be compared directly to Does AI Coaching Prepare us for Workplace Negotiations?.",
+          "mechanism": null
+        },
+        "promptTokens": 1479,
+        "completionTokens": 199,
+        "costUsd": 0.00054455
+      },
+      {
+        "id": "eval_006",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations reports that frontline negotiators judged process-oriented AI tools (surfacing options and risks) to be more effective than tools that give direct strategy recommendations. ACE: A LLM-based Negotiation Coaching System reports that zero-shot GPT-4 prompting–based feedback improved LLM negotiator performance in simulated bargaining but did not improve human negotiator performance. Under the same general “AI feedback/tooling for negotiation” construct, these claims predict opposite effectiveness for human negotiators (A: process-oriented tools improve effectiveness; B: GPT-4 feedback fails to improve human negotiators).",
+          "strongerEvidence": "neither",
+          "resolution": "Report matched comparisons on the same human-participant setting with the same evaluation outcome (e.g., negotiation success/utility) and explicitly separate process-oriented option/risk surfacing from direct strategy recommendation/zero-shot feedback so the human-effectiveness claims can be tested directly.",
+          "mechanism": null
+        },
+        "promptTokens": 1523,
+        "completionTokens": 227,
+        "costUsd": 0.0005883500000000001
+      },
+      {
+        "id": "eval_007",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations reports that experienced frontline humanitarian negotiators tolerate occasional LLM hallucinations because their domain expertise lets them manage AI errors, whereas ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations claims novice negotiators face greater risk from hallucinations due to lacking expertise to detect and counter errors, increasing over-reliance. These can both be true as a boundary condition on negotiator expertise level (experienced vs. novice), with opposite risk/tolerance predictions applying to different populations.",
+          "strongerEvidence": "neither",
+          "resolution": "Provide empirical results stratified by negotiator experience (experienced vs. novice) showing hallucination detection/impact and quantify over-reliance rates in each subgroup under the same LLM task conditions.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1565,
+        "completionTokens": 202,
+        "costUsd": 0.0005655
+      },
+      {
+        "id": "eval_008",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills reports a statistical finding that making a high initial offer is positively correlated with negotiation earnings (r=0.47, p<0.001). ACE: A LLM-based Negotiation Coaching System claims its coaching/annotation scheme works by instructing users to state their opening price first to anchor the negotiation in a favorable position, which implies an effect tied to opening-price anchoring rather than the specific “high initial offer → higher earnings” correlation. These are incompatible as stated because one is a quantified correlation about initial-offer magnitude versus earnings, while the other centers on a different mechanism/effect definition (first-stated opening price/anchoring) without providing the same quantified relationship to earnings under the same construct definitions.",
+          "strongerEvidence": "paper_a",
+          "resolution": "To resolve, both works must operationalize “high initial offer” and the anchoring “opening price first” condition identically and report a common outcome (earnings) so the correlation (e.g., r=0.47, p<0.001) can be directly compared to ACE’s measured earnings effect.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 1493,
+        "completionTokens": 263,
+        "costUsd": 0.00062735
+      },
+      {
+        "id": "eval_009",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Trucey’s responses being 168% less verbose than ChatGPT’s and scoring higher on readability (Flesch-Kincaid 80.00 vs 68.46) claims that this delivery style is more accessible. In contrast, participants who were under preparation stress rejected the AI’s incremental, conversational delivery as imposing excessive cognitive load and preferred immediately comprehensive content. Under the same preparation-for-negotiation framing, one claim indicates the incremental-style output improves readability/accessibility, while the other indicates it worsens perceived cognitive burden under stress, predicting opposite user responses to the same interaction format.",
+          "strongerEvidence": "neither",
+          "resolution": "Use the same participant population and stress condition and directly measure both readability (e.g., Flesch-Kincaid) and cognitive-load ratings/acceptance for incremental versus comprehensive delivery, reporting whether higher readability translates into reduced perceived cognitive load.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 1494,
+        "completionTokens": 209,
+        "costUsd": 0.0005600500000000001
+      },
+      {
+        "id": "eval_010",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution makes a pipeline-specific claim that an IRP prompting setup classifies and scores conflict-resolution utterances using an 8-strategy Interests-Rights-Power taxonomy. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills instead reports a statistical finding that making a high initial offer correlates with negotiation earnings (r=0.47, p<0.001). Because one concerns an utterance-classification/scoring method and the other concerns an earnings correlation with a negotiation tactic, they address different constructs and cannot be in direct support or contradiction.",
+          "strongerEvidence": "neither",
+          "resolution": "Provide a direct comparison tying the Interests-Rights-Power IRP scoring outputs to the specific earnings outcome and tactic (e.g., testing whether high-initial-offer students score differently under the 8-strategy taxonomy).",
+          "mechanism": null
+        },
+        "promptTokens": 1507,
+        "completionTokens": 203,
+        "costUsd": 0.0005551500000000001
+      },
+      {
+        "id": "eval_011",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports the largest reduction in negotiation-related fear for the theory-driven AI coach (Trucey) versus generic AI and a static handbook (e.g., Cohen’s d=-0.27). Does AI Coaching Prepare us for Workplace Negotiations? instead claims the static negotiation handbook significantly outperformed both AI conditions on psychological empowerment (PEU) with a medium effect size relative to Trucey (e.g., d=-0.40, p<0.05), which is an opposite directional conclusion about which intervention is superior in the key outcome(s) under comparison. Because they both pit Trucey and the static handbook against the other AI conditions but reach conflicting superiority claims, the two findings cannot both be true as stated for the same comparative framing.",
+          "strongerEvidence": "neither",
+          "resolution": "Report the exact outcome constructs and the specific pairwise comparisons (fear vs PEU, and whether d=-0.27 and d=-0.40 are computed for the same intervention contrast and time window) so the results can be mapped onto a common set of dependent variables and effect definitions.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 1513,
+        "completionTokens": 257,
+        "costUsd": 0.00062385
+      },
+      {
+        "id": "eval_012",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports a statistically significant superiority of the theory-driven AI coach over generic AI for willingness to initiate negotiations (beta=12.65, p<0.05 in regression). Does AI Coaching Prepare us for Workplace Negotiations? instead states that all three coaching interventions yielded equivalent improvements with no significant differences on the Kruskal–Wallis test. These assertions are incompatible under the same outcome (willingness to initiate negotiations) because one finds a clear between-condition effect while the other finds none.",
+          "strongerEvidence": "neither",
+          "resolution": "Report the full set of condition means/effect sizes and sample sizes for all three interventions and use a common analysis framework (e.g., match regression vs. Kruskal–Wallis or provide comparable omnibus and pairwise tests) to determine whether the apparent discrepancy is due to differing definitions or subgroup/threshold analyses.",
+          "mechanism": null
+        },
+        "promptTokens": 1497,
+        "completionTokens": 209,
+        "costUsd": 0.00056065
+      },
+      {
+        "id": "eval_013",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated conflict practice with Rehearsal reduced participants' conflict self-efficacy after training, attributing the change to gaining a realistic understanding of how difficult conflicts are. Does AI Coaching Prepare us for Workplace Negotiations? instead reports that a theory-driven AI coach achieved the largest reduction in negotiation-related fear, implying decreased anxiety/psychological barriers after coaching. These outcomes are incompatible under a common training-to-psychological-barriers framing because one asserts a reduction in self-efficacy while the other asserts a reduction in fear, with no stated boundary condition aligning the constructs or directions.",
+          "strongerEvidence": "neither",
+          "resolution": "Measure the same psychological construct(s) (e.g., conflict self-efficacy vs negotiation fear) with identical scales and timepoints across both interventions, so direction and construct alignment can be directly compared.",
+          "mechanism": null
+        },
+        "promptTokens": 1495,
+        "completionTokens": 208,
+        "costUsd": 0.000559
+      },
+      {
+        "id": "eval_014",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "methodological",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that theory-grounded LLM prompting (IRP) yields significantly better realistic conflict simulations than standard instruction-following LLMs, i.e., an outcome tied to simulation realism/roleplay generation. Does AI Coaching Prepare us for Workplace Negotiations? claims a theory-driven AI coach (based on Brett and Thompson’s negotiation framework) produces significantly greater fear reduction than a generic ChatGPT condition using the same underlying model, i.e., an outcome tied to participant affect. Both can be true because they operationalize “outperforms” on different dependent variables (simulation realism vs. fear reduction) and compare different intervention modalities (IRP prompting vs. an AI coaching/dialogue experience), so the boundary condition is the specific measured endpoint and evaluation context.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a single experiment that uses the same coaching/simulation format and compares (1) theory-grounded IRP prompting and (2) the generic ChatGPT condition while measuring both simulation realism and fear reduction under identical participant and task conditions.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 1497,
+        "completionTokens": 247,
+        "costUsd": 0.00060815
+      },
+      {
+        "id": "eval_015",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System reports high error-detection accuracy (>0.90 across categories) but lower F1 for qualitative categories like strategic closing (F1=0.54), which is an evaluation of classification performance on specific label categories. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills instead reports that automatic metrics from dialogue annotations significantly correlated with negotiation outcomes (r=0.47 for initial claim and r=0.59 for agreement time), which is about predictive correlation with behavioral outcomes. These claims concern different target variables and metrics (classification F1/accuracy vs. outcome correlations), with no stated logical incompatibility or shared construct that would let one directly confirm or refute the other.",
+          "strongerEvidence": "neither",
+          "resolution": "Test whether the error categories from ACE (especially qualitative ones like strategic closing) also derive dialogue-based metrics that show significant correlations with the same outcomes (initial claim and agreement time) in the other work’s annotation framework.",
+          "mechanism": null
+        },
+        "promptTokens": 1515,
+        "completionTokens": 228,
+        "costUsd": 0.000588
+      },
+      {
+        "id": "eval_016",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? states a study-design detail: 267 Prolific participants randomly assigned to three conditions in a 2:1:1 ratio. Rehearsal: Simulating Conflict to Teach Conflict Resolution makes a theoretical/methodological assertion about standard instruction-following LLMs being too agreeable to function as effective conflict practice partners without theory grounding. These claims address different constructs (experimental recruitment/assignment vs. suitability of LLM behavior for conflict practice) without a shared outcome or condition to compare.",
+          "strongerEvidence": "neither",
+          "resolution": "Provide the specific common claim they are both making (e.g., whether the experiment outcome supports or contradicts the “too agreeable without theory grounding” limitation) and align both on the same population, partner type, and conflict/negotiation outcome measure.",
+          "mechanism": null
+        },
+        "promptTokens": 1492,
+        "completionTokens": 195,
+        "costUsd": 0.00054215
+      },
+      {
+        "id": "eval_017",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System asserts that improvement in negotiation tactics requires structured feedback and instruction beyond what is learned from bargaining experience. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills claims that autonomous agent systems improve negotiation ability even without feedback, implying that structured instruction is not necessary. Under the same general construct of learning negotiation tactics, these position requirements for feedback as opposing—one says it is required, the other says improvement occurs without it.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a head-to-head experiment that orthogonally varies (i) presence vs. absence of agent-delivered feedback/instruction and (ii) exposure to bargaining experience alone, then compare negotiation improvement across conditions to test whether feedback is necessary.",
+          "mechanism": null
+        },
+        "promptTokens": 1495,
+        "completionTokens": 181,
+        "costUsd": 0.00052525
+      },
+      {
+        "id": "eval_018",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations argues that existing negotiation AI tools mainly support outcomes/automation and neglect process-oriented support for frontline negotiators, focusing on what kinds of AI assistance are missing in humanitarian settings. ACE: A LLM-based Negotiation Coaching System instead claims its built-in annotation scheme and feedback method are grounded in American-style negotiation conventions and may not generalize cross-culturally. These address different aspects (process-support design vs. cultural transferability of an annotation/feedback scheme), so they do not directly conflict about the same mechanism or measurement target.",
+          "strongerEvidence": "neither",
+          "resolution": "To resolve the relationship, both works would need to make commensurate claims about the same AI feature set (e.g., process-oriented feedback) and test it across cultures using the same outcome/process metrics. ",
+          "mechanism": null
+        },
+        "promptTokens": 1521,
+        "completionTokens": 204,
+        "costUsd": 0.0005592
+      },
+      {
+        "id": "eval_019",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims specific model usage (GPT-4 for the negotiation chat agent and GPT-4o for feedback generation) selected for speed after expert evaluation, which is about system design choices rather than an effect on downstream conflict outcomes. Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that participants improved real unaided conflict-resolution performance after training, which is an outcomes/effect claim. Because one statement is about AI model selection/feedback generation and the other is about behavioral training effects, they do not address the same construct, measurement, or mechanism and cannot be compared as supporting or contradicting evidence.",
+          "strongerEvidence": "neither",
+          "resolution": "Evaluate both works under the same outcome: test whether using ACE’s GPT-4/GPT-4o coaching (and its feedback method) produces the same kind of unaided real-conflict improvement reported for Rehearsal, with matching performance measures and conditions.",
+          "mechanism": null
+        },
+        "promptTokens": 1490,
+        "completionTokens": 219,
+        "costUsd": 0.00057175
+      },
+      {
+        "id": "eval_020",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims that interactive AI coaching produced significantly better outcomes than non-interactive/static resources, citing improved results over non-interactive baselines. Does AI Coaching Prepare us for Workplace Negotiations? reports the opposite direction for user-facing effects, stating participants preferred the static handbook and that it outperformed both AI conditions on usability and psychological empowerment.",
+          "strongerEvidence": "neither",
+          "resolution": "Report a common outcome set (e.g., objective negotiation performance plus usability/empowerment) under the same participant sample and evaluation design, so interactive versus static effects can be directly compared.",
+          "mechanism": null
+        },
+        "promptTokens": 1481,
+        "completionTokens": 151,
+        "costUsd": 0.00048495
+      },
+      {
+        "id": "eval_021",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated practice with Rehearsal significantly improved cooperative strategy use versus a lecture-only control, whereas Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that passive reading/watching produces skills orthogonal to those from active simulated practice. These can both be true if the “orthogonal” skills from passive training do not manifest as improved cooperative strategy use on the specific outcome used in the comparison (cooperative strategy use vs lecture-only), rather than implying passive training has zero effects on any related abilities.",
+          "strongerEvidence": "neither",
+          "resolution": "Use the same outcome measures (including cooperative strategy use) and the same active-vs-passive contrasts in a single study design to test whether passive training improves distinct, orthogonal skill dimensions while leaving cooperative strategy use unchanged.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1490,
+        "completionTokens": 198,
+        "costUsd": 0.0005455
+      },
+      {
+        "id": "eval_022",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that the static handbook outperformed both AI conditions on usability (UMUX) and psychological empowerment in the Trucey study, whereas ACE: A LLM-based Negotiation Coaching System claims that ACE’s interactive LLM coaching significantly outperformed both no-feedback and alternative-feedback conditions on objective negotiation outcomes. Under the same general evaluation frame of “outperformed” by the coaching approach, the first work’s superiority is confined to usability/empowerment (with a static handbook beating AI on those metrics), while the second asserts interactive AI beats alternatives on objective negotiation outcomes; thus the direction of “best performance” differs across metrics/conditions rather than both being compatible for a single outcome basis.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a head-to-head study that compares the static handbook, ACE’s interactive coaching, and both baseline feedback types using the same outcome set (UMUX, psychological empowerment, and objective negotiation outcome measures) and report whether the interactive system also wins on usability/empowerment or the handbook wins on objective outcomes.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1480,
+        "completionTokens": 249,
+        "costUsd": 0.00060725
+      },
+      {
+        "id": "eval_023",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that hallucinations in its conflict simulations were mitigated but not eliminated, with simulations sometimes feeling overly scripted. ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations instead states that frontline negotiators tolerated occasional LLM hallucinations under time pressure by triangulating and verifying outputs using expertise. These claims diverge on the practical consequence of hallucinations (persistent residual problem within simulations vs. effective tolerance/mitigation in live negotiation), and the direction of impact cannot be reconciled without changing what counts as “mitigated” or “tolerated.”",
+          "strongerEvidence": "neither",
+          "resolution": "Run a directly comparable evaluation where both settings use the same definition of hallucination and the same metric for whether residual hallucinations degrade usability/outcomes versus being tolerated via verification under time pressure.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1532,
+        "completionTokens": 211,
+        "costUsd": 0.00057015
+      },
+      {
+        "id": "eval_024",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports a user study of 40 participants in a between-subjects design who engaged in an actual conflict after training, focusing on training/conflict-simulation participation. ACE: A LLM-based Negotiation Coaching System reports a significant medium effect (d=0.38) on objective deal prices, which is an effectiveness outcome for deal economics. Because one claim specifies study design and conflict-rehearsal training context while the other specifies a different intervention/metric (objective deal prices) with no overlapping construct or outcome, they do not directly support or contradict each other.",
+          "strongerEvidence": "neither",
+          "resolution": "Report whether Rehearsal: Simulating Conflict to Teach Conflict Resolution also measured objective deal prices (and with what effect size/d) under the same or comparable negotiation-coaching condition, then compare to ACE’s d=0.38 on deal prices.",
+          "mechanism": null
+        },
+        "promptTokens": 1499,
+        "completionTokens": 213,
+        "costUsd": 0.00056605
+      },
+      {
+        "id": "eval_025",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that a simulated AI rehearsal leads to measurable transfer, with participants improving in an actual unaided conflict after training. Does AI Coaching Prepare us for Workplace Negotiations? instead reports that frontline negotiators rejected AI-mediated rehearsal as inadequate because simulations cannot reproduce the unpredictability and embodied pressure of real negotiations. These claims directly oppose each other about whether simulation-based AI practice improves performance in real, unaided conflict/negotiation settings, and neither offers a boundary condition (e.g., task type, participant group, or outcome metric) that would make both true.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a single study with both populations and the same simulation protocol, using the same outcome metric in an unaided real negotiation; report whether any transfer effect exists and whether participants still rate the simulation as “inadequate.”",
+          "mechanism": null
+        },
+        "promptTokens": 1493,
+        "completionTokens": 205,
+        "costUsd": 0.00055485
+      },
+      {
+        "id": "eval_026",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? claims that cultural background significantly moderates AI coaching effectiveness, implying negotiation coaching can work differently across participant cultural backgrounds. ACE: A LLM-based Negotiation Coaching System claims its coaching scheme is grounded in American-style negotiation conventions and may be less useful in other cultural contexts, which is a specific mechanism of that moderation (convention mismatch) rather than a direct denial that effects vary by culture. These can both be true if the boundary condition is cultural fit between participant context and the coaching system’s convention assumptions (i.e., coaching effectiveness varies by cultural background because the system encodes American conventions).",
+          "strongerEvidence": "neither",
+          "resolution": "Test ACE across participant cultural backgrounds while experimentally varying the coaching convention set (American vs culturally adapted) and measure whether the coaching benefit changes with background-to-convention alignment.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1474,
+        "completionTokens": 199,
+        "costUsd": 0.0005435500000000001
+      },
+      {
+        "id": "eval_027",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills asserts that post-negotiation feedback is crucial because it links performance to fundamental negotiation principles, implying that feedback-driven learning is central to improving negotiation skill. Rehearsal: Simulating Conflict to Teach Conflict Resolution instead claims that simulated practice builds application skills, while passive review yields only orthogonal recognition/recall skills—implying that feedback/review after exposure is not the key driver of application skill. Under the same learning target (skills), these outcomes are incompatible because one work elevates post-negotiation feedback as crucial for learning the principles underpinning performance, while the other demotes passive review to a non-skill outcome relative to rehearsal.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a study that directly compares (i) post-negotiation automated feedback tied to negotiation principles versus (ii) rehearsal/simulation with no such post-feedback, measuring the same downstream outcomes for application skill and principle-based performance to determine which driver predominates.",
+          "mechanism": null
+        },
+        "promptTokens": 1500,
+        "completionTokens": 234,
+        "costUsd": 0.0005925
+      },
+      {
+        "id": "eval_028",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims that its dynamic prompting with an adjustable subjective limit helps the negotiation agent avoid being a pushover and generate robust counteroffers, which is an internal design/agent-behavior mechanism. Does AI Coaching Prepare us for Workplace Negotiations? instead claims that cultural background moderated the effectiveness of AI negotiation coaching across participant groups, focusing on a participant-level boundary condition for coaching outcomes. These address different constructs (prompting control vs. cross-cultural moderation of coaching effectiveness), so they do not directly agree or conflict.",
+          "strongerEvidence": "neither",
+          "resolution": "Test both effects in the same experimental setup by manipulating (i) the presence of dynamic prompting/adjustable subjective limits and (ii) cultural background groups, then report whether the prompting mechanism interacts with culture in the measured negotiation outcomes.",
+          "mechanism": null
+        },
+        "promptTokens": 1473,
+        "completionTokens": 192,
+        "costUsd": 0.0005346
+      },
+      {
+        "id": "eval_029",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System asserts that structured feedback is necessary for learning negotiation because people do not improve from bargaining experience alone without instruction. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills instead claims that autonomous agent systems improve negotiation ability even when no feedback is provided to the learner. Under the same learning-without-instruction condition, these two assertions make incompatible predictions about whether experience alone can drive improvement.",
+          "strongerEvidence": "neither",
+          "resolution": "Both works would need to specify and experimentally match the exact no-feedback condition (e.g., whether the “autonomous agent” still provides any implicit guidance like prompts, scoring, or scaffolding) and report whether improvements occur strictly from experience versus any form of feedback or instructional interaction.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1483,
+        "completionTokens": 184,
+        "costUsd": 0.0005266
+      },
+      {
+        "id": "eval_030",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports Trucey reduced negotiation fear most across conditions but gave only a negligible improvement in organizational self-efficacy (delta=+0.05). Rehearsal: Simulating Conflict to Teach Conflict Resolution instead states that simulated conflict practice with Rehearsal reduced participants' self-efficacy after training. These two claims are incompatible about the direction of change in self-efficacy following the respective training methods (small positive/negligible improvement vs a reduction).",
+          "strongerEvidence": "neither",
+          "resolution": "Compare both studies on the same self-efficacy construct, timing (immediately post-training vs later), and intervention specifics; a meta-analytic contrast or direct replication with matched outcome measures would determine whether any boundary condition exists.",
+          "mechanism": null
+        },
+        "promptTokens": 1498,
+        "completionTokens": 188,
+        "costUsd": 0.0005346
+      },
+      {
+        "id": "ir_001",
+        "domain": "information_retrieval",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Hybrid Sparse-Dense Retrieval for Open-Domain QA reports that adding BM25 to dense retrieval improves Recall@100 from 0.71 to 0.88 versus dense-only retrieval on the benchmark. When Dense Retrieval Misses: A Lexical Safety Net similarly claims that a lexical BM25 pass recovers relevant passages that the embedding model ranks far apart, improving recall (specifically on out-of-vocabulary queries). Both works assert the same directional effect of incorporating BM25 as a lexical complement to dense retrieval to raise recall, differing mainly in the evaluation scenario emphasized (overall benchmark vs. OOV/miss cases).",
+          "strongerEvidence": "neither",
+          "resolution": "Compare both systems on the same dataset and retrieval protocol, including dense-only vs. dense+BM25, and report whether the gains concentrate on OOV/miss cases while matching recall metrics (e.g., Recall@100).",
+          "mechanism": null
+        },
+        "promptTokens": 1498,
+        "completionTokens": 209,
+        "costUsd": 0.0005608500000000001
+      },
+      {
+        "id": "ir_002",
+        "domain": "information_retrieval",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Scaling Embedding Dimensions for Retrieval reports monotonically increasing retrieval accuracy as embedding dimensionality rises, with the 1536-dim model best “across all tested corpora.” Diminishing Returns in High-Dimensional Embeddings instead claims accuracy plateaus beyond 768 dimensions and even degrades at very high dimensions because extra components add noise rather than signal. These two findings cannot both hold under the same evaluation setup and dimension range on the same retrieval task, since one asserts consistent improvement up to 1536 while the other predicts plateauing/degradation past 768.",
+          "strongerEvidence": "neither",
+          "resolution": "Report a head-to-head evaluation on the same corpora, retrieval pipeline, and metrics while sweeping dimensions (e.g., 256–1536 in the same increments) to test whether performance is monotonic or peaks/declines beyond 768.",
+          "mechanism": null
+        },
+        "promptTokens": 1471,
+        "completionTokens": 201,
+        "costUsd": 0.0005454500000000001
+      },
+      {
+        "id": "ir_003",
+        "domain": "information_retrieval",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Reranking for Precision in Two-Stage Retrieval reports an accuracy benefit—cross-encoder reranking of the top-100 candidates “substantially improved Precision@10 over the first-stage retriever.” The Latency Cost of Neural Reranking reports a system-level tradeoff—cross-encoder reranking adds 400–600ms latency per query and becomes impractical for sub-second interactive search without aggressive pruning. These are compatible because one is about retrieval quality under reranking (using top-100 candidates), while the other is about serving-time constraints and whether the same reranking can be deployed under interactive latency budgets; the boundary condition is the latency requirement/candidate-pruning regime. ",
+          "strongerEvidence": "neither",
+          "resolution": "Run the same two-stage pipeline with cross-encoder reranking while explicitly matching the latency budget (including the exact pruning level) and report both Precision@10 and end-to-end latency for the resulting candidate set.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1488,
+        "completionTokens": 219,
+        "costUsd": 0.00057135
+      },
+      {
+        "id": "ir_004",
+        "domain": "information_retrieval",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Scaling Embedding Dimensions for Retrieval discusses a preprocessing step—deduplicating the corpus with MinHash LSH at a Jaccard threshold of 0.8 before indexing—whereas Reranking for Precision in Two-Stage Retrieval concerns a different stage of the pipeline and outcome: cross-encoder reranking’s effect on Precision@10 over the first-stage retriever. Since one claim is about dedup/indexing conditions and the other about reranking performance, they do not directly make compatible or incompatible assertions about the same measurable phenomenon.",
+          "strongerEvidence": "neither",
+          "resolution": "Provide a study or ablation that evaluates how MinHash-LSH deduplication at Jaccard=0.8 changes the Precision@10 gains from cross-encoder reranking, tying both claims to the same metric and pipeline stage.",
+          "mechanism": null
+        },
+        "promptTokens": 1466,
+        "completionTokens": 192,
+        "costUsd": 0.0005332000000000001
+      },
+      {
+        "id": "ir_005",
+        "domain": "information_retrieval",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Generative Query Expansion for Sparse Queries reports that generating paraphrases improves Recall@20 for short, underspecified queries by 6 points, while Revisiting Pseudo-Relevance Feedback reports that pseudo-relevance feedback raises recall most for short queries that lack sufficient terms to match relevant documents directly. Both describe recall gains being largest for short/underspecified queries, but they differ on the mechanism (paraphrase generation vs. pseudo-relevance feedback) and on the specific evaluation framing (Recall@20 improvement magnitude vs. relative recall lift without an explicit Recall@20 figure).",
+          "strongerEvidence": "neither",
+          "resolution": "Provide a head-to-head comparison on the same benchmark with the same retrieval metric (e.g., Recall@20) and the same definition of “underspecified/short queries,” ideally reporting both methods’ gains on identical query subsets.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1460,
+        "completionTokens": 199,
+        "costUsd": 0.00054075
+      },
+      {
+        "id": "ir_006",
+        "domain": "information_retrieval",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Closing the Bi-Encoder Gap with In-Domain Training asserts that in-domain fine-tuned bi-encoders “matched cross-encoder relevance” while being about an order of magnitude faster. Why Cross-Encoders Still Win on Relevance asserts that cross-encoders “consistently outperformed bi-encoders on relevance regardless of fine-tuning,” implying no fine-tuning condition can make bi-encoders match cross-encoders. Under the same premise (fine-tuning bi-encoders in-domain), the relevance outcomes cannot both be true.",
+          "strongerEvidence": "neither",
+          "resolution": "A head-to-head comparison using the same dataset(s), evaluation metric(s) for relevance, and the same fine-tuning regimen should report whether bi-encoder relevance truly matches cross-encoder relevance under identical conditions.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 1493,
+        "completionTokens": 197,
+        "costUsd": 0.0005448499999999999
+      },
+      {
+        "id": "llm_001",
+        "domain": "llm_reasoning",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Chain-of-thought prompting improved accuracy on multi-step arithmetic and symbolic reasoning by a large margin, but When Chain-of-Thought Does Not Help reports negligible benefit (and occasional harm) specifically on single-step tasks. These can both be true if the effect is boundary-conditioned on task complexity/number of reasoning steps, with chain-of-thought helping when multiple intermediate steps are genuinely required but adding spurious intermediate steps on one-step problems.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a single evaluation suite that separately measures accuracy on matched single-step vs multi-step arithmetic/symbolic tasks under both prompting regimes, reporting effect sizes for each condition.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1474,
+        "completionTokens": 157,
+        "costUsd": 0.00049105
+      },
+      {
+        "id": "llm_002",
+        "domain": "llm_reasoning",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Chain-of-Thought Prompting Elicits Reasoning reports the training setup (instruction-tuning on 1.5M examples from a mixture of 12 task families), not an observed change in multi-step arithmetic accuracy. Chain-of-Thought Prompting Elicits Reasoning specifically claims that chain-of-thought prompting improved accuracy on multi-step arithmetic reasoning. These concern different quantities (training data mixture vs. downstream arithmetic accuracy with prompting), so the comparison does not establish compatibility, conflict, or a named boundary condition.",
+          "strongerEvidence": "neither",
+          "resolution": "Report from each work the exact experimental evaluation protocol for multi-step arithmetic (dataset, metrics, prompting method, and accuracy before/after) and link it explicitly to the 1.5M/12-task-family instruction-tuning data so the two claims are directly comparable.",
+          "mechanism": null
+        },
+        "promptTokens": 1478,
+        "completionTokens": 194,
+        "costUsd": 0.0005381
+      },
+      {
+        "id": "llm_003",
+        "domain": "llm_reasoning",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Scale and Calibration in Language Models asserts that increasing model scale leads to *less* hallucination because improved calibration enables abstention when uncertain. Confident Hallucination at Scale instead claims that larger models hallucinate *more confidently*, generating fluent but false statements that are harder for users to detect. Under the same manipulation (model size), these directions about hallucination frequency/confidence are incompatible.",
+          "strongerEvidence": "neither",
+          "resolution": "Compare both works under identical evaluation settings—same uncertainty prompt format, abstention policy, and the same metrics for hallucination rate versus confidence detectability—to test whether higher scale increases hallucination confidence while reducing (or increasing) overall hallucination frequency.",
+          "mechanism": null
+        },
+        "promptTokens": 1450,
+        "completionTokens": 164,
+        "costUsd": 0.000495
+      },
+      {
+        "id": "llm_004",
+        "domain": "llm_reasoning",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Self-Consistency Improves Chain-of-Thought reports that sampling multiple reasoning chains and taking a majority answer increased benchmark accuracy over greedy decoding. Sampling-and-Voting for Reasoning similarly claims that majority voting over independently sampled reasoning paths raised accuracy on arithmetic and commonsense benchmarks. Both attribute the accuracy gain to majority-voting across sampled reasoning trajectories rather than greedy decoding, making the results mutually reinforcing.",
+          "strongerEvidence": "neither",
+          "resolution": "Run a direct ablation study comparing self-consistency (multiple chains + majority) versus sampling-and-voting (independent path sampling + majority) under identical model, sampling temperature, number of samples, and evaluation benchmarks.",
+          "mechanism": null
+        },
+        "promptTokens": 1461,
+        "completionTokens": 161,
+        "costUsd": 0.00049345
+      },
+      {
+        "id": "llm_005",
+        "domain": "llm_reasoning",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Retrieval-Augmented Generation for Knowledge Tasks asserts that retrieval grounding on knowledge-intensive queries *reduces* factual hallucination by anchoring answers in retrieved passages. When Retrieval Hurts: Context Distraction in RAG instead claims retrieval can *increase* errors when retrieved context is irrelevant and the model defers to misleading passages over parametric knowledge. Both can be true under a boundary condition on retrieval relevance/quality: grounding helps when retrieved evidence matches the question but harms when it is distractive.",
+          "strongerEvidence": "neither",
+          "resolution": "Evaluate both systems across systematically varied retrieval relevance/quality (e.g., using matched irrelevant vs relevant retrieved passages) and test whether the hallucination/error rate shows a sign flip with context relevance.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1476,
+        "completionTokens": 175,
+        "costUsd": 0.00051395
+      },
+      {
+        "id": "llm_006",
+        "domain": "llm_reasoning",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "methodological",
+          "explanation": "Self-Consistency Improves Chain-of-Thought asserts a specific evaluation setup—5-shot prompting with temperature 0 and a fixed prompt template—while Self-Consistency Improves Chain-of-Thought attributes improved reasoning accuracy to self-consistency sampling relative to greedy decoding. These are not incompatible: sampling with self-consistency can still improve accuracy even under a fixed prompt/template and with deterministic per-sample generation at temperature 0, but the claims leave unclear whether greedy decoding used the same temperature and whether the self-consistency “samples” were generated by decoding stochasticity or by other variation (e.g., multiple reasoning paths).",
+          "strongerEvidence": "neither",
+          "resolution": "Report the exact decoding conditions for both systems (temperature, how self-consistency samples were produced, and whether greedy decoding matched them) so the comparison under identical settings can be verified.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 1460,
+        "completionTokens": 199,
+        "costUsd": 0.00054075
+      }
+    ],
+    "claude-haiku-4-5": [
+      {
+        "id": "eval_001",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Both claims converge on the same empirical finding: zero-shot GPT-4 feedback failed to produce significant improvement in negotiation performance. The first work demonstrates this by showing that targeted turn-by-turn feedback (with significant improvement, t=2.97, p=0.003) outperformed zero-shot GPT-4 feedback, while the second work explicitly confirms that zero-shot GPT-4 produced no significant difference from the no-feedback control. These are mutually reinforcing observations of the same null result for zero-shot GPT-4.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Both claims are compatible and support each other; no resolution is needed beyond recognizing that the contrast between ACE's targeted feedback success and zero-shot GPT-4's failure is the key finding both works establish.",
+          "mechanism": null
+        },
+        "promptTokens": 2364,
+        "completionTokens": 285,
+        "costUsd": 0.0037890000000000003
+      },
+      {
+        "id": "eval_002",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that AI coaching improves psychological outcomes (fear reduction, willingness to initiate) but not tactical skills, while ACE: A LLM-based Negotiation Coaching System demonstrates significant improvements in objective deal outcomes (lower prices) with transfer to novel scenarios. Both claims can be true if the coaching systems differ in design, scope, or participant populations: ACE may employ specific tactical instruction mechanisms absent from the first work, or may select participants more capable of skill transfer, making tactical improvement a boundary condition dependent on system architecture or learner baseline rather than an inherent limitation of LLM coaching.",
+          "strongerEvidence": "paper_b",
+          "resolution": "A direct comparison using identical AI systems and participant pools—one system optimized for psychological outcomes, another for tactical skill instruction—would reveal whether the difference reflects system design choices or inherent LLM limitations.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2342,
+        "completionTokens": 304,
+        "costUsd": 0.003862
+      },
+      {
+        "id": "eval_003",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution (Claim A) shows that simulated conflict practice produced large changes in actual conflict behavior—67% reduction in competitive strategies and doubling of cooperative strategies in unaided real conflict. The second work from Rehearsal: Simulating Conflict to Teach Conflict Resolution (Claim B) found that the same practice did not significantly improve strategy recognition or recall in a lecture-control comparison. The boundary condition is the outcome measure: transfer to real-world behavioral performance versus performance on recognition/recall assessments. Both claims can be true if simulated practice improves strategic execution in live conflict without improving explicit metacognitive recall of strategies.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Direct testing would need to show whether participants in Claim B's recognition/recall assessments could execute the strategies they failed to recall when placed in live conflict scenarios, isolating whether strategy transfer occurs through implicit learning rather than explicit recognition.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2339,
+        "completionTokens": 318,
+        "costUsd": 0.003929
+      },
+      {
+        "id": "eval_004",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution identifies that standard instruction-following LLMs produce conflict responses that are too agreeable and capitulate quickly to user viewpoints. ACE: A LLM-based Negotiation Coaching System reports the same underlying behavioral tendency—that LLM negotiation agents are overly agreeable, avoid hardball tactics, and respond passively rather than driving negotiation forward. Both works identify the identical failure mode: LLMs defaulting to agreement-seeking rather than adversarial or assertive behavior in interactive settings.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical measurement of the degree of agreeableness and capitulation in each system's simulated interactions would confirm whether both works are observing the same magnitude of effect or whether one context (conflict simulation vs. negotiation coaching) produces systematically different levels of passivity.",
+          "mechanism": null
+        },
+        "promptTokens": 2352,
+        "completionTokens": 296,
+        "costUsd": 0.003832
+      },
+      {
+        "id": "eval_005",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System describes a methodological contribution: how a dataset of 50 MBA students' used car negotiations was collected and transcribed using Whisper API with manual corrections. Does AI Coaching Prepare us for Workplace Negotiations? reports an empirical outcome: that a theory-driven AI coach reduced negotiation-related fear more effectively than other tested conditions. These address different constructs—one is about dataset construction and transcription methodology, the other is about the efficacy of a coaching intervention on a psychological outcome—sharing no overlapping measurement, population, or causal claim.",
+          "strongerEvidence": "neither",
+          "resolution": "Direct comparison requires determining whether the two works study the same AI coaching system or population; if they do not, they remain orthogonal contributions to different research questions.",
+          "mechanism": null
+        },
+        "promptTokens": 2331,
+        "completionTokens": 283,
+        "costUsd": 0.003746
+      },
+      {
+        "id": "eval_006",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations establishes that human frontline negotiators prefer process-oriented AI tools (options/risks surfacing) over direct strategy recommendations. ACE: A LLM-based Negotiation Coaching System reports that zero-shot GPT-4 feedback improved simulated LLM negotiator performance but failed with human negotiators. Both findings are compatible if the failure in human performance is because ACE's system provided direct strategic coaching rather than process-oriented support—the specific boundary condition being the type of AI feedback (direct recommendations vs. process-oriented surfacing of considerations).",
+          "strongerEvidence": "neither",
+          "resolution": "A direct experiment testing whether ACE's feedback improves human negotiator performance when reframed as process-oriented option/risk surfacing rather than direct strategy recommendations would clarify whether the ineffectiveness is due to the coaching scope rather than the LLM source.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2382,
+        "completionTokens": 323,
+        "costUsd": 0.003997
+      },
+      {
+        "id": "eval_007",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations finds that experienced frontline humanitarian negotiators tolerate occasional LLM hallucinations as manageable with their expertise, while the same work establishes that novice negotiators lack domain expertise to identify and counteract AI errors, creating over-reliance. Both claims are true and mutually compatible; they reflect a single boundary condition: user expertise level. The hallucination tolerance mechanism differs predictably between experienced and novice populations, not contradictorily.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical evidence distinguishing error-detection accuracy and reliance behavior between experienced and novice negotiators under identical hallucination rates would confirm that expertise is the causal moderator of hallucination tolerance.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2421,
+        "completionTokens": 286,
+        "costUsd": 0.0038510000000000003
+      },
+      {
+        "id": "eval_008",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills reports a positive correlation (r=0.47, p<0.001) between high initial offers and negotiation earnings as a general empirical finding. ACE: A LLM-based Negotiation Coaching System prescribes opening-price anchoring as a coaching strategy without claiming it universally maximizes earnings—rather, it advocates for strategic anchor-setting in a favorable position. The specific boundary condition is negotiator role and context: initial-offer effectiveness may depend on whether the negotiator is the proposer (where anchoring benefits them) versus the responder (where responding strategically to an anchor differs from making one), a distinction that reconciles the empirical correlation with the coaching directive.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Empirical validation of whether ACE's coaching produces higher earnings specifically when users follow the opening-price anchoring rule, and whether the r=0.47 correlation holds equally for both proposers and responders or varies by role.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2350,
+        "completionTokens": 339,
+        "costUsd": 0.004045
+      },
+      {
+        "id": "eval_009",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? (Claim A) demonstrates that Trucey delivers responses 168% less verbose than ChatGPT with higher readability scores (Flesch-Kincaid 80.00 vs 68.46), representing a system-level design choice favoring brevity and clarity. Does AI Coaching Prepare us for Workplace Negotiations? (Claim B) documents that under preparation stress, participants actively rejected this incremental, concise delivery as cognitively burdensome and preferred comprehensive immediate content. Both claims are true under different boundary conditions: Trucey's design achieves technical readability advantages, but stressed users in a preparation context may find those same constraints frustrating despite their objective quality metrics.",
+          "strongerEvidence": "neither",
+          "resolution": "Measure user acceptance and cognitive load ratings of Trucey's concise responses across stress conditions (preparation stress vs. baseline) to identify the threshold at which brevity becomes perceived as incomplete rather than readable.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2344,
+        "completionTokens": 326,
+        "costUsd": 0.003974
+      },
+      {
+        "id": "eval_010",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution describes a methodological framework for classifying conflict resolution utterances using an 8-strategy taxonomy from the Interests-Rights-Power framework. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills reports an empirical finding about negotiation earnings (r=0.47, p<0.001) associated with initial offer magnitude. The first claim is about utterance classification methodology; the second is about a behavioral predictor of negotiation outcomes. They address different constructs in different research contexts with no shared measurement, population concern, or theoretical premise.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct comparison would require evidence that the Interests-Rights-Power taxonomy systematically captures or predicts variance in initial offer magnitude and earnings outcomes.",
+          "mechanism": null
+        },
+        "promptTokens": 2358,
+        "completionTokens": 284,
+        "costUsd": 0.003778
+      },
+      {
+        "id": "eval_011",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Both works evaluate the same three conditions (theory-driven AI coach Trucey, generic AI ChatGPT, and static handbook) but measure different psychological outcomes: fear reduction versus psychological empowerment. Does AI Coaching Prepare us for Workplace Negotiations? finds Trucey superior on fear reduction (d=-0.27 vs. ChatGPT), while Does AI Coaching Prepare us for Workplace Negotiations? finds the static handbook superior on empowerment (d=-0.40 vs. Trucey, p<0.05). These are distinct constructs—emotional and cognitive—within the same intervention domain, revealing that intervention effectiveness depends on which outcome is measured.",
+          "strongerEvidence": "neither",
+          "resolution": "A mediator analysis testing whether fear reduction and psychological empowerment are independent pathways (or trade-offs) would clarify whether Trucey's strength in one domain explains or conflicts with the handbook's advantage in the other.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 2363,
+        "completionTokens": 314,
+        "costUsd": 0.003933
+      },
+      {
+        "id": "eval_012",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? (Work A) reports that a theory-driven AI negotiation coach produced significantly higher willingness to initiate negotiations than generic AI (beta=12.65, p<0.05) via regression analysis. Does AI Coaching Prepare us for Workplace Negotiations? (Work B) reports no significant differences among all three coaching interventions on the Kruskal-Wallis test. These claims are directly incompatible: one asserts a significant difference between coaching types; the other asserts equivalent effects across all interventions tested in the same construct (willingness to initiate negotiations).",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether the regression analysis in Work A compares theory-driven vs. generic AI specifically, or includes other coaching conditions; if Work A's theory-driven coach and Work B's three interventions are not the identical set of comparisons, the apparent contradiction may reflect different subsetting or grouping of conditions rather than genuine disagreement about the same effect.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 2347,
+        "completionTokens": 330,
+        "costUsd": 0.0039970000000000006
+      },
+      {
+        "id": "eval_013",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated conflict practice reduced participants' conflict self-efficacy after training, framed as negative because it reflected realistic understanding of difficulty. Does AI Coaching Prepare us for Workplace Negotiations? reports that AI coaching achieved the largest reduction in negotiation-related fear, framed as positive because it reduced anxiety. Both claim reduction in a psychological measure (self-efficacy vs. fear) following training, but interpret the direction differently: one treats post-training decrease as evidence of benefit (realistic calibration), the other treats decrease as benefit (anxiety relief). Under identical conditions—training intervention, psychological outcome measure, post-training assessment—these cannot both be true if self-efficacy and fear are measuring the same underlying construct.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether conflict self-efficacy and negotiation fear measure orthogonal constructs (e.g., confidence in ability vs. emotional arousal), or whether they are isomorphic and the claims genuinely conflict on the direction of training benefit.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 2335,
+        "completionTokens": 339,
+        "costUsd": 0.00403
+      },
+      {
+        "id": "eval_014",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "methodological",
+          "explanation": "Both works demonstrate that theory-grounded AI systems outperform standard instruction-following or generic baseline LLMs, but they differ in scope: Rehearsal: Simulating Conflict to Teach Conflict Resolution focuses on realistic conflict simulation generation as the outcome metric, while Does AI Coaching Prepare us for Workplace Negotiations? targets fear reduction in actual negotiation coaching as the outcome. The boundary condition is the target outcome—simulation quality vs. emotional/behavioral change in a negotiation context—which explains why both theory-driven approaches can succeed without contradiction.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct comparison requiring both works to measure the same outcome (e.g., both testing negotiation fear reduction with theory-grounded vs. generic prompting) would reveal whether the performance advantage is general across outcomes or conditional on the specific task domain.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2342,
+        "completionTokens": 291,
+        "costUsd": 0.003797
+      },
+      {
+        "id": "eval_015",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "methodological",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System reports error detection accuracy (>=0.90) for binary classification of negotiation moves and qualitative categories, measuring system performance on a labeling task. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills reports correlations between dialogue-derived metrics and external negotiation outcomes (agreement time, initial claims), measuring predictive validity. These target entirely different phenomena—internal classifier performance versus external outcome prediction—and neither finding implies anything about the other.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct comparison would require showing whether high error-detection accuracy in ACE correlates with (or predicts) the negotiation outcome measures used in the second work.",
+          "mechanism": null
+        },
+        "promptTokens": 2376,
+        "completionTokens": 267,
+        "costUsd": 0.003711
+      },
+      {
+        "id": "eval_016",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports a methodological detail about sample recruitment and randomization (267 participants, Prolific, 2:1:1 ratio), which is a procedural fact about one study's design. Rehearsal: Simulating Conflict to Teach Conflict Resolution makes a theoretical claim about the properties of standard instruction-following LLMs (that they are too agreeable without theory grounding), which concerns model behavior and design. One is a descriptive fact about participant assignment; the other is a claim about an AI system's inherent limitations — they address entirely different constructs and share no measurement, outcome, or testable relationship.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims would become comparable only if one work explicitly tested whether Trucey's participant-allocation scheme (2:1:1 ratio via Prolific) affected the degree to which an LLM partner appeared \"too agreeable,\" but the claims as stated have no logical connection.",
+          "mechanism": null
+        },
+        "promptTokens": 2333,
+        "completionTokens": 322,
+        "costUsd": 0.003943
+      },
+      {
+        "id": "eval_017",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims that people require structured feedback and instruction to improve negotiation tactics and cannot learn effectively from bargaining experience alone. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills directly contradicts this by asserting that autonomous agent systems improve negotiation ability even without feedback. These make incompatible causal claims: one holds that learning requires structured intervention, the other demonstrates learning occurs independently of feedback.",
+          "strongerEvidence": "neither",
+          "resolution": "A controlled experiment comparing negotiation skill gains in three arms (coached with feedback, autonomous agent without feedback, and control bargaining only) would establish whether feedback is necessary, sufficient, or neither for improvement.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 2349,
+        "completionTokens": 263,
+        "costUsd": 0.0036639999999999997
+      },
+      {
+        "id": "eval_018",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do identifies a general gap in AI negotiation tools—insufficient process-oriented support for frontline negotiators—as a widespread design problem. ACE: A LLM-based Negotiation Coaching System reveals a specific instantiation of design failure within one implementation: its annotation scheme and feedback mechanisms encode American-style conventions that fail to transfer across cultural contexts. Both identify inadequate support for diverse negotiation contexts, but ACE's claim bounds the problem to a particular methodological choice (cultural encoding in feedback design) rather than claiming the entire class of process-support tools is culturally insensitive by nature.",
+          "strongerEvidence": "neither",
+          "resolution": "Audit whether process-oriented AI negotiation tools can support culturally distinct negotiation styles without redesigning their annotation and feedback mechanisms for each cultural context, or whether cultural transfer failure is inherent to the process-support paradigm itself.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2375,
+        "completionTokens": 307,
+        "costUsd": 0.00391
+      },
+      {
+        "id": "eval_019",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System's claim concerns the choice of LLM backbone technology (GPT-4 vs. GPT-4o) and its evaluation metric (speed after expert assessment). Rehearsal: Simulating Conflict to Teach Conflict Resolution's claim addresses whether training via conflict simulation transfers to real unaided conflict resolution performance—a learning outcome claim. These address orthogonal aspects: one is about system architecture and model selection, the other is about training transfer and behavioral improvement in a target domain.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims would become comparable only if ACE documented that its choice of GPT-4/GPT-4o affected participant learning outcomes in unaided conflict, which neither work claims.",
+          "mechanism": null
+        },
+        "promptTokens": 2338,
+        "completionTokens": 275,
+        "costUsd": 0.003713
+      },
+      {
+        "id": "eval_020",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims that interactive AI feedback significantly improved negotiation outcomes over non-interactive baselines, while Does AI Coaching Prepare us for Workplace Negotiations? reports that participants preferred the static handbook and it outperformed AI conditions on usability and psychological empowerment—a direct contradiction on whether interactive AI or static resources produce better results. Both claims assess effectiveness of coaching interventions in the same domain (workplace negotiation preparation) using similar outcome constructs (performance, preference, and user experience), with no identifiable boundary condition (population, method, or scope) that would allow both to be simultaneously true.",
+          "strongerEvidence": "neither",
+          "resolution": "A head-to-head trial comparing the exact same interactive AI system (ACE) against the exact static handbook used in the second study, with pre-registered outcome measures (negotiation outcome metrics, usability scales, and empowerment measures) would definitively establish which intervention produces superior results.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 2330,
+        "completionTokens": 319,
+        "costUsd": 0.003925
+      },
+      {
+        "id": "eval_021",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Claim A establishes that active simulated practice (Rehearsal) produces significant improvements in cooperative strategy use versus lecture-only control. Claim B narrows the scope by contrasting active simulated practice against passive engagement modes (reading or watching), asserting that these passive modalities build orthogonal (non-overlapping) skills. Both claims can be true under different boundary conditions: Rehearsal beats passive control on cooperative strategy; passive methods may improve other competencies that active simulation does not target. The difference is the comparison condition (lecture-only vs. passive reading/watching) and the outcome focus (shared cooperative skills vs. distinct skill dimensions).",
+          "strongerEvidence": "neither",
+          "resolution": "Measure both cooperative strategy outcomes and the \"orthogonal\" skill dimensions (e.g., conflict awareness, vocabulary, theoretical knowledge) across all three conditions (active simulation, passive reading/watching, lecture-only) to confirm whether Claim A's superiority and Claim B's orthogonality both hold in a single sample.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2330,
+        "completionTokens": 328,
+        "costUsd": 0.00397
+      },
+      {
+        "id": "eval_022",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that a static handbook outperformed AI conditions on usability and psychological empowerment metrics, while ACE: A LLM-based Negotiation Coaching System demonstrates that interactive LLM coaching outperformed alternative feedback conditions on objective negotiation outcomes. The boundary condition is the outcome measure: one study prioritizes subjective usability/empowerment (favoring the static handbook), while the other prioritizes objective negotiation success (favoring interactive LLM coaching). Both results can coexist if usability and psychological empowerment differ from actual negotiation performance—a coaching modality might excel at objective negotiation outcomes while feeling less empowering or intuitive to users.",
+          "strongerEvidence": "neither",
+          "resolution": "A study directly comparing static handbook, basic AI, and interactive LLM coaching on both subjective metrics (usability, empowerment) and objective outcomes (deal quality, agreement rates) would clarify whether the apparent opposition reflects genuinely different constructs or a real trade-off in coaching design.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2334,
+        "completionTokens": 341,
+        "costUsd": 0.004039
+      },
+      {
+        "id": "eval_023",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that hallucinations persisted despite IRP theory grounding and made simulations feel overly scripted—a limitation of the training approach in a pedagogical sandbox. ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations reports that frontline negotiators tolerated the same hallucination phenomenon because they operated under time pressure and possessed domain expertise to verify outputs. The difference is not whether hallucinations occur (both acknowledge they do) but whether they constitute a critical failure: in a structured learning environment, scripted artifacts harm pedagogical fidelity; in a time-constrained field setting with expert oversight, the same hallucinations can be mitigated through human triangulation. The boundary condition is operational context (training lab vs. field practice under time pressure) and user expertise level.",
+          "strongerEvidence": "neither",
+          "resolution": "Document whether the same hallucination profiles occur at equivalent rates in both pedagogical and field-deployment contexts, and measure whether expert-led verification in time-pressured settings recovers the fidelity losses that Rehearsal identifies in its lab simulations.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2384,
+        "completionTokens": 368,
+        "costUsd": 0.004224
+      },
+      {
+        "id": "eval_024",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution measures training efficacy by testing whether participants can engage in actual conflict resolution with a confederate after simulated practice. ACE: A LLM-based Negotiation Coaching System measures coaching efficacy by quantifying objective performance gains (d=0.38 effect size on deal prices). These address fundamentally different phenomena: one is about behavioral capability transfer from simulation to real conflict, the other is about quantitative outcome improvement in negotiation deals. They target different dependent variables in different task domains with incomparable metrics.",
+          "strongerEvidence": "neither",
+          "resolution": "The claims would become comparable only if both works measured the same outcome (e.g., both reporting effect sizes on deal quality or both reporting success rates on conflict resolution tasks), which they do not.",
+          "mechanism": null
+        },
+        "promptTokens": 2340,
+        "completionTokens": 281,
+        "costUsd": 0.003745
+      },
+      {
+        "id": "eval_025",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that participants improved conflict performance in actual unaided conflict after AI-simulated training, demonstrating successful transfer. Does AI Coaching Prepare us for Workplace Negotiations? reports that frontline negotiators rejected AI-mediated rehearsal as fundamentally inadequate because simulation cannot reproduce the unpredictability and embodied pressure of real negotiations—a rejection of transfer validity. Both claims address the same construct (whether AI simulation transfers to real-world performance) under comparable conditions (trained vs. untrained on actual tasks), yet predict opposite outcomes: one shows improvement occurred, the other documents participants' belief that such improvement cannot occur.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical measurement of actual post-training performance in real conflicts for both samples would clarify whether the rejection of AI rehearsal reflects a genuine absence of transfer or a mismatch between participants' subjective assessment and objective behavioral improvement.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 2340,
+        "completionTokens": 312,
+        "costUsd": 0.0039
+      },
+      {
+        "id": "eval_026",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that cultural background moderated coaching effectiveness (outcomes varied across participant backgrounds), while ACE: A LLM-based Negotiation Coaching System identifies the specific mechanism—that its coaching scheme is based on American-style conventions—that explains why effectiveness would be compromised in non-American contexts. The two claims are compatible: the first establishes that cultural moderation occurs; the second identifies the boundary condition (American-style design) that causes the differential effectiveness across cultural groups.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Empirically test whether participants from non-American cultural backgrounds show lower coaching gains specifically when exposed to American-style negotiation norms (as in ACE) compared to culturally-adapted coaching variants.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2322,
+        "completionTokens": 278,
+        "costUsd": 0.003712
+      },
+      {
+        "id": "eval_027",
+        "domain": "empirical",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills emphasizes post-negotiation feedback as crucial for relating performance to fundamental principles—a reflective, principle-linking phase after practice. Rehearsal: Simulating Conflict to Teach Conflict Resolution distinguishes simulated practice (which builds application skills) from passive review (which builds recognition and recall). Both claims are compatible: feedback tied to principles is most valuable precisely because it operates on the reflective/review side after application practice, making principle-linking feedback the reflective complement to active simulation rather than a competitor for where learning occurs.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether principle-linked feedback is delivered immediately post-negotiation (during passive review of one's own performance) or only after cumulative practice cycles, which would show how both claims address different moments in the pedagogical sequence.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2348,
+        "completionTokens": 301,
+        "costUsd": 0.0038529999999999997
+      },
+      {
+        "id": "eval_028",
+        "domain": "empirical",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System describes a technical mechanism within a coaching agent—how the system avoids suboptimal concessions through dynamic prompting and counteroffer logic. Does AI Coaching Prepare us for Workplace Negotiations? examines a comparative outcome: whether coaching effectiveness varies across demographic groups based on cultural background. The first addresses internal agent behavior design; the second addresses moderators of coaching impact across populations. These address different constructs (agent design vs. participant-group variation) and neither claim constrains the other.",
+          "strongerEvidence": "neither",
+          "resolution": "A claim that cultural background moderates response to *ACE specifically* (rather than \"AI coaching\" generically) would bridge these; absent that, they remain orthogonal.",
+          "mechanism": null
+        },
+        "promptTokens": 2324,
+        "completionTokens": 272,
+        "costUsd": 0.003684
+      },
+      {
+        "id": "eval_029",
+        "domain": "empirical",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System asserts that structured feedback is necessary for learning negotiation because people do not improve from bargaining experience alone without instruction. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills claims the opposite: that autonomous agent systems improve negotiation ability even without any feedback provided to the learner. These claims directly contradict each other under the same outcome (negotiation ability improvement) and construct (whether feedback/instruction is necessary for improvement from experience).",
+          "strongerEvidence": "neither",
+          "resolution": "A controlled experiment comparing negotiation improvement across three conditions (unstructured experience alone, autonomous agent coaching without explicit feedback to learner, and autonomous agent coaching with explicit feedback) would determine whether the agent's mechanism operates through implicit learning, explicit feedback, or some other pathway.",
+          "mechanism": "different_definition"
+        },
+        "promptTokens": 2340,
+        "completionTokens": 287,
+        "costUsd": 0.0037749999999999997
+      },
+      {
+        "id": "eval_030",
+        "domain": "empirical",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that Trucey \"produced only negligible improvement in organizational self-efficacy (delta=+0.05),\" indicating a training intervention that failed to enhance self-efficacy despite reducing fear. Rehearsal: Simulating Conflict to Teach Conflict Resolution claims that simulated conflict practice \"reduced participants' self-efficacy after training,\" indicating the opposite directional outcome—a decline rather than stasis. Both studies measure post-training self-efficacy change from the same type of practice-based intervention, yet one finds minimal increase (≈0) while the other finds decrease (negative). These outcomes are directionally incompatible and cannot both be true under identical conditions.",
+          "strongerEvidence": "neither",
+          "resolution": "Direct replication of each intervention on the same participant population with identical self-efficacy measurement timing and instruments would determine whether the difference reflects genuine effect heterogeneity, measurement error, or conflicting intervention designs.",
+          "mechanism": "interprets_differently"
+        },
+        "promptTokens": 2339,
+        "completionTokens": 320,
+        "costUsd": 0.003939
+      },
+      {
+        "id": "ir_001",
+        "domain": "information_retrieval",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Hybrid Sparse-Dense Retrieval for Open-Domain QA reports a concrete performance gain (Recall@100 from 0.71 to 0.88) when combining BM25 with dense retrieval. When Dense Retrieval Misses: A Lexical Safety Net identifies the same mechanism—lexical BM25 recovery of passages that embeddings ranked poorly—as the explanation for why this hybrid approach works. Both claims describe the same phenomenon: dense-only retrieval has systematic failure modes (out-of-vocabulary terms, low embedding-space ranking) that BM25 recovers, yielding improved recall.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Controlled ablation comparing dense-only vs. hybrid performance specifically on out-of-vocabulary passages would quantify the proportion of the overall gain attributable to the lexical safety net mechanism.",
+          "mechanism": null
+        },
+        "promptTokens": 2357,
+        "completionTokens": 295,
+        "costUsd": 0.0038320000000000003
+      },
+      {
+        "id": "ir_002",
+        "domain": "information_retrieval",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Scaling Embedding Dimensions for Retrieval asserts that retrieval accuracy improves consistently with increasing dimensionality, with 1536-dim performing best, while Diminishing Returns in High-Dimensional Embeddings reports that accuracy plateaus beyond 768 dimensions and degrades at very high dimensions due to noise. These claims make opposing empirical predictions about the same outcome (retrieval accuracy as a function of embedding dimension) under the same general conditions (embedding-based retrieval), with no boundary condition (e.g., corpus type, retrieval task, embedding method) named that would reconcile both patterns as true.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical reconciliation requires specifying whether accuracy trajectories differ by corpus characteristics, retrieval task type, or embedding model architecture; a single standardized benchmark comparing both approaches under identical conditions would determine which pattern holds.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2315,
+        "completionTokens": 296,
+        "costUsd": 0.0037949999999999998
+      },
+      {
+        "id": "ir_003",
+        "domain": "information_retrieval",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Reranking for Precision in Two-Stage Retrieval demonstrates that cross-encoder reranking improves Precision@10 on the top-100 candidates, while The Latency Cost of Neural Reranking documents that the same operation incurs 400-600ms latency per query. Both claims are true under their respective conditions: the precision gain is achievable in offline or batch settings, but that same reranking becomes impractical for interactive search requiring sub-second latency at scale. The boundary condition is deployment context — whether the use case prioritizes ranking quality (where reranking adds value) versus real-time responsiveness (where latency becomes prohibitive).",
+          "strongerEvidence": "neither",
+          "resolution": "Empirically test whether Precision@10 gains from cross-encoder reranking remain acceptable when latency is constrained to sub-second budgets via candidate pruning, or whether aggressive pruning to meet latency targets negates the precision gains.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2334,
+        "completionTokens": 322,
+        "costUsd": 0.0039440000000000005
+      },
+      {
+        "id": "ir_004",
+        "domain": "information_retrieval",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Scaling Embedding Dimensions for Retrieval addresses data preprocessing (deduplication via MinHash LSH at Jaccard 0.8 threshold before indexing), while Reranking for Precision in Two-Stage Retrieval addresses post-retrieval ranking (cross-encoder reranking improving Precision@10). These are sequential but orthogonal pipeline stages with no material interaction—deduplication quality does not determine reranking effectiveness, and reranking outcome does not validate deduplication choices.",
+          "strongerEvidence": "neither",
+          "resolution": "Evidence that deduplication strategy affects cross-encoder reranking performance would establish a dependence, but no such claim is present in either work as stated.",
+          "mechanism": null
+        },
+        "promptTokens": 2314,
+        "completionTokens": 259,
+        "costUsd": 0.0036090000000000002
+      },
+      {
+        "id": "ir_005",
+        "domain": "information_retrieval",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Generative Query Expansion for Sparse Queries reports a 6-point Recall@20 improvement for short, underspecified queries using generated paraphrases. Revisiting Pseudo-Relevance Feedback identifies that pseudo-relevance feedback raised recall most on short queries lacking sufficient terms to match relevant documents directly. Both works identify the same target population (short, underspecified queries with insufficient term overlap) and both show that augmenting the query representation improves recall recovery in this exact scenario — they converge on the same phenomenon from different methodological approaches.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical comparison on the same benchmark dataset using both generative expansion and pseudo-relevance feedback would quantify whether one technique outperforms the other, or whether they capture complementary gains for short, sparse queries.",
+          "mechanism": null
+        },
+        "promptTokens": 2310,
+        "completionTokens": 283,
+        "costUsd": 0.003725
+      },
+      {
+        "id": "ir_006",
+        "domain": "information_retrieval",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Closing the Bi-Encoder Gap with In-Domain Training claims that in-domain fine-tuned bi-encoders matched cross-encoder relevance performance, while Why Cross-Encoders Still Win on Relevance asserts that cross-encoders consistently outperformed bi-encoders on relevance regardless of fine-tuning. Both claims address the same outcome (relevance performance) under the same condition class (fine-tuned bi-encoders vs. cross-encoders), and they predict opposite results: equivalence versus persistent cross-encoder superiority.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct empirical comparison of the same fine-tuning method, dataset, and relevance metric on identical held-out test sets would determine whether fine-tuned bi-encoders achieve parity with cross-encoders or whether cross-encoders retain a measurable advantage.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2334,
+        "completionTokens": 300,
+        "costUsd": 0.0038339999999999997
+      },
+      {
+        "id": "llm_001",
+        "domain": "llm_reasoning",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Chain-of-Thought Prompting Elicits Reasoning reports large accuracy improvements on multi-step arithmetic and symbolic reasoning tasks, while When Chain-of-Thought Does Not Help demonstrates negligible or negative effects specifically on single-step tasks. These claims address the same intervention (chain-of-thought prompting) and outcome (accuracy) but differ in a critical boundary condition: task complexity. Both findings are compatible if chain-of-thought's benefit depends on task structure—providing substantial gains when intermediate reasoning steps are inherently required (multi-step), but offering no value or introducing noise when no decomposition is needed (single-step).",
+          "strongerEvidence": "neither",
+          "resolution": "Test chain-of-thought prompting across a controlled task taxonomy that systematically varies the number of necessary intermediate reasoning steps, with pre-registered accuracy metrics for each task type to identify the exact threshold where benefit emerges or vanishes.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2316,
+        "completionTokens": 306,
+        "costUsd": 0.003846
+      },
+      {
+        "id": "llm_002",
+        "domain": "llm_reasoning",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Work A reports a training configuration detail: instruction-tuning on 1.5M examples from 12 task families. Work B reports an empirical finding: chain-of-thought prompting improved accuracy on multi-step arithmetic reasoning. The first describes a methodological input (training data composition), the second a behavioral output (task performance improvement). These address different parts of the research pipeline with no direct logical connection—the training configuration does not entail or contradict the effectiveness claim, and the effectiveness claim does not constrain the training setup used.",
+          "strongerEvidence": "neither",
+          "resolution": "Showing that both claims come from the same published study would establish whether they describe the same experimental system; if so, the relationship would become scope-based support rather than unrelated parts.",
+          "mechanism": null
+        },
+        "promptTokens": 2325,
+        "completionTokens": 269,
+        "costUsd": 0.0036699999999999997
+      },
+      {
+        "id": "llm_003",
+        "domain": "llm_reasoning",
+        "goldLabel": "contradiction",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Scale and Calibration in Language Models reports that larger models hallucinated less by abstaining when uncertain, while Confident Hallucination at Scale documents that larger models hallucinated more confidently with fluent false statements. Both observations can coexist if calibration improvements in larger models enable selective abstention on difficult queries, but when larger models do attempt to generate answers, scale amplifies fluency and confidence in those outputs—meaning the models hallucinate *differently* rather than universally more or less. The boundary condition is whether the measured outcome is abstention rate (favors Scale and Calibration) versus hallucination *quality conditional on generation* (favors Confident Hallucination).",
+          "strongerEvidence": "neither",
+          "resolution": "Measure both abstention frequency and conditional hallucination quality (fluency, confidence, user detectability) on the same model sizes and tasks to determine whether scale reduces total hallucination events or simply redistributes errors toward higher-confidence false generation on attempted answers.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2284,
+        "completionTokens": 324,
+        "costUsd": 0.0039040000000000004
+      },
+      {
+        "id": "llm_004",
+        "domain": "llm_reasoning",
+        "goldLabel": "support",
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Self-Consistency Improves Chain-of-Thought demonstrates that sampling multiple reasoning chains and selecting the majority answer improves benchmark accuracy over greedy decoding. Sampling-and-Voting for Reasoning reports that majority voting over independently sampled reasoning paths raises accuracy on arithmetic and commonsense benchmarks. Both works converge on the same core finding: aggregating multiple sampled reasoning outputs via majority voting outperforms single-pass greedy decoding, across overlapping benchmark types (arithmetic and commonsense reasoning).",
+          "strongerEvidence": "neither",
+          "resolution": "Direct empirical comparison on identical benchmarks with controlled sampling budgets would determine whether one framing or sampling strategy yields larger effect sizes, but both claims as stated are mutually reinforcing without conflict.",
+          "mechanism": null
+        },
+        "promptTokens": 2306,
+        "completionTokens": 267,
+        "costUsd": 0.0036409999999999997
+      },
+      {
+        "id": "llm_005",
+        "domain": "llm_reasoning",
+        "goldLabel": "nuance",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Retrieval-Augmented Generation for Knowledge Tasks demonstrates that RAG reduces factual hallucination when retrieved passages are relevant and grounding-conducive. When Retrieval Hurts: Context Distraction in RAG identifies a failure mode where RAG introduces errors specifically when retrieved context is irrelevant or misleading. Both claims are true under different conditions—the boundary condition is the quality/relevance of retrieved context, which determines whether RAG mitigates or amplifies errors.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical comparison across the same model and query set with systematically varied retrieval quality (high-relevance vs. low-relevance vs. irrelevant passages) would determine whether the net effect of RAG is positive, negative, or contingent on passage quality.",
+          "mechanism": "different_scope_conditions"
+        },
+        "promptTokens": 2330,
+        "completionTokens": 282,
+        "costUsd": 0.0037400000000000003
+      },
+      {
+        "id": "llm_006",
+        "domain": "llm_reasoning",
+        "goldLabel": "unrelated",
+        "predicted": {
+          "relationship": "support",
+          "category": "methodological",
+          "explanation": "The first work establishes the experimental design parameters (5-shot prompting, temperature 0, fixed prompt template) under which self-consistency methods were evaluated. The second work reports the core finding that self-consistency sampling improved reasoning accuracy compared to greedy decoding. These are complementary claims about the same intervention—one specifies the controlled conditions, the other reports the outcome—and together they form a coherent methodological-to-findings progression.",
+          "strongerEvidence": "neither",
+          "resolution": "",
+          "mechanism": null
+        },
+        "promptTokens": 2308,
+        "completionTokens": 240,
+        "costUsd": 0.0035080000000000003
+      }
+    ]
+  }
+}

@@ -14,8 +14,11 @@ describe("RETRIEVAL_THRESHOLDS", () => {
     expect(RETRIEVAL_THRESHOLDS.locusSectionScore).toBe(0.7);
   });
 
-  it("defaults the uncalibrated dense thresholds to NaN when no env var is set", () => {
-    expect(Number.isNaN(RETRIEVAL_THRESHOLDS.denseMin)).toBe(true);
+  it("defaults denseMin to the Phase 25.5 calibration spike's measured value (0.35) when no env var is set", () => {
+    expect(RETRIEVAL_THRESHOLDS.denseMin).toBe(0.35);
+  });
+
+  it("still defaults denseStrong to NaN — the spike never measured a corroboration-skip cutoff", () => {
     expect(Number.isNaN(RETRIEVAL_THRESHOLDS.denseStrong)).toBe(true);
   });
 
@@ -25,9 +28,9 @@ describe("RETRIEVAL_THRESHOLDS", () => {
 });
 
 describe("NOVELTY_THRESHOLDS", () => {
-  it("defaults high/low to NaN when uncalibrated", () => {
-    expect(Number.isNaN(NOVELTY_THRESHOLDS.high)).toBe(true);
-    expect(Number.isNaN(NOVELTY_THRESHOLDS.low)).toBe(true);
+  it("defaults high/low to the Phase 25.5 calibration spike's PROVISIONAL measured values when no env var is set", () => {
+    expect(NOVELTY_THRESHOLDS.low).toBe(0.174);
+    expect(NOVELTY_THRESHOLDS.high).toBe(0.725);
   });
 });
 
@@ -43,9 +46,12 @@ describe("assertThresholdsCalibratedFor", () => {
 });
 
 describe("assertThresholdsSet", () => {
-  it("throws when any numeric field is NaN", () => {
+  it("throws when any numeric field is NaN — RETRIEVAL_THRESHOLDS still has one (denseStrong, uncalibrated)", () => {
     expect(() => assertThresholdsSet(RETRIEVAL_THRESHOLDS)).toThrow(/unset \(NaN default\)/);
-    expect(() => assertThresholdsSet(NOVELTY_THRESHOLDS)).toThrow(/unset \(NaN default\)/);
+  });
+
+  it("does not throw for NOVELTY_THRESHOLDS now that both low/high have Phase 25.5 measured defaults", () => {
+    expect(() => assertThresholdsSet(NOVELTY_THRESHOLDS)).not.toThrow();
   });
 
   it("does not throw once every numeric field is a real number", () => {
