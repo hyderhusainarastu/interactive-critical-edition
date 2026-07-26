@@ -589,6 +589,65 @@ test.describe("Phase 12 workspace foundation", () => {
     expect(topElement?.insideDialog).toBe(true);
   });
 
+  // Owner-reproduced live regression (2026-07-26, D-25-12): the account and
+  // preferences header menus were reported unusable in real Safari
+  // (including incognito, ruling out cache/extensions) while working fine in
+  // Chrome — and this suite's own Chromium/WebKit runs above never caught
+  // it. Root cause: the menu panels are `absolute`-positioned descendants of
+  // `<header>`, and `<header>` itself carried Tailwind's `backdrop-blur`
+  // (`backdrop-filter`/`-webkit-backdrop-filter`). Safari has a known bug
+  // clipping positioned descendants of a backdrop-filtered ancestor to that
+  // ancestor's own paint bounds, so the open panel — which extends below the
+  // header's box — was clipped away entirely in Safari specifically, with no
+  // symptom in Chromium/headless WebKit's rendering path. No engine other
+  // than real Safari reproduces the visual symptom, so this test instead
+  // makes the underlying defect CLASS structurally impossible and provable
+  // in any engine: walk every ancestor of an open menu panel and assert none
+  // of them resolves a `backdrop-filter`/`-webkit-backdrop-filter` other
+  // than "none". Fixed by moving the header's blur/background onto a
+  // dedicated `.app-shell-header-underlay` sibling `div` (see
+  // `AppShell.tsx`) so no filtered element is ever an ancestor of a panel.
+  // Red→green proof: `git stash push -- apps/web/src/components/app/
+  // AppShell.tsx apps/web/src/app/globals.css`, rebuild, and this test fails
+  // (the header itself resolves a real `backdrop-filter`); `git stash pop`,
+  // rebuild, and it passes again.
+  test("no open menu panel has a backdrop-filtered ancestor (Safari clipping guard)", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    async function filteredAncestors(dialog: ReturnType<typeof page.getByRole>) {
+      return dialog.evaluate((node) => {
+        const offenders: string[] = [];
+        let el: Element | null = node.parentElement;
+        while (el) {
+          const style = getComputedStyle(el);
+          const backdropFilter =
+            style.getPropertyValue("backdrop-filter") || style.getPropertyValue("-webkit-backdrop-filter");
+          if (backdropFilter && backdropFilter !== "none") {
+            offenders.push(`${el.tagName.toLowerCase()}.${Array.from(el.classList).join(".")}`);
+          }
+          el = el.parentElement;
+        }
+        return offenders;
+      });
+    }
+
+    await page.getByRole("button", { name: "Workspace preferences" }).click();
+    const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
+    await expect(preferencesDialog).toBeVisible();
+    expect(await filteredAncestors(preferencesDialog)).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(preferencesDialog).toBeHidden();
+
+    await page.getByRole("button", { name: "Account menu", exact: true }).click();
+    const profileDialog = page.getByRole("dialog", { name: "Account menu" });
+    await expect(profileDialog).toBeVisible();
+    expect(await filteredAncestors(profileDialog)).toEqual([]);
+  });
+
   // Phase 22.5/22.6 (plan §22.6): the shell-level global RAG sidebar
   // (D-22-8 — previously there was no entry point to Ask Library outside
   // the Reader and a full-page nav link at all). Named distinctly from the

@@ -195,8 +195,21 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
       {focusMode && <button ref={focusModeExitRef} type="button" className="app-control fixed right-4 top-4 z-40 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm shadow-md" onClick={() => setFocusMode(false)}>Exit focus mode</button>}
-      <header inert={focusMode} className={focusMode ? "sr-only" : `app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur ${headerCompact ? "header-compact" : ""}`}>
-        <div className="mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
+      {/* D-25-12: the blur/background live on a dedicated underlay `div`
+          (below) rather than on `<header>` itself. Safari clips positioned
+          descendants of a `backdrop-filter` ancestor to that ancestor's
+          paint bounds — the preferences/account menu panels below are
+          `absolute`-positioned descendants of this header, so putting the
+          filter on the header directly made those panels invisible in real
+          Safari (worked fine in Chrome/headless WebKit, where no such
+          clipping occurs). The underlay is a sibling of the content wrapper,
+          not an ancestor of the panels, so it can carry the blur with no
+          filtered element anywhere in the panels' ancestor chain. `sticky`
+          already establishes a positioning context for the underlay's
+          `absolute inset-0`, so no extra `relative` is needed here. */}
+      <header inert={focusMode} className={focusMode ? "sr-only" : `app-shell-header sticky top-0 z-30 w-full min-w-0 overflow-x-clip border-b border-[var(--color-border)] ${headerCompact ? "header-compact" : ""}`}>
+        {!focusMode && <div aria-hidden="true" className="app-shell-header-underlay pointer-events-none absolute inset-0 z-0 bg-[color-mix(in_srgb,var(--color-background)_94%,transparent)] backdrop-blur" />}
+        <div className="app-shell-header-content relative z-10 mx-auto grid min-h-14 w-full min-w-0 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <Wordmark href="/dashboard" className="shrink-0 font-serif text-lg font-semibold tracking-tight text-[var(--color-text)]" />
             <BetaBadge />

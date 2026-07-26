@@ -503,7 +503,14 @@ body {
 .app-shell-header, .masthead { transition: min-height .18s var(--spring-fast), box-shadow .18s var(--spring-fast), background-color .18s var(--spring-fast); }
 .header-compact { box-shadow: var(--shadow-elevation-1); }
 .app-shell-header.header-compact { min-height: 3.1rem; }
-.app-shell-header.header-compact > div { min-height: 3rem; }
+.app-shell-header.header-compact .app-shell-header-content { min-height: 3rem; }
+/* D-25-12: the underlay carries the background + backdrop-filter that used
+   to live on `.app-shell-header` itself. Kept as a sibling of
+   `.app-shell-header-content` (not an ancestor of the menu panels rendered
+   inside that content div) specifically so Safari's "positioned descendant
+   of a backdrop-filter ancestor gets clipped to the filter's paint bounds"
+   bug has no filtered ancestor to trigger on. */
+.app-shell-header-underlay { transition: background-color .18s var(--spring-fast); }
 .pal-site .masthead { position: sticky; top: 0; z-index: 30; }
 .pal-site .masthead.header-compact { min-height: 66px; background: color-mix(in srgb, var(--color-background) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 @media (max-width: 700px) { .pal-site .masthead.header-compact { min-height: 62px; } }
