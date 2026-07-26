@@ -1,4 +1,4 @@
-import { isEditionPipeline } from "@ice/config";
+import { isEditionPipeline, phase25FeatureEnabled } from "@ice/config";
 import {
   type AnalyzeWorkJob,
   type ResolveCitationMetadataJob,
@@ -15,8 +15,13 @@ import {
   QUEUE_ANALYZE_CLAIM_DEBATES,
   QUEUE_SYNTHESIZE_RESEARCH,
   RESEARCH_QUEUES,
+  RUN_MONITOR_CRON_NAME,
+  RUN_MONITOR_CRON_PAYLOAD,
+  RUN_MONITOR_CRON_SCHEDULE,
+  isRunMonitorCronTrigger,
   type ResearchJobPayload,
   type ResearchQueueName,
+  type RunMonitorCronTrigger,
   researchCache,
   researchJobRequests,
 } from "@ice/db";
@@ -32,6 +37,7 @@ import { extractClaims } from "./research/extractClaims";
 import { generateHypotheses } from "./research/generateHypotheses";
 import { importCorpus } from "./research/importCorpus";
 import { runResearchJob } from "./research/jobRunner";
+import { runDueMonitorFanout, runMonitor } from "./research/runMonitor";
 import { synthesizeChamber } from "./research/synthesizeChamber";
 import "./sentry";
 
@@ -114,14 +120,29 @@ async function main() {
     for (const job of batch) await runResearchJob(job.data.requestId, extractClaims);
   });
 
-  // Phase 28.2: import-research-corpus gets its real handler for
-  // `import_corpus` jobs. `run_monitor` (Phase 29.1) shares this SAME queue
-  // (plan §Pipeline: "also carries scheduled monitors") but is not
-  // implemented yet — a request of that job type on this queue still falls
+  // Phase 28.2/29.1: import-research-corpus gets its real handler for both
+  // job types this queue carries — `import_corpus` (28.2) and `run_monitor`
+  // (29.1, plan §Pipeline: "also carries scheduled monitors"). This queue
+  // ALSO carries the daily monitor cron's own static trigger payload
+  // (`RUN_MONITOR_CRON_PAYLOAD`, no `requestId` — see `packages/db/src/
+  // queue.ts`'s doc comment on why pg-boss's fixed-per-tick payload forces
+  // that trigger onto this same queue rather than a real per-request
+  // message); that shape is checked FIRST since it carries no `requestId` to
+  // look a `research_job_request` up by. Any other job type still falls
   // through to the honest no-op below, exactly as it did before this lane.
-  await boss.work<ResearchJobPayload>(QUEUE_IMPORT_RESEARCH_CORPUS, async (jobs) => {
+  await boss.work<ResearchJobPayload | RunMonitorCronTrigger>(QUEUE_IMPORT_RESEARCH_CORPUS, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
+      if (isRunMonitorCronTrigger(job.data)) {
+        try {
+          const { usersEnqueued } = await runDueMonitorFanout();
+          if (usersEnqueued > 0) console.log(`[worker] run_monitor cron fan-out enqueued ${usersEnqueued} user(s) with due monitors`);
+        } catch (error) {
+          reportError(error, { scope: "worker.runDueMonitorFanout" });
+          throw error;
+        }
+        continue;
+      }
       const [request] = await db
         .select({ jobType: researchJobRequests.jobType })
         .from(researchJobRequests)
@@ -129,6 +150,10 @@ async function main() {
         .limit(1);
       if (request?.jobType === "import_corpus") {
         await runResearchJob(job.data.requestId, importCorpus);
+        continue;
+      }
+      if (request?.jobType === "run_monitor") {
+        await runResearchJob(job.data.requestId, runMonitor);
         continue;
       }
       try {
@@ -217,12 +242,14 @@ async function main() {
     }
   });
 
-  // Phase 25.6: the remaining research queues stay honest no-ops until
-  // their own lanes (29 monitors) replace this registration — see
-  // `handleUnimplementedResearchJob`'s doc comment. Registering now means
-  // the queue rows and this worker's consumer set exist before any web route
-  // can enqueue, so an early enqueue is dequeued and answered honestly
-  // instead of sitting `created` forever with nothing consuming it.
+  // Phase 25.6: any FUTURE research queue stays an honest no-op until its own
+  // lane replaces this registration — see `handleUnimplementedResearchJob`'s
+  // doc comment. As of Phase 29.1 every current `RESEARCH_QUEUES` entry has a
+  // real handler above, so this loop is currently a no-op over an empty
+  // filtered list; left in place (rather than deleted) as the landing spot
+  // for the next research queue this codebase adds, matching the same
+  // "register now so an early enqueue is answered honestly, not left
+  // `created` forever" reasoning it always has.
   for (const queueName of RESEARCH_QUEUES.filter(
     (name) =>
       name !== QUEUE_EXTRACT_RESEARCH_CLAIMS &&
@@ -241,6 +268,23 @@ async function main() {
         }
       }
     });
+  }
+
+  // Phase 29.1: the daily monitor-scan cron, guarded by the `monitoring`
+  // flag (default off — `packages/config/src/phase25.ts`'s own doc comment:
+  // "a scheduled job is the one surface here that can act without a user
+  // present"). `boss.schedule()`'s `schedule` table is keyed by queue name
+  // (one row per queue, upserted on every call), so this call is itself
+  // idempotent across restarts/redeploys. When the flag is OFF this
+  // `unschedule`s instead of skipping outright — a flag that was
+  // ON in a prior deploy and is later turned OFF must not leave a stale
+  // cron row still firing forever; `unschedule` on a name with no existing
+  // row is a harmless no-op.
+  if (phase25FeatureEnabled("monitoring")) {
+    await boss.schedule(RUN_MONITOR_CRON_NAME, RUN_MONITOR_CRON_SCHEDULE, RUN_MONITOR_CRON_PAYLOAD, { tz: "UTC" });
+    console.log(`[worker] run_monitor cron scheduled: "${RUN_MONITOR_CRON_SCHEDULE}" UTC on queue "${RUN_MONITOR_CRON_NAME}"`);
+  } else {
+    await boss.unschedule(RUN_MONITOR_CRON_NAME).catch((err) => reportError(err, { scope: "worker.unscheduleRunMonitorCron" }));
   }
 
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary

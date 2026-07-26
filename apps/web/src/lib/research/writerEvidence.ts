@@ -43,6 +43,11 @@ export interface LinkedResearchProject {
  *  researched bibliographic record" self-match. */
 const NORM = (column: string) => sql.raw(`regexp_replace(lower(${column}), '[^a-z0-9]', '', 'g')`);
 
+/** The `tx` a `db.transaction()` callback receives — used below so the
+ *  evidence insert's citation write and document save commit or fail
+ *  together (see `insertClaimEvidenceIntoDocument`). */
+type Tx = Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];
+
 // ---------------------------------------------------------------------------
 // Project linking (Writer <-> Research). A writer project may technically be
 // linked to more than one research project over time (the schema allows it,
@@ -258,11 +263,14 @@ export async function buildClaimSourceCitation(userId: string, claim: Pick<Claim
   return null;
 }
 
-async function linkCitationToClaim(projectId: string, claim: ClaimEvidenceSource, csl: CslJson): Promise<{ id: string } | null> {
-  const citation = await addWriterCitation(projectId, csl, "research_claim");
+/** `dbClient` is always the transaction handed in by
+ *  `insertClaimEvidenceIntoDocument` — see the note there on why the
+ *  citation write and the document save must commit or fail together. */
+async function linkCitationToClaim(projectId: string, claim: ClaimEvidenceSource, csl: CslJson, dbClient: Tx): Promise<{ id: string } | null> {
+  const citation = await addWriterCitation(projectId, csl, "research_claim", dbClient);
   if (!citation) return null;
   if (!citation.researchClaimId) {
-    await db.update(writerCitations).set({ researchClaimId: claim.id, updatedAt: new Date() }).where(eq(writerCitations.id, citation.id));
+    await dbClient.update(writerCitations).set({ researchClaimId: claim.id, updatedAt: new Date() }).where(eq(writerCitations.id, citation.id));
   }
   return { id: citation.id };
 }
@@ -283,6 +291,15 @@ export interface EvidenceInsertResult {
  * bibliographic identity resolves; an unresolved citation and an unanchored
  * claim each get their own honest, visible marker paragraph (both can fire
  * together — they are independent facts about the claim).
+ *
+ * The citation write (`linkCitationToClaim`) and the document save
+ * (`saveWriterDocument`) run inside one `db.transaction()`: both are real
+ * durable writes describing the SAME insert action, so a failure partway
+ * through (e.g. the document save erroring after the citation row already
+ * committed) must never leave an orphaned `writer_citation` with no
+ * corresponding content in the document — either both commit or neither
+ * does. `buildClaimSourceCitation` stays outside the transaction since it is
+ * read-only (bibliographic lookup), not a write needing atomicity.
  */
 export async function insertClaimEvidenceIntoDocument(
   userId: string,
@@ -296,21 +313,37 @@ export async function insertClaimEvidenceIntoDocument(
   if (!claim) return "not_found";
 
   const csl = await buildClaimSourceCitation(userId, claim);
-  const citation = csl ? await linkCitationToClaim(writerProjectId, claim, csl) : null;
 
-  const blocks: ProseMirrorBlock[] = [buildEvidenceBlockquote({ researchClaimId: claim.id, excerpt: claim.supportingExcerpt, workTitle: claim.workTitle })];
-  if (!citation) blocks.push(buildEvidenceMarker("[Citation unresolved — no verified bibliographic identity is available for this source.]"));
-  if (claim.anchorState === "unanchored") blocks.push(buildEvidenceMarker("[Passage not currently locatable in the source text.]"));
+  try {
+    return await db.transaction(async (tx) => {
+      const citation = csl ? await linkCitationToClaim(writerProjectId, claim, csl, tx) : null;
 
-  const currentContent = owned.document.content as ProseMirrorDocument;
-  const nextContent: ProseMirrorDocument = { type: "doc", content: [...currentContent.content, ...blocks] };
-  const updated = await saveWriterDocument(documentId, { content: nextContent }, "evidence_insert");
-  if (!updated) return "not_found";
+      const blocks: ProseMirrorBlock[] = [buildEvidenceBlockquote({ researchClaimId: claim.id, excerpt: claim.supportingExcerpt, workTitle: claim.workTitle })];
+      if (!citation) blocks.push(buildEvidenceMarker("[Citation unresolved — no verified bibliographic identity is available for this source.]"));
+      if (claim.anchorState === "unanchored") blocks.push(buildEvidenceMarker("[Passage not currently locatable in the source text.]"));
 
-  return {
-    document: { id: updated.id, content: updated.content },
-    citationId: citation?.id ?? null,
-    unresolvedCitation: !citation,
-    unanchored: claim.anchorState === "unanchored",
-  };
+      const currentContent = owned.document.content as ProseMirrorDocument;
+      const nextContent: ProseMirrorDocument = { type: "doc", content: [...currentContent.content, ...blocks] };
+      const updated = await saveWriterDocument(documentId, { content: nextContent }, "evidence_insert", tx);
+      // The document vanished between the ownership check above and this
+      // save (a concurrent delete) — throw to roll back the citation write
+      // too, then translate back to the ordinary "not_found" result below
+      // rather than letting a raw rollback error escape to the caller.
+      if (!updated) throw new DocumentVanishedError();
+
+      return {
+        document: { id: updated.id, content: updated.content },
+        citationId: citation?.id ?? null,
+        unresolvedCitation: !citation,
+        unanchored: claim.anchorState === "unanchored",
+      };
+    });
+  } catch (err) {
+    if (err instanceof DocumentVanishedError) return "not_found";
+    throw err;
+  }
 }
+
+/** Internal rollback signal for the concurrent-delete race in
+ *  `insertClaimEvidenceIntoDocument` — never surfaced past that function. */
+class DocumentVanishedError extends Error {}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { claimRelationships, db, debateClusters, researchClaims, researchJobRequests, researchProjects, works } from "@ice/db";
+import { claimRelationships, db, debateClusters, researchClaims, researchJobRequests, researchMonitorHits, researchMonitors, researchProjects, works } from "@ice/db";
 import { getResearchInsightCounts, hasResearchInsightSignal } from "@/lib/researchDashboard";
 import { createVerifiedTestUser, deleteTestUser } from "../../e2e/helpers";
 
@@ -182,6 +182,16 @@ async function testMixedSignalCountsExactlyTheEligibleRows() {
     await db.insert(researchJobRequests).values({ ...jobBase, status: "failed", idempotencyKey: crypto.randomUUID() });
     await db.insert(researchJobRequests).values({ ...jobBase, status: "cancelled", idempotencyKey: crypto.randomUUID() });
 
+    // Monitor hits: one undismissed (counts), one dismissed (must not).
+    const [monitor] = await db
+      .insert(researchMonitors)
+      .values({ userId, monitorType: "topic", query: "test topic", cadence: "daily" })
+      .returning({ id: researchMonitors.id });
+    await db.insert(researchMonitorHits).values({ monitorId: monitor.id, dedupKey: `title:hit-a-${crypto.randomUUID()}`, title: "Hit A", authors: [], provider: "semanticscholar" });
+    await db
+      .insert(researchMonitorHits)
+      .values({ monitorId: monitor.id, dedupKey: `title:hit-b-${crypto.randomUUID()}`, title: "Hit B", authors: [], provider: "semanticscholar", dismissedAt: new Date() });
+
     const counts = await getResearchInsightCounts(userId);
     assert.equal(counts.activeProjects, 1, "only the non-archived project counts");
     assert.equal(counts.claimsAwaitingReview, 1, "only the unreviewed/active/non-hidden claim counts");
@@ -189,6 +199,7 @@ async function testMixedSignalCountsExactlyTheEligibleRows() {
     assert.equal(counts.activeDebateClusters, 1, "only the active (non-stale) debate cluster counts");
     assert.equal(counts.runningJobs, 2, "queued + running both count as 'running'");
     assert.equal(counts.failedJobs, 1, "only the failed job counts");
+    assert.equal(counts.newMonitorHits, 1, "only the undismissed monitor hit counts");
 
     assert.equal(hasResearchInsightSignal(counts), true, "a real mixed signal must show the module");
   } finally {
@@ -211,6 +222,7 @@ async function testZeroActivityHasNoSignal() {
     assert.equal(counts.activeDebateClusters, 0);
     assert.equal(counts.runningJobs, 0);
     assert.equal(counts.failedJobs, 0);
+    assert.equal(counts.newMonitorHits, 0);
     assert.equal(hasResearchInsightSignal(counts), false, "an all-zero account must not show the module");
   } finally {
     await deleteTestUser(email);
@@ -235,10 +247,34 @@ async function testProjectAloneIsSignal() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// (d) Phase 29.1: a lone undismissed monitor hit, with no project/claim/
+// debate/job activity at all, is still a real signal on its own — and a
+// second monitor hit that IS dismissed does not inflate the count.
+// ---------------------------------------------------------------------------
+async function testMonitorHitAloneIsSignal() {
+  const { email, userId } = await seedUser("monitor-hit-only");
+  try {
+    const [monitor] = await db
+      .insert(researchMonitors)
+      .values({ userId, monitorType: "author_follow", query: "Some Author", cadence: "weekly" })
+      .returning({ id: researchMonitors.id });
+    await db.insert(researchMonitorHits).values({ monitorId: monitor.id, dedupKey: `title:solo-hit-${crypto.randomUUID()}`, title: "Solo Hit", authors: [], provider: "semanticscholar" });
+
+    const counts = await getResearchInsightCounts(userId);
+    assert.equal(counts.activeProjects, 0);
+    assert.equal(counts.newMonitorHits, 1);
+    assert.equal(hasResearchInsightSignal(counts), true, "one undismissed monitor hit alone is a real signal");
+  } finally {
+    await deleteTestUser(email);
+  }
+}
+
 async function main() {
   await testMixedSignalCountsExactlyTheEligibleRows();
   await testZeroActivityHasNoSignal();
   await testProjectAloneIsSignal();
+  await testMonitorHitAloneIsSignal();
   console.log("researchDashboard.test.ts: all assertions passed");
 }
 

@@ -1,5 +1,5 @@
 import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
-import { claimRelationships, db, debateClusters, researchClaims, researchJobRequests, researchProjects } from "@ice/db";
+import { claimRelationships, db, debateClusters, researchClaims, researchJobRequests, researchMonitorHits, researchMonitors, researchProjects } from "@ice/db";
 
 /**
  * Zero-LLM, zero-cache dashboard insight-feed queries (Phase 29.3
@@ -33,6 +33,10 @@ export interface ResearchInsightCounts {
   runningJobs: number;
   /** `research_job_request` rows that ended `failed`. */
   failedJobs: number;
+  /** Phase 29.1: `research_monitor_hit` rows not yet dismissed, across
+   *  every monitor this user owns — undismissed findings a monitor
+   *  surfaced, not a lifetime total. */
+  newMonitorHits: number;
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -48,8 +52,15 @@ function firstCount(rows: Array<{ value: number }>): number {
 export async function getResearchInsightCounts(userId: string): Promise<ResearchInsightCounts> {
   const sevenDaysAgo = new Date(Date.now() - SEVEN_DAYS_MS);
 
-  const [activeProjectsRows, claimsAwaitingReviewRows, newContradictionsRows, activeDebateClustersRows, runningJobsRows, failedJobsRows] =
-    await Promise.all([
+  const [
+    activeProjectsRows,
+    claimsAwaitingReviewRows,
+    newContradictionsRows,
+    activeDebateClustersRows,
+    runningJobsRows,
+    failedJobsRows,
+    newMonitorHitsRows,
+  ] = await Promise.all([
       db
         .select({ value: count() })
         .from(researchProjects)
@@ -88,6 +99,13 @@ export async function getResearchInsightCounts(userId: string): Promise<Research
         .select({ value: count() })
         .from(researchJobRequests)
         .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.status, "failed"))),
+      // Phase 29.1: joined through research_monitor for ownership —
+      // research_monitor_hit carries no user_id of its own.
+      db
+        .select({ value: count() })
+        .from(researchMonitorHits)
+        .innerJoin(researchMonitors, eq(researchMonitors.id, researchMonitorHits.monitorId))
+        .where(and(eq(researchMonitors.userId, userId), isNull(researchMonitorHits.dismissedAt))),
     ]);
 
   return {
@@ -97,6 +115,7 @@ export async function getResearchInsightCounts(userId: string): Promise<Research
     activeDebateClusters: firstCount(activeDebateClustersRows),
     runningJobs: firstCount(runningJobsRows),
     failedJobs: firstCount(failedJobsRows),
+    newMonitorHits: firstCount(newMonitorHitsRows),
   };
 }
 
@@ -114,6 +133,7 @@ export function hasResearchInsightSignal(counts: ResearchInsightCounts): boolean
     counts.newContradictions > 0 ||
     counts.activeDebateClusters > 0 ||
     counts.runningJobs > 0 ||
-    counts.failedJobs > 0
+    counts.failedJobs > 0 ||
+    counts.newMonitorHits > 0
   );
 }

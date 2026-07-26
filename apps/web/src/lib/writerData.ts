@@ -12,6 +12,12 @@ import {
 import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
 import { citationKey, type CslJson, emptyWriterDocument, type ProseMirrorDocument } from "./writer";
 
+/** Accepts either the top-level `db` or a `db.transaction()` callback's `tx`
+ *  — lets a caller (e.g. `lib/research/writerEvidence.ts`'s evidence insert)
+ *  compose this module's writes into its own transaction, while every
+ *  existing call site keeps working unchanged via the default `db`. */
+type DbOrTx = typeof db | Parameters<Parameters<(typeof db)["transaction"]>[0]>[0];
+
 export async function getOwnedWriterProject(userId: string, projectId: string, includeArchived = false) {
   const conditions = [eq(writerProjects.id, projectId), eq(writerProjects.userId, userId)];
   if (!includeArchived) conditions.push(isNull(writerProjects.archivedAt));
@@ -76,17 +82,18 @@ export async function saveWriterDocument(
   documentId: string,
   patch: { title?: string; content?: ProseMirrorDocument; sortOrder?: number },
   reason = "autosave",
+  dbClient: DbOrTx = db,
 ) {
-  const [current] = await db.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
+  const [current] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
   if (!current) return null;
   const contentChanged = patch.content !== undefined && JSON.stringify(current.content) !== JSON.stringify(patch.content);
-  const [updated] = await db.update(writerDocuments).set({ ...patch, updatedAt: new Date() }).where(eq(writerDocuments.id, documentId)).returning();
+  const [updated] = await dbClient.update(writerDocuments).set({ ...patch, updatedAt: new Date() }).where(eq(writerDocuments.id, documentId)).returning();
   if (contentChanged) {
-    const [last] = await db.select({ revision: writerDocumentRevisions.revision }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).limit(1);
-    await db.insert(writerDocumentRevisions).values({ documentId, revision: (last?.revision ?? 0) + 1, content: patch.content!, reason });
+    const [last] = await dbClient.select({ revision: writerDocumentRevisions.revision }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).limit(1);
+    await dbClient.insert(writerDocumentRevisions).values({ documentId, revision: (last?.revision ?? 0) + 1, content: patch.content!, reason });
     // Keep recovery intentionally bounded without deleting the initial snapshot.
-    const old = await db.select({ id: writerDocumentRevisions.id }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).offset(50);
-    if (old.length) await db.delete(writerDocumentRevisions).where(sql`${writerDocumentRevisions.id} in (${sql.join(old.map((row) => sql`${row.id}`), sql`, `)})`);
+    const old = await dbClient.select({ id: writerDocumentRevisions.id }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).offset(50);
+    if (old.length) await dbClient.delete(writerDocumentRevisions).where(sql`${writerDocumentRevisions.id} in (${sql.join(old.map((row) => sql`${row.id}`), sql`, `)})`);
   }
   return updated;
 }
@@ -101,15 +108,15 @@ export async function restoreWriterDocumentRevision(documentId: string, revision
   return saveWriterDocument(documentId, { content: revision.content as ProseMirrorDocument }, "revision_restore");
 }
 
-export async function addWriterCitation(projectId: string, citation: CslJson, source: string) {
+export async function addWriterCitation(projectId: string, citation: CslJson, source: string, dbClient: DbOrTx = db) {
   const normalizedKey = citationKey(citation);
-  const [created] = await db
+  const [created] = await dbClient
     .insert(writerCitations)
     .values({ projectId, normalizedKey, cslJson: citation, source })
     .onConflictDoNothing({ target: [writerCitations.projectId, writerCitations.normalizedKey] })
     .returning();
   if (created) return created;
-  const [existing] = await db.select().from(writerCitations).where(and(eq(writerCitations.projectId, projectId), eq(writerCitations.normalizedKey, normalizedKey))).limit(1);
+  const [existing] = await dbClient.select().from(writerCitations).where(and(eq(writerCitations.projectId, projectId), eq(writerCitations.normalizedKey, normalizedKey))).limit(1);
   return existing ?? null;
 }
 
