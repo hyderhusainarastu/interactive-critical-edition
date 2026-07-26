@@ -522,6 +522,73 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(trigger).toBeFocused();
   });
 
+  // Owner-reported live regression (2026-07-25): the account/preferences
+  // menus were suspected to be painting BEHIND `<main>`'s routed content —
+  // a stacking-context occlusion, distinct from the two previously-fixed
+  // menu defects (hardware double-fire, see `useOutsideMenuClose`'s doc
+  // comment; and `AnimatePresence` remounting the shell, see
+  // `PageTransition.tsx`'s doc comment). Investigated by asserting
+  // `document.elementFromPoint` at a menu item's own center actually
+  // resolves to that item (or a descendant of its `role="dialog"` panel) —
+  // the only way to prove or disprove *paint* order, as opposed to mere
+  // visibility/opacity. Could NOT be reproduced: `<header>` is
+  // `position: sticky; z-index: 30`, which forms its own stacking context
+  // that always paints above `<main>`'s default (`position: static`,
+  // `z-index: auto`) content, regardless of any nested `transform`
+  // `PageTransition`'s `motion.div` applies while animating — a nested
+  // stacking context can never escape its ancestor's slot in the parent
+  // paint order. Kept here as permanent regression coverage (settled AND
+  // mid-transition) rather than only as a one-off diagnostic, since the
+  // underlying report is real even though this environment couldn't
+  // reproduce it.
+  test("the account menu paints above main content, not behind it (settled)", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    await page.getByRole("button", { name: "Account menu" }).click();
+    const profileLink = page.getByRole("link", { name: "Profile" });
+    await expect(profileLink).toBeVisible();
+    const box = (await profileLink.boundingBox())!;
+    const topElement = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? { tag: el.tagName, insideDialog: !!el.closest('[role="dialog"]') } : null;
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(topElement?.insideDialog).toBe(true);
+  });
+
+  test("the account menu paints above main content, not behind it (mid page-transition)", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+    await page.waitForLoadState("networkidle");
+
+    // Navigate, then open the menu with no settle wait — this is the
+    // window during which PageTransition's motion.div is actively
+    // animating opacity/transform on #main-content.
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Library", exact: true }).click();
+    await page.getByRole("button", { name: "Account menu" }).click();
+    const profileLink = page.getByRole("link", { name: "Profile" });
+    await expect(profileLink).toBeVisible();
+    const box = (await profileLink.boundingBox())!;
+    const topElement = await page.evaluate(
+      ({ x, y }) => {
+        const el = document.elementFromPoint(x, y);
+        return el ? { tag: el.tagName, insideDialog: !!el.closest('[role="dialog"]') } : null;
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    expect(topElement?.insideDialog).toBe(true);
+  });
+
   // Phase 22.5/22.6 (plan §22.6): the shell-level global RAG sidebar
   // (D-22-8 — previously there was no entry point to Ask Library outside
   // the Reader and a full-page nav link at all). Named distinctly from the
