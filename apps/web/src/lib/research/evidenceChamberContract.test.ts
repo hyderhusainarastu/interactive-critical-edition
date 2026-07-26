@@ -163,6 +163,7 @@ const sampleChamber: EvidenceChamberView = {
   provider: "openai",
   model: "gpt-5.4-nano",
   verificationStatus: "unreviewed",
+  hidden: false,
   createdAt: new Date("2026-07-26T00:00:00Z"),
   positions: [samplePosition],
 };

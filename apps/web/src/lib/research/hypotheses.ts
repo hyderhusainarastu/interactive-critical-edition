@@ -46,8 +46,10 @@ export interface ResearchHypothesisListRow {
   hidden: boolean;
   createdAt: Date;
   /** Cited conflicts, resolved to their real `claim_relationship` rows —
-   *  the label-validated provenance the UI links out to. */
-  sources: { claimRelationshipId: string; valence: string; category: string }[];
+   *  the label-validated provenance the UI links out to. `verificationStatus`/
+   *  `hidden` are included so the Phase 29.2 review chips shown alongside
+   *  each chip reflect the relationship's actual current state on load. */
+  sources: { claimRelationshipId: string; valence: string; category: string; verificationStatus: string; hidden: boolean }[];
   /** Distinct works this hypothesis's cited conflicts touch. */
   supportingWorks: { workId: string; workTitle: string }[];
 }
@@ -84,7 +86,14 @@ export async function listResearchHypotheses(userId: string, projectId: string):
   const hypothesisIds = rows.map((r) => r.id);
   const [sourceRows, supportRows] = await Promise.all([
     db
-      .select({ hypothesisId: researchHypothesisSources.hypothesisId, claimRelationshipId: researchHypothesisSources.claimRelationshipId, valence: claimRelationships.valence, category: claimRelationships.category })
+      .select({
+        hypothesisId: researchHypothesisSources.hypothesisId,
+        claimRelationshipId: researchHypothesisSources.claimRelationshipId,
+        valence: claimRelationships.valence,
+        category: claimRelationships.category,
+        verificationStatus: claimRelationships.verificationStatus,
+        hidden: claimRelationships.hidden,
+      })
       .from(researchHypothesisSources)
       .innerJoin(claimRelationships, eq(claimRelationships.id, researchHypothesisSources.claimRelationshipId))
       .where(inArray(researchHypothesisSources.hypothesisId, hypothesisIds)),
@@ -98,7 +107,7 @@ export async function listResearchHypotheses(userId: string, projectId: string):
   const sourcesByHypothesis = new Map<string, ResearchHypothesisListRow["sources"]>();
   for (const s of sourceRows) {
     const existing = sourcesByHypothesis.get(s.hypothesisId) ?? [];
-    existing.push({ claimRelationshipId: s.claimRelationshipId, valence: s.valence, category: s.category });
+    existing.push({ claimRelationshipId: s.claimRelationshipId, valence: s.valence, category: s.category, verificationStatus: s.verificationStatus, hidden: s.hidden });
     sourcesByHypothesis.set(s.hypothesisId, existing);
   }
   const supportByHypothesis = new Map<string, ResearchHypothesisListRow["supportingWorks"]>();

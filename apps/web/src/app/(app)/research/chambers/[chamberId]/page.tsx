@@ -2,6 +2,7 @@ import { phase25FeatureEnabled } from "@ice/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CREDIBILITY_DIMENSIONS, CREDIBILITY_DIMENSION_LABEL } from "@/components/graph/types";
+import { ResearchCorrectionControls } from "@/components/research/ResearchCorrectionControls";
 import { requireSession } from "@/lib/auth";
 import { getEvidenceChamberView, type ChamberPositionClaimView, type PositionSourceCredibility } from "@/lib/research/chambers";
 
@@ -97,6 +98,15 @@ export default async function EvidenceChamberPage({ params }: { params: Promise<
       </p>
       <h1 id="evidence-chamber-title" className="mt-1 font-serif text-2xl font-semibold">{chamber.question}</h1>
       <p className="mt-2 text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Evidence Chamber — a neutral map of this disagreement, not a ruling on it</p>
+
+      {/* Review affordances (Phase 29.2): verify/dispute/hide/restore the
+          chamber as a whole, plus its revision history. */}
+      <section className="app-card app-panel-enter mt-4 rounded-lg p-4" aria-labelledby="chamber-review-title">
+        <h2 id="chamber-review-title" className="font-serif text-lg font-semibold">Review</h2>
+        <div className="mt-2">
+          <ResearchCorrectionControls objectType="chamber" objectId={chamber.id} verificationStatus={chamber.verificationStatus} hidden={chamber.hidden} />
+        </div>
+      </section>
 
       {/* The chamber's own structured comparison — every brief field, none omitted. */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="chamber-shared-ground-title">

@@ -174,6 +174,10 @@ export interface EvidenceChamberView {
   provider: string;
   model: string;
   verificationStatus: string;
+  /** The Phase 29.2 review workflow's hide/restore state — read here so the
+   *  chamber page's `ResearchCorrectionControls` reflects the DB's actual
+   *  current value on load rather than always assuming `false`. */
+  hidden: boolean;
   createdAt: Date;
   /** Rendered in ordinal order — never re-sorted by any score. */
   positions: ChamberPositionView[];
@@ -234,6 +238,7 @@ export async function getEvidenceChamberView(userId: string, chamberId: string):
       provider: evidenceChambers.provider,
       model: evidenceChambers.model,
       verificationStatus: evidenceChambers.verificationStatus,
+      hidden: evidenceChambers.hidden,
       createdAt: evidenceChambers.createdAt,
       clusterName: sql<string>`(select name from debate_cluster where id = ${evidenceChambers.clusterId})`,
     })

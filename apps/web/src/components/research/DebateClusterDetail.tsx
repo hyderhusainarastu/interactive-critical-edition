@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ResearchCorrectionControls } from "./ResearchCorrectionControls";
 
 type MemberClaim = { id: string; workId: string | null; workTitle: string | null; claimText: string; claimNature: string };
 type Cluster = {
@@ -14,6 +15,7 @@ type Cluster = {
   status: string;
   edgeCount: number;
   verificationStatus: string;
+  hidden: boolean;
   members: MemberClaim[];
   latestChamberId: string | null;
 };
@@ -139,6 +141,15 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
       </div>
       {lastNote && <p className="mt-2 text-xs text-[var(--color-text-muted)]">{lastNote}</p>}
       {error && <p className="mt-2 text-xs text-[var(--color-error,#b3261e)]">{error}</p>}
+
+      {/* Review affordances (Phase 29.2): verify/dispute/hide/restore this
+          debate cluster, plus its revision history. */}
+      <section className="app-card app-panel-enter mt-4 rounded-lg p-4" aria-labelledby="debate-cluster-review-title">
+        <h2 id="debate-cluster-review-title" className="font-serif text-lg font-semibold">Review</h2>
+        <div className="mt-2">
+          <ResearchCorrectionControls objectType="cluster" objectId={cluster.id} verificationStatus={cluster.verificationStatus} hidden={cluster.hidden} />
+        </div>
+      </section>
 
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="debate-cluster-members-title">
         <h2 id="debate-cluster-members-title" className="font-serif text-lg font-semibold">Claims in this debate</h2>

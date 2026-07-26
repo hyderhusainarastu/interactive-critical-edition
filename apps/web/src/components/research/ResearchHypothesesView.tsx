@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { ResearchCorrectionControls } from "./ResearchCorrectionControls";
 
 type Project = { id: string; title: string };
 
@@ -22,7 +23,7 @@ type Hypothesis = {
   verificationStatus: string;
   hidden: boolean;
   createdAt: string | Date;
-  sources: { claimRelationshipId: string; valence: string; category: string }[];
+  sources: { claimRelationshipId: string; valence: string; category: string; verificationStatus: string; hidden: boolean }[];
   supportingWorks: { workId: string; workTitle: string }[];
 };
 
@@ -210,9 +211,9 @@ export function ResearchHypothesesView({
               {h.sources.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Cited conflicts</p>
-                  <ul className="mt-1 flex flex-wrap gap-2">
+                  <ul className="mt-1 flex flex-wrap items-start gap-3">
                     {h.sources.map((s) => (
-                      <li key={s.claimRelationshipId}>
+                      <li key={s.claimRelationshipId} className="flex flex-col gap-1">
                         <Link
                           href={`/research/${project.id}/claims`}
                           className="app-control app-press inline-block rounded border border-[var(--color-border)] px-2 py-1 text-xs underline"
@@ -220,6 +221,13 @@ export function ResearchHypothesesView({
                         >
                           {VALENCE_LABEL[s.valence] ?? s.valence} · {s.category}
                         </Link>
+                        <ResearchCorrectionControls
+                          objectType="relationship"
+                          objectId={s.claimRelationshipId}
+                          verificationStatus={s.verificationStatus}
+                          hidden={s.hidden}
+                          compact
+                        />
                       </li>
                     ))}
                   </ul>
@@ -230,6 +238,9 @@ export function ResearchHypothesesView({
                   Draws on: {h.supportingWorks.map((w) => w.workTitle).join(", ")}
                 </p>
               )}
+              <div className="mt-3">
+                <ResearchCorrectionControls objectType="hypothesis" objectId={h.id} verificationStatus={h.verificationStatus} hidden={h.hidden} compact />
+              </div>
             </li>
           ))}
           {!hypotheses.length && (
@@ -252,6 +263,9 @@ export function ResearchHypothesesView({
             <li key={g.id} className="app-mount rounded border border-[var(--color-border)] p-3 text-sm">
               <p>{g.description}</p>
               {g.debateClusterName && <p className="mt-1 text-xs text-[var(--color-text-muted)]">From debate: {g.debateClusterName}</p>}
+              <div className="mt-2">
+                <ResearchCorrectionControls objectType="gap" objectId={g.id} verificationStatus={g.verificationStatus} hidden={g.hidden} compact />
+              </div>
             </li>
           ))}
           {!gaps.length && <li className="app-empty app-mount rounded p-3 text-sm text-[var(--color-text-muted)]">No open gaps recorded yet.</li>}

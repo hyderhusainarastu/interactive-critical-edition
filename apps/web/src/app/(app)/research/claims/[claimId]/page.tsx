@@ -1,6 +1,8 @@
 import { phase25FeatureEnabled } from "@ice/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ClaimCorrectionExtras } from "@/components/research/ClaimCorrectionExtras";
+import { ResearchCorrectionControls } from "@/components/research/ResearchCorrectionControls";
 import { requireSession } from "@/lib/auth";
 import { getResearchClaimDetail, listProjectIdsForWork } from "@/lib/research/claims";
 
@@ -85,6 +87,24 @@ export default async function ResearchClaimPermalinkPage({ params }: { params: P
           </div>
         </dl>
       </section>
+
+      {/* Review affordances (Phase 29.2): verify/dispute/hide/restore + a
+          per-object revision history, and the claim-only edit/reclassify/
+          split/merge actions. `applyResearchCorrection` is the only
+          mutation path these controls ever call. */}
+      <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="claim-review-title">
+        <h2 id="claim-review-title" className="font-serif text-lg font-semibold">Review</h2>
+        <div className="mt-2">
+          <ResearchCorrectionControls objectType="claim" objectId={claim.id} verificationStatus={claim.verificationStatus} hidden={claim.hidden} />
+        </div>
+      </section>
+      <ClaimCorrectionExtras
+        claimId={claim.id}
+        claimText={claim.claimText}
+        supportingExcerpt={claim.supportingExcerpt}
+        claimNature={claim.claimNature}
+        anchorState={claim.anchorState}
+      />
 
       {claim.scores.length > 0 && (
         <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-claim-scores-title">
