@@ -366,3 +366,147 @@ export async function lookupSemanticScholarById(
   });
   return { resource: result.resources[0] ?? null, attempt: result.attempt };
 }
+
+function mapSemanticScholarPaper(p: SemanticScholarPaper): RawResource {
+  return {
+    provider: "semanticscholar",
+    resourceType: "article",
+    title: p.title ?? "",
+    authors: (p.authors ?? []).map((a) => a.name ?? "").filter(Boolean),
+    year: p.year ?? null,
+    url: p.url ?? (p.externalIds?.DOI ? `https://doi.org/${p.externalIds.DOI}` : null),
+    doi: p.externalIds?.DOI ?? null,
+    isbn: null,
+    snippet: p.abstract ? p.abstract.replace(/\s+/g, " ").trim().slice(0, 600) : null,
+    venue: p.venue ?? null,
+    popularity: p.citationCount ?? null,
+    raw: p,
+  };
+}
+
+/**
+ * Phase 29.1 monitoring: new papers CITING a seed paper (Semantic Scholar's
+ * citations graph) — the "citation alert" monitor type
+ * (`docs/architecture/scholarlens-integration-plan.md` §Pipeline
+ * monitoring, transplanting `monitoring_agent.py`'s `scan_citations` onto
+ * this codebase's honest-attempt adapter shape). `seedPaperId` is whatever
+ * `formatSemanticScholarPaperId` (below) already normalized — S2 accepts a
+ * bare paperId, `DOI:...`, or `ARXIV:...`. A seed with zero citers is an
+ * honest empty result, not a failure.
+ */
+export async function lookupCitations(
+  seedPaperId: string,
+  opts: { maxResults?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ resources: RawResource[]; attempt: ProviderAttempt }> {
+  if (!providerEnabled("semanticscholar")) return { resources: [], attempt: disabledAttempt("semanticscholar").attempt };
+  const maxResults = opts.maxResults ?? 10;
+  const result = await runAttempt("semanticscholar", [seedPaperId], async () => {
+    const params = new URLSearchParams({
+      fields: "title,authors,year,externalIds,abstract,citationCount,url,venue",
+      limit: String(Math.min(maxResults, 100)),
+    });
+    const headers: Record<string, string> = { "User-Agent": userAgent(POLITE_EMAIL) };
+    if (process.env.SEMANTIC_SCHOLAR_API_KEY) headers["x-api-key"] = process.env.SEMANTIC_SCHOLAR_API_KEY;
+    const { ok, status, data, error } = await fetchJson<{ data?: { citingPaper?: SemanticScholarPaper }[] }>(
+      `https://api.semanticscholar.org/graph/v1/paper/${encodeURIComponent(seedPaperId)}/citations?${params}`,
+      { headers, timeoutMs: opts.timeoutMs, signal: opts.signal },
+    );
+    if (!ok) {
+      // S2 answers 404 for a seed id it doesn't recognize — an honest "not
+      // found" (e.g. a DOI it hasn't indexed), distinct from a real
+      // outage/rate-limit.
+      if (status === 404) return { resources: [] };
+      return { resources: [], rateLimited: status === 429, failed: status === 0, unavailable: status > 0 && status !== 429 && status !== 404, error };
+    }
+    const resources = (data?.data ?? [])
+      .map((row) => row.citingPaper)
+      .filter((p): p is SemanticScholarPaper => Boolean(p?.title))
+      .map(mapSemanticScholarPaper);
+    return { resources };
+  });
+  return { resources: result.resources, attempt: result.attempt };
+}
+
+/**
+ * Phase 29.1 monitoring: an author's newest S2-indexed papers — the
+ * "author follow" monitor type (transplanting `monitoring_agent.py`'s
+ * `scan_authors`). Two real requests under one `ProviderAttempt` (author
+ * name -> authorId, then that author's papers) since S2 has no single
+ * "papers by author name" endpoint; both are honestly reported as one
+ * logical operation, matching how `runAttempt` already wraps a whole
+ * adapter body elsewhere in this file. An author name with no S2 match is
+ * an honest empty result (no author found), not a failure.
+ */
+export async function lookupAuthorRecentPapers(
+  authorName: string,
+  opts: { maxResults?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ resources: RawResource[]; attempt: ProviderAttempt }> {
+  if (!providerEnabled("semanticscholar")) return { resources: [], attempt: disabledAttempt("semanticscholar").attempt };
+  const maxResults = opts.maxResults ?? 10;
+  const result = await runAttempt("semanticscholar", [authorName], async () => {
+    const headers: Record<string, string> = { "User-Agent": userAgent(POLITE_EMAIL) };
+    if (process.env.SEMANTIC_SCHOLAR_API_KEY) headers["x-api-key"] = process.env.SEMANTIC_SCHOLAR_API_KEY;
+
+    const searchParams = new URLSearchParams({ query: authorName });
+    const authorSearch = await fetchJson<{ data?: { authorId?: string }[] }>(
+      `https://api.semanticscholar.org/graph/v1/author/search?${searchParams}`,
+      { headers, timeoutMs: opts.timeoutMs, signal: opts.signal },
+    );
+    if (!authorSearch.ok) {
+      if (authorSearch.status === 404) return { resources: [] };
+      return {
+        resources: [],
+        rateLimited: authorSearch.status === 429,
+        failed: authorSearch.status === 0,
+        unavailable: authorSearch.status > 0 && authorSearch.status !== 429 && authorSearch.status !== 404,
+        error: authorSearch.error,
+      };
+    }
+    const authorId = authorSearch.data?.data?.[0]?.authorId;
+    if (!authorId) return { resources: [] }; // honest "no matching author"
+
+    const papersParams = new URLSearchParams({
+      fields: "title,authors,year,externalIds,abstract,citationCount,url,venue",
+      // Over-fetch then sort/trim client-side — S2's author-papers endpoint
+      // has no "most recent" sort of its own.
+      limit: String(Math.min(maxResults * 3, 1000)),
+    });
+    const papers = await fetchJson<{ data?: SemanticScholarPaper[] }>(
+      `https://api.semanticscholar.org/graph/v1/author/${encodeURIComponent(authorId)}/papers?${papersParams}`,
+      { headers, timeoutMs: opts.timeoutMs, signal: opts.signal },
+    );
+    if (!papers.ok) {
+      return {
+        resources: [],
+        rateLimited: papers.status === 429,
+        failed: papers.status === 0,
+        unavailable: papers.status > 0 && papers.status !== 429,
+        error: papers.error,
+      };
+    }
+    const sorted = (papers.data?.data ?? [])
+      .filter((p): p is SemanticScholarPaper => Boolean(p.title))
+      .sort((a, b) => (b.year ?? 0) - (a.year ?? 0))
+      .slice(0, maxResults);
+    return { resources: sorted.map(mapSemanticScholarPaper) };
+  });
+  return { resources: result.resources, attempt: result.attempt };
+}
+
+/**
+ * Normalizes a `citation_alert` monitor's `query` (a bare DOI, a bare arXiv
+ * id, or an already-prefixed `DOI:`/`ARXIV:` seed — the same three shapes
+ * `monitoring_agent.py`'s `scan_citations` accepts) into the exact id
+ * format Semantic Scholar's paper-lookup endpoints expect. A DOI is
+ * recognized by its `10.` prefix; an arXiv id by its `NNNN.NNNNN`
+ * (post-2007) or legacy `category/NNNNNNN` shape. Anything already carrying
+ * a recognized S2 prefix (`DOI:`, `ARXIV:`, `PMID:`, `MAG:`, `ACL:`,
+ * `CorpusID:`) is passed through untouched.
+ */
+export function formatSemanticScholarPaperId(seed: string): string {
+  const trimmed = seed.trim();
+  if (/^(DOI|ARXIV|PMID|MAG|ACL|CorpusID):/i.test(trimmed)) return trimmed;
+  if (/^10\.\d{4,9}\//.test(trimmed)) return `DOI:${trimmed}`;
+  if (/^\d{4}\.\d{4,5}(v\d+)?$/.test(trimmed) || /^[a-z-]+(\.[A-Z]{2})?\/\d{7}$/i.test(trimmed)) return `ARXIV:${trimmed}`;
+  return trimmed;
+}

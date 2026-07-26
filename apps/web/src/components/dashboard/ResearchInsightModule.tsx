@@ -17,13 +17,17 @@ import type { ResearchInsightCounts } from "@/lib/researchDashboard";
  * `globals.css`), so no new motion/reduced-motion handling is needed here.
  */
 export function ResearchInsightModule({ counts }: { counts: ResearchInsightCounts }) {
-  const stats: Array<{ label: string; value: number; emphasize?: boolean }> = [
+  const stats: Array<{ label: string; value: number; emphasize?: boolean; href?: string }> = [
     { label: "Active projects", value: counts.activeProjects },
     { label: "Claims awaiting review", value: counts.claimsAwaitingReview },
     { label: "New contradictions (7d)", value: counts.newContradictions, emphasize: counts.newContradictions > 0 },
     { label: "Active debates", value: counts.activeDebateClusters },
     { label: "Jobs running", value: counts.runningJobs },
     { label: "Jobs failed", value: counts.failedJobs, emphasize: counts.failedJobs > 0 },
+    // Phase 29.1: undismissed monitor findings — links straight to the
+    // monitors view rather than the generic Research landing, since that's
+    // where this count is actually acted on.
+    { label: "New monitor findings", value: counts.newMonitorHits, emphasize: counts.newMonitorHits > 0, href: "/research/monitors" },
   ];
 
   return (
@@ -34,19 +38,22 @@ export function ResearchInsightModule({ counts }: { counts: ResearchInsightCount
           Open Research →
         </Link>
       </div>
-      <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" aria-label="Research insight counts">
-        {stats.map((stat) => (
-          <li key={stat.label}>
-            <div
-              className="text-xl font-semibold"
-              data-stat-value
-              style={{ color: stat.emphasize ? "var(--color-credibility-warning)" : "var(--color-text)" }}
-            >
-              {stat.value}
-            </div>
-            <div className="text-xs text-[var(--color-text-muted)]">{stat.label}</div>
-          </li>
-        ))}
+      <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7" aria-label="Research insight counts">
+        {stats.map((stat) => {
+          const content = (
+            <>
+              <div
+                className="text-xl font-semibold"
+                data-stat-value
+                style={{ color: stat.emphasize ? "var(--color-credibility-warning)" : "var(--color-text)" }}
+              >
+                {stat.value}
+              </div>
+              <div className="text-xs text-[var(--color-text-muted)]">{stat.label}</div>
+            </>
+          );
+          return <li key={stat.label}>{stat.href ? <Link href={stat.href} className="app-control block">{content}</Link> : content}</li>;
+        })}
       </ul>
     </section>
   );

@@ -231,6 +231,40 @@ export async function enqueueImportResearchCorpus(requestId: string) {
   );
 }
 
+/**
+ * Phase 29.1 monitoring's cron trigger — the STATIC payload pg-boss's own
+ * `schedule()` sends on every cron tick, on the SAME `QUEUE_IMPORT_RESEARCH_CORPUS`
+ * queue every other research job on this queue carries a `{requestId}`
+ * `ResearchJobPayload` on. Distinct because pg-boss's `schedule` table stores
+ * one fixed `data` payload per queue name (there is no way to compute a fresh
+ * `requestId` server-side on each tick) — so the cron's own job can only ever
+ * be a discovery/fan-out step (find every user with a due monitor, enqueue a
+ * real `{requestId}` `run_monitor` request per such user), never the scan
+ * itself. `apps/worker/src/index.ts`'s `QUEUE_IMPORT_RESEARCH_CORPUS` handler
+ * distinguishes the two payload shapes by presence of `requestId`;
+ * `apps/worker/src/research/runMonitor.ts`'s `runDueMonitorFanout` is the
+ * fan-out step this trigger runs.
+ */
+export interface RunMonitorCronTrigger {
+  kind: "run-monitor-fanout";
+}
+
+export const RUN_MONITOR_CRON_PAYLOAD: RunMonitorCronTrigger = { kind: "run-monitor-fanout" };
+
+/** Once daily, 06:00 UTC — arbitrary but fixed; monitors themselves still
+ *  gate on their own `daily`/`weekly` cadence window (`isMonitorDue()`), so
+ *  this only needs to run at least as often as the shortest cadence. */
+export const RUN_MONITOR_CRON_SCHEDULE = "0 6 * * *";
+
+/** `QUEUE_IMPORT_RESEARCH_CORPUS`'s registered cron schedule name — pg-boss
+ *  schedules are keyed by queue name (one schedule row per queue), so this
+ *  IS the queue name, not a separate identifier. */
+export const RUN_MONITOR_CRON_NAME = QUEUE_IMPORT_RESEARCH_CORPUS;
+
+export function isRunMonitorCronTrigger(data: unknown): data is RunMonitorCronTrigger {
+  return Boolean(data && typeof data === "object" && (data as { kind?: unknown }).kind === "run-monitor-fanout");
+}
+
 // ---- Phase 20.5: the single idempotent reprocess command's decision core ----
 
 /** pg-boss states that mean "this document already has an extraction attempt

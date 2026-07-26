@@ -3987,3 +3987,91 @@ export const researchGaps = pgTable(
     check("research_gap_count_nonnegative", sql`${t.unresolvedContradictionCount} >= 0`),
   ],
 );
+
+/**
+ * Phase 29.1: scheduled research monitoring (plan §Pipeline monitoring —
+ * "in-app only" delivery per the owner's decision; no email digest surface).
+ * Three monitor types share one table:
+ *
+ *  - `topic` — free-text keywords, scanned via `searchCorpusCandidates()`
+ *    (Semantic Scholar + OpenAlex + arXiv fan-out, the same zero-AI-cost
+ *    corpus-import search Phase 28.2 already ships).
+ *  - `citation_alert` — a DOI-or-arXiv seed paper; new papers citing it, via
+ *    Semantic Scholar's citations graph (`lookupCitations`).
+ *  - `author_follow` — an author display name; their newest S2-indexed
+ *    papers (`lookupAuthorRecentPapers`).
+ *
+ * Zero AI cost end-to-end: every hit is a real provider metadata record,
+ * copied verbatim — never an LLM inference (the `research_corpus_item`
+ * anti-hallucination precedent one table up literally, and several tables up
+ * in this file's own history).
+ *
+ * `cadence` DEFAULTS `paused` (a monitor never scans until the user opts it
+ * in) and the whole surface sits behind `phase25FeatureEnabled("monitoring")`,
+ * which also DEFAULTS false (`packages/config/src/phase25.ts`) — two
+ * independent off switches, not one, because a scheduled job is the one
+ * Phase 25 surface that can act without a user present.
+ */
+export const researchMonitorTypeEnum = pgEnum("research_monitor_type", ["topic", "citation_alert", "author_follow"]);
+
+export const researchMonitorCadenceEnum = pgEnum("research_monitor_cadence", ["daily", "weekly", "paused"]);
+
+export const researchMonitors = pgTable(
+  "research_monitor",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    /** Optional project this monitor's hits are meant to feed — display
+     *  grouping only; a monitor works standalone with this null (the global
+     *  `/research/monitors` view). `set null` on project delete: the monitor
+     *  and its accumulated hits outlive a deleted project, unlike the hard
+     *  `cascade` on `userId` above. */
+    projectId: uuid("project_id").references(() => researchProjects.id, { onDelete: "set null" }),
+    monitorType: researchMonitorTypeEnum("monitor_type").notNull(),
+    /** Free-text topic keywords, a DOI/arXiv seed id, or an author display
+     *  name — which, per `monitorType`. Never model-interpreted; passed
+     *  straight to the relevant provider query untouched. */
+    query: text("query").notNull(),
+    cadence: researchMonitorCadenceEnum("cadence").notNull().default("paused"),
+    isActive: boolean("is_active").notNull().default(true),
+    lastScannedAt: timestamp("last_scanned_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_monitor_user_cadence_idx").on(t.userId, t.cadence),
+    index("research_monitor_project_idx").on(t.projectId),
+  ],
+);
+
+/**
+ * One discovered candidate for a monitor, deduped per-monitor by `dedup_key`
+ * (`normalizedKey()` — DOI > ISBN > URL > normalized title+author+year, the
+ * exact function `research_corpus_item` dedupes with — `packages/research/
+ * src/normalize.ts`). `imported_corpus_item_id` records the "Add to corpus"
+ * one-click outcome without duplicating the corpus item's own fields here;
+ * `set null` so a hit's history survives if the imported item is later
+ * removed from the corpus.
+ */
+export const researchMonitorHits = pgTable(
+  "research_monitor_hit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    monitorId: uuid("monitor_id").notNull().references(() => researchMonitors.id, { onDelete: "cascade" }),
+    dedupKey: text("dedup_key").notNull(),
+    title: text("title").notNull(),
+    /** Author display names, provider-supplied — never inferred (the
+     *  `research_corpus_item.authors` precedent). */
+    authors: jsonb("authors").notNull().default([]),
+    year: integer("year"),
+    venue: text("venue"),
+    url: text("url"),
+    provider: text("provider").notNull(),
+    seenAt: timestamp("seen_at").notNull().defaultNow(),
+    dismissedAt: timestamp("dismissed_at"),
+    importedCorpusItemId: uuid("imported_corpus_item_id").references(() => researchCorpusItems.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("research_monitor_hit_monitor_idx").on(t.monitorId),
+    uniqueIndex("research_monitor_hit_monitor_dedup_unique").on(t.monitorId, t.dedupKey),
+  ],
+);

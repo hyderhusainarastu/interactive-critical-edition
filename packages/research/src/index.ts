@@ -41,3 +41,6 @@ export * from "./citationBridge";
 // Phase 28.2: corpus import (search + direct-by-id lookup + normalization
 // into the research_corpus_item insert shape) — network-only, zero AI cost.
 export * from "./corpusImport";
+// Phase 29.1: scheduled monitoring's pure cadence math (network-only, zero
+// AI cost — see runMonitor.ts/repository.ts in apps/worker for the DB glue).
+export * from "./monitoring";
