@@ -15,6 +15,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -2555,13 +2556,15 @@ export const researchProjectQuestions = pgTable(
  * can never disagree with the target.
  *
  * STAGED ACROSS TWO MIGRATIONS (deliberate, documented deviation from the
- * plan's single-table sketch): `research_corpus_item` does not exist until
- * migration 0039, so a `corpus_item_id` column and its FK cannot be created
- * here. 0038 therefore ships three target columns and a three-branch CHECK;
- * 0039 adds `corpus_item_id` + its FK and REPLACES this CHECK with the
- * four-branch version. Until that happens `memberType = 'corpus_item'` matches
- * no branch of the CHECK and is rejected by Postgres — the staging is enforced,
- * not merely intended.
+ * plan's single-table sketch): `research_corpus_item` did not exist until
+ * migration 0039, so a `corpus_item_id` column and its FK could not be
+ * created in 0038. 0038 shipped three target columns and a three-branch
+ * CHECK; 0039 (below) adds `corpus_item_id` + its FK and REPLACES that CHECK
+ * with the four-branch version below — same constraint name, widened SQL, so
+ * drizzle-kit emits a DROP CONSTRAINT + ADD CONSTRAINT rather than a second
+ * constraint. Before 0039, `memberType = 'corpus_item'` matched no branch of
+ * the CHECK and was rejected by Postgres — the staging was enforced, not
+ * merely intended.
  */
 export const researchProjectMembers = pgTable(
   "research_project_member",
@@ -2570,7 +2573,10 @@ export const researchProjectMembers = pgTable(
     projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
     memberType: researchMemberTypeEnum("member_type").notNull(),
     workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
-    // 0039 adds: corpusItemId -> research_corpus_item.id (cascade).
+    // 0039: research_corpus_item now exists — forward-referenced via
+    // AnyPgColumn (the ai_usage_log -> research_job_request precedent) since
+    // `researchCorpusItems` is declared later in this incrementally-grown file.
+    corpusItemId: uuid("corpus_item_id").references((): AnyPgColumn => researchCorpusItems.id, { onDelete: "cascade" }),
     writerProjectId: uuid("writer_project_id").references(() => writerProjects.id, { onDelete: "cascade" }),
     ragConversationId: uuid("rag_conversation_id").references(() => ragConversations.id, { onDelete: "cascade" }),
     role: researchMemberRoleEnum("role").notNull().default("supporting"),
@@ -2579,6 +2585,7 @@ export const researchProjectMembers = pgTable(
   (t) => [
     index("research_project_member_project_idx").on(t.projectId, t.memberType),
     index("research_project_member_work_idx").on(t.workId),
+    index("research_project_member_corpus_item_idx").on(t.corpusItemId),
     // Postgres's DEFAULT null handling (NULLS DISTINCT) is exactly what is
     // wanted here and is the opposite of `resource_role`'s case: these indexes
     // must stop the same work/project/conversation being added to one project
@@ -2587,11 +2594,13 @@ export const researchProjectMembers = pgTable(
     uniqueIndex("research_project_member_work_unique").on(t.projectId, t.workId),
     uniqueIndex("research_project_member_writer_unique").on(t.projectId, t.writerProjectId),
     uniqueIndex("research_project_member_conversation_unique").on(t.projectId, t.ragConversationId),
+    uniqueIndex("research_project_member_corpus_item_unique").on(t.projectId, t.corpusItemId),
     check(
       "research_project_member_typed_target",
-      sql`(${t.memberType} = 'work' AND ${t.workId} IS NOT NULL AND ${t.writerProjectId} IS NULL AND ${t.ragConversationId} IS NULL)
-        OR (${t.memberType} = 'writer_project' AND ${t.writerProjectId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.ragConversationId} IS NULL)
-        OR (${t.memberType} = 'rag_conversation' AND ${t.ragConversationId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.writerProjectId} IS NULL)`,
+      sql`(${t.memberType} = 'work' AND ${t.workId} IS NOT NULL AND ${t.corpusItemId} IS NULL AND ${t.writerProjectId} IS NULL AND ${t.ragConversationId} IS NULL)
+        OR (${t.memberType} = 'corpus_item' AND ${t.corpusItemId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.writerProjectId} IS NULL AND ${t.ragConversationId} IS NULL)
+        OR (${t.memberType} = 'writer_project' AND ${t.writerProjectId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.corpusItemId} IS NULL AND ${t.ragConversationId} IS NULL)
+        OR (${t.memberType} = 'rag_conversation' AND ${t.ragConversationId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.corpusItemId} IS NULL AND ${t.writerProjectId} IS NULL)`,
     ),
   ],
 );
@@ -2686,7 +2695,12 @@ export const researchRevisions = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
     objectType: researchObjectTypeEnum("object_type").notNull(),
-    // 0039-0043 add the seven typed object FK columns listed above.
+    // 0039: first of the seven typed object FK columns listed above.
+    // Forward-referenced via AnyPgColumn since `researchClaims` is declared
+    // later in this incrementally-grown file (the ai_usage_log ->
+    // research_job_request precedent).
+    researchClaimId: uuid("research_claim_id").references((): AnyPgColumn => researchClaims.id, { onDelete: "cascade" }),
+    // 0040-0043 add the remaining six typed object FK columns listed above.
     /** Monotonic per object. 0 is always the immutable generated snapshot. */
     revision: integer("revision").notNull(),
     action: researchRevisionActionEnum("action").notNull(),
@@ -2706,6 +2720,7 @@ export const researchRevisions = pgTable(
   },
   (t) => [
     index("research_revision_user_object_idx").on(t.userId, t.objectType, t.createdAt),
+    index("research_revision_claim_idx").on(t.researchClaimId),
     /**
      * The schema-level expression of the research-gated no-auto-endorsement
      * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
@@ -2721,5 +2736,365 @@ export const researchRevisions = pgTable(
     ),
     /** The generated snapshot is revision 0 by definition, so history is always rooted at a known state. */
     check("research_revision_generated_is_zero", sql`(${t.action} <> 'generated') OR (${t.revision} = 0)`),
+    /**
+     * The typed-target XOR CHECK the class doc comment above describes:
+     * introduced here in 0039 (the first typed FK column to exist) and
+     * extended — same constraint name, widened SQL — by each of 0040-0043 as
+     * their own typed FK column lands, exactly like
+     * `research_project_member_typed_target` above. Until a later migration
+     * adds its column, every non-`claim` `objectType` is constrained to leave
+     * `research_claim_id` null, so a mismatched assignment can never be
+     * inserted even before that type's own FK exists to check against.
+     */
+    check(
+      "research_revision_typed_target",
+      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL)
+        OR (${t.objectType} <> 'claim' AND ${t.researchClaimId} IS NULL)`,
+    ),
+    /** Per-type partial unique `(<object>_id, revision)` — the claim branch. */
+    uniqueIndex("research_revision_claim_revision_unique")
+      .on(t.researchClaimId, t.revision)
+      .where(sql`${t.researchClaimId} IS NOT NULL`),
+  ],
+);
+
+/* -------------------------------------------------------------------------
+ * Phase 26.1 (migration 0039): claim extraction. `research_corpus_item`,
+ * `research_claim`, `claim_score`, `claim_locus`, `research_claim_embedding`
+ * land here; `claim_pair_candidate`, `claim_relationship`, `debate_cluster`,
+ * `evidence_chamber`, `research_hypothesis`, `research_gap` land in their own
+ * later migrations (0040-0043, plan §Schema) — not here.
+ * ------------------------------------------------------------------------- */
+
+/** What a claim's own text asserts. Palimnote's corpus spans empirical
+ *  papers AND philosophy/textual-scholarship works, where most claims are
+ *  interpretive, historical, or conceptual rather than empirical — this axis
+ *  keeps those honestly distinguished instead of forced into an
+ *  empirical-shaped bucket. Mirrors `@ice/claims`'s `CLAIM_NATURES` exactly
+ *  (that package is pure/dependency-free and does not import this schema, so
+ *  the two lists are kept in lockstep by hand, not by a shared import). */
+export const claimNatureEnum = pgEnum("claim_nature", [
+  "empirical",
+  "textual",
+  "interpretive",
+  "historical",
+  "conceptual",
+  "normative",
+  "definitional",
+  "methodological",
+]);
+
+/**
+ * Whether a claim's `text_block_id` anchor is currently trustworthy.
+ * `anchored`: the claim was extracted from and still points at a real text
+ * block of the run that produced it. `rebound`: a later reprocess
+ * content-addressed the claim and `findQuoteOffset` (via `@ice/claims`'s
+ * `anchoring.ts`) re-located exactly one match in the new published run's
+ * blocks. `unanchored`: a reprocess found zero or multiple matches (or a
+ * corpus-item-sourced claim was never anchored to any block at all) — the
+ * claim is NEVER deleted for this, only marked, since the user may have
+ * verified or cited it (plan §Pipeline "Reprocess supersession").
+ */
+export const claimAnchorStateEnum = pgEnum("claim_anchor_state", ["anchored", "rebound", "unanchored"]);
+
+/** What portion of the source text a claim's `supporting_excerpt` was
+ *  actually drawn from. `full_text`: the complete uploaded-work body was in
+ *  scope for extraction (even if map-reduce chunked it). `abstract`: a
+ *  corpus-item import, where only the provider's abstract is ever available
+ *  — never the full paper body (no model writes to `research_corpus_item`,
+ *  the bibliographic rule). `sampled`: extraction covered less than the full
+ *  eligible text because a cost/chunk cap was hit (`@ice/claims`'s
+ *  `ExtractionCoverage`, same honesty vocabulary as `research_job_request.coverage`). */
+export const claimSourceScopeEnum = pgEnum("claim_source_scope", ["full_text", "abstract", "sampled"]);
+
+/** Lifecycle for a research object that reprocessing can supersede.
+ *  `superseded` rows are never deleted — same "never delete, always mark"
+ *  discipline as `claim_anchor_state`'s `unanchored`, and as
+ *  `processing_run.isPublished`'s own supersession pattern. */
+export const researchObjectStatusEnum = pgEnum("research_object_status", ["active", "superseded"]);
+
+/** Which of `@ice/claims`'s two parallel scorers produced a `claim_score`
+ *  row — the empirical track (ported verbatim from ScholarLens) and the
+ *  humanities/textual-support track (new, same architectural DNA). Mirrors
+ *  `@ice/claims`'s `ClaimScoreDimension` exactly. */
+export const claimScoreDimensionEnum = pgEnum("claim_score_dimension", ["evidence_strength", "textual_support"]);
+
+/** Mirrors `@ice/claims`'s `ClaimScore.label` exactly. */
+export const claimScoreLabelEnum = pgEnum("claim_score_label", ["strong", "moderate", "weak"]);
+
+/** Where a `claim_locus` row's normalized locus key was harvested from: the
+ *  claim's own verbatim excerpt, its full anchored text block, an authorial
+ *  footnote/endnote near the claim, or a structurally resolved citation's
+ *  raw text. Multiple origins can independently corroborate the same locus
+ *  for the same claim (the `(claim_id, locus_key, origin)` unique below keeps
+ *  those as distinct rows rather than colliding them). */
+export const claimLocusOriginEnum = pgEnum("claim_locus_origin", ["excerpt", "block", "footnote", "citation"]);
+
+/** The three corpus-import provider adapters `packages/research` gains for
+ *  Phase 25.7/28.2 (Semantic Scholar, OpenAlex, and a new arXiv adapter —
+ *  none exists today). Every `research_corpus_item` column is populated only
+ *  from a real payload from one of these, never invented (the
+ *  `bibliographic_record` anti-hallucination rule, applied to imports). */
+export const corpusSourceEnum = pgEnum("corpus_source", ["semanticscholar", "openalex", "arxiv"]);
+
+/**
+ * An imported-not-uploaded work (plan §Schema): a research project member
+ * the user added by reference to a real scholarly-database record, not by
+ * uploading a document. User-scoped (not a shared catalog like
+ * `bibliographic_record`) because corpus import is a per-project research
+ * action, not a cross-user canonical fact store — `(user_id, dedup_key)` is
+ * the import-time dedup key, so re-importing the same paper into a second
+ * project reuses the row rather than duplicating it. Every column below is
+ * populated only from the real provider payload that produced `externalId`
+ * — no model ever writes to this table.
+ */
+export const researchCorpusItems = pgTable(
+  "research_corpus_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    source: corpusSourceEnum("source").notNull(),
+    /** The provider's own id for this record (e.g. a Semantic Scholar paperId, an OpenAlex work id, an arXiv id). */
+    externalId: text("external_id").notNull(),
+    /** Normalized title(+year/DOI) key this row was deduped against at import time. */
+    dedupKey: text("dedup_key").notNull(),
+    title: text("title").notNull(),
+    /** Author display names, provider-supplied — never inferred. */
+    authors: jsonb("authors").notNull().default([]),
+    year: integer("year"),
+    doi: text("doi"),
+    url: text("url"),
+    /** The provider's own abstract text, when supplied — the only source text a corpus-item claim can ever cite (`claim_source_scope = 'abstract'`). */
+    abstract: text("abstract"),
+    venue: text("venue"),
+    /** Full raw provider payload, for audit/re-derivation — the `bibliographic_record.raw` precedent. */
+    raw: jsonb("raw").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_corpus_item_user_idx").on(t.userId),
+    index("research_corpus_item_source_external_idx").on(t.source, t.externalId),
+    uniqueIndex("research_corpus_item_user_dedup_unique").on(t.userId, t.dedupKey),
+  ],
+);
+
+/**
+ * The core research object (plan §Schema): a specific, falsifiable assertion
+ * extracted directly from a work's own text (never from a summary), always
+ * traceable back to a literal, re-verified excerpt of that source. Exactly
+ * one of `work_id`/`corpus_item_id` is the claim's source (XOR CHECK below)
+ * — an uploaded Palimnote work, or a project's imported corpus item.
+ *
+ * Grounding is enforced, not merely conventional: a work-sourced claim is
+ * always either anchored to a real `text_block` (`text_block_id` set) or
+ * explicitly marked `anchor_state = 'unanchored'` after a reprocess lost its
+ * anchor (never silently deleted, plan §Pipeline "Reprocess supersession");
+ * a corpus-item-sourced claim is `source_scope = 'abstract'` since no text
+ * block exists to anchor to. There is deliberately no third "whole-work"
+ * escape hatch — the `research_claim_grounded` CHECK rejects any row that
+ * fits none of these three cases.
+ *
+ * `content_hash` (sha256 of the normalized `claim_text`) plus
+ * `prompt_version` is the dedup/idempotency key (the `basis_hash` precedent
+ * from `work_relationship_judgment`): a re-run under an unchanged prompt
+ * version inserts nothing new (`ON CONFLICT DO NOTHING` at the app layer),
+ * while a prompt-version bump legitimately re-extracts. `excerpt_verified`
+ * is a deterministic, app-computed fact (was this excerpt re-checked as a
+ * literal substring of its named block, right before insert) — deliberately
+ * NOT a review state, which is what `verification_status` (reused from the
+ * `annotation`/`passage_annotation` precedent) is for.
+ */
+export const researchClaims = pgTable(
+  "research_claim",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+    corpusItemId: uuid("corpus_item_id").references(() => researchCorpusItems.id, { onDelete: "cascade" }),
+    /** SET NULL, not cascade: `research_claim.processing_run_id` is deliberately
+     *  nullable so a claim survives past the run that extracted it (content-
+     *  addressed identity) — a later reprocess rebinds it rather than losing it. */
+    processingRunId: uuid("processing_run_id").references(() => processingRuns.id, { onDelete: "set null" }),
+    /** SET NULL for the same reason: the referenced text_block can be deleted
+     *  out from under a claim by a reprocess (cascading from a new processing_run's
+     *  pages), and the rebind step decides the claim's new anchor afterward —
+     *  the claim row itself must survive that deletion. */
+    textBlockId: uuid("text_block_id").references(() => textBlocks.id, { onDelete: "set null" }),
+    /** {quote,prefix,suffix} anchor — the same text-fingerprint idiom as
+     *  `highlight`/`passage_annotation`. Null for a claim that has never had
+     *  a locatable anchor (a corpus-item claim drawn from an abstract). */
+    quote: text("quote"),
+    prefix: text("prefix"),
+    suffix: text("suffix"),
+    anchorState: claimAnchorStateEnum("anchor_state").notNull().default("anchored"),
+    claimText: text("claim_text").notNull(),
+    claimNature: claimNatureEnum("claim_nature").notNull(),
+    /** Stage-2 argumentative role (premise/conclusion/objection/reply/
+     *  qualification/speculative, plan §Dual-track "Claim taxonomy" stage 2).
+     *  Deliberately plain text, not yet a pgEnum: the stage-2 taxonomy ships
+     *  once the reader-side passage-role suggestions land (plan §Program,
+     *  Phase 28+), and an enum with zero ratified values isn't valid
+     *  Postgres syntax. Nothing writes to this column yet. */
+    claimRole: text("claim_role"),
+    /** "high"/"medium"/"low", exactly `@ice/claims`'s `ClaimConfidence` —
+     *  plain text (not a DB enum) since it is not one of this migration's
+     *  eight reserved enum names; validated at the application layer by the
+     *  same `buildClaimExtractionPrompt`/`validateClaimExtraction` pair that
+     *  produces it. */
+    confidence: text("confidence").notNull(),
+    /** The section label this claim was extracted from (`@ice/claims`'s
+     *  `ExtractionChunk.sectionLabel` / `ExtractedClaim.section`). */
+    section: text("section").notNull(),
+    sourceScope: claimSourceScopeEnum("source_scope").notNull(),
+    /** A LITERAL, VERBATIM substring of the source text supplied to the
+     *  model — verified before insert, never repaired or paraphrased. */
+    supportingExcerpt: text("supporting_excerpt").notNull(),
+    /** Deterministic re-verification fact, NOT a review state (see class doc comment). */
+    excerptVerified: boolean("excerpt_verified").notNull().default(false),
+    /** sha256 of the normalized claim_text — the dedup/idempotency key alongside `prompt_version`. */
+    contentHash: text("content_hash").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    status: researchObjectStatusEnum("status").notNull().default("active"),
+    /** Reused verbatim — the `annotation`/`passage_annotation` correction-workflow precedent. */
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_claim_user_idx").on(t.userId),
+    index("research_claim_work_idx").on(t.workId),
+    index("research_claim_corpus_item_idx").on(t.corpusItemId),
+    index("research_claim_text_block_idx").on(t.textBlockId),
+    index("research_claim_user_status_idx").on(t.userId, t.status),
+    // Two partial dedup uniques (plan §Schema PART 1) rather than one over
+    // both nullable source columns: exactly one of work_id/corpus_item_id is
+    // ever set per row (the XOR CHECK below), so each unique only ever
+    // scopes the dedup key to the source type it actually names.
+    uniqueIndex("research_claim_work_dedup_unique")
+      .on(t.workId, t.contentHash, t.promptVersion)
+      .where(sql`${t.workId} IS NOT NULL`),
+    uniqueIndex("research_claim_corpus_item_dedup_unique")
+      .on(t.corpusItemId, t.contentHash, t.promptVersion)
+      .where(sql`${t.corpusItemId} IS NOT NULL`),
+    check(
+      "research_claim_exactly_one_source",
+      sql`(${t.workId} IS NOT NULL AND ${t.corpusItemId} IS NULL) OR (${t.workId} IS NULL AND ${t.corpusItemId} IS NOT NULL)`,
+    ),
+    /** No whole-work escape hatch: a claim is always passage-anchored
+     *  (`text_block_id` set), abstract-scoped (a corpus-item claim), or
+     *  explicitly `unanchored` after a reprocess lost a real prior anchor —
+     *  never inserted with none of the three. */
+    check(
+      "research_claim_grounded",
+      sql`${t.textBlockId} IS NOT NULL OR ${t.sourceScope} = 'abstract' OR ${t.anchorState} = 'unanchored'`,
+    ),
+    /** Tightens the grounded invariant above: once a claim is explicitly
+     *  `unanchored` (a reprocess lost its prior anchor, plan §Pipeline
+     *  "Reprocess supersession"), `text_block_id` must actually be cleared,
+     *  not left pointing at a stale/superseded block. Without this, a row
+     *  could satisfy `research_claim_grounded` via the `anchor_state =
+     *  'unanchored'` branch while still carrying a dangling `text_block_id`
+     *  from before the rebind — self-contradictory grounding metadata. */
+    check(
+      "research_claim_unanchored_no_block",
+      sql`${t.anchorState} <> 'unanchored' OR ${t.textBlockId} IS NULL`,
+    ),
+    check("research_claim_excerpt_nonempty", sql`char_length(trim(${t.supportingExcerpt})) > 0`),
+  ],
+);
+
+/**
+ * A named, scored dimension of one claim (plan §Dual-track "evidence
+ * model"). Both `@ice/claims` scorers (`scoreEvidenceStrength` for
+ * empirical claims, `scoreTextualSupport` for humanities/textual ones) run
+ * over every claim's text for free (pure regex, no LLM); a row is written
+ * only when the scorer found at least one real signal
+ * (`MIN_SIGNAL_FLOOR`) — a claim with zero rows here is honestly
+ * "unscored" on that dimension, never a fabricated default score. The two
+ * dimensions are never averaged or compared against each other (plan
+ * §Dual-track: "the two scores are visibly different dimensions, not one
+ * scale"). `scorer_version` keys the dedup unique so a scorer-algorithm
+ * change legitimately re-scores rather than silently reusing a stale row.
+ */
+export const claimScores = pgTable(
+  "claim_score",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    dimension: claimScoreDimensionEnum("dimension").notNull(),
+    score: real("score").notNull(),
+    label: claimScoreLabelEnum("label").notNull(),
+    /** The specific matched category that drove `score` (`EvidenceStrength.design` / `TextualSupport.mode`). */
+    tier: text("tier"),
+    /** The named signals that fired — `@ice/claims`'s `ClaimScore.signals`. */
+    signals: jsonb("signals").notNull().default([]),
+    scorerVersion: text("scorer_version").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("claim_score_claim_idx").on(t.claimId),
+    uniqueIndex("claim_score_claim_dimension_version_unique").on(t.claimId, t.dimension, t.scorerVersion),
+  ],
+);
+
+/**
+ * A normalized classical-locus key (`author:work-slug:page-letter`, line
+ * numbers deliberately dropped so 1151a20 and 1151a25 collide — the plan's
+ * `canonicalLocusKey` contract) harvested from one claim, powering the
+ * locus retrieval channel (plan §Pipeline "Three-channel Stage 1": two
+ * claims sharing a `locus_key` become a Stage-1 candidate pair at score 1.0,
+ * deterministic and free, regardless of embedding/BM25 vocabulary distance
+ * between them). A claim can carry more than one locus row — the same locus
+ * independently corroborated from its own excerpt AND a nearby footnote is
+ * two distinct, non-colliding rows (the `(claim_id, locus_key, origin)`
+ * unique below), not a single fact overwritten.
+ */
+export const claimLoci = pgTable(
+  "claim_locus",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    locusKey: text("locus_key").notNull(),
+    origin: claimLocusOriginEnum("origin").notNull(),
+    /** The verbatim locus text this key was derived from (e.g. "1151a20-8"), for display. */
+    rawLocus: text("raw_locus"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("claim_locus_locus_key_idx").on(t.locusKey),
+    uniqueIndex("claim_locus_claim_key_origin_unique").on(t.claimId, t.locusKey, t.origin),
+  ],
+);
+
+/**
+ * A claim's embedding vector — the pgvector provider seam (plan §Owner-
+ * ratified decisions 7 and §Schema): a real indexed `vector` column, not
+ * jsonb, dimension-typed now that the calibration spike (Phase 25.5) chose
+ * `text-embedding-3-small` (1536). `dim` is stored alongside the fixed-width
+ * `vector(1536)` column so a future provider/model swap is legible from the
+ * row itself without decoding the column type; `(claim_id, model,
+ * input_hash)` is the provider-swap-safe unique — a new model or a changed
+ * input produces a new row rather than overwriting the old one, so a
+ * provider swap is purely additive (flip config, new rows accumulate).
+ * HNSW `vector_cosine_ops` index below backs the dense-retrieval Stage-1
+ * channel's `<=>` cosine search (plan §Pipeline).
+ */
+export const researchClaimEmbeddings = pgTable(
+  "research_claim_embedding",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    claimId: uuid("claim_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    inputHash: text("input_hash").notNull(),
+    embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    dim: integer("dim").notNull().default(1536),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_claim_embedding_claim_idx").on(t.claimId),
+    uniqueIndex("research_claim_embedding_claim_model_hash_unique").on(t.claimId, t.model, t.inputHash),
+    index("research_claim_embedding_hnsw_idx").using("hnsw", t.embedding.op("vector_cosine_ops")),
   ],
 );

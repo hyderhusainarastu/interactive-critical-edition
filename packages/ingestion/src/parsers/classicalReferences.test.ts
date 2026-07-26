@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BEKKER_WORK_RANGES, isLocusDominated, recognizeClassicalReference, splitLeadingClause } from "./classicalReferences";
+import {
+  BEKKER_WORK_RANGES,
+  canonicalLocusKey,
+  isLocusDominated,
+  recognizeClassicalReference,
+  splitLeadingClause,
+  type ClassicalReferenceMatch,
+} from "./classicalReferences";
 
 describe("recognizeClassicalReference — the real production fixture", () => {
   it("recognizes 'Af?;7.8.1151a20-8.' as Nicomachean Ethics via the standalone page-range path (1151 falls in [1094, 1181])", () => {
@@ -184,5 +191,45 @@ describe("BEKKER_WORK_RANGES", () => {
     const mm = BEKKER_WORK_RANGES.find((r) => r.work === "Magna Moralia")!;
     expect(ne.endPage).toBe(1181);
     expect(mm.startPage).toBe(1181);
+  });
+});
+
+describe("canonicalLocusKey", () => {
+  it("builds an author:work-slug:page-letter key, dropping the line number", () => {
+    const match = recognizeClassicalReference("NE 7.8.1151a20-8")!;
+    expect(canonicalLocusKey(match)).toBe("aristotle:nicomachean-ethics:1151a");
+  });
+
+  it("collapses two citations of different lines on the same page+letter into the same key", () => {
+    const first = recognizeClassicalReference("NE 1151a20")!;
+    const second = recognizeClassicalReference("NE 1151a25")!;
+    expect(canonicalLocusKey(first)).toBe(canonicalLocusKey(second));
+  });
+
+  it("does not collapse a different letter on the same page", () => {
+    const a = recognizeClassicalReference("NE 1151a20")!;
+    const b = recognizeClassicalReference("NE 1151b20")!;
+    expect(canonicalLocusKey(a)).not.toBe(canonicalLocusKey(b));
+  });
+
+  it("slugifies a multi-word work title", () => {
+    const match = recognizeClassicalReference("Rhet. 1354a1")!;
+    expect(canonicalLocusKey(match)).toBe("aristotle:rhetoric:1354a");
+  });
+
+  it("keys a Stephanus (Plato) locus the same way", () => {
+    const match = recognizeClassicalReference("Plato, Rep. 514a")!;
+    expect(canonicalLocusKey(match)).toBe("plato:republic:514a");
+  });
+
+  it("degrades to a lowercased alphanumeric fallback rather than throwing on a malformed locus", () => {
+    const malformed: ClassicalReferenceMatch = {
+      author: "aristotle",
+      work: "Nicomachean Ethics",
+      query: "Aristotle, Nicomachean Ethics",
+      locus: "??",
+    };
+    expect(() => canonicalLocusKey(malformed)).not.toThrow();
+    expect(canonicalLocusKey(malformed)).toBe("aristotle:nicomachean-ethics:");
   });
 });

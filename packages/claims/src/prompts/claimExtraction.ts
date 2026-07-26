@@ -1,5 +1,13 @@
 import { CLAIM_NATURES, isClaimNature, type ClaimNature } from "../taxonomy";
 
+/** Bumped whenever the prompt text below changes — stored on every
+ *  `research_claim` row as provenance and doubles as half of the dedup key
+ *  (alongside `content_hash`), so a prompt change legitimately re-extracts
+ *  rather than silently reusing output produced under different wording
+ *  (the `CLASSIFY_PROMPT_VERSION`/`work_relationship_judgment.basisHash`
+ *  precedent). */
+export const CLAIM_EXTRACTION_PROMPT_VERSION = "claim-extraction-v1";
+
 export type ClaimConfidence = "high" | "medium" | "low";
 
 export interface ExtractedClaim {

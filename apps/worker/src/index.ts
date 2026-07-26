@@ -10,6 +10,7 @@ import {
   QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
   type ExpandCrossLibraryGraphJob,
   QUEUE_EXTRACT_TEXT,
+  QUEUE_EXTRACT_RESEARCH_CLAIMS,
   RESEARCH_QUEUES,
   type ResearchJobPayload,
   type ResearchQueueName,
@@ -22,6 +23,8 @@ import { analyzeWork, resolveCitationMetadata } from "./analyze";
 import { activePipelineVersion, handleEditionExtraction, handleExtractText } from "./extraction";
 import { sweepAbandonedRuns } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
+import { extractClaims } from "./research/extractClaims";
+import { runResearchJob } from "./research/jobRunner";
 import "./sentry";
 
 async function main() {
@@ -91,12 +94,26 @@ async function main() {
     }
   });
 
-  // Phase 25.6: the four research queues are registered from this migration
-  // onward, ahead of the engine that will implement them (26–29). Registering
-  // now means the queue rows and this worker's consumer set exist before any
-  // web route can enqueue, so an early enqueue is dequeued and answered
-  // honestly instead of sitting `created` forever with nothing consuming it.
-  for (const queueName of RESEARCH_QUEUES) {
+  // Phase 26.1: extract-research-claims gets its real handler.
+  // `runResearchJob` (jobRunner.ts) owns the request's lifecycle (running →
+  // complete/failed, budget seeding, usage-log batching) and already reports
+  // any thrown error itself before rethrowing — no second `reportError` call
+  // here, matching `QUEUE_ANALYZE_WORK`'s simpler style above rather than
+  // `QUEUE_EXPAND_CROSS_LIBRARY_GRAPH`'s (whose own function does NOT
+  // self-report).
+  await boss.work<ResearchJobPayload>(QUEUE_EXTRACT_RESEARCH_CLAIMS, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) await runResearchJob(job.data.requestId, extractClaims);
+  });
+
+  // Phase 25.6: the remaining three research queues stay honest no-ops until
+  // their own lanes (26.2 relationships/clustering, 27 synthesis, 28.2/29
+  // corpus import+monitors) replace this registration — see
+  // `handleUnimplementedResearchJob`'s doc comment. Registering now means the
+  // queue rows and this worker's consumer set exist before any web route can
+  // enqueue, so an early enqueue is dequeued and answered honestly instead of
+  // sitting `created` forever with nothing consuming it.
+  for (const queueName of RESEARCH_QUEUES.filter((name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS)) {
     await boss.work<ResearchJobPayload>(queueName, async (jobs) => {
       const batch = Array.isArray(jobs) ? jobs : [jobs];
       for (const job of batch) {

@@ -313,3 +313,41 @@ export function isLocusDominated(segment: string): boolean {
   const alphabetic = stripped.replace(/[^a-zA-Z]/g, "");
   return alphabetic.length < 8;
 }
+
+/** Matches the leading `(page)(letter)` of a locus string — the
+ *  column-level granularity `canonicalLocusKey` keeps. Deliberately the
+ *  same shape as `LOCUS_CORE`'s own leading group, kept as its own literal
+ *  regex (not derived from `LOCUS_CORE`) so a future change to the full
+ *  matcher's line-number/range tail can never accidentally change what this
+ *  key-building step reads off the front. */
+const LOCUS_KEY_HEAD = /^(\d{1,4})([a-e])/;
+
+/**
+ * Normalizes a recognized classical reference into a locus key
+ * (`author:work-slug:page-letter`, e.g. `"aristotle:nicomachean-ethics:1151a"`)
+ * for `claim_locus.locus_key` (Phase 26.1, plan §Pipeline "Three-channel
+ * Stage 1" / §Improvements "Locus-based candidate retrieval"). Line numbers
+ * are deliberately DROPPED — two claims citing "1151a20" and "1151a25" are
+ * the same column of the same page and should collide into the same key, so
+ * two claims about the same passage retrieve each other as a Stage-1
+ * candidate pair regardless of exactly which line each one quotes.
+ *
+ * `match.locus` is `recognizeClassicalReference`'s own verbatim match (e.g.
+ * "1151a20-8", or occasionally a locus with no leading digits at all in a
+ * malformed input) — this reads only the leading page+letter it always
+ * starts with when the match itself is well-formed; a locus that somehow
+ * fails to start that way falls back to every alphanumeric character of the
+ * raw string lowercased, so the function never throws on a real
+ * `ClassicalReferenceMatch` (which by construction always has a
+ * page+letter — see `recognizeClassicalReference`'s two recognition paths),
+ * only degrades to a less-collapsed key in a case that shouldn't occur.
+ */
+export function canonicalLocusKey(match: ClassicalReferenceMatch): string {
+  const workSlug = match.work
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const head = LOCUS_KEY_HEAD.exec(match.locus);
+  const columnLocus = head ? `${head[1]}${head[2]}` : match.locus.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return `${match.author}:${workSlug}:${columnLocus}`;
+}

@@ -9,6 +9,17 @@
  * it's skipped rather than mis-rendered or crashing.
  */
 
+import { findQuoteOffset } from "@ice/claims";
+
+// Re-exported for existing importers (`./matchNoteToBlock` and any future
+// caller) — the actual matching algorithm now lives in `@ice/claims`'s
+// `anchoring.ts` (Phase 26.1), moved there so the worker's claim-rebind step
+// can share the exact same pure logic instead of re-implementing it. This
+// file keeps the DOM-specific helpers below (`getTextNodeSpans`,
+// `wrapRange`, `applyHighlights`, ...), which never moved — they all take a
+// live `HTMLElement`, which `@ice/claims` deliberately stays free of.
+export { findQuoteOffset };
+
 export interface HighlightAnchor {
   id: string;
   quote: string;
@@ -37,41 +48,6 @@ function getTextNodeSpans(container: HTMLElement): TextNodeSpan[] {
     node = walker.nextNode() as Text | null;
   }
   return spans;
-}
-
-export function findQuoteOffset(
-  fullText: string,
-  quote: string,
-  prefix: string,
-  suffix: string,
-): number | null {
-  const combined = prefix + quote + suffix;
-  const exact = fullText.indexOf(combined);
-  if (exact !== -1) return exact + prefix.length;
-
-  const occurrences: number[] = [];
-  let from = 0;
-  for (;;) {
-    const found = fullText.indexOf(quote, from);
-    if (found === -1) break;
-    occurrences.push(found);
-    from = found + 1;
-  }
-  if (occurrences.length === 0) return null;
-  if (occurrences.length === 1) return occurrences[0];
-
-  let best = occurrences[0];
-  let bestScore = -1;
-  for (const occ of occurrences) {
-    const before = fullText.slice(Math.max(0, occ - prefix.length), occ);
-    const after = fullText.slice(occ + quote.length, occ + quote.length + suffix.length);
-    const score = (before === prefix ? 1 : 0) + (after === suffix ? 1 : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      best = occ;
-    }
-  }
-  return best;
 }
 
 function wrapRange(container: HTMLElement, matchStart: number, matchEnd: number, id: string, color: string) {

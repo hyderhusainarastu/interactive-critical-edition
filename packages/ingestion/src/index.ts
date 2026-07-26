@@ -39,6 +39,7 @@ export {
 export {
   recognizeClassicalReference,
   isLocusDominated,
+  canonicalLocusKey,
   BEKKER_WORK_RANGES,
   type ClassicalAuthor,
   type ClassicalReferenceMatch,
