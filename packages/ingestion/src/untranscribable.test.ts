@@ -139,6 +139,53 @@ describe("detectUntranscribableSpans — Signal 4: broken-CMap Latin mojibake", 
   });
 });
 
+describe("detectUntranscribableSpans — Signal 4 cross-word marker cluster (D-23-39)", () => {
+  it("flags the real production garble that per-word corroboration alone missed", () => {
+    // Real garble from the Brickhouse canary follow-up: "aiQoijvxai" has a
+    // case anomaly but no marker; "?vxi", "?oxouvxoov", and "?avxo?" each
+    // carry a single, uncorroborated '?' before a letter — none flagged
+    // individually before this fix. Three marker words within a six-word
+    // span is the cross-word signal.
+    const text = "aiQoijvxai ?vxi x v ?oxouvxoov ?avxo?";
+    const spans = detectUntranscribableSpans(text);
+    expect(spans.length).toBeGreaterThan(0);
+    expect(spans.every((s) => s.reason === "garbled_encoding")).toBe(true);
+    // Every marker word is covered by some span (word 1 "aiQoijvxai" is not,
+    // and the two single-letter words "x"/"v" break the merge — both
+    // honestly reflect the word-level nature of the detector).
+    const covered = spans.map((s) => text.slice(s.start, s.end)).join(" | ");
+    expect(covered).toContain("?vxi");
+    expect(covered).toContain("?oxouvxoov");
+    expect(covered).toContain("?avxo?");
+  });
+
+  it("requires at least three clustered marker words — two is not enough (matches the existing lost-dash adversarial case)", () => {
+    expect(detectUntranscribableSpans("both pursue?and both avoid?is the crux")).toEqual([]);
+  });
+
+  it("does not cluster three lone markers that are far apart in the document", () => {
+    const text =
+      "pursue?and one two three four five six seven eight nine ten " +
+      "avoid?is one two three four five six seven eight nine ten " +
+      "teach?not";
+    expect(detectUntranscribableSpans(text)).toEqual([]);
+  });
+
+  it("never fires on a dense cluster of caret-before-letter words (math notation, not '?')", () => {
+    expect(detectUntranscribableSpans("p^q and r^s and t^u are independent variables")).toEqual([]);
+  });
+
+  it("does not fire near a case-anomaly proper name with only an innocuous nearby '?' (MacIntyre risk case)", () => {
+    // "MacIntyre" carries the same lowercase→uppercase case-anomaly shape
+    // Signal 4's same-word corroboration looks for, but the cluster signal
+    // is deliberately '?'-count-only and ignores case anomaly entirely, so
+    // a real proper name near a single lost-dash '?' must never trip it.
+    expect(
+      detectUntranscribableSpans("As MacIntyre asks, whether virtue can be taught?and answers that it can."),
+    ).toEqual([]);
+  });
+});
+
 describe("detectUntranscribableSpans — genuine mojibake is flagged", () => {
   it("U+FFFD replacement characters", () => {
     const text = "good text l�g�s more text";

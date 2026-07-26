@@ -51,6 +51,23 @@
  *    "o^ai") are deliberately NOT detectable by conservative means and are
  *    left as prose — the same honest limitation as OCR l-for-1 confusions
  *    inside citations. Precision over recall is the standing rule.
+ *
+ * A second, cross-word pass (D-23-39, canary follow-up 2026-07-26) closes
+ * one narrow gap left by the per-word rules above: a real production garble
+ * — "aiQoijvxai ?vxi x v ?oxouvxoov ?avxo?" — has THREE separate words each
+ * carrying a single, uncorroborated '?' immediately before a letter, none
+ * individually flagged (a lone '?' before a letter is the documented
+ * legitimate lost-dash pattern, e.g. "pursue?and"). Three or more such
+ * words within a short span of each other is a distinct signal a single
+ * lone marker isn't: no legitimate document loses three dashes to '?'
+ * within a handful of words of one another. Restricted to '?' alone (never
+ * '^' or '\\') and requires no OTHER signal to be present — deliberately
+ * NOT combined with the case-anomaly signal above, because a case-anomaly
+ * word can be a perfectly ordinary proper name (e.g. "MacIntyre") that
+ * could otherwise co-occur near an innocent lost-dash '?' by coincidence.
+ * Caret-heavy math ("a^b^c", "e^x^2", "2^n^m") legitimately clusters
+ * several caret-before-letter words together and must never trip this path
+ * — verified adversarially below.
  */
 
 export type UntranscribableReason =
@@ -96,6 +113,21 @@ const CARET_BEFORE_LETTER = /\^[A-Za-z]/; // '^' immediately before a Latin lett
 const MIDWORD_BACKSLASH = /[A-Za-z]\\[A-Za-z]/; // backslash flanked by letters
 const ADJACENT_QC_BEFORE_LETTER = /[?^]{2}[A-Za-z]/; // "?^e", "??a" — never math
 const CASE_ANOMALY = /[a-z][A-Z]/; // interior lowercase→uppercase (CMap casing)
+
+// Non-global counterpart of Q_BEFORE_LETTER for a plain boolean test (a
+// global regex's `.test()` carries `lastIndex` state across calls, which is
+// unsafe to reuse per-word in a loop). Used only by the cross-word cluster
+// pass below, never by `classifyWord`'s own same-word qCount logic.
+const LONE_Q_BEFORE_LETTER = /\?[A-Za-z]/;
+// "Short window": up to this many words either side of a candidate marker
+// word are considered when counting nearby marker words. Wide enough to
+// cover the real fixture's three marker words (six words apart at most),
+// tight enough that unrelated '?' usage elsewhere in a long document can
+// never accumulate into a false cluster.
+const MARKER_CLUSTER_WINDOW = 4;
+// Marker-bearing words required within the window (inclusive of the
+// candidate itself) before the cluster signal fires.
+const MARKER_CLUSTER_MIN = 3;
 
 function scriptBucket(char: string): string | null {
   for (const [name, matcher] of SCRIPT_BUCKETS) {
@@ -163,6 +195,22 @@ function classifyWord(word: string): UntranscribableReason | null {
   return null;
 }
 
+interface WordMatch {
+  start: number;
+  end: number;
+  text: string;
+}
+
+function collectWords(text: string): WordMatch[] {
+  const words: WordMatch[] = [];
+  const wordPattern = /\S+/g;
+  let match: RegExpExecArray | null;
+  while ((match = wordPattern.exec(text)) !== null) {
+    words.push({ start: match.index, end: match.index + match[0].length, text: match[0] });
+  }
+  return words;
+}
+
 /**
  * Detect spans of `text` that are untranscribable source-scan garbage.
  * Offsets are UTF-16 code-unit offsets into the input, suitable for
@@ -171,14 +219,25 @@ function classifyWord(word: string): UntranscribableReason | null {
  * so the reader renders one honest marker, not a stutter of them.
  */
 export function detectUntranscribableSpans(text: string): UntranscribableSpan[] {
+  const words = collectWords(text);
+  const hasLoneMarker = words.map((word) => LONE_Q_BEFORE_LETTER.test(word.text));
+
   const spans: UntranscribableSpan[] = [];
-  const wordPattern = /\S+/g;
-  let match: RegExpExecArray | null;
-  while ((match = wordPattern.exec(text)) !== null) {
-    const reason = classifyWord(match[0]);
+  for (let i = 0; i < words.length; i += 1) {
+    let reason = classifyWord(words[i].text);
+
+    if (!reason && hasLoneMarker[i]) {
+      const lo = Math.max(0, i - MARKER_CLUSTER_WINDOW);
+      const hi = Math.min(words.length - 1, i + MARKER_CLUSTER_WINDOW);
+      let clustered = 0;
+      for (let j = lo; j <= hi; j += 1) {
+        if (hasLoneMarker[j]) clustered += 1;
+      }
+      if (clustered >= MARKER_CLUSTER_MIN) reason = "garbled_encoding";
+    }
+
     if (!reason) continue;
-    const start = match.index;
-    const end = match.index + match[0].length;
+    const { start, end } = words[i];
     const previous = spans[spans.length - 1];
     if (previous && /^\s*$/.test(text.slice(previous.end, start))) {
       previous.end = end; // merge across whitespace-only gap
