@@ -10,10 +10,14 @@ import {
   QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
   type ExpandCrossLibraryGraphJob,
   QUEUE_EXTRACT_TEXT,
+  RESEARCH_QUEUES,
+  type ResearchJobPayload,
+  type ResearchQueueName,
   researchCache,
+  researchJobRequests,
 } from "@ice/db";
 import { reportError } from "@ice/observability";
-import { lt } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { analyzeWork, resolveCitationMetadata } from "./analyze";
 import { activePipelineVersion, handleEditionExtraction, handleExtractText } from "./extraction";
 import { sweepAbandonedRuns } from "./runLifecycle";
@@ -87,11 +91,76 @@ async function main() {
     }
   });
 
+  // Phase 25.6: the four research queues are registered from this migration
+  // onward, ahead of the engine that will implement them (26–29). Registering
+  // now means the queue rows and this worker's consumer set exist before any
+  // web route can enqueue, so an early enqueue is dequeued and answered
+  // honestly instead of sitting `created` forever with nothing consuming it.
+  for (const queueName of RESEARCH_QUEUES) {
+    await boss.work<ResearchJobPayload>(queueName, async (jobs) => {
+      const batch = Array.isArray(jobs) ? jobs : [jobs];
+      for (const job of batch) {
+        try {
+          await handleUnimplementedResearchJob(queueName, job.data.requestId);
+        } catch (error) {
+          reportError(error, { scope: `worker.${queueName}`, requestId: job.data.requestId });
+          throw error;
+        }
+      }
+    });
+  }
+
   // Log the RESOLVED version, not the raw env var: Phase 8 lost three canary
   // runs to production quietly running something other than what was assumed.
-  console.log(
-    `[worker] listening for "${QUEUE_EXTRACT_TEXT}", "${QUEUE_ANALYZE_WORK}", "${QUEUE_RESOLVE_CITATION_METADATA}", and "${QUEUE_EXPAND_CROSS_LIBRARY_GRAPH}" jobs (pipeline ${activePipelineVersion()})`,
-  );
+  const queueNames = [
+    QUEUE_EXTRACT_TEXT,
+    QUEUE_ANALYZE_WORK,
+    QUEUE_RESOLVE_CITATION_METADATA,
+    QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
+    ...RESEARCH_QUEUES,
+  ]
+    .map((name) => `"${name}"`)
+    .join(", ");
+  console.log(`[worker] listening for ${queueNames} jobs (pipeline ${activePipelineVersion()})`);
+}
+
+/** The failure text a research request carries until its engine ships. Asserted on, so it is a constant. */
+export const RESEARCH_NOT_IMPLEMENTED = "research pipeline not yet implemented";
+
+/**
+ * Phase 25.6's honest no-op research handler. The queues exist; the engine that
+ * fulfils them does not yet. Rather than silently completing a job that did
+ * nothing — which would leave the request row stuck `queued` forever and read
+ * to the user as "still working" — this records an explicit terminal failure
+ * with a truthful reason on the ledger row.
+ *
+ * It deliberately does NOT rethrow on this path: the no-op is a definitive
+ * answer, not a transient fault, so pg-boss must not retry it. Genuine errors
+ * (a DB failure while recording the above) do propagate — see the caller's
+ * try/catch, which reports and rethrows them.
+ *
+ * Each research lane REPLACES this registration with its real handler; this
+ * function is expected to be deleted, not extended.
+ */
+async function handleUnimplementedResearchJob(queueName: ResearchQueueName, requestId: string): Promise<void> {
+  const [request] = await db
+    .select({ id: researchJobRequests.id, status: researchJobRequests.status })
+    .from(researchJobRequests)
+    .where(eq(researchJobRequests.id, requestId))
+    .limit(1);
+
+  if (!request) {
+    // Same class as the stale extract-text jobs D-19-2 addressed: a request
+    // deleted after enqueue. Nothing to record, and nothing is wrong.
+    console.warn(`[worker] ${queueName}: research_job_request ${requestId} not found; skipping`);
+    return;
+  }
+
+  console.warn(`[worker] ${queueName}: ${RESEARCH_NOT_IMPLEMENTED} (request ${requestId})`);
+  await db
+    .update(researchJobRequests)
+    .set({ status: "failed", error: RESEARCH_NOT_IMPLEMENTED, updatedAt: new Date() })
+    .where(eq(researchJobRequests.id, requestId));
 }
 
 /** A crash outside any job handler's own try/catch (e.g. a driver-level
