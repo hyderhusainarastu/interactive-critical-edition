@@ -2707,7 +2707,14 @@ export const researchRevisions = pgTable(
       (): AnyPgColumn => claimRelationships.id,
       { onDelete: "cascade" },
     ),
-    // 0041-0043 add the remaining five typed object FK columns listed above.
+    // 0041: third of the seven typed object FK columns — same
+    // forward-reference pattern (`debateClusters` is declared later in this
+    // incrementally-grown file, after `claimRelationships`).
+    debateClusterId: uuid("debate_cluster_id").references(
+      (): AnyPgColumn => debateClusters.id,
+      { onDelete: "cascade" },
+    ),
+    // 0042-0043 add the remaining four typed object FK columns listed above.
     /** Monotonic per object. 0 is always the immutable generated snapshot. */
     revision: integer("revision").notNull(),
     action: researchRevisionActionEnum("action").notNull(),
@@ -2729,6 +2736,7 @@ export const researchRevisions = pgTable(
     index("research_revision_user_object_idx").on(t.userId, t.objectType, t.createdAt),
     index("research_revision_claim_idx").on(t.researchClaimId),
     index("research_revision_relationship_idx").on(t.claimRelationshipId),
+    index("research_revision_cluster_idx").on(t.debateClusterId),
     /**
      * The schema-level expression of the research-gated no-auto-endorsement
      * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
@@ -2749,21 +2757,23 @@ export const researchRevisions = pgTable(
      * introduced in 0039 (the first typed FK column to exist) and extended —
      * same constraint name, widened SQL — by each of 0040-0043 as their own
      * typed FK column lands, exactly like
-     * `research_project_member_typed_target` above. Widened here (0040) to
+     * `research_project_member_typed_target` above. Widened here (0041) to
      * a per-type branch that pins EVERY typed FK column, not just the one
-     * being added: `objectType = 'claim'` now also requires
-     * `claim_relationship_id IS NULL`, so a row can never claim to be a
-     * `'claim'` while also carrying a relationship FK (or vice versa). Until
-     * 0041-0043 add their own columns, every objectType outside
-     * `{'claim','relationship'}` is constrained to leave BOTH typed FKs
-     * null, so a mismatched assignment can never be inserted even before
-     * that type's own FK exists to check against.
+     * being added: `objectType = 'cluster'` now requires `debate_cluster_id
+     * IS NOT NULL` with both other typed FKs null, and the `'claim'`/
+     * `'relationship'` branches now also require `debate_cluster_id IS
+     * NULL`, so a row can never claim one type while also carrying another
+     * type's FK. Until 0042-0043 add their own columns, every objectType
+     * outside `{'claim','relationship','cluster'}` is constrained to leave
+     * all three typed FKs null, so a mismatched assignment can never be
+     * inserted even before that type's own FK exists to check against.
      */
     check(
       "research_revision_typed_target",
-      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL)
-        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL)
-        OR (${t.objectType} NOT IN ('claim', 'relationship') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL)`,
+      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL)
+        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.debateClusterId} IS NULL)
+        OR (${t.objectType} = 'cluster' AND ${t.debateClusterId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL)
+        OR (${t.objectType} NOT IN ('claim', 'relationship', 'cluster') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL)`,
     ),
     /** Per-type partial unique `(<object>_id, revision)` — the claim branch. */
     uniqueIndex("research_revision_claim_revision_unique")
@@ -2773,6 +2783,10 @@ export const researchRevisions = pgTable(
     uniqueIndex("research_revision_relationship_revision_unique")
       .on(t.claimRelationshipId, t.revision)
       .where(sql`${t.claimRelationshipId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the cluster branch. */
+    uniqueIndex("research_revision_cluster_revision_unique")
+      .on(t.debateClusterId, t.revision)
+      .where(sql`${t.debateClusterId} IS NOT NULL`),
   ],
 );
 
@@ -3324,5 +3338,119 @@ export const claimRelationships = pgTable(
       "claim_relationship_gap_dimensioned",
       sql`${t.evidenceGap} IS NULL OR ${t.evidenceGapDimension} IS NOT NULL`,
     ),
+  ],
+);
+
+/* -------------------------------------------------------------------------
+ * Phase 26.3 (migration 0041): the debate layer — grouping judged
+ * `claim_relationship` edges (everything except `unrelated`, per
+ * `@ice/claims`'s `findClaimClusters`) into named `debate_cluster`s via BFS
+ * connected components. `debate_cluster_member`/`debate_cluster_relationship`
+ * are pure join tables (which claims, which judged edges belong to a
+ * cluster) so a cluster's membership can be recomputed/diffed without
+ * re-deriving it from `claim_relationship` scans every time.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * `active`: this is the CURRENT connected-component membership for its
+ * `member_hash`. `stale`: a later `cluster_debates` run found this exact
+ * cluster's membership has changed (an edge was added/removed/reclassified,
+ * so the BFS produced a different component) — the row is NEVER deleted
+ * (plan §Pipeline: "membership shifts mark old clusters `stale`, never
+ * delete (user verifications survive)"), it just stops being the surfaced
+ * membership. Deliberately a DEDICATED enum, not a reuse of
+ * `research_object_status`'s `active|superseded` — `superseded` implies a
+ * newer row replaced this one by identity (the `research_claim` rebind
+ * precedent), whereas a stale cluster's membership simply changed; there is
+ * no single "successor" row to point at (a stale cluster's members may now
+ * be split across several new clusters, or folded into one that already
+ * existed under a different `member_hash`).
+ */
+export const debateClusterStatusEnum = pgEnum("debate_cluster_status", ["active", "stale"]);
+
+/**
+ * A named debate/tension detected by `cluster_debates` (plan §Pipeline/
+ * §Program 26.3): a BFS connected component over non-`unrelated`
+ * `claim_relationship` edges, scoped to one project (same project-scoping
+ * discipline as `claim_pair_candidate`/`claim_relationship` — bounds the
+ * surface, and lets the identical claim membership be named independently
+ * in two different projects rather than forcing a global namespace).
+ * `member_hash` (`@ice/claims`'s `memberHash()` — sha256 of the sorted
+ * member claim ids) is this table's idempotency key: re-running clustering
+ * over an UNCHANGED component reuses the existing row (reactivating it if it
+ * had gone `stale`) rather than paying to re-name it, which is what makes
+ * "repeat run costs nothing new" a real, testable guarantee here exactly
+ * like `claim_pair_candidate`'s dedup unique. `name`/`researchQuestion`/
+ * `description` come from `@ice/claims`'s `buildClusterNamingPrompt`, with
+ * `deterministicFallbackName` as the $0 fallback when the naming call fails
+ * or no provider is configured — `prompt_version`/`provider`/`model` are
+ * nullable and left null on that fallback path (the `annotation`
+ * `promptVersion: "heuristic"` precedent, applied via a sentinel value at
+ * the write site rather than widening this column's own type).
+ */
+export const debateClusters = pgTable(
+  "debate_cluster",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    researchQuestion: text("research_question"),
+    description: text("description"),
+    /** sha256 of the sorted member claim ids (`@ice/claims`'s `memberHash()`) — this table's naming-idempotency key. */
+    memberHash: text("member_hash").notNull(),
+    /** How many non-`unrelated` `claim_relationship` edges connect this cluster's members — `ClaimCluster.edgeCount`. */
+    edgeCount: integer("edge_count").notNull().default(0),
+    /** Per-valence edge tally (`ClaimCluster.counts`: `{contradiction, support, nuance}`) — display only, never re-derived from a live scan. */
+    counts: jsonb("counts").notNull().default({}),
+    status: debateClusterStatusEnum("status").notNull().default("active"),
+    promptVersion: text("prompt_version"),
+    provider: text("provider"),
+    model: text("model"),
+    /** Reused verbatim — the `claim_relationship`/`research_claim` correction-workflow precedent. */
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("debate_cluster_project_idx").on(t.projectId),
+    index("debate_cluster_user_status_idx").on(t.userId, t.status),
+    /** The whole naming-idempotency contract: ANY prior cluster (active or
+     *  stale) with this exact membership, in this project, is reused rather
+     *  than re-named. */
+    uniqueIndex("debate_cluster_user_project_member_hash_unique").on(t.userId, t.projectId, t.memberHash),
+  ],
+);
+
+/** Which claims belong to a cluster — the BFS component's membership, materialized. */
+export const debateClusterMembers = pgTable(
+  "debate_cluster_member",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clusterId: uuid("cluster_id").notNull().references(() => debateClusters.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("debate_cluster_member_cluster_idx").on(t.clusterId),
+    index("debate_cluster_member_claim_idx").on(t.claimId),
+    uniqueIndex("debate_cluster_member_cluster_claim_unique").on(t.clusterId, t.claimId),
+  ],
+);
+
+/** Which judged edges (non-`unrelated` `claim_relationship` rows) connect a cluster's members — the BFS component's own edge set, materialized. */
+export const debateClusterRelationships = pgTable(
+  "debate_cluster_relationship",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    clusterId: uuid("cluster_id").notNull().references(() => debateClusters.id, { onDelete: "cascade" }),
+    claimRelationshipId: uuid("claim_relationship_id").notNull().references(() => claimRelationships.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("debate_cluster_relationship_cluster_idx").on(t.clusterId),
+    index("debate_cluster_relationship_rel_idx").on(t.claimRelationshipId),
+    uniqueIndex("debate_cluster_relationship_cluster_rel_unique").on(t.clusterId, t.claimRelationshipId),
   ],
 );

@@ -1,3 +1,8 @@
+/** Bumped whenever the prompt text below changes — stored on every
+ *  `debate_cluster` row as provenance (null on the deterministic-fallback
+ *  path, the `CLAIM_EXTRACTION_PROMPT_VERSION` precedent). */
+export const CLUSTER_NAMING_PROMPT_VERSION = "cluster-naming-v1";
+
 export interface ClusterNamingInput {
   claimTexts: string[];
 }
@@ -39,4 +44,50 @@ export function deterministicFallbackName(claimTexts: string[]): string {
   if (!first || !first.trim()) return "Debate";
   const words = first.trim().split(/\s+/).slice(0, 6).join(" ");
   return `Debate: ${words}`;
+}
+
+/**
+ * Structured-output JSON schema for the cluster-naming call — OpenAI strict
+ * `json_schema` mode (`OpenAIResponsesClient`), the "structured, cheap" rung
+ * `debate_cluster_naming` routes to by default (`@ice/ai-adapters`'s
+ * `routing.ts`). Every property must appear in `required` under OpenAI's
+ * strict mode, so the two optional fields are nullable strings rather than
+ * omittable.
+ */
+export const CLUSTER_NAMING_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    researchQuestion: { type: ["string", "null"] },
+    description: { type: ["string", "null"] },
+  },
+  required: ["name", "researchQuestion", "description"],
+  additionalProperties: false,
+} as const;
+
+export interface ParsedClusterNamingResponse {
+  name?: unknown;
+  researchQuestion?: unknown;
+  description?: unknown;
+}
+
+/**
+ * Validates a parsed cluster-naming response. `name` is load-bearing (a
+ * cluster is never left with an empty label) — THROWS on a missing/empty
+ * name so the caller retries and, on retry exhaustion, falls back to
+ * `deterministicFallbackName` rather than persisting a blank one.
+ * `researchQuestion`/`description` are optional framing text; a non-string
+ * (including the schema's own `null`) normalizes to `null` rather than
+ * throwing — losing that framing doesn't invalidate the name itself.
+ */
+export function validateClusterNamingResponse(parsed: unknown): ClusterNamingResult {
+  const p = (parsed ?? {}) as ParsedClusterNamingResponse;
+  if (typeof p.name !== "string" || p.name.trim().length === 0) {
+    throw new Error(`Cluster naming response "name" (${String(p.name)}) is missing or empty.`);
+  }
+  return {
+    name: p.name.trim(),
+    researchQuestion: typeof p.researchQuestion === "string" && p.researchQuestion.trim() ? p.researchQuestion.trim() : null,
+    description: typeof p.description === "string" && p.description.trim() ? p.description.trim() : null,
+  };
 }
