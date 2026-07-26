@@ -47,3 +47,30 @@ export const RETRIEVAL_LIMITS: ClaimsRetrievalLimits = {
  */
 export const AUTO_APPROVE_MAX_CHUNKS = 12;
 export const HARD_STOP_MAX_CHUNKS = 50;
+
+/**
+ * `generate_hypotheses` caps (Phase 27.2, plan §Program 27.2 "maxHypotheses
+ * <=5"). `maxHypothesesPerRequest` is the hard ceiling `generateHypotheses.ts`
+ * clamps a caller-supplied `maxHypotheses` scope field to, regardless of what
+ * value is requested. `maxConflictsForHypothesisContext` bounds how many
+ * `[CONFLICT_N]`-labeled conflicts are ever assembled into one prompt — a
+ * project with hundreds of undisputed conflicts must not blow up the prompt
+ * (or the cost) just because they all exist; the highest-value context still
+ * makes it in, the rest are simply outside this run's hypothesis-generation
+ * window, not silently corrupted. "Highest-value" is enforced by the LOADER
+ * (`loadUndisputedConflictRelationshipsForProject` in
+ * `apps/worker/src/research/repository.ts`), not the caller:
+ * `claim_relationship` carries no literal `confidence` column, so the query
+ * orders by `evidence_gap` DESC NULLS LAST (then `id` for stable pagination)
+ * as the closest real proxy — the row differential magnitude that measures
+ * how decisively one side's evidence outweighs the other's — before
+ * `generateHypotheses.ts` does its `.slice(0, maxConflictsForHypothesisContext)`.
+ * A caller-side sort would be redundant with, and could silently drift out
+ * of sync with, the loader's own ORDER BY — keeping ranking in the one place
+ * that owns the query is what actually keeps this promise true (27.2
+ * merge-gate adversarial finding, register row D-25-7's sibling: the loader
+ * previously had no ORDER BY at all, so the truncation dropped rows in
+ * whatever order Postgres happened to return them).
+ */
+export const MAX_HYPOTHESES_PER_REQUEST = Number(process.env.CLAIMS_MAX_HYPOTHESES_PER_REQUEST ?? 5);
+export const MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT = Number(process.env.CLAIMS_MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT ?? 30);

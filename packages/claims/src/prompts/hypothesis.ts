@@ -10,6 +10,14 @@
  * ported Python's own post-parse validation.
  */
 
+/** Bumped whenever the prompt text or output contract below changes — stored
+ *  on every `research_hypothesis` row as provenance, and folded into
+ *  `run_hash`/the job idempotency key so a prompt bump legitimately
+ *  re-generates rather than silently reusing output computed under a
+ *  no-longer-current definition (the `CLAIM_EXTRACTION_PROMPT_VERSION`
+ *  precedent). */
+export const HYPOTHESIS_PROMPT_VERSION = "hypothesis-v1";
+
 export interface HypothesisConflictInput {
   id: string;
   relationship: string; // "contradiction" | "nuance"
@@ -82,12 +90,55 @@ export function buildHypothesisPrompt(
   return { prompt, labelToReal };
 }
 
+/**
+ * Structured-output JSON schema for the hypothesis-generation call — OpenAI
+ * strict `json_schema` mode (`OpenAIResponsesClient`), the "structured,
+ * cheap" rung `hypothesis_generation` routes to by default
+ * (`@ice/ai-adapters`'s `routing.ts`). The prompt's own prose asks for a bare
+ * top-level JSON array (compatible with the Anthropic raw-text-JSON rung
+ * below, whose client just `JSON.parse`s whatever comes back), but OpenAI's
+ * strict mode requires a top-level object — wrapped here under `hypotheses`,
+ * the `{claims: [...]}` precedent from `extractClaims.ts`'s own schema. The
+ * caller unwraps `.hypotheses` before handing the array to
+ * `validateHypothesisResponse`, exactly like `extractClaims.ts` unwraps
+ * `.claims`.
+ */
+export const HYPOTHESIS_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    hypotheses: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          statement: { type: "string" },
+          rationale: { type: "string" },
+          methodology: { type: "string" },
+          challenges: { type: "array", items: { type: "string" } },
+          sourceConflictLabels: { type: "array", items: { type: "string" } },
+        },
+        required: ["statement", "rationale", "methodology", "challenges", "sourceConflictLabels"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["hypotheses"],
+  additionalProperties: false,
+} as const;
+
 export interface HypothesisResult {
   statement: string;
   rationale: string;
   sourceConflictIds: string[];
   methodology: string;
   challenges: string[];
+  /** How many of this hypothesis's OWN `sourceConflictLabels` failed to
+   *  resolve to a real, currently-valid conflict id (a fabricated/malformed
+   *  label, or one referencing a conflict never supplied) — dropped from
+   *  `sourceConflictIds` above, but counted here rather than silently lost,
+   *  so a caller can log/report how often the model reaches for a label that
+   *  isn't real. */
+  fabricatedLabelCount: number;
 }
 
 export interface ParsedHypothesisItem {
@@ -133,11 +184,13 @@ export function validateHypothesisResponse(parsed: unknown, labelToReal: Map<str
 
     const labels = Array.isArray(item.sourceConflictLabels) ? item.sourceConflictLabels : [];
     const sourceConflictIds: string[] = [];
+    let fabricatedLabelCount = 0;
     for (const ref of labels) {
-      if (typeof ref !== "string") continue;
+      if (typeof ref !== "string") continue; // malformed, not a fabricated-label attempt — ignored quietly, as before
       const label = ref.startsWith("CONFLICT_") ? ref : `CONFLICT_${ref}`;
       const realId = labelToReal.get(label);
       if (realId && validIds.has(realId)) sourceConflictIds.push(realId);
+      else fabricatedLabelCount += 1;
     }
 
     return {
@@ -148,6 +201,7 @@ export function validateHypothesisResponse(parsed: unknown, labelToReal: Map<str
       challenges: Array.isArray(item.challenges)
         ? item.challenges.filter((c): c is string => typeof c === "string")
         : [],
+      fabricatedLabelCount,
     };
   });
 }

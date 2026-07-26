@@ -200,6 +200,9 @@ export function ResearchProjectOverview({
           <Link href={`/research/${project.id}/debates`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
             View debates
           </Link>
+          <Link href={`/research/${project.id}/hypotheses`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
+            Hypotheses &amp; gaps
+          </Link>
         </div>
       </div>
 

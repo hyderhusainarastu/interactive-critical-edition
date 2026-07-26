@@ -2726,7 +2726,15 @@ export const researchRevisions = pgTable(
       (): AnyPgColumn => evidenceChamberPositions.id,
       { onDelete: "cascade" },
     ),
-    // 0043 adds the remaining two typed object FK columns listed above.
+    // 0043: the sixth and seventh (final) of the seven typed object FK
+    // columns — same forward-reference pattern (`researchHypotheses`/
+    // `researchGaps` are declared later in this incrementally-grown file, at
+    // the very end, after `debateClusterRelationships`).
+    researchHypothesisId: uuid("research_hypothesis_id").references(
+      (): AnyPgColumn => researchHypotheses.id,
+      { onDelete: "cascade" },
+    ),
+    researchGapId: uuid("research_gap_id").references((): AnyPgColumn => researchGaps.id, { onDelete: "cascade" }),
     /** Monotonic per object. 0 is always the immutable generated snapshot. */
     revision: integer("revision").notNull(),
     action: researchRevisionActionEnum("action").notNull(),
@@ -2751,6 +2759,8 @@ export const researchRevisions = pgTable(
     index("research_revision_cluster_idx").on(t.debateClusterId),
     index("research_revision_chamber_idx").on(t.evidenceChamberId),
     index("research_revision_position_idx").on(t.evidenceChamberPositionId),
+    index("research_revision_hypothesis_idx").on(t.researchHypothesisId),
+    index("research_revision_gap_idx").on(t.researchGapId),
     /**
      * The schema-level expression of the research-gated no-auto-endorsement
      * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
@@ -2771,27 +2781,36 @@ export const researchRevisions = pgTable(
      * introduced in 0039 (the first typed FK column to exist) and extended —
      * same constraint name, widened SQL — by each of 0040-0043 as their own
      * typed FK column lands, exactly like
-     * `research_project_member_typed_target` above. Widened here (0042) to
-     * add the `'chamber'`/`'position'` branches: `objectType = 'chamber'`
-     * requires `evidence_chamber_id IS NOT NULL` with every other typed FK
-     * (including `evidence_chamber_position_id`) null, `objectType =
-     * 'position'` requires `evidence_chamber_position_id IS NOT NULL` with
-     * every other typed FK (including `evidence_chamber_id`) null, and every
-     * existing branch now also pins both new columns to null — so a row can
-     * never claim one type while also carrying another type's FK. Until 0043
-     * adds its own columns, every objectType outside `{'claim',
-     * 'relationship', 'cluster', 'chamber', 'position'}` is constrained to
-     * leave all five typed FKs null, so a mismatched assignment can never be
-     * inserted even before that type's own FK exists to check against.
+     * `research_project_member_typed_target` above. Widened by 0041 to a
+     * per-type branch that pins EVERY typed FK column, not just the one
+     * being added, then independently by the parallel 0042 (Evidence
+     * Chamber: `'chamber'`/`'position'`) and 0043 (`'hypothesis'`/`'gap'`)
+     * lanes, each of which — landing in isolation — necessarily left the
+     * other lane's two object types inside a catch-all
+     * `objectType NOT IN (...)` branch it couldn't yet enumerate.
+     * Reconciled here (0043, merged after 0042) into the final, single
+     * constraint covering all seven typed object types with NO catch-all
+     * branch at all: every `research_object_type` enum value now has its
+     * own explicit branch pinning all six OTHER typed FKs to null, so the
+     * XOR invariant is total over the enum, not partial. This closes a real
+     * gap the 27.2 merge-gate's adversarial verification proved empirically
+     * (register row D-25-7): with the catch-all branch left in place, an
+     * `object_type = 'chamber'` row with every typed FK NULL satisfied the
+     * catch-all and inserted successfully, silently falsifying this class's
+     * own documented "unimplemented object types are unsatisfiable"
+     * invariant. Do not reintroduce a catch-all for a future eighth type —
+     * add that type's own explicit branch instead, exactly as this
+     * reconciliation does for the seven that exist today.
      */
     check(
       "research_revision_typed_target",
-      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
-        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
-        OR (${t.objectType} = 'cluster' AND ${t.debateClusterId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
-        OR (${t.objectType} = 'chamber' AND ${t.evidenceChamberId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
-        OR (${t.objectType} = 'position' AND ${t.evidenceChamberPositionId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL)
-        OR (${t.objectType} NOT IN ('claim', 'relationship', 'cluster', 'chamber', 'position') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)`,
+      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchHypothesisId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchHypothesisId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'cluster' AND ${t.debateClusterId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchHypothesisId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'chamber' AND ${t.evidenceChamberId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchHypothesisId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'position' AND ${t.evidenceChamberPositionId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.researchHypothesisId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'hypothesis' AND ${t.researchHypothesisId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchGapId} IS NULL)
+        OR (${t.objectType} = 'gap' AND ${t.researchGapId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL AND ${t.researchHypothesisId} IS NULL)`,
     ),
     /** Per-type partial unique `(<object>_id, revision)` — the claim branch. */
     uniqueIndex("research_revision_claim_revision_unique")
@@ -2813,6 +2832,14 @@ export const researchRevisions = pgTable(
     uniqueIndex("research_revision_position_revision_unique")
       .on(t.evidenceChamberPositionId, t.revision)
       .where(sql`${t.evidenceChamberPositionId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the hypothesis branch. */
+    uniqueIndex("research_revision_hypothesis_revision_unique")
+      .on(t.researchHypothesisId, t.revision)
+      .where(sql`${t.researchHypothesisId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the gap branch. */
+    uniqueIndex("research_revision_gap_revision_unique")
+      .on(t.researchGapId, t.revision)
+      .where(sql`${t.researchGapId} IS NOT NULL`),
   ],
 );
 
@@ -3664,5 +3691,244 @@ export const evidenceChamberPositionClaims = pgTable(
     uniqueIndex("evidence_chamber_position_claim_position_claim_unique").on(t.positionId, t.claimId),
     uniqueIndex("evidence_chamber_position_claim_position_ordinal_unique").on(t.positionId, t.ordinal),
     check("evidence_chamber_position_claim_excerpt_nonempty", sql`char_length(trim(${t.excerpt})) > 0`),
+  ],
+);
+
+/* -------------------------------------------------------------------------
+ * Phase 27.2 (migration 0043): hypotheses + research gaps. `research_hypothesis`
+ * ports ScholarLens's `[CONFLICT_N]` label-then-validate hypothesis generation
+ * (`@ice/claims`'s `prompts/hypothesis.ts`) over a project's detected,
+ * undisputed `claim_relationship` conflicts (contradiction/nuance); novelty is
+ * ALWAYS computed (cosine distance vs. the project's own `research_claim_embedding`
+ * vectors), never self-assessed by the model (plan §Crown jewels "Computed
+ * novelty scoring"). `research_gap` is the $0, no-LLM structural counterpart:
+ * a deterministic, template-based row per `debate_cluster` that still carries
+ * an unresolved contradiction — same "no fabricated content" discipline as
+ * `packages/curriculum`'s deterministic checkpoint sentences.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * How a hypothesis was grounded. `detected_conflicts` is the only value this
+ * lane's worker ever writes — every `research_hypothesis` row is required (by
+ * the label-then-validate pattern: a hypothesis with zero validated
+ * `research_hypothesis_source` rows is dropped, never inserted) to cite at
+ * least one real conflict. `single_work_gaps` is a Stage-1 honest placeholder
+ * (the `claim_relation_mechanism` precedent): when a project has zero
+ * undisputed conflicts to hypothesize about, the worker skips hypothesis
+ * generation entirely rather than inventing one, and derives `research_gap`
+ * rows instead — this value is reserved for a future lane that generates a
+ * hypothesis FROM a gap rather than a conflict, not written by this one.
+ */
+export const researchHypothesisGroundingEnum = pgEnum("research_hypothesis_grounding", [
+  "detected_conflicts",
+  "single_work_gaps",
+]);
+
+/** Mirrors `@ice/claims`'s `NoveltyTier` exactly (`novelty.ts`). `unknown`
+ *  means novelty WAS attempted (an embedder was configured) but the project's
+ *  claim corpus had nothing to compare against yet — distinct from a fully
+ *  NULL novelty (embedder unavailable, never attempted at all): see
+ *  `research_hypothesis_novelty_provenance` below. */
+export const researchHypothesisNoveltyTierEnum = pgEnum("research_hypothesis_novelty_tier", [
+  "high",
+  "medium",
+  "low",
+  "unknown",
+]);
+
+/**
+ * A generated research hypothesis (plan §Schema `research_hypothesis`): the
+ * output of `generate_hypotheses`, always grounded in real, cited conflicts
+ * (never a whole-project synthesis with no traceable source — the
+ * label-then-validate pattern's whole point). `run_hash` is this row's OWN
+ * content-addressed identity — sha256 of THIS hypothesis's own validated,
+ * sorted `sourceConflictIds` + the research question + prompt version +
+ * novelty embedding model (`@ice/claims`'s `computeHypothesisRunHash`) — so a
+ * hypothesis grounded in an unchanged set of conflicts, under an unchanged
+ * question/prompt/model, is never duplicated across re-runs, exactly like
+ * `research_claim.content_hash` or `claim_relationship.basis_hash` are their
+ * own rows' identities. This is DELIBERATELY row-scoped, not job-scoped: a
+ * single `generate_hypotheses` call can validly produce several hypotheses
+ * that each cite different subsets of the same conflict pool, and each gets
+ * its own hash — `UNIQUE (user_id, run_hash)` protects against a literal
+ * duplicate hypothesis, not against a second LLM call being made at all. The
+ * SEPARATE guarantee that a genuinely identical whole-job re-run costs $0 is
+ * enforced one layer up, in the worker (`generateHypotheses.ts`'s own
+ * pre-call check against a prior COMPLETED `research_job_request` sharing the
+ * same idempotency key) — see that file's doc comment for why job-level
+ * dedup could not be expressed as a single `run_hash` column here without
+ * breaking "more than one hypothesis per job" outright.
+ *
+ * Novelty is computed, never model-asserted (`@ice/claims`'s `noveltyFor`) —
+ * `research_hypothesis_novelty_provenance` below enforces that
+ * `novelty_embedding_model`/`novelty_corpus` are set together with
+ * `novelty_tier` or not at all, so a tier can never appear with no record of
+ * what it was measured against.
+ */
+export const researchHypotheses = pgTable(
+  "research_hypothesis",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    /** The researcher's own free-text question, when one was given at
+     *  dispatch time (`generate_hypotheses` scope's optional `question`) —
+     *  null when the run instead asked for "the most promising directions". */
+    question: text("question"),
+    statement: text("statement").notNull(),
+    rationale: text("rationale").notNull(),
+    methodology: text("methodology").notNull(),
+    /** `HypothesisResult.challenges` — a list of predicted obstacles. */
+    challenges: jsonb("challenges").notNull().default([]),
+    grounding: researchHypothesisGroundingEnum("grounding").notNull().default("detected_conflicts"),
+    /** Cosine DISTANCE (1 - similarity) to the nearest claim in the project's
+     *  own embedded corpus — null exactly when novelty was never attempted
+     *  (no embedder configured) OR the corpus was empty (`tier = 'unknown'`,
+     *  where a distance would be a fabricated number, not a measurement). */
+    noveltyDistance: real("novelty_distance"),
+    noveltyTier: researchHypothesisNoveltyTierEnum("novelty_tier"),
+    /** The embedding model novelty was measured under — required whenever
+     *  `novelty_tier` is set, so a later model swap can never be silently
+     *  compared against a stale-model tier (the `thresholds.ts`
+     *  `assertThresholdsCalibratedFor` discipline, recorded per-row here). */
+    noveltyEmbeddingModel: text("novelty_embedding_model"),
+    /** Human/audit-readable descriptor of what corpus novelty was measured
+     *  against, e.g. `"project_claims:42"` — never a raw vector dump, just
+     *  enough to explain the number (the `research_job_request.note` honesty
+     *  precedent, applied to one row instead of a whole job). */
+    noveltyCorpus: text("novelty_corpus"),
+    runHash: text("run_hash").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    /** Reused verbatim — the `research_claim`/`claim_relationship`/`debate_cluster` precedent. */
+    status: researchObjectStatusEnum("status").notNull().default("active"),
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_hypothesis_project_idx").on(t.projectId),
+    index("research_hypothesis_user_status_idx").on(t.userId, t.status),
+    uniqueIndex("research_hypothesis_user_run_hash_unique").on(t.userId, t.runHash),
+    check("research_hypothesis_statement_nonempty", sql`char_length(trim(${t.statement})) > 0`),
+    /** The novelty CHECK the plan calls for: `novelty_embedding_model` and
+     *  `novelty_corpus` are required together with `novelty_tier` — either
+     *  all three are null (novelty never attempted) or all three are set
+     *  (novelty was attempted, whatever the resulting tier). */
+    check(
+      "research_hypothesis_novelty_provenance",
+      sql`(${t.noveltyTier} IS NULL AND ${t.noveltyEmbeddingModel} IS NULL AND ${t.noveltyCorpus} IS NULL)
+        OR (${t.noveltyTier} IS NOT NULL AND ${t.noveltyEmbeddingModel} IS NOT NULL AND ${t.noveltyCorpus} IS NOT NULL)`,
+    ),
+    /** Tightens the invariant above: a REAL tier (high/medium/low) must carry
+     *  a real measured distance; only `unknown` (an empty corpus — nothing to
+     *  measure against) is allowed to leave `novelty_distance` null rather
+     *  than persist a meaningless placeholder number. */
+    check(
+      "research_hypothesis_novelty_distance_present",
+      sql`${t.noveltyTier} IS NULL OR ${t.noveltyTier} = 'unknown' OR ${t.noveltyDistance} IS NOT NULL`,
+    ),
+  ],
+);
+
+/**
+ * Which real, validated conflicts (`claim_relationship` rows) a hypothesis
+ * cites — the label-then-validate pattern's durable record (plan §Schema
+ * `research_hypothesis`: "`[CONFLICT_N]` grounding"). Cascades from
+ * `claim_relationship`: if a cited relationship is later deleted outright
+ * (not just hidden/disputed — those stay real rows), this join row goes with
+ * it, but the hypothesis itself survives with whatever OTHER sources remain
+ * (a hypothesis is never deleted just because one of several citations did).
+ */
+export const researchHypothesisSources = pgTable(
+  "research_hypothesis_source",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    hypothesisId: uuid("hypothesis_id").notNull().references(() => researchHypotheses.id, { onDelete: "cascade" }),
+    claimRelationshipId: uuid("claim_relationship_id").notNull().references(() => claimRelationships.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_hypothesis_source_hypothesis_idx").on(t.hypothesisId),
+    index("research_hypothesis_source_relationship_idx").on(t.claimRelationshipId),
+    uniqueIndex("research_hypothesis_source_hypothesis_relationship_unique").on(t.hypothesisId, t.claimRelationshipId),
+  ],
+);
+
+/**
+ * The distinct works/corpus items a hypothesis's cited conflicts actually
+ * touch (plan §Schema `research_hypothesis_support`: "work XOR corpus_item
+ * CHECK") — a materialized, deduplicated denormalization derived from
+ * `research_hypothesis_source`'s claim_relationship rows' own claims'
+ * `work_id`/`corpus_item_id` (the `research_claim_exactly_one_source` XOR
+ * precedent, one level up), so a UI can show "this hypothesis draws on: X, Y"
+ * without joining through source -> relationship -> claim -> work every time.
+ */
+export const researchHypothesisSupport = pgTable(
+  "research_hypothesis_support",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    hypothesisId: uuid("hypothesis_id").notNull().references(() => researchHypotheses.id, { onDelete: "cascade" }),
+    workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+    corpusItemId: uuid("corpus_item_id").references(() => researchCorpusItems.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_hypothesis_support_hypothesis_idx").on(t.hypothesisId),
+    uniqueIndex("research_hypothesis_support_hypothesis_work_unique")
+      .on(t.hypothesisId, t.workId)
+      .where(sql`${t.workId} IS NOT NULL`),
+    uniqueIndex("research_hypothesis_support_hypothesis_corpus_item_unique")
+      .on(t.hypothesisId, t.corpusItemId)
+      .where(sql`${t.corpusItemId} IS NOT NULL`),
+    check(
+      "research_hypothesis_support_exactly_one_target",
+      sql`(${t.workId} IS NOT NULL AND ${t.corpusItemId} IS NULL) OR (${t.workId} IS NULL AND ${t.corpusItemId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * A deterministic, $0, no-LLM structural finding (plan §Schema
+ * `research_gap`): one row per ACTIVE `debate_cluster` that still carries at
+ * least one unresolved contradiction edge — "this remains a documented open
+ * disagreement in your library" is a plain fact about the graph, not a
+ * synthesized insight, so it costs nothing and can never be fabricated (the
+ * `packages/curriculum` deterministic-checkpoint precedent, applied to a
+ * per-project structural summary instead of a per-category lookup).
+ * `(user_id, debate_cluster_id)` is the whole idempotency contract: a re-run
+ * over an unchanged cluster reuses (and refreshes) the same row rather than
+ * duplicating it, and a cluster later going `stale` (plan §Pipeline
+ * "membership shifts mark old clusters stale, never delete") leaves this row
+ * in place too — a gap about a debate that's since been reclassified is still
+ * honest history, not something to silently delete.
+ */
+export const researchGaps = pgTable(
+  "research_gap",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    debateClusterId: uuid("debate_cluster_id").notNull().references(() => debateClusters.id, { onDelete: "cascade" }),
+    /** Deterministic template sentence over the cluster's own `name`/
+     *  `research_question` (`@ice/claims`'s `buildGapDescription`) — never
+     *  model-authored. */
+    description: text("description").notNull(),
+    /** `debate_cluster.counts.contradiction` at the time this row was last
+     *  written — display/audit only, refreshed on every idempotent re-run. */
+    unresolvedContradictionCount: integer("unresolved_contradiction_count").notNull(),
+    status: researchObjectStatusEnum("status").notNull().default("active"),
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_gap_project_idx").on(t.projectId),
+    index("research_gap_user_status_idx").on(t.userId, t.status),
+    uniqueIndex("research_gap_user_cluster_unique").on(t.userId, t.debateClusterId),
+    check("research_gap_count_nonnegative", sql`${t.unresolvedContradictionCount} >= 0`),
   ],
 );

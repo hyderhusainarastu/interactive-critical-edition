@@ -29,6 +29,7 @@ import { expandCrossLibraryGraph } from "./crossLibraryGraph";
 import { clusterDebates } from "./research/clusterDebates";
 import { detectRelationships } from "./research/detectRelationships";
 import { extractClaims } from "./research/extractClaims";
+import { generateHypotheses } from "./research/generateHypotheses";
 import { importCorpus } from "./research/importCorpus";
 import { runResearchJob } from "./research/jobRunner";
 import { synthesizeChamber } from "./research/synthesizeChamber";
@@ -180,12 +181,13 @@ async function main() {
     }
   });
 
-  // Phase 27.1: synthesize-research-output gets its real handler for
-  // `synthesize_chamber` jobs. `generate_hypotheses` (Phase 27.2) shares this
-  // SAME queue (plan §Pipeline: "Evidence Chamber + hypotheses, explicit
-  // action only") but is not implemented yet — a request of that job type on
-  // this queue still falls through to the honest no-op below, exactly as it
-  // did before this lane.
+  // Phase 27.1/27.2: synthesize-research-output gets its real handlers for
+  // both `synthesize_chamber` (Evidence Chamber, 27.1) and
+  // `generate_hypotheses` (27.2) jobs — the two lanes shared this SAME queue
+  // (plan §Pipeline: "Evidence Chamber + hypotheses, explicit action only")
+  // and merged in, so both branches are dispatched here now. Any other job
+  // type on this queue still falls through to the honest no-op below,
+  // exactly as before either lane landed.
   await boss.work<ResearchJobPayload>(QUEUE_SYNTHESIZE_RESEARCH, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
@@ -194,8 +196,16 @@ async function main() {
         .from(researchJobRequests)
         .where(eq(researchJobRequests.id, job.data.requestId))
         .limit(1);
-      if (request?.jobType === "synthesize_chamber") {
+      if (!request) {
+        console.warn(`[worker] ${QUEUE_SYNTHESIZE_RESEARCH}: research_job_request ${job.data.requestId} not found; skipping`);
+        continue;
+      }
+      if (request.jobType === "synthesize_chamber") {
         await runResearchJob(job.data.requestId, synthesizeChamber);
+        continue;
+      }
+      if (request.jobType === "generate_hypotheses") {
+        await runResearchJob(job.data.requestId, generateHypotheses);
         continue;
       }
       try {
