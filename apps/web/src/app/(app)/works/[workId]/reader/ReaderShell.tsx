@@ -21,6 +21,7 @@ import { EditionReader, computeOutline, type EditionPayload } from "./EditionRea
 import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
 import { ReaderOutlineSidebar } from "./ReaderOutlineSidebar";
 import { RagChatPanel } from "./RagChatPanel";
+import type { ResearchClaimSummary } from "./researchClaims";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -43,6 +44,7 @@ export function ReaderShell({
   enablePhase12Identity = false,
   enablePhase12Reader = false,
   enablePhase18Rag = false,
+  enableReaderClaimLayer = false,
 }: {
   workId: string;
   embedded?: boolean;
@@ -50,6 +52,9 @@ export function ReaderShell({
   enablePhase12Identity?: boolean;
   enablePhase12Reader?: boolean;
   enablePhase18Rag?: boolean;
+  /** Phase 28.3: the Claims tab + in-text claim markers, behind
+   *  `readerClaimLayer` (plan §"Web surfaces (reader)"). */
+  enableReaderClaimLayer?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -81,6 +86,7 @@ export function ReaderShell({
   const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
   const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(null);
   const [showRagChat, setShowRagChat] = useState(false);
+  const [claims, setClaims] = useState<ResearchClaimSummary[]>([]);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const currentPositionRef = useRef<Position | null>(null);
@@ -130,6 +136,19 @@ export function ReaderShell({
       ignore = true;
     };
   }, [workId]);
+
+  useEffect(() => {
+    if (!enableReaderClaimLayer) return;
+    let ignore = false;
+    jsonFetch<{ claims: ResearchClaimSummary[] }>(`/api/works/${workId}/claims`)
+      .then((response) => {
+        if (!ignore) setClaims(response.claims);
+      })
+      .catch(() => { /* Claims tab renders its own empty state either way */ });
+    return () => {
+      ignore = true;
+    };
+  }, [workId, enableReaderClaimLayer]);
 
   // D-23-51: a rail's `showX` boolean means two different things depending
   // on viewport — "always-open sticky column" (wide) vs. "drawer is open"
@@ -301,9 +320,18 @@ export function ReaderShell({
   const openAnnotation = useCallback((id: string) => {
     setShowAnalysis(true);
     setActiveAnnotationId(id);
-    const blockId = edition?.passageAnnotations.find((annotation) => annotation.id === id)?.textBlockId ?? null;
+    // Passage annotations, generated notes, and (Phase 28.3) research claims
+    // multiplex onto this one activation id — their id-spaces never collide
+    // across these separate DB tables, the same precedent the sidebar's own
+    // tab-sync effect relies on. Only passage annotations and claims carry a
+    // real DB textBlockId to auto-jump to; a claim re-matched at render time
+    // (unanchored) has none here, so clicking its marker opens the tab
+    // without also re-jumping to where the reader already is.
+    const blockId = edition?.passageAnnotations.find((annotation) => annotation.id === id)?.textBlockId
+      ?? claims.find((claim) => claim.id === id)?.textBlockId
+      ?? null;
     if (blockId) setActiveReaderBlockId(blockId);
-  }, [edition]);
+  }, [edition, claims]);
 
   const createLinkedNote = useCallback(async (anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
     const highlightId = await createHighlight({ kind: "processed", ...anchor });
@@ -558,7 +586,7 @@ export function ReaderShell({
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
           >
-            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} pendingColor={pendingColor} onColorChange={setPendingColor} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} /> : isPdf ? (
+            {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} pendingColor={pendingColor} onColorChange={setPendingColor} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} claims={enableReaderClaimLayer ? claims : []} /> : isPdf ? (
               data.fileUrl ? (
                 <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
                   fileUrl={data.fileUrl}
@@ -607,7 +635,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} />
           </div>
         )}
       </div>
@@ -631,6 +659,9 @@ export function ReaderShell({
             onSelectAnnotation={openAnnotation}
             onClose={closeAnalysisPanel}
             flushTop={readerFocus}
+            claims={enableReaderClaimLayer ? claims : []}
+            enableReaderClaimLayer={enableReaderClaimLayer}
+            onLocatePassage={setActiveReaderBlockId}
           />
         ) : (
           <AnnotationsPanel

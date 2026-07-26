@@ -14,6 +14,7 @@ import {
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import { matchFootnotesToBlocks } from "./matchFootnoteToBlock";
 import { readerScrollBehavior } from "./readerMotion";
+import { CLAIM_MARKER_COLOR_VAR, CLAIM_MARKER_GLYPH, matchClaimToBlock, type ResearchClaimSummary } from "./researchClaims";
 import type { RelationshipCategory } from "./types";
 import { HIGHLIGHT_COLORS, type HighlightColor, type HighlightRecord } from "./types";
 
@@ -524,6 +525,7 @@ export function EditionReader({
   onCreateLinkedNote,
   onLinkExistingNote,
   activeBlockId = null,
+  claims = [],
 }: {
   edition: EditionPayload;
   onOpenAnnotation: (id: string) => void;
@@ -532,6 +534,15 @@ export function EditionReader({
   notes?: Array<{ id: string; body: string }>;
   scriptDisplay?: "original" | "transliteration";
   focusMode?: boolean;
+  /** Phase 28.3, behind `readerClaimLayer`: `research_claim` rows for this
+   *  work. Anchored/rebound claims with a `textBlockId` render a single-point
+   *  marker directly; unanchored claims are re-matched at render time
+   *  (`matchClaimToBlock`) and render a dashed marker only on exactly one
+   *  match — both share the SAME `data-annotation-id`/`onOpenAnnotation`
+   *  click dispatch as passage annotations and generated notes (id-spaces
+   *  never collide across these DB tables, the established multiplexing
+   *  precedent this reader already relies on for notes vs. annotations). */
+  claims?: ResearchClaimSummary[];
   /** The color the next highlight will use, and the setter for it — the
    *  swatches live in this reader's own text-selection popover (Phase 23
    *  Lane D), next to the "Highlight" action they actually affect, rather
@@ -586,6 +597,32 @@ export function EditionReader({
     }
     return map;
   }, [edition.blocks, edition.generatedNotes]);
+  // Phase 28.3: DB-anchored/rebound claims, keyed by their own textBlockId —
+  // the same shape as passageAnnotationsByBlock above.
+  const claimsByBlock = useMemo(() => {
+    const map = new Map<string, ResearchClaimSummary[]>();
+    for (const claim of claims) {
+      if (!claim.textBlockId || (claim.anchorState !== "anchored" && claim.anchorState !== "rebound") || claim.quote === null) continue;
+      const list = map.get(claim.textBlockId) ?? [];
+      list.push(claim);
+      map.set(claim.textBlockId, list);
+    }
+    return map;
+  }, [claims]);
+  // Unanchored claims, re-matched at render time — the matchedNotesByBlock
+  // sibling above, applied to research_claim instead of generated_note.
+  const matchedClaimsByBlock = useMemo(() => {
+    const map = new Map<string, ResearchClaimSummary[]>();
+    for (const claim of claims) {
+      if (claim.anchorState !== "unanchored") continue;
+      const match = matchClaimToBlock(claim, edition.blocks);
+      if (!match) continue;
+      const list = map.get(match.blockId) ?? [];
+      list.push(claim);
+      map.set(match.blockId, list);
+    }
+    return map;
+  }, [claims, edition.blocks]);
   // Lane G Fix 2b: authorial footnotes/endnotes (source apparatus) anchored to
   // the body block that calls them out, recomputed on read (never persisted).
   // A numeric marker anchors only when its inline reference is unambiguous
@@ -626,6 +663,16 @@ export function EditionReader({
         summary: note.body,
       });
     }
+    // Phase 28.3: every claim gets an entry regardless of whether it ends up
+    // with a real marker (harmless if unused — same as generatedNotes above).
+    for (const claim of claims) {
+      map.set(claim.id, {
+        glyph: CLAIM_MARKER_GLYPH,
+        colorVar: CLAIM_MARKER_COLOR_VAR,
+        categoryLabel: claim.anchorState === "unanchored" ? "Re-matched research claim" : "Research claim",
+        summary: claim.claimText,
+      });
+    }
     // Authorial footnotes read distinctly from generated material: a neutral
     // ink glyph and an explicit "Authorial note" label, never a category color.
     for (const entry of edition.authorApparatus) {
@@ -638,7 +685,7 @@ export function EditionReader({
       });
     }
     return map;
-  }, [edition.authorApparatus, edition.generatedNotes, edition.passageAnnotations]);
+  }, [claims, edition.authorApparatus, edition.generatedNotes, edition.passageAnnotations]);
 
   const blockRefs = useRef(new Map<string, HTMLElement>());
   const sectionRef = useRef<HTMLElement>(null);
@@ -663,6 +710,8 @@ export function EditionReader({
     for (const [blockId, el] of blockRefs.current) {
       const notes = passageAnnotationsByBlock.get(blockId);
       const matchedNotes = matchedNotesByBlock.get(blockId);
+      const anchoredClaims = claimsByBlock.get(blockId);
+      const matchedClaims = matchedClaimsByBlock.get(blockId);
       const footnoteMatches = footnoteMatchesByBlock.get(blockId) ?? [];
       const blockHighlights = highlights.filter(
         (highlight): highlight is HighlightRecord & { anchor: { kind: "processed"; pageIndex: number; textBlockId: string; quote: string; prefix: string; suffix: string } } =>
@@ -690,7 +739,12 @@ export function EditionReader({
         marker: match.marker,
         ariaLabel: `Authorial note ${match.marker} — show text`,
       })));
-      if ((!notes || notes.length === 0) && (!matchedNotes || matchedNotes.length === 0)) {
+      if (
+        (!notes || notes.length === 0)
+        && (!matchedNotes || matchedNotes.length === 0)
+        && (!anchoredClaims || anchoredClaims.length === 0)
+        && (!matchedClaims || matchedClaims.length === 0)
+      ) {
         continue;
       }
       applyAnnotationMarkers(
@@ -719,10 +773,38 @@ export function EditionReader({
               markerKind: "matched-note" as const,
               ariaLabel: "Matched critical note — open details",
             })),
+          // Phase 28.3: anchored/rebound claims get their own DB-stored
+          // {quote,prefix,suffix} (same idiom as passage annotations, but
+          // WITH prefix/suffix since research_claim always captures them);
+          // re-matched unanchored claims get the dashed "matched" treatment.
+          ...(anchoredClaims ?? [])
+            .filter((c): c is ResearchClaimSummary & { quote: string } => c.quote !== null)
+            .map((c) => ({
+              id: c.id,
+              quote: c.quote,
+              prefix: c.prefix ?? "",
+              suffix: c.suffix ?? "",
+              colorVar: CLAIM_MARKER_COLOR_VAR,
+              glyph: CLAIM_MARKER_GLYPH,
+              markerKind: "claim" as const,
+              ariaLabel: "Research claim — open details",
+            })),
+          ...(matchedClaims ?? [])
+            .filter((c): c is ResearchClaimSummary & { quote: string } => c.quote !== null)
+            .map((c) => ({
+              id: c.id,
+              quote: c.quote,
+              prefix: c.prefix ?? "",
+              suffix: c.suffix ?? "",
+              colorVar: CLAIM_MARKER_COLOR_VAR,
+              glyph: CLAIM_MARKER_GLYPH,
+              markerKind: "claim-matched" as const,
+              ariaLabel: "Re-matched research claim — open details",
+            })),
         ],
       );
     }
-  }, [footnoteMatchesByBlock, highlights, matchedNotesByBlock, orderedBlocks, passageAnnotationsByBlock, scriptDisplay]);
+  }, [claimsByBlock, footnoteMatchesByBlock, highlights, matchedClaimsByBlock, matchedNotesByBlock, orderedBlocks, passageAnnotationsByBlock, scriptDisplay]);
 
   useEffect(() => {
     if (!activeAnnotationId) return;
