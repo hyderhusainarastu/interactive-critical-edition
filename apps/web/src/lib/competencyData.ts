@@ -9,6 +9,7 @@ import {
   graphEdges,
   understandingRatings,
 } from "@ice/db";
+import { reportEvent } from "@ice/observability";
 import { shouldOverwriteMastery, type MasterySource } from "@ice/research";
 import {
   COMPETENCY_CALL_HARD_CAP_USD,
@@ -146,6 +147,7 @@ const COMPETENCY_PROJECTED_PROMPT_TOKENS = 1_200;
 
 async function runGatedModelCall(input: {
   userId: string;
+  conversationId: string;
   userMessage: string;
   previousAssistantMessage: string | null;
   candidates: readonly CompetencyCandidate[];
@@ -166,18 +168,37 @@ async function runGatedModelCall(input: {
   if ((await currentRagSpend(input.userId)) + projected > RAG_DAILY_SOFT_CAP_USD) return null;
 
   try {
+    // Label-then-validate hardening: the prompt exposes each candidate only
+    // as a short "TARGET_N" label (never the real database targetId — see
+    // `buildCompetencyInput`'s doc comment), and `validateCompetencySignals`
+    // resolves the model's cited labels back through `labelToTargetId`,
+    // dropping (and counting) any signal that doesn't resolve rather than
+    // discarding sibling valid signals in the same response.
+    const { prompt, labelToTargetId } = buildCompetencyInput(input.userMessage, input.previousAssistantMessage, input.candidates);
     const result = await client.call({
       model,
       system: COMPETENCY_SYSTEM_PROMPT,
-      input: buildCompetencyInput(input.userMessage, input.previousAssistantMessage, input.candidates),
+      input: prompt,
       schema: competencySignalsSchema(),
       schemaName: COMPETENCY_SIGNALS_SCHEMA_NAME,
       safetyIdentifier: safetyIdentifierFor(input.userId),
       maxOutputTokens: COMPETENCY_MAX_OUTPUT_TOKENS,
-      validate: (parsed) => validateCompetencySignals(parsed, input.candidates, input.userMessage),
+      validate: (parsed) => validateCompetencySignals(parsed, input.candidates, labelToTargetId, input.userMessage),
     });
+    // Content-free observability for the trust-calibration posture: how
+    // often the model cites a target label that doesn't resolve to a real
+    // candidate. No message/quote/answer text is logged — counts and ids
+    // only, matching `ragData.ts`'s `rag.citation_labels_dropped` call site.
+    if (result.data.droppedCount > 0) {
+      reportEvent("competency.target_labels_dropped", {
+        conversationId: input.conversationId,
+        droppedCount: result.data.droppedCount,
+        acceptedCount: result.data.signals.length,
+        candidateCount: input.candidates.length,
+      });
+    }
     return {
-      signals: result.data,
+      signals: result.data.signals,
       cost: estimateCostUsd(result.model, result.promptTokens, result.completionTokens),
       model: result.model,
       promptTokens: result.promptTokens,
@@ -403,6 +424,7 @@ export async function processCompetencySignals(input: {
     const detectorSignals = detectSelfReportedCompetency(input.userMessage, candidates);
     const modelResult = await runGatedModelCall({
       userId: input.userId,
+      conversationId: input.conversationId,
       userMessage: input.userMessage,
       previousAssistantMessage: input.previousAssistantMessage,
       candidates,
