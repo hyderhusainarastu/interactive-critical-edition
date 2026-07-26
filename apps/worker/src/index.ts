@@ -11,6 +11,7 @@ import {
   type ExpandCrossLibraryGraphJob,
   QUEUE_EXTRACT_TEXT,
   QUEUE_EXTRACT_RESEARCH_CLAIMS,
+  QUEUE_IMPORT_RESEARCH_CORPUS,
   RESEARCH_QUEUES,
   type ResearchJobPayload,
   type ResearchQueueName,
@@ -24,6 +25,7 @@ import { activePipelineVersion, handleEditionExtraction, handleExtractText } fro
 import { sweepAbandonedRuns } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
 import { extractClaims } from "./research/extractClaims";
+import { importCorpus } from "./research/importCorpus";
 import { runResearchJob } from "./research/jobRunner";
 import "./sentry";
 
@@ -106,14 +108,42 @@ async function main() {
     for (const job of batch) await runResearchJob(job.data.requestId, extractClaims);
   });
 
-  // Phase 25.6: the remaining three research queues stay honest no-ops until
-  // their own lanes (26.2 relationships/clustering, 27 synthesis, 28.2/29
-  // corpus import+monitors) replace this registration — see
-  // `handleUnimplementedResearchJob`'s doc comment. Registering now means the
-  // queue rows and this worker's consumer set exist before any web route can
-  // enqueue, so an early enqueue is dequeued and answered honestly instead of
-  // sitting `created` forever with nothing consuming it.
-  for (const queueName of RESEARCH_QUEUES.filter((name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS)) {
+  // Phase 28.2: import-research-corpus gets its real handler for
+  // `import_corpus` jobs. `run_monitor` (Phase 29.1) shares this SAME queue
+  // (plan §Pipeline: "also carries scheduled monitors") but is not
+  // implemented yet — a request of that job type on this queue still falls
+  // through to the honest no-op below, exactly as it did before this lane.
+  await boss.work<ResearchJobPayload>(QUEUE_IMPORT_RESEARCH_CORPUS, async (jobs) => {
+    const batch = Array.isArray(jobs) ? jobs : [jobs];
+    for (const job of batch) {
+      const [request] = await db
+        .select({ jobType: researchJobRequests.jobType })
+        .from(researchJobRequests)
+        .where(eq(researchJobRequests.id, job.data.requestId))
+        .limit(1);
+      if (request?.jobType === "import_corpus") {
+        await runResearchJob(job.data.requestId, importCorpus);
+        continue;
+      }
+      try {
+        await handleUnimplementedResearchJob(QUEUE_IMPORT_RESEARCH_CORPUS, job.data.requestId);
+      } catch (error) {
+        reportError(error, { scope: `worker.${QUEUE_IMPORT_RESEARCH_CORPUS}`, requestId: job.data.requestId });
+        throw error;
+      }
+    }
+  });
+
+  // Phase 25.6: the remaining two research queues stay honest no-ops until
+  // their own lanes (26.2 relationships/clustering, 27 synthesis) replace
+  // this registration — see `handleUnimplementedResearchJob`'s doc comment.
+  // Registering now means the queue rows and this worker's consumer set
+  // exist before any web route can enqueue, so an early enqueue is dequeued
+  // and answered honestly instead of sitting `created` forever with nothing
+  // consuming it.
+  for (const queueName of RESEARCH_QUEUES.filter(
+    (name) => name !== QUEUE_EXTRACT_RESEARCH_CLAIMS && name !== QUEUE_IMPORT_RESEARCH_CORPUS,
+  )) {
     await boss.work<ResearchJobPayload>(queueName, async (jobs) => {
       const batch = Array.isArray(jobs) ? jobs : [jobs];
       for (const job of batch) {

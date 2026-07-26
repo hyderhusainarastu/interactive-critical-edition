@@ -20,19 +20,25 @@ export type ProviderName =
   | "openlibrary"
   | "googlebooks"
   | "semanticscholar"
+  | "arxiv"
   | "tavily"
   | "youtube"
   | "mastodon"
   | "bluesky";
 
 /** Scholarly providers get a 30-day cache and feed the credibility A/B tiers;
- *  web/video 7 days; social 24 hours (plan §33). */
+ *  web/video 7 days; social 24 hours (plan §33). `arxiv` is scholarly for
+ *  cache-TTL purposes but is deliberately NOT wired into `allAdapters()` —
+ *  it powers Phase 28.2's corpus import only, not the general per-document
+ *  discovery pipeline (`discover.ts`'s `providersForLane`), so adding it
+ *  here does not change what any existing analysis run consults. */
 export const SCHOLARLY_PROVIDERS: readonly ProviderName[] = [
   "crossref",
   "openalex",
   "openlibrary",
   "googlebooks",
   "semanticscholar",
+  "arxiv",
 ];
 export const WEB_PROVIDERS: readonly ProviderName[] = ["tavily", "youtube"];
 export const SOCIAL_PROVIDERS: readonly ProviderName[] = ["mastodon", "bluesky"];

@@ -38,3 +38,6 @@ export * from "./selection";
 // Floors-capability-proposal §2.3: the citation-resolution → research_resource
 // bridge's pure row-construction (no DB), shared with apps/worker's call site.
 export * from "./citationBridge";
+// Phase 28.2: corpus import (search + direct-by-id lookup + normalization
+// into the research_corpus_item insert shape) — network-only, zero AI cost.
+export * from "./corpusImport";

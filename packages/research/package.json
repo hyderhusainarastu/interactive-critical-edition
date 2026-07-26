@@ -10,7 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ice/bibliographic": "workspace:*"
+    "@ice/bibliographic": "workspace:*",
+    "fast-xml-parser": "^5.10.1"
   },
   "devDependencies": {
     "@types/node": "^24",

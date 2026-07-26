@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CrossrefAdapter, OpenAlexAdapter, SemanticScholarAdapter } from "./scholarly";
+import { CrossrefAdapter, OpenAlexAdapter, SemanticScholarAdapter, lookupOpenAlexById, lookupSemanticScholarById } from "./scholarly";
 import { TavilyAdapter, YouTubeAdapter } from "./web";
 import { MastodonAdapter } from "./social";
+import { ArxivAdapter } from "./arxiv";
+import { allAdapters, enabledAdapters } from "./index";
 
 /** Build a mock `fetch` returning a given status + json body. */
 function mockFetch(status: number, body: unknown) {
@@ -151,5 +153,84 @@ describe("keyed adapters activate when configured", () => {
       venue: "Reddit (web search result)",
       snippet: "Search snippet only",
     });
+  });
+});
+
+describe("direct-by-id lookups (Phase 28.2 corpus import)", () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("lookupSemanticScholarById resolves a real paperId to full metadata", async () => {
+    global.fetch = mockFetch(200, {
+      title: "Being and Time",
+      authors: [{ name: "Martin Heidegger" }],
+      year: 1927,
+      externalIds: { DOI: "10.1000/abc" },
+      abstract: "An abstract.",
+      citationCount: 42,
+      url: "https://example.com/paper",
+      venue: "Journal of Phenomenology",
+    });
+    const { resource, attempt } = await lookupSemanticScholarById("abc123paperid");
+    expect(attempt.status).toBe("queried");
+    expect(resource).toMatchObject({ provider: "semanticscholar", title: "Being and Time", doi: "10.1000/abc" });
+    expect((resource?.raw as { paperId: string }).paperId).toBe("abc123paperid");
+  });
+
+  it("lookupSemanticScholarById reports an honest not-found on 404, distinct from a real failure", async () => {
+    global.fetch = mockFetch(404, {});
+    const { resource, attempt } = await lookupSemanticScholarById("does-not-exist");
+    expect(resource).toBeNull();
+    expect(attempt.status).toBe("queried");
+    expect(attempt.resultCount).toBe(0);
+  });
+
+  it("lookupSemanticScholarById reports 'rate_limited' on HTTP 429", async () => {
+    global.fetch = mockFetch(429, {});
+    const { resource, attempt } = await lookupSemanticScholarById("abc123paperid");
+    expect(resource).toBeNull();
+    expect(attempt.status).toBe("rate_limited");
+  });
+
+  it("lookupOpenAlexById resolves a bare or full-URL id to full metadata", async () => {
+    global.fetch = mockFetch(200, {
+      id: "https://openalex.org/W2031754690",
+      title: "Being and Time",
+      authorships: [{ author: { display_name: "Martin Heidegger" } }],
+      publication_year: 1927,
+      doi: "https://doi.org/10.1000/abc",
+      cited_by_count: 999,
+    });
+    const { resource, attempt } = await lookupOpenAlexById("W2031754690");
+    expect(attempt.status).toBe("queried");
+    expect(resource).toMatchObject({ provider: "openalex", title: "Being and Time", doi: "10.1000/abc", popularity: 999 });
+    expect((resource?.raw as { id: string }).id).toBe("https://openalex.org/W2031754690");
+  });
+
+  it("lookupOpenAlexById reports an honest not-found on 404", async () => {
+    global.fetch = mockFetch(404, {});
+    const { resource, attempt } = await lookupOpenAlexById("W0000000000");
+    expect(resource).toBeNull();
+    expect(attempt.status).toBe("queried");
+  });
+});
+
+describe("arXiv adapter isolation (Phase 28.2)", () => {
+  // `ArxivAdapter` deliberately powers only `corpusImport.ts`'s corpus
+  // search, not the general per-document discovery pipeline — see the
+  // module doc comment on `adapters/index.ts`. If a future edit adds it to
+  // either list, every existing analysis run's provider fan-out (and cost)
+  // changes silently; this test exists to make that an intentional,
+  // reviewed change rather than an accidental one.
+  it("is absent from allAdapters()", () => {
+    expect(allAdapters().some((a) => a.provider === "arxiv")).toBe(false);
+  });
+
+  it("is absent from enabledAdapters(), even though it is itself keyless-enabled", () => {
+    expect(new ArxivAdapter().isEnabled()).toBe(true);
+    expect(enabledAdapters().some((a) => a.provider === "arxiv")).toBe(false);
   });
 });

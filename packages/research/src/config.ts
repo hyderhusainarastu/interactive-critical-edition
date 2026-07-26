@@ -69,6 +69,7 @@ export function providerEnabled(provider: ProviderName): boolean {
     case "openlibrary":
     case "googlebooks":
     case "semanticscholar":
+    case "arxiv":
       return true;
     // Free-tier keys required; disabled (honestly reported) when absent.
     case "tavily":

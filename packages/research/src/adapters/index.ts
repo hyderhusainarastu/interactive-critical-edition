@@ -13,6 +13,11 @@ export * from "./base";
 export * from "./scholarly";
 export * from "./web";
 export * from "./social";
+// Phase 28.2: the arXiv adapter. Deliberately NOT added to `allAdapters()`/
+// `enabledAdapters()` below — it powers `corpusImport.ts`'s corpus search
+// only, not the general per-document discovery pipeline those two functions
+// feed, so exporting it here changes no existing analysis run's behavior.
+export * from "./arxiv";
 
 /** Every adapter, in a stable order (scholarly → web → social). */
 export function allAdapters(): SourceAdapter[] {
