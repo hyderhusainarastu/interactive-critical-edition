@@ -1,5 +1,7 @@
 import {
+  AUTO_APPROVE_MAX_CHUNKS,
   CLAIM_EXTRACTION_PROMPT_VERSION,
+  HARD_STOP_MAX_CHUNKS,
   planExtractionChunks,
   planResearchJob,
   TAXONOMY_VERSION_CLAIMS,
@@ -39,14 +41,9 @@ import { getOwnedResearchProject } from "./projects";
 // `ai_usage_log`).
 const CHUNK_COST_ESTIMATE_USD = 0.01;
 
-// Phase 12's cross-library graph expansion precedent (plan §Owner-ratified
-// decisions 3 / `@ice/claims`'s own `planResearchJob` doc comment):
-// small jobs auto-enqueue, larger ones need explicit confirmation. A single
-// work's extraction is capped by `planExtractionChunks`'s own
-// `DEFAULT_MAX_CHUNKS` (12, ~$0.12) — well under this — so confirmation is
-// realistically reached only if that per-work cap is ever raised.
-const AUTO_APPROVE_MAX_CHUNKS = 12;
-const HARD_STOP_MAX_CHUNKS = 50;
+// AUTO_APPROVE_MAX_CHUNKS / HARD_STOP_MAX_CHUNKS now live in
+// `@ice/claims`'s `limits.ts` (moved there so any future caller shares the
+// same numbers instead of re-guessing them) — imported above.
 
 async function loadEligibleBlocksForWork(workId: string): Promise<ExtractionBlock[] | null> {
   const [document] = await db.select({ id: documents.id }).from(documents).where(eq(documents.workId, workId)).limit(1);

@@ -21,3 +21,17 @@ export interface ClaimsRetrievalLimits {
 export const RETRIEVAL_LIMITS: ClaimsRetrievalLimits = {
   maxCandidatePairs: Number(process.env.CLAIMS_MAX_CANDIDATE_PAIRS ?? 400),
 };
+
+/**
+ * Confirmation-gate thresholds for the `extract_claims` job (Phase 28.1's
+ * `dispatchExtractClaimsJob`). Phase 12's cross-library graph expansion
+ * precedent (plan §Owner-ratified decisions 3 / `planResearchJob`'s own doc
+ * comment): small jobs auto-enqueue, larger ones need explicit confirmation.
+ * A single work's extraction is capped by `planExtractionChunks`'s own
+ * `DEFAULT_MAX_CHUNKS` (12, ~$0.12) — well under `AUTO_APPROVE_MAX_CHUNKS` —
+ * so confirmation is realistically reached only if that per-work cap is ever
+ * raised. Colocated here (rather than left local to the web-side dispatcher)
+ * so any future caller shares the same numbers instead of re-guessing them.
+ */
+export const AUTO_APPROVE_MAX_CHUNKS = 12;
+export const HARD_STOP_MAX_CHUNKS = 50;

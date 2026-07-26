@@ -71,6 +71,15 @@ export async function runResearchJob(
   }
   if (request.status === "complete" || request.status === "cancelled") return;
 
+  // Defense in depth: a request gated on confirmation must never run just
+  // because it was (re)dequeued — the enqueue-time check is not the only
+  // thing standing between "needs a human yes" and real spend. Refuse
+  // outright rather than silently completing; the handler is never invoked.
+  if (request.requiresConfirmation && !request.confirmedAt) {
+    await repo.markResearchJobFailed(requestId, { actualCostUsd: 0, error: "awaiting confirmation" });
+    return;
+  }
+
   await repo.markResearchJobRunning(requestId);
 
   // Crash-loop-proof budget (the `analyze.ts` `seededUsd` idiom): seed from
