@@ -111,8 +111,15 @@ export class AnthropicTextJsonClient {
     };
 
     let lastError: Error | null = null;
-    let lastPromptTokens = 0;
-    let lastCompletionTokens = 0;
+    // Accumulated (not overwritten) across attempts — D-25-5, found by the
+    // 26.2b adversarial verification: every attempt that reaches
+    // `res.json()` has already been billed by Anthropic for those tokens,
+    // whether or not its output goes on to parse/validate. Overwriting on
+    // each attempt silently dropped every failed attempt's real spend from
+    // the logged usage, undercounting cost on any judge/naming call that
+    // needed a retry.
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -137,8 +144,8 @@ export class AnthropicTextJsonClient {
           content?: { type: string; text?: string }[];
           usage?: { input_tokens?: number; output_tokens?: number };
         };
-        lastPromptTokens = json.usage?.input_tokens ?? 0;
-        lastCompletionTokens = json.usage?.output_tokens ?? 0;
+        totalPromptTokens += json.usage?.input_tokens ?? 0;
+        totalCompletionTokens += json.usage?.output_tokens ?? 0;
         const text = (json.content ?? [])
           .filter((b) => b.type === "text")
           .map((b) => b.text ?? "")
@@ -156,8 +163,8 @@ export class AnthropicTextJsonClient {
           ok: true,
           data,
           model: params.model,
-          promptTokens: lastPromptTokens,
-          completionTokens: lastCompletionTokens,
+          promptTokens: totalPromptTokens,
+          completionTokens: totalCompletionTokens,
         };
       } catch (err) {
         const e = err instanceof Error ? err : new Error(String(err));
@@ -171,8 +178,8 @@ export class AnthropicTextJsonClient {
       ok: false,
       error: lastError?.message ?? "Anthropic Messages call failed",
       model: params.model,
-      promptTokens: lastPromptTokens,
-      completionTokens: lastCompletionTokens,
+      promptTokens: totalPromptTokens,
+      completionTokens: totalCompletionTokens,
     };
   }
 }

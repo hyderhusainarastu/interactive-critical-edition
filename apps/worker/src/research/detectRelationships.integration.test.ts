@@ -1,4 +1,5 @@
 import type { EmbeddingBatchResult, EmbeddingProvider } from "@ice/ai-adapters";
+import { RETRIEVAL_LIMITS } from "@ice/claims";
 import {
   bibliographicRecords,
   citations,
@@ -769,6 +770,92 @@ describe.skipIf(!hasDb)("detect_relationships judge stage (integration)", () => 
     expect(outcome.concerns.some((c) => c.includes("No judge provider configured"))).toBe(true);
     const rows = await db.select().from(claimRelationships).where(eq(claimRelationships.userId, userId));
     expect(rows).toHaveLength(0);
+  });
+
+  it("maxJudgedPairsPerRequest truncation: candidates beyond the cap stay awaiting judgment this run", async () => {
+    const userId = await seedUser();
+    cleanupUsers.push(userId);
+    const workA = await seedWork(userId, "Work A");
+    const workB = await seedWork(userId, "Work B");
+    const workC = await seedWork(userId, "Work C");
+    const claimA = await seedClaim(userId, workA, "Claim A about the shared locus.");
+    const claimB = await seedClaim(userId, workB, "Claim B about that very same locus.");
+    const claimC = await seedClaim(userId, workC, "Claim C also about that very same locus.");
+    // Three works sharing one locus produce all THREE cross-work pairs
+    // (A-B, A-C, B-C) — `crossWorkPairsByKey`'s full pairwise combination
+    // over one locus group, `@ice/claims`'s `retrieval/locus.ts`.
+    await seedLocus(claimA.id, "aristotle:nicomachean-ethics:1151a");
+    await seedLocus(claimB.id, "aristotle:nicomachean-ethics:1151a");
+    await seedLocus(claimC.id, "aristotle:nicomachean-ethics:1151a");
+    const projectId = await seedProject(userId, [workA, workB, workC]);
+
+    // RETRIEVAL_LIMITS is a plain mutable module-level constant (not
+    // env-rebindable after import) — temporarily lower the cap so 3 seeded
+    // candidates exceed it without seeding 41+ works.
+    const originalCap = RETRIEVAL_LIMITS.maxJudgedPairsPerRequest;
+    RETRIEVAL_LIMITS.maxJudgedPairsPerRequest = 2;
+    try {
+      const anthropic = new MockAnthropicJudgeCaller(() => ({ ok: true, data: judgeResponse() }));
+      const requestId = await seedJobRequest(userId, projectId);
+      const outcome = await runDetect(requestId, projectId, new UnavailableEmbeddingProvider(), anthropic, new UnavailableOpenAICaller());
+
+      expect(outcome.judged).toBe(2); // capped at 2, not all 3 pending pairs
+      expect(anthropic.calls).toBe(2);
+      expect(outcome.candidatesAwaitingJudgment).toBe(1);
+      expect(outcome.coverage).toBe("partial");
+      expect(outcome.concerns.some((c) => c.includes("Judging capped at 2"))).toBe(true);
+
+      const rows = await db.select().from(claimRelationships).where(eq(claimRelationships.userId, userId));
+      expect(rows).toHaveLength(2); // exactly the capped count persisted, not all 3
+    } finally {
+      RETRIEVAL_LIMITS.maxJudgedPairsPerRequest = originalCap;
+    }
+  });
+
+  it("mid-run budget stop: the loop stops once a call pushes spend over the soft cap, leaving the rest awaiting judgment", async () => {
+    const userId = await seedUser();
+    cleanupUsers.push(userId);
+    const workA = await seedWork(userId, "Work A");
+    const workB = await seedWork(userId, "Work B");
+    const workC = await seedWork(userId, "Work C");
+    const claimA = await seedClaim(userId, workA, "Claim A about the shared locus.");
+    const claimB = await seedClaim(userId, workB, "Claim B about that very same locus.");
+    const claimC = await seedClaim(userId, workC, "Claim C also about that very same locus.");
+    await seedLocus(claimA.id, "aristotle:nicomachean-ethics:1151a");
+    await seedLocus(claimB.id, "aristotle:nicomachean-ethics:1151a");
+    await seedLocus(claimC.id, "aristotle:nicomachean-ethics:1151a");
+    const projectId = await seedProject(userId, [workA, workB, workC]); // 3 candidate pairs
+
+    // A judge mock reporting real-looking but huge per-call token usage —
+    // `estimateCostUsd`'s unknown-model fallback pricing ($1/$3 per Mtok
+    // input/output) means 600k/300k tokens alone cost $1.50, well past the
+    // default $1 soft cap, so `overSoftCap(ctx.budget)` (re-checked before
+    // EVERY pair in `judgeCandidatePairsForProject`'s loop, not just once up
+    // front) trips after the FIRST real call rather than gating nothing at
+    // all — proving the stop is genuinely mid-run.
+    class BudgetBurningAnthropicJudgeCaller implements JudgeAnthropicCaller {
+      available = true;
+      calls = 0;
+      async call<T>(params: { model: string; validate: (parsed: unknown) => T }) {
+        this.calls += 1;
+        const data = params.validate(judgeResponse());
+        return { ok: true as const, data, model: params.model, promptTokens: 600_000, completionTokens: 300_000 };
+      }
+    }
+    const anthropic = new BudgetBurningAnthropicJudgeCaller();
+
+    const requestId = await seedJobRequest(userId, projectId);
+    const outcome = await runDetect(requestId, projectId, new UnavailableEmbeddingProvider(), anthropic, new UnavailableOpenAICaller());
+
+    expect(outcome.judged).toBe(1); // exactly one pair judged before the budget check broke the loop
+    expect(anthropic.calls).toBe(1); // the loop broke BEFORE attempting a second/third pair
+    expect(outcome.candidatesAwaitingJudgment).toBe(2);
+    expect(outcome.coverage).toBe("partial");
+    expect(outcome.note).toMatch(/stopped early: cost budget/i);
+    expect(outcome.concerns.some((c) => /Judging stopped after 1\/3 pair\(s\): cost budget reached\./.test(c))).toBe(true);
+
+    const rows = await db.select().from(claimRelationships).where(eq(claimRelationships.userId, userId));
+    expect(rows).toHaveLength(1);
   });
 });
 

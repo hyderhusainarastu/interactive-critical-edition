@@ -1,5 +1,6 @@
 import type { StructuredCaller } from "@ice/research";
 import {
+  aiUsageLogs,
   claimRelationships,
   db,
   debateClusterMembers,
@@ -339,6 +340,54 @@ describe.skipIf(!hasDb)("cluster_debates (integration)", () => {
     expect(cluster.promptVersion).toBeNull();
     expect(cluster.provider).toBeNull();
     expect(cluster.model).toBeNull();
+  });
+
+  it("naming budget exhausted before any call: new clusters are named deterministically without ever invoking a provider", async () => {
+    const userId = await seedUser();
+    cleanupUsers.push(userId);
+    const workA = await seedWork(userId, "Work A");
+    const workB = await seedWork(userId, "Work B");
+    const workC = await seedWork(userId, "Work C");
+    const workD = await seedWork(userId, "Work D");
+    const claimA = await seedClaim(userId, workA, "The virtuous agent acts from settled character, not calculation.");
+    const claimB = await seedClaim(userId, workB, "Virtue requires deliberate calculation in the moment of action.");
+    const claimC = await seedClaim(userId, workC, "Practical wisdom cannot be taught, only habituated.");
+    const claimD = await seedClaim(userId, workD, "Practical wisdom is teachable through explicit instruction.");
+    const projectId = await seedProject(userId, [workA, workB, workC, workD]);
+    await seedRelationship(userId, projectId, claimA.id, claimB.id, "contradiction");
+    await seedRelationship(userId, projectId, claimC.id, claimD.id, "contradiction");
+
+    const requestId = await seedJobRequest(userId, projectId);
+    // Pre-charge this request's budget to the default $1 soft cap BEFORE the
+    // job runs — `runResearchJob` seeds its budget from the sum of every
+    // `ai_usage_log` row already attributed to this exact request id (the
+    // `analyze.ts` `seededUsd` crash-recovery idiom), so this simulates the
+    // naming budget already being gone by the time clustering starts.
+    await db.insert(aiUsageLogs).values({
+      researchRequestId: requestId,
+      task: "test-seed",
+      provider: "test",
+      model: "test-model",
+      promptTokens: 0,
+      completionTokens: 0,
+      estimatedCostUsd: 1,
+    });
+
+    const openai = new FailingOpenAICaller(); // throws if ever called — proves the budget check short-circuits BEFORE any provider call
+    const outcome = await runCluster(requestId, projectId, openai, new UnavailableAnthropicCaller());
+
+    expect(outcome.clustersFound).toBe(2);
+    expect(outcome.clustersNamed).toBe(0);
+    expect(outcome.clustersFallbackNamed).toBe(2);
+    expect(outcome.coverage).toBe("partial");
+    expect(openai.calls).toBe(0); // never even attempted — unlike the "both providers fail" case, which does call and catches
+    expect(outcome.concerns.some((c) => c.includes("Cluster-naming cost budget reached"))).toBe(true);
+
+    const clusters = await db.select().from(debateClusters).where(eq(debateClusters.projectId, projectId));
+    expect(clusters).toHaveLength(2);
+    expect(clusters.every((c) => c.status === "active")).toBe(true); // still created and active, just plainly named
+    expect(clusters.every((c) => c.name.startsWith("Debate: "))).toBe(true);
+    expect(clusters.every((c) => c.provider === null && c.promptVersion === null)).toBe(true);
   });
 
   it("rejects a project the requesting user does not own", async () => {

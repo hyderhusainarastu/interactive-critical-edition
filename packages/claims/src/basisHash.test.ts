@@ -54,4 +54,43 @@ describe("computeRelationshipBasisHash", () => {
     const b = computeRelationshipBasisHash({ ...BASE, loText: "a", loExcerpt: "bc" });
     expect(a).not.toBe(b);
   });
+
+  it("rebind invariance: an applyRebindResult-shaped change (textBlockId/anchorState) never changes the hash", () => {
+    // `RelationshipBasisInput` (this file's import above) has no
+    // `textBlockId`/`anchorState`/`processingRunId` field at all — those are
+    // exactly the columns `apps/worker/src/research/repository.ts`'s
+    // `applyRebindResult` writes when a claim's anchor is relocated after a
+    // reprocess. Model a "claim row" with those extra fields to prove that
+    // projecting ONLY the basis-relevant fields (claimText/supportingExcerpt)
+    // through the same extraction a caller like `detectRelationships.ts`
+    // does yields an identical hash whether the claim is pre- or
+    // post-rebind — a rebind must never force every `claim_relationship`
+    // judged against that claim to be silently re-judged (and re-paid for).
+    interface ClaimRowShape {
+      claimText: string;
+      supportingExcerpt: string;
+      textBlockId: string | null;
+      anchorState: "unanchored" | "rebound";
+      processingRunId: string | null;
+    }
+    const beforeRebind: ClaimRowShape = {
+      claimText: BASE.loText,
+      supportingExcerpt: BASE.loExcerpt,
+      textBlockId: null,
+      anchorState: "unanchored",
+      processingRunId: "11111111-1111-1111-1111-111111111111",
+    };
+    const afterRebind: ClaimRowShape = {
+      ...beforeRebind,
+      textBlockId: "22222222-2222-2222-2222-222222222222",
+      anchorState: "rebound",
+      processingRunId: "33333333-3333-3333-3333-333333333333",
+    };
+    const basisOf = (claim: ClaimRowShape): RelationshipBasisInput => ({
+      ...BASE,
+      loText: claim.claimText,
+      loExcerpt: claim.supportingExcerpt,
+    });
+    expect(computeRelationshipBasisHash(basisOf(beforeRebind))).toBe(computeRelationshipBasisHash(basisOf(afterRebind)));
+  });
 });
