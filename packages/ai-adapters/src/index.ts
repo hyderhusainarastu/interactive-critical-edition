@@ -27,6 +27,11 @@ export {
   type StructuredResult,
 } from "./responses";
 export { AnthropicStructuredClient, type AnthropicStructuredCall } from "./anthropicStructured";
+export {
+  AnthropicTextJsonClient,
+  type AnthropicTextJsonCall,
+  type AnthropicTextJsonResult,
+} from "./anthropicTextJson";
 
 /**
  * Selects the LLM provider for a task based on which API keys are

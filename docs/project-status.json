@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-25",
   "current": {
-    "phase": 25,
-    "headline": "Phases 25-30 (ScholarLens integration program) adopted and started 2026-07-25 per the owner-approved plan at docs/architecture/scholarlens-integration-plan.md: a full TypeScript port of the licensed ScholarLens claims-and-debates engine into a new Palimnote Research workspace, with a dual-track empirical+humanities evidence model, improvements grounded in the owner's research project (trust calibration, citation-graph-aware judgment, locus-based retrieval), reverse-direction improvements to existing Palimnote, and Phase 24 final verification executing at program close over the merged product. Phase 23 remains COMPLETE (tagged phase-23-complete) and the v.5 UX-redesign program record below is unchanged. Phase 25 (Research Foundations) is in progress.",
+    "phase": 26,
+    "headline": "Phase 25 (Research Foundations, ScholarLens integration) is COMPLETE as of 2026-07-26 (tag phase-25-complete): gold sets + @ice/claims + the embedding/Anthropic adapter seam all shipped and tested, and the three paid eval spikes (25.5/25.5b/25.5c, $1.438 total) resolved both calibration and the judge configuration — production now runs RAW-TEXT-VALIDATED mode for the anthropic rung of the judge task per an explicit, documented moderator decision. Migrations 0038 and 0039 are applied to production (ledger 40). Phase 26 (Claims Engine) is now in progress: 26.1 (claim extraction + migration 0039) is complete; 26.2 (relationship detection) and 26.3 (debate clustering) remain.",
     "summary": "v.5 UX-redesign completion program (2026-07-25), condensed: Workstream D wires foreign-script/untranscribable-passage recovery end to end (migration 0036, free deterministic detection + a paid gpt-5.4-nano translation stage, v3/v4-scoped). The Bekker/classical-citation fix adds a pure classical-reference recognizer and a canonical deterministic Library projection, eliminating junk 'Needs bibliographic resolution' Library entries for Aristotle-style locus citations; a production cleanup script exists but its run is deferred to owner execution alongside a Brickhouse reprocess canary. Graph redesign P0-P4 keeps react-force-graph-3d (P0), widens the data contract (P1), adds reader-level/concept-kind filters and a fuller inspector to the accessible table (P2), restyles the 3D scene with an astronomical-plate backdrop and bloom (P3), and adds hover/select choreography plus a Concepts focus mode (P4). Workstream J adds a real in-app FeedbackModal/FeedbackTrigger (replacing the old mailto link) in both signed-in and public footers. Workstream H adds a wholly separate HMAC-cookie-gated /admin-dash tree (overview/users/feedback) plus site-wide telemetry, coded to 404 until its three env vars are set in production. Workstream G adds /account (profile/usage/plan), a ProfileMenu, signup consent checkboxes, and a full delete-account flow verified against real Storage. Lane 0 lands migration 0037 (data_sharing_enabled/policy_accepted_at, user_deletion_archive, usage_event, feedback) and a new hand-rolled charts package. Workstream E upgrades Ask Library with a greeting card, sounds, citation stagger, and a conversation-history switcher. Workstream K adds monetization/payments proposal docs only, no code. A live-regression fix (found immediately after the day's deploys) scoped the root layout's PageTransition to #main-content only, since wrapping the entire app shell in AnimatePresence was silently remounting open menus. Both migrations (0036, 0037) were applied to production before their dependent code shipped, per the D-23-34 rule. This session's full-suite verification (354 tests, 39 spec files, built prod server + local worker): 305 passed / 3 flaky-recovered / 46 initially failed -> 3 documented-pre-existing (D-19-6 class, left as-is) + 36 fixed (test-drift/baseline regeneration, all re-verified green) + 7 new real product defects reported, not fixed (3 WCAG contrast + 4 touch-target-size, both traced to this program's own shipped UI). Tracker (docs/project-status.json) updated and progress-checklist.html regenerated/validated in the same pass. **A11y-repair follow-up (2026-07-25):** the 7 reported-not-fixed accessibility findings above are now fixed (D-23-40 contrast, D-23-41 touch-target), each via a narrowly-scoped CSS/token fix rather than a broader redesign; verification also surfaced one new, previously-masked, pre-existing defect (D-23-42, open, P3, reader selection-toolbar controls at 42px instead of 44px) left open as out of scope for this repair pass.",
-    "nextAction": "Execute Phase 25: parallel lanes 25.1-25.4 + 25.7, then the paid calibration/judge spikes (25.5), then migration 0038 + queues (25.6, applied to production before its code push per D-23-34)."
+    "nextAction": "Execute Phase 26.2 (relationship detection + migration 0040), then 26.3 (debate clustering + migration 0041)."
   },
   "program": {
     "name": "Phases 19-24 completion program + Phases 25-30 ScholarLens integration program",
@@ -888,67 +888,67 @@
     {
       "number": 25,
       "title": "Research Foundations (ScholarLens integration)",
-      "state": "in_progress",
+      "state": "complete",
       "summary": "Foundation phase of the ScholarLens integration program: gold-set port with provenance, humanities gold-set drafting (owner-ratified), the pure @ice/claims package skeleton (verbatim evidence-strength port, new textual-support scorer, metrics/split/BM25/cosine/taxonomy/thresholds/limits), the embedding provider seam + embedMany + Anthropic tool-use structured output, the paid calibration and judge-eval spikes that fix thresholds and judge-model routing before any schema exists, migration 0038 (research_project/research_job_request/research_revision + queues + flags + migration-ledger CI check), and the research-project quick-wins lane.",
-      "confirmation": "All pure modules unit-tested green; spike reports recorded in docs/eval/research-claims/ with per-domain breakdowns; thresholds and TASK_ROUTES set from measurement or the documented BM25+locus-only fallback; migration 0038 applied to production before its code push; worker boots logging all queues; typecheck/lint/test/build green.",
+      "confirmation": "Confirmed complete 2026-07-26: all 7 sub-phases (25.1-25.7) closed. Gold sets + PROVENANCE merged; humanities drafts merged PROVISIONAL pending owner ratification; @ice/claims (253+ tests), the embedding seam, AnthropicStructuredClient, and AnthropicTextJsonClient all shipped and unit-tested green; the three eval spikes (25.5/25.5b/25.5c, $1.438 total paid spend) resolved calibration (text-embedding-3-small@0.35) and the judge config via a moderator-directed output-mode experiment — production now runs RAW-TEXT-VALIDATED mode for the anthropic rung of claim_relationship_judgment (docs/eval/research-claims/spike-25-5c-output-mode.md's Moderator decision section), the only config across 10+ measured to clear every quality gate; migrations 0038+0039 applied to production (ledger 40) before their dependent code, per the D-23-34 rule; queues live as guarded handlers; typecheck/lint/test/build all green.",
       "evidence": [],
       "subphases": [
         {
           "id": "25.1",
           "title": "Gold-set port + PROVENANCE",
-          "state": "planned",
+          "state": "complete",
           "model": "haiku",
-          "summary": "Transcribe ScholarLens eval/gold_claims.json (42 pairs) and gold_search.json into packages/claims/src/eval/gold/ with PROVENANCE.md (MIT + owner permission, per-file attribution); Opus-tier review of fidelity."
+          "summary": "Transcribe ScholarLens eval/gold_claims.json (42 pairs) and gold_search.json into packages/claims/src/eval/gold/ with PROVENANCE.md (MIT + owner permission, per-file attribution); Opus-tier review of fidelity. — Complete: Gold sets ported (42 empirical relationship pairs + retrieval negatives) with PROVENANCE.md merged (MIT + owner permission, per-file attribution)."
         },
         {
           "id": "25.2",
           "title": "Humanities gold-set drafts (owner-ratified)",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Agent-drafted candidate labels with source passages attached: ~20 retrieval negatives, 30-40 relationship pairs, ~64 claim-nature examples from the Aristotle-vice corpus (baseline-test/, docs/eval/irwin-vice-and-reason/). PROVISIONAL until owner ratification; nothing is treated as gold before that."
+          "summary": "Agent-drafted candidate labels with source passages attached: ~20 retrieval negatives, 30-40 relationship pairs, ~64 claim-nature examples from the Aristotle-vice corpus (baseline-test/, docs/eval/irwin-vice-and-reason/). PROVISIONAL until owner ratification; nothing is treated as gold before that. — Complete: Humanities gold-set drafts (retrieval negatives, relationship pairs, claim-nature examples from the Aristotle-vice corpus) merged and marked PROVISIONAL, pending owner ratification."
         },
         {
           "id": "25.3",
           "title": "@ice/claims pure skeleton",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Zero-dependency package: taxonomy.ts, thresholds.ts (calibratedFor guard, NaN defaults), limits.ts, scoring/ (verbatim evidenceStrength port + textualSupport + dimension discriminator), retrieval/ (cosine, BM25, locus, union), clustering.ts, novelty.ts, mapReduce.ts, prompts/ (schema + validate per task; Evidence Chamber schema has no winner field), jobs/planResearchJob.ts, eval/ metrics with hand-computed fixtures."
+          "summary": "Zero-dependency package: taxonomy.ts, thresholds.ts (calibratedFor guard, NaN defaults), limits.ts, scoring/ (verbatim evidenceStrength port + textualSupport + dimension discriminator), retrieval/ (cosine, BM25, locus, union), clustering.ts, novelty.ts, mapReduce.ts, prompts/ (schema + validate per task; Evidence Chamber schema has no winner field), jobs/planResearchJob.ts, eval/ metrics with hand-computed fixtures. — Complete: @ice/claims pure package shipped: taxonomy/thresholds/limits/scoring/retrieval/clustering/novelty/mapReduce/prompts/jobs/eval, 253+ unit tests green."
         },
         {
           "id": "25.4",
           "title": "Embedding seam + Anthropic structured output",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "packages/ai-adapters: embedMany() batching, EmbeddingProvider seam (OpenAI default, double-gated Voyage stub, honest Null provider), Anthropic tool-use structured-output path at parity with OpenAIResponsesClient, 5 new cheap-first TaskType routes."
+          "summary": "packages/ai-adapters: embedMany() batching, EmbeddingProvider seam (OpenAI default, double-gated Voyage stub, honest Null provider), Anthropic tool-use structured-output path at parity with OpenAIResponsesClient, 5 new cheap-first TaskType routes. — Complete: packages/ai-adapters gained the embedding seam (embedMany, provider seam), AnthropicStructuredClient (tool-use structured output), and AnthropicTextJsonClient (raw-text-validated mode)."
         },
         {
           "id": "25.5",
           "title": "Calibration + judge-eval spikes (paid)",
-          "state": "planned",
+          "state": "complete",
           "model": "opus",
-          "summary": "Embedding class-separation measurement (3-small vs 3-large, ~$0.001) with decision criteria written before running; judge eval ladder nano/mini/haiku (~$0.20) incl. the citation-engagement ablation and the base-judge-on-humanities baseline. Re-plan point if all models fail."
+          "summary": "Embedding class-separation measurement (3-small vs 3-large, ~$0.001) with decision criteria written before running; judge eval ladder nano/mini/haiku (~$0.20) incl. the citation-engagement ablation and the base-judge-on-humanities baseline. Re-plan point if all models fail. — Complete: Three paid spikes (25.5/25.5b/25.5c, $1.438 total): embedding calibration ships text-embedding-3-small@0.35; judge model/prompt/output-mode resolved via a moderator-directed output-mode experiment — claude-haiku-4-5 baseline-prompt raw-text-validated mode is the only config to clear all three gates (macroF1 0.752, kappa 0.650, contradiction recall 1.000)."
         },
         {
           "id": "25.6",
           "title": "Migration 0038 + queues + flags + CI ledger check",
-          "state": "planned",
+          "state": "complete",
           "model": "opus",
-          "summary": "research_project(+question,+member), research_job_request, research_revision (no-auto-endorsement CHECK), ai_usage_log.research_request_id; four pg-boss queues with no-op handlers; packages/config/src/phase25.ts flags (all default false); the ~20-line CI check failing builds whose migrations are absent from the production ledger. Applied to production before the code push (D-23-34)."
+          "summary": "research_project(+question,+member), research_job_request, research_revision (no-auto-endorsement CHECK), ai_usage_log.research_request_id; four pg-boss queues with no-op handlers; packages/config/src/phase25.ts flags (all default false); the ~20-line CI check failing builds whose migrations are absent from the production ledger. Applied to production before the code push (D-23-34). — Complete: Migrations 0038 and 0039 applied to production (ledger 40) before their dependent code shipped (D-23-34 rule); four pg-boss queues live as guarded no-op/real handlers."
         },
         {
           "id": "25.7",
           "title": "Quick-wins lane",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "From the research project Tier 1 checklist: wire the existing text footnote heuristic into the GROBID-unavailable PDF fallback path; port the two-column gutter-detection heuristic to the same path; verify keyed discovery-adapter production config (read-only). Owner-manual items (competency flags decision, VoiceOver pass, real Writer project) surfaced, not agent tasks."
+          "summary": "From the research project Tier 1 checklist: wire the existing text footnote heuristic into the GROBID-unavailable PDF fallback path; port the two-column gutter-detection heuristic to the same path; verify keyed discovery-adapter production config (read-only). Owner-manual items (competency flags decision, VoiceOver pass, real Writer project) surfaced, not agent tasks. — Complete: PDF-fallback footnote heuristic and two-column gutter detection ported and merged; discovery adapters confirmed configured on Render (read-only verification); ANTHROPIC_API_KEY confirmed configured in all three environments (local/Vercel/Render)."
         }
       ],
-      "nextAction": "Execute 25.1-25.4 and 25.7 as parallel lanes, then the 25.5 spikes, then 25.6 schema."
+      "nextAction": "Phase 25 complete. Phase 26 (Claims Engine) is in progress: 26.1 shipped, 26.2/26.3 remain."
     },
     {
       "number": 26,
       "title": "Claims Engine",
-      "state": "planned",
+      "state": "in_progress",
       "summary": "The core pipeline, serial on the shared worker/schema surface: map-reduce claim extraction over GROBID text_block structure with dual-track scoring, locus harvesting, embeddings (pgvector, dimension typed by the 25.5 spike), and deterministic rebind-on-republish (migration 0039); three-channel Stage-1 retrieval (dense/BM25/locus) + citation-graph engagement pre-join + structured judge with basis-hash idempotency (0040); BFS debate clustering with member-hash idempotent naming (0041).",
       "confirmation": "Paid canaries: extraction on a real work <=$0.30 with every supporting_excerpt proven a literal substring (zero tolerance) and apparatus-block claims structurally impossible; 2-work relationship scope <=$0.50 with a repeat run costing $0.00; clustering repeat run naming zero new clusters; the locus channel demonstrably surfaces a pair dense retrieval missed on the Aristotle corpus.",
       "evidence": [],
@@ -956,9 +956,9 @@
         {
           "id": "26.1",
           "title": "Claim extraction + migration 0039",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "extract-research-claims queue handler: structural map-reduce (body-block allowlist), HARD-RULES prompt with humanities BAD/GOOD extensions, dual scoring, claim_locus harvest, research_claim_embedding writes, coverage honesty (full/partial/sampled), rebind via shared findQuoteOffset."
+          "summary": "extract-research-claims queue handler: structural map-reduce (body-block allowlist), HARD-RULES prompt with humanities BAD/GOOD extensions, dual scoring, claim_locus harvest, research_claim_embedding writes, coverage honesty (full/partial/sampled), rebind via shared findQuoteOffset. — Complete: extraction pipeline + DB-enforced invariants shipped with migration 0039 applied to production; mini-canary on 10 claims found zero apparatus-block/substring violations at $0.0014; worker DB-integration suite 157/157 green."
         },
         {
           "id": "26.2",
@@ -975,7 +975,7 @@
           "summary": "BFS connected components over non-unrelated relationships; member_hash idempotent LLM naming with deterministic fallback; staleness on membership change (never delete: user verifications survive)."
         }
       ],
-      "nextAction": "Begins after Phase 25 gates."
+      "nextAction": "26.2 (relationship detection + migration 0040) is next."
     },
     {
       "number": 27,

@@ -59,21 +59,30 @@ export const TASK_ROUTES: Record<TaskType, { preferred: RouteConfig; alternate: 
   // recall 1.000 (>=0.66) on the full 42-pair empirical gold set. openai's
   // cheap tier (nano/mini) has never come close at any point across all
   // three spikes (best: nano 0.582/0.450/0.333 in Phase 25.5).
-  // CAVEAT — read before relying on this route for real traffic: the
-  // passing evidence above is for RAW-TEXT calling (a hand-rolled
-  // fence-strip + JSON.parse + one retry, eval-only, NOT wired into any
-  // production client). Per the spike's own decision rule, raw-text mode
-  // was NOT wired into production because it weakens the retry/validation
-  // guarantees AnthropicStructuredClient/OpenAIResponsesClient both give —
-  // packages/claims/src/prompts/judge.ts's shipped `buildJudgePrompt` +
-  // `JUDGE_OUTPUT_SCHEMA` (structured tool-use, reasoning field first) is
-  // the best STRUCTURED config measured (macroF1 0.733, missing the 0.75
-  // gate by 0.017 — the closest any structured config has come, but still
-  // a miss). This task type has no production caller yet (grep finds none
-  // as of this comment), so nothing today actually executes this route —
-  // but whoever wires one up should re-measure the exact call shape they
-  // build against src/eval/gates.ts before trusting this promotion,
-  // rather than assuming the raw-text numbers above transfer unchanged.
+  // MODERATOR DECISION (2026-07-26, spike-25-5c-output-mode.md's
+  // "Moderator decision" section) OVERRODE the spike's own initial
+  // caution above: the spike report's structured-output-everywhere
+  // default was not to wire raw-text into production even though it was
+  // the only config to pass — the moderator's explicit, documented
+  // deviation from that default is that the anthropic rung of this task
+  // now DOES run RAW-TEXT-VALIDATED mode in production, via
+  // `AnthropicTextJsonClient` (packages/ai-adapters/src/anthropicTextJson.ts).
+  // That client replicates the fence-strip + `JSON.parse` + retry-until-
+  // MAX_RETRIES path the spike measured, but hardened into a real
+  // production client: on retry exhaustion it returns a typed
+  // `{ ok: false }` failure rather than throwing or fabricating, and the
+  // caller's `validate()` (the same post-parse validator every structured
+  // client already relies on for closed-enum outputs) is the sole
+  // correctness gate — see that file's doc comment for the full
+  // rationale for why this is safe despite deviating from the
+  // structured-output-everywhere rule. The openai rung of this task is
+  // UNCHANGED: it still runs `OpenAIResponsesClient`'s structured
+  // (json_schema) mode via `packages/claims/src/prompts/judge.ts`'s
+  // `JUDGE_OUTPUT_SCHEMA` — only the anthropic rung's calling convention
+  // changed. This task type has no production caller yet (grep finds
+  // none as of this comment); whoever wires one up should call the
+  // anthropic rung through `AnthropicTextJsonClient`, not
+  // `AnthropicStructuredClient`, to match the config that actually passed.
   claim_relationship_judgment: {
     preferred: { provider: "anthropic", model: ANTHROPIC_CHEAP },
     alternate: { provider: "openai", model: OPENAI_CHEAP },
