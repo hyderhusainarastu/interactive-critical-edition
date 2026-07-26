@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GraphView } from "@/components/graph/GraphView";
+import { phase25FeatureEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
 import { getOwnedDocument } from "@/lib/works";
 
@@ -14,6 +15,11 @@ export default async function WorkGraphPage({
   if (!doc) notFound();
 
   return (
-    <GraphView endpoint={`/api/works/${workId}/graph`} backHref={`/works/${workId}`} backLabel={doc.title} />
+    <GraphView
+      endpoint={`/api/works/${workId}/graph`}
+      backHref={`/works/${workId}`}
+      backLabel={doc.title}
+      enableEvidenceChips={phase25FeatureEnabled("research")}
+    />
   );
 }

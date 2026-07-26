@@ -1,8 +1,16 @@
 import { GraphView } from "@/components/graph/GraphView";
-import { phase12FeatureEnabled } from "@ice/config";
+import { phase12FeatureEnabled, phase25FeatureEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
 
 export default async function GlobalGraphPage() {
   await requireSession();
-  return <GraphView endpoint="/api/graph" backHref="/dashboard" backLabel="Library" enableExpansion={phase12FeatureEnabled("crossLibraryGraph")} />;
+  return (
+    <GraphView
+      endpoint="/api/graph"
+      backHref="/dashboard"
+      backLabel="Library"
+      enableExpansion={phase12FeatureEnabled("crossLibraryGraph")}
+      enableEvidenceChips={phase25FeatureEnabled("research")}
+    />
+  );
 }

@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { db, documents, users, works } from "@ice/db";
+import { phase25FeatureEnabled } from "@ice/config";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { getUserPreferences } from "@/lib/preferences";
 import { getLibrary } from "@/lib/library";
 import { STATUS_LABEL } from "@/lib/status";
+import { getResearchInsightCounts, hasResearchInsightSignal } from "@/lib/researchDashboard";
 import { PageHeader } from "@/components/app/PageHeader";
+import { ResearchInsightModule } from "@/components/dashboard/ResearchInsightModule";
 
 /**
  * Overview (plan §34.4 9.5) — this route used to BE the uploads list; that
@@ -46,6 +49,13 @@ export default async function DashboardPage() {
   const library = await getLibrary(userId);
   const toReadCount = library.items.filter((item) => item.readingStatus === null || item.readingStatus === "planned").length;
 
+  // Phase 29.3 reverse-direction lane: the module mounts only when the
+  // Research workspace flag is on AND there's a real signal to show — a
+  // brand-new/non-research account renders nothing here (`hasResearchInsightSignal`).
+  const researchEnabled = phase25FeatureEnabled("research");
+  const researchCounts = researchEnabled ? await getResearchInsightCounts(userId) : null;
+  const showResearchModule = researchCounts !== null && hasResearchInsightSignal(researchCounts);
+
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
       <PageHeader title={`Welcome back${me?.name ? `, ${me.name}` : ""}`} description={me?.email} />
@@ -80,6 +90,8 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {showResearchModule && researchCounts && <ResearchInsightModule counts={researchCounts} />}
 
       <div className="flex flex-wrap gap-2">
         <Link href="/works" className="app-control app-press rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]">

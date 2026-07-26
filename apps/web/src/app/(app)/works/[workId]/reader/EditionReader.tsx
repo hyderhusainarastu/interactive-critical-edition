@@ -1,7 +1,9 @@
 "use client";
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { scoreBothDimensions } from "@ice/claims";
 import { CATEGORY_META } from "./annotationMeta";
+import { ClaimScoreChips } from "@/components/shared/ClaimScoreChips";
 import { applyAnnotationMarkers, applyFootnoteMarkers, applyHighlights, captureSelectionAnchor, clearAnnotationMarkers, clearFootnoteMarkers } from "./highlightDom";
 import { AnnotationHoverPreview } from "./AnnotationHoverPreview";
 import {
@@ -247,11 +249,27 @@ export function ClaimTypeBadge({ type }: { type: EditionClaim["claimType"] }) {
   return <span className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 text-xs text-[var(--color-text-muted)]">{label}</span>;
 }
 
-export function ClaimView({ claim }: { claim: EditionClaim }) {
+export function ClaimView({
+  claim,
+  enableEvidenceChips = false,
+}: {
+  claim: EditionClaim;
+  /** Phase 29.3 reverse-direction lane, gated by `phase25FeatureEnabled("research")`
+   *  (no new flag): scores `claim.text` at render time with `@ice/claims`'s
+   *  `scoreBothDimensions` — pure regex, free, nothing persisted (a DB row
+   *  would drift the moment either scorer's logic changes; render-time
+   *  scoring can't drift and needs no migration). Off by default so this
+   *  component's existing callers/tests are unaffected. */
+  enableEvidenceChips?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const supporting = claim.evidence.filter((e) => e.stance === "supports" && e.quote);
   const contradicting = claim.evidence.filter((e) => e.stance === "contradicts" && e.quote);
   const hasEvidence = supporting.length > 0 || contradicting.length > 0;
+  const scores = useMemo(
+    () => (enableEvidenceChips ? scoreBothDimensions(claim.text) : []),
+    [enableEvidenceChips, claim.text],
+  );
   return (
     <li className="rounded border border-[var(--color-border)] p-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -260,6 +278,7 @@ export function ClaimView({ claim }: { claim: EditionClaim }) {
         <span className="ml-auto text-xs text-[var(--color-text-muted)]">{Math.round(claim.confidence * 100)}%</span>
       </div>
       <p className="mt-1">{claim.text}</p>
+      <ClaimScoreChips scores={scores} />
       {hasEvidence && (
         <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="mt-1 text-xs underline">
           {open ? "Hide evidence" : `Evidence (${supporting.length + contradicting.length})`}

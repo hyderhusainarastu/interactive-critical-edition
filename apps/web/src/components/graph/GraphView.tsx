@@ -122,7 +122,21 @@ function filtersFromParams(params: URLSearchParams): GraphFilters {
  * the exact same filtered node/edge set (one `filterGraphData` call feeds
  * both), and a filtered link is shareable/reloadable.
  */
-export function GraphView({ endpoint, backHref, backLabel, enableExpansion = false }: { endpoint: string; backHref: string; backLabel: string; enableExpansion?: boolean }) {
+export function GraphView({
+  endpoint,
+  backHref,
+  backLabel,
+  enableExpansion = false,
+  enableEvidenceChips = false,
+}: {
+  endpoint: string;
+  backHref: string;
+  backLabel: string;
+  enableExpansion?: boolean;
+  /** Phase 29.3 reverse-direction lane, behind `phase25FeatureEnabled("research")`
+   *  (no new flag) — see `GraphInspector`'s `EvidenceAnchors` doc comment. */
+  enableEvidenceChips?: boolean;
+}) {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
@@ -774,6 +788,7 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                     onExpandDebate={expandDebate}
                     expandedDebateClusterIds={expandedDebateClusterIds}
                     expandingDebateId={expandingDebateId}
+                    enableEvidenceChips={enableEvidenceChips}
                   />
                 </div>
               </section>
