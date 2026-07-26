@@ -1,4 +1,4 @@
-import { phase12FeatureEnabled } from "@ice/config";
+import { phase12FeatureEnabled, phase25FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { WriterEditor } from "@/components/writer/WriterEditor";
 import { requireSession } from "@/lib/auth";
@@ -10,5 +10,15 @@ export default async function WriterProjectPage({ params }: { params: Promise<{ 
   const { projectId } = await params;
   const workspace = await getWriterProjectWorkspace(session.user.id, projectId);
   if (!workspace) notFound();
-  return <WriterEditor project={workspace.project} initialDocuments={workspace.documents} initialCitations={workspace.citations} />;
+  // Phase 28.5: the Evidence panel is its own independently addressable
+  // flag (`requireWriterEvidenceApiUser`'s doc comment) — the panel simply
+  // doesn't render (not a broken/erroring one) while it's off.
+  return (
+    <WriterEditor
+      project={workspace.project}
+      initialDocuments={workspace.documents}
+      initialCitations={workspace.citations}
+      evidenceEnabled={phase25FeatureEnabled("writerEvidence")}
+    />
+  );
 }

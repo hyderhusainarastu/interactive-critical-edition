@@ -1,9 +1,21 @@
 import { z } from "zod";
 
 export type ProseMirrorText = { type: "text"; text: string };
+/** `heading`'s own optional level, unchanged from before Phase 28.5. */
+export type ProseMirrorHeadingAttrs = { level?: 1 | 2 | 3 };
+/**
+ * Phase 28.5 (Writer evidence insertion): a `blockquote` node produced by
+ * the Evidence panel's "Insert" action carries the research claim it came
+ * from, never bare quoted text with no traceable source. `excerpt` is a
+ * denormalized copy of the node's own `content` text — kept on `attrs` too
+ * so the citation/anchor machinery can read it without re-parsing `content`.
+ * `workTitle` is nullable: a corpus-item-sourced claim may have no owned
+ * `work` at all (see `research_claim`'s `work_id`/`corpus_item_id` XOR).
+ */
+export type ProseMirrorEvidenceAttrs = { researchClaimId: string; excerpt: string; workTitle: string | null };
 export type ProseMirrorBlock = {
   type: "paragraph" | "heading" | "blockquote";
-  attrs?: { level?: 1 | 2 | 3 };
+  attrs?: ProseMirrorHeadingAttrs | ProseMirrorEvidenceAttrs;
   content?: ProseMirrorText[];
 };
 export type ProseMirrorDocument = { type: "doc"; content: ProseMirrorBlock[] };
@@ -26,9 +38,24 @@ export type CslJson = {
 };
 
 const textSchema = z.object({ type: z.literal("text"), text: z.string().max(20_000) }).strict();
+const headingAttrsSchema = z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }).strict();
+/** Phase 28.5: the shape `buildEvidenceBlockquote()` writes — see
+ *  `ProseMirrorEvidenceAttrs`'s doc comment for why `workTitle` is nullable. */
+const evidenceAttrsSchema = z.object({
+  researchClaimId: z.string().uuid(),
+  excerpt: z.string().min(1).max(20_000),
+  workTitle: z.string().max(2_000).nullable(),
+}).strict();
 const blockSchema = z.object({
   type: z.enum(["paragraph", "heading", "blockquote"]),
-  attrs: z.object({ level: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional() }).strict().optional(),
+  // A union, not one shared shape: `blockquote` nodes written by the
+  // Evidence panel carry `evidenceAttrsSchema`, while `paragraph`/`heading`
+  // keep the pre-existing `{level}` shape. Without this widening,
+  // `proseMirrorDocumentSchema.safeParse` would reject ANY document
+  // containing an evidence blockquote, and `proseMirrorToPlainText` (which
+  // calls `safeParse` and returns `""` on failure) would silently blank out
+  // the entire draft the next time it loaded — not just drop the quote.
+  attrs: z.union([headingAttrsSchema, evidenceAttrsSchema]).optional(),
   content: z.array(textSchema).max(1_000).optional(),
 }).strict();
 
@@ -58,6 +85,29 @@ export const cslJsonSchema = z.object({
 
 export function emptyWriterDocument(): ProseMirrorDocument {
   return { type: "doc", content: [{ type: "paragraph" }] };
+}
+
+/**
+ * Phase 28.5: the Evidence panel's "Insert" node — a real ProseMirror
+ * `blockquote`, not plain appended text (unlike the pre-existing MLA
+ * `insertCitation` helper). `excerpt` must be the claim's own
+ * `supporting_excerpt` (a literal, re-verified substring of the source),
+ * never paraphrased or model-generated at insert time.
+ */
+export function buildEvidenceBlockquote(params: { researchClaimId: string; excerpt: string; workTitle: string | null }): ProseMirrorBlock {
+  return {
+    type: "blockquote",
+    attrs: { researchClaimId: params.researchClaimId, excerpt: params.excerpt, workTitle: params.workTitle },
+    content: [{ type: "text", text: params.excerpt }],
+  };
+}
+
+/** A plain, visible marker paragraph — used when an evidence insertion has
+ *  no resolvable citation ("citation unresolved") or no locatable passage
+ *  ("passage not currently locatable"), so the gap is honest and visible
+ *  rather than silently absent. */
+export function buildEvidenceMarker(text: string): ProseMirrorBlock {
+  return { type: "paragraph", content: [{ type: "text", text }] };
 }
 
 export function plainTextToProseMirror(value: string): ProseMirrorDocument {
@@ -114,6 +164,64 @@ export function normalizeCslJson(value: unknown): CslJson | null {
     ...(clean(raw.page ?? raw.pages) ? { page: clean(raw.page ?? raw.pages) } : {}),
   };
   return cslJsonSchema.safeParse(candidate).success ? candidate : null;
+}
+
+/**
+ * Phase 28.5: pure honesty gate + CSL construction for citing a research
+ * claim's OWN source work, split from the DB read the same way `@ice/roadmap`
+ * is split from `lib/roadmap.ts`'s traversal (`docs/PROJECT-LOG.md` Design
+ * Decisions) — the fields here are already-fetched real `bibliographic_record`
+ * columns (the self-matched-by-title record `lib/research/chambers.ts`'s
+ * `loadPositionSourceCredibility` also reads), never anything model-generated.
+ *
+ * A bare title is deliberately NOT treated as a "resolvable" identity on its
+ * own: `bibliographic_record.title` always exists once ANY record matched,
+ * so gating on title alone would make the "no resolvable identity" branch
+ * unreachable and defeat the honesty check this exists to enforce. At least
+ * one of author/year/DOI/URL must also be present.
+ */
+export function buildCslFromWorkBibliographicFields(fields: {
+  title: string;
+  authors: string | null;
+  year: number | null;
+  doi: string | null;
+  url: string | null;
+}): CslJson | null {
+  if (!fields.authors && !fields.year && !fields.doi && !fields.url) return null;
+  return normalizeCslJson({
+    type: "book",
+    title: fields.title,
+    author: fields.authors ? [{ literal: fields.authors }] : undefined,
+    issued: fields.year ? { "date-parts": [[fields.year]] } : undefined,
+    DOI: fields.doi ?? undefined,
+    URL: fields.url ?? undefined,
+  });
+}
+
+/** Same honesty gate as above, applied to a `research_corpus_item`'s own
+ *  provider-supplied fields (never model-generated — plan §Schema's
+ *  `research_corpus_item` doc comment: "no model writes to
+ *  `research_corpus_item`"). `authors` is the provider's raw display-name
+ *  array; non-string entries are dropped rather than guessed at. */
+export function buildCslFromCorpusItemFields(fields: {
+  title: string;
+  authors: unknown;
+  year: number | null;
+  doi: string | null;
+  url: string | null;
+  venue: string | null;
+}): CslJson | null {
+  const authorNames = Array.isArray(fields.authors) ? fields.authors.filter((value): value is string => typeof value === "string") : [];
+  if (!authorNames.length && !fields.year && !fields.doi && !fields.url) return null;
+  return normalizeCslJson({
+    type: "article-journal",
+    title: fields.title,
+    author: authorNames.map((name) => ({ literal: name })),
+    issued: fields.year ? { "date-parts": [[fields.year]] } : undefined,
+    DOI: fields.doi ?? undefined,
+    URL: fields.url ?? undefined,
+    "container-title": fields.venue ?? undefined,
+  });
 }
 
 export function citationKey(citation: CslJson): string {

@@ -221,6 +221,40 @@ export async function addResearchProjectWorkMember(
   return members.find((m) => m.id === created.id) ?? "not_found";
 }
 
+/**
+ * Phase 28.5: links a `writer_project` into a research project as a member
+ * (`memberType = "writer_project"`) — the `addResearchProjectWorkMember`
+ * precedent, just for the writer-project target column instead of `workId`.
+ * Ownership is checked on BOTH sides (the research project AND the writer
+ * project must belong to the caller) before the row is written; either side
+ * failing returns `"not_found"`, never a distinguishable 403. `onConflictDoNothing`
+ * makes a repeat "Link" click idempotent, same as the work-member path.
+ */
+export async function addResearchProjectWriterMember(
+  userId: string,
+  projectId: string,
+  writerProjectId: string,
+): Promise<ResearchProjectMemberRow | "not_found"> {
+  const project = await getOwnedResearchProject(userId, projectId, true);
+  if (!project) return "not_found";
+  const [writerProject] = await db
+    .select({ id: writerProjects.id })
+    .from(writerProjects)
+    .where(and(eq(writerProjects.id, writerProjectId), eq(writerProjects.userId, userId)))
+    .limit(1);
+  if (!writerProject) return "not_found";
+  const [created] = await db
+    .insert(researchProjectMembers)
+    .values({ projectId, memberType: "writer_project", writerProjectId, role: "supporting" })
+    .onConflictDoNothing({ target: [researchProjectMembers.projectId, researchProjectMembers.writerProjectId] })
+    .returning({ id: researchProjectMembers.id });
+  const members = await listResearchProjectMembers(projectId);
+  if (!created?.id) {
+    return members.find((m) => m.writerProjectId === writerProjectId) ?? "not_found";
+  }
+  return members.find((m) => m.id === created.id) ?? "not_found";
+}
+
 export async function removeResearchProjectMember(userId: string, projectId: string, memberId: string): Promise<boolean> {
   const project = await getOwnedResearchProject(userId, projectId, true);
   if (!project) return false;
