@@ -1143,6 +1143,18 @@ export const ragConversations = pgTable(
   (t) => [index("rag_conversation_user_updated_idx").on(t.userId, t.updatedAt)],
 );
 
+/**
+ * Phase 28.6 (migration 0044, plan §Schema "Integration migration"): which
+ * Ask Library research mode produced this message. Plain `text` + a CHECK
+ * (not a pgEnum) so the value set can widen alongside `@ice/rag`'s own mode
+ * union without a separate enum-widening migration — the `researchClaims
+ * .claimRole`/`confidence` precedent above. `NULL` means `socratic`
+ * (back-compatible with every `rag_message` row written before this
+ * migration, and with every future socratic-mode row too — `mode` is only
+ * ever set to a non-null value for the four research modes). Mode is a
+ * per-MESSAGE property (an assistant's answer, not the whole conversation),
+ * since one conversation can freely mix modes turn to turn.
+ */
 export const ragMessages = pgTable(
   "rag_message",
   {
@@ -1152,6 +1164,7 @@ export const ragMessages = pgTable(
       .references(() => ragConversations.id, { onDelete: "cascade" }),
     role: ragMessageRoleEnum("role").notNull(),
     content: text("content").notNull(),
+    mode: text("mode"),
     model: text("model"),
     provider: text("provider"),
     promptTokens: integer("prompt_tokens").notNull().default(0),
@@ -1160,7 +1173,13 @@ export const ragMessages = pgTable(
     latencyMs: integer("latency_ms"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (t) => [index("rag_message_conversation_created_idx").on(t.conversationId, t.createdAt)],
+  (t) => [
+    index("rag_message_conversation_created_idx").on(t.conversationId, t.createdAt),
+    check(
+      "rag_message_mode_valid",
+      sql`${t.mode} IS NULL OR ${t.mode} IN ('socratic', 'find_counterarguments', 'explain_disagreement', 'map_debate', 'find_support')`,
+    ),
+  ],
 );
 
 /** Each answer link is a foreign key to the exact retrieved chunk. If a work,
@@ -1183,6 +1202,33 @@ export const ragMessageCitations = pgTable(
     uniqueIndex("rag_message_citation_message_chunk_unique").on(t.messageId, t.chunkId),
     uniqueIndex("rag_message_citation_message_ordinal_unique").on(t.messageId, t.ordinal),
     index("rag_message_citation_chunk_idx").on(t.chunkId),
+  ],
+);
+
+/**
+ * Phase 28.6 (migration 0044): parallel to `rag_message_citation` above, but
+ * for a research-mode answer's claim citations (`find_counterarguments`/
+ * `find_support`/`explain_disagreement`/`map_debate` cite `research_claim`
+ * rows via the CLAIM_N label, never a `rag_chunk`). A message can carry both
+ * kinds of citation rows at once — nothing here supersedes the chunk table.
+ */
+export const ragMessageClaimCitations = pgTable(
+  "rag_message_claim_citation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => ragMessages.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id")
+      .notNull()
+      .references(() => researchClaims.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("rag_message_claim_citation_message_claim_unique").on(t.messageId, t.claimId),
+    uniqueIndex("rag_message_claim_citation_message_ordinal_unique").on(t.messageId, t.ordinal),
+    index("rag_message_claim_citation_claim_idx").on(t.claimId),
   ],
 );
 
@@ -2220,12 +2266,21 @@ export const writerCitations = pgTable(
     normalizedKey: text("normalized_key").notNull(),
     cslJson: jsonb("csl_json").notNull(),
     source: text("source").notNull(),
+    /** Phase 28.6 (migration 0044, for the sibling Phase 28.5 Writer-evidence
+     *  lane): optional link back to the `research_claim` this citation's
+     *  evidence-panel insertion came from. `SET NULL` on delete — a claim
+     *  can be removed/superseded without invalidating the writer's own
+     *  citation record, matching `passage_annotation.related_resource_id`'s
+     *  "the citation survives; only its extra provenance link is cleared"
+     *  precedent. Nothing in THIS lane writes to this column. */
+    researchClaimId: uuid("research_claim_id").references(() => researchClaims.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [
     index("writer_citation_project_idx").on(t.projectId),
     uniqueIndex("writer_citation_project_key_unique").on(t.projectId, t.normalizedKey),
+    index("writer_citation_research_claim_idx").on(t.researchClaimId),
   ],
 );
 

@@ -32,6 +32,7 @@ export default async function ReaderPage({
       enablePhase18Rag={phase18RagEnabled()}
       enableReaderClaimLayer={phase25FeatureEnabled("readerClaimLayer")}
       enableEvidenceChips={phase25FeatureEnabled("research")}
+      enableAskResearchModes={phase25FeatureEnabled("askResearchModes")}
     />
   );
 }

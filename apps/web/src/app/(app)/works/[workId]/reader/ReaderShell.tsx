@@ -46,6 +46,7 @@ export function ReaderShell({
   enablePhase18Rag = false,
   enableReaderClaimLayer = false,
   enableEvidenceChips = false,
+  enableAskResearchModes = false,
 }: {
   workId: string;
   embedded?: boolean;
@@ -59,6 +60,9 @@ export function ReaderShell({
   /** Phase 29.3 reverse-direction lane, behind `phase25FeatureEnabled("research")`
    *  (no new flag) — see `EditionAnnotationsPanel`'s own doc comment. */
   enableEvidenceChips?: boolean;
+  /** Phase 28.6: Ask Library's per-message research modes, behind
+   *  `askResearchModes` (plan §"Web surfaces (Ask Library)"). */
+  enableAskResearchModes?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -639,7 +643,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableEvidenceChips={enableEvidenceChips} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableEvidenceChips={enableEvidenceChips} enableAskResearchModes={enableAskResearchModes} />
           </div>
         )}
       </div>
@@ -698,7 +702,7 @@ export function ReaderShell({
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" />}
+      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" enableResearchModes={enableAskResearchModes} />}
     </div>
   );
 }

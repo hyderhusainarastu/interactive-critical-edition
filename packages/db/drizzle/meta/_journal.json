@@ -309,6 +309,13 @@
       "when": 1785052315136,
       "tag": "0043_research_hypotheses",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1785052037917,
+      "tag": "0044_research_integration",
+      "breakpoints": true
     }
   ]
 }

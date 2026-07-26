@@ -31,7 +31,7 @@ export default async function AppLayout({
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
       <TelemetryBeacon />
-      <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} researchEnabled={phase25FeatureEnabled("research")} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
+      <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} researchEnabled={phase25FeatureEnabled("research")} askResearchModesEnabled={phase25FeatureEnabled("askResearchModes")} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
     </>
   );
 }

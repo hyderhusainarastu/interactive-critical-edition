@@ -44,6 +44,7 @@ export function AppShell({
   writerEnabled,
   ragEnabled,
   researchEnabled,
+  askResearchModesEnabled = false,
   initialPreferences,
   initialReaderLevel = null,
   children,
@@ -56,6 +57,9 @@ export function AppShell({
   writerEnabled: boolean;
   ragEnabled: boolean;
   researchEnabled: boolean;
+  /** Phase 28.6: threaded down to the global `GlobalRagSidebar`/`RagChatPanel`
+   *  instance — behind `askResearchModes` (plan §"Web surfaces (Ask Library)"). */
+  askResearchModesEnabled?: boolean;
   initialPreferences: WorkspacePreferences;
   initialReaderLevel?: ReaderLevel | null;
   children: React.ReactNode;
@@ -63,13 +67,13 @@ export function AppShell({
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents userId={userId} email={email} name={name} image={image} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} researchEnabled={researchEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
+        <AppShellContents userId={userId} email={email} name={name} image={image} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} researchEnabled={researchEnabled} askResearchModesEnabled={askResearchModesEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ userId, email, name, image, admin, writerEnabled, ragEnabled, researchEnabled, initialReaderLevel, children }: { userId: string; email: string | null | undefined; name: string | null | undefined; image: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; researchEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
+function AppShellContents({ userId, email, name, image, admin, writerEnabled, ragEnabled, researchEnabled, askResearchModesEnabled, initialReaderLevel, children }: { userId: string; email: string | null | undefined; name: string | null | undefined; image: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; researchEnabled: boolean; askResearchModesEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -283,7 +287,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
       <main id="main-content" className="app-shell-main flex-1"><PageTransition>{children}</PageTransition></main>
       <AppFooter />
       <CommandPalette items={navItems.map((item) => ({ ...item, shortcut: item.href === "/upload" ? "U" : undefined }))} />
-      {ragEnabled && ragOpen && <GlobalRagSidebar id={ragSidebarId} contextWorkId={routeWorkId} onClose={closeRag} />}
+      {ragEnabled && ragOpen && <GlobalRagSidebar id={ragSidebarId} contextWorkId={routeWorkId} onClose={closeRag} enableResearchModes={askResearchModesEnabled} />}
     </div>
   );
 }

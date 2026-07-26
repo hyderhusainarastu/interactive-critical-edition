@@ -5,8 +5,14 @@ import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesPr
 import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/ragConversationClient";
 import { canPlaySound, playSound } from "@/lib/sound";
 import { useOutsideMenuClose } from "@/hooks/useOutsideMenuClose";
+import { CLAIM_MARKER_COLOR_VAR, CLAIM_MARKER_GLYPH } from "./researchClaims";
+import { RESEARCH_MODES, RESEARCH_MODE_LABEL, type ResearchMode } from "./researchModeTaxonomy";
 
 type Citation = { chunkId: string; ordinal: number; href: string; label: string; sourceType: "uploaded" | "open_access"; license?: string };
+// Phase 28.6: a research-mode answer's claim citation — parallel to
+// `Citation` above, but linking to the claim permalink page rather than a
+// reader anchor. Always empty for a socratic-mode message.
+type ClaimCitation = { claimId: string; ordinal: number; href: string; label: string; claimNature: string };
 // Sub-phase 22.9b (plan §3.4): one quiet, collapsed line per chat-inferred
 // competency update, rendered under the assistant message it arrived with.
 type CompetencyLevel = "unfamiliar" | "struggling" | "partial" | "familiar" | "strong";
@@ -26,8 +32,9 @@ type CompetencyNotice = {
 // DB row (see `packages/db/src/schema.ts`'s `ragMessages`: content/role/
 // tokens/cost only), so it is only ever present on a message completed in
 // THIS session. Optional and absent for history loaded from `GET
-// /api/rag/conversations/:id`.
-type Message = { id: string; role: "user" | "assistant"; content: string; citations: Citation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[]; notFound?: boolean };
+// /api/rag/conversations/:id`. `mode`, unlike `notFound`, IS persisted
+// (`rag_message.mode`) — present on both a live turn and reloaded history.
+type Message = { id: string; role: "user" | "assistant"; content: string; mode?: ResearchMode | null; citations: Citation[]; claimCitations: ClaimCitation[]; createdAt: string; latencyMs: number | null; competencyNotices?: CompetencyNotice[]; notFound?: boolean };
 
 // Workstream E (plan §4): the `GET /api/rag/conversations` list row shape
 // (`listRagConversations` in `ragData.ts`) — deliberately narrower than
@@ -55,6 +62,11 @@ export function RagChatPanel({
   presentation = "drawer",
   widthPx,
   dialogLabel = "Library-grounded Socratic chat",
+  enableResearchModes = false,
+  initialMode,
+  initialClaimId,
+  initialClusterId,
+  initialWorkIdB,
 }: {
   /** Stable DOM id so a trigger button elsewhere can `aria-controls` this panel. */
   id?: string;
@@ -75,12 +87,27 @@ export function RagChatPanel({
    * `/ask-library` page, where only one instance can ever be open.
    */
   dialogLabel?: string;
+  /** Phase 28.6: behind `askResearchModes` — shows the mode selector at all. */
+  enableResearchModes?: boolean;
+  /** Phase 28.6: deep-link seeds (e.g. `/ask-library?mode=explain_disagreement&clusterId=...`,
+   *  a future hook for the graph debate layer/reader Claims tab to link into
+   *  a specific scope) — there is no in-panel claim/cluster picker in this
+   *  lane, so a research mode that needs more than the conversation's own
+   *  `contextWorkId` only resolves real evidence when seeded this way;
+   *  otherwise it honestly degrades to the not-found answer (never an
+   *  error) exactly like any other scope-less request. */
+  initialMode?: ResearchMode;
+  initialClaimId?: string;
+  initialClusterId?: string;
+  initialWorkIdB?: string;
 }) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [mode, setMode] = useState<ResearchMode>(() => (enableResearchModes && initialMode ? initialMode : "socratic"));
   const [pending, setPending] = useState("");
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
+  const [pendingClaimCitations, setPendingClaimCitations] = useState<ClaimCitation[]>([]);
   const [error, setError] = useState<string | null>(null);
   // True only when the panel has genuinely nothing to show but a Retry
   // affordance — the stored-pointer self-heal already failed AND the
@@ -194,6 +221,7 @@ export function RagChatPanel({
     setMessages([]);
     setPending("");
     setPendingCitations([]);
+    setPendingClaimCitations([]);
     return created.conversation.id;
   }, [contextWorkId]);
 
@@ -257,6 +285,7 @@ export function RagChatPanel({
       setMessages(view.messages);
       setPending("");
       setPendingCitations([]);
+      setPendingClaimCitations([]);
       setError(null);
       setConversationUnavailable(false);
       closeHistory();
@@ -271,6 +300,7 @@ export function RagChatPanel({
     if (!question || !conversationId || pending) return;
     setPending("");
     setPendingCitations([]);
+    setPendingClaimCitations([]);
     setError(null);
     // Covers the gap between send and the first streamed `delta` (see the
     // thinking-indicator render below) — always cleared in `finally`, so
@@ -281,7 +311,16 @@ export function RagChatPanel({
       const response = await fetch(`/api/rag/conversations/${conversationId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: question }),
+        // Phase 28.6: `mode` is only ever meaningful when the flag enabled
+        // the selector at all — an untouched `mode` state otherwise stays
+        // "socratic", byte-identical to every pre-existing call site. The
+        // scope fields are deep-link seeds only (see the prop doc comment
+        // above); omitted entirely for socratic mode.
+        body: JSON.stringify(
+          enableResearchModes && mode !== "socratic"
+            ? { message: question, mode, claimId: initialClaimId, clusterId: initialClusterId, workIdB: initialWorkIdB }
+            : { message: question },
+        ),
       });
       if (response.status === 404) {
         // The conversation vanished server-side mid-session — same failure
@@ -315,10 +354,11 @@ export function RagChatPanel({
         const eventName = raw.match(/^event: ([^\n]+)/m)?.[1];
         const data = raw.match(/^data: (.+)$/m)?.[1];
         if (!eventName || !data) return;
-        const value = JSON.parse(data) as Message | Citation | CompetencyNotice | { text: string } | { message: Message; notFound: boolean };
+        const value = JSON.parse(data) as Message | Citation | ClaimCitation | CompetencyNotice | { text: string } | { message: Message; notFound: boolean };
         if (eventName === "user") setMessages((existing) => [...existing, value as Message]);
         if (eventName === "delta") setPending((existing) => existing + (value as { text: string }).text);
         if (eventName === "citation") setPendingCitations((existing) => [...existing, value as Citation]);
+        if (eventName === "claimCitation") setPendingClaimCitations((existing) => [...existing, value as ClaimCitation]);
         if (eventName === "competency") competencyNotices = [...competencyNotices, value as CompetencyNotice];
         if (eventName === "done") {
           // The API streams every delta token, THEN citations, THEN this
@@ -332,6 +372,7 @@ export function RagChatPanel({
           setMessages((existing) => [...existing, { ...message, notFound, ...(competencyNotices.length ? { competencyNotices } : {}) }]);
           setPending("");
           setPendingCitations([]);
+          setPendingClaimCitations([]);
           if (soundReady) playSound("receive");
         }
       };
@@ -346,6 +387,7 @@ export function RagChatPanel({
     } catch (askError) {
       setPending("");
       setPendingCitations([]);
+      setPendingClaimCitations([]);
       setError(askError instanceof Error ? askError.message : "Could not answer that question.");
       if (soundReady) playSound("error");
     } finally {
@@ -398,6 +440,24 @@ export function RagChatPanel({
               detail below. */}
           <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Conversations here help Palimnote gauge your familiarity with each topic, so explanations and your roadmap match your level.</p>
           <p className="mt-2 inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-sunken)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Scope: {scopeLabel}</p>
+          {/* Phase 28.6: the research-mode selector, PreferencesMenu's
+              `.app-control` select convention. Absent entirely (not merely
+              disabled) when the flag is off — the flag gates the AFFORDANCE,
+              not just server-side behavior. Socratic stays the always-
+              available default, so switching modes never loses the ability
+              to ask a plain grounded question. */}
+          {enableResearchModes && (
+            <label className="mt-2 flex w-fit items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              Mode
+              <select
+                className="app-control rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 text-[11px] font-normal normal-case tracking-normal text-[var(--color-text)]"
+                value={mode}
+                onChange={(event) => setMode(event.target.value as ResearchMode)}
+              >
+                {RESEARCH_MODES.map((value) => <option key={value} value={value}>{RESEARCH_MODE_LABEL[value]}</option>)}
+              </select>
+            </label>
+          )}
         </div>
         <div className="flex gap-1">
           <div className="relative" ref={historyContainerRef}>
@@ -457,7 +517,7 @@ export function RagChatPanel({
           })}
         </ol>
         {streaming && !pending && <ThinkingIndicator />}
-        {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, createdAt: new Date().toISOString(), latencyMs: null }} isPending />}
+        {pending && <MessageCard message={{ id: "pending", role: "assistant", content: pending, citations: pendingCitations, claimCitations: pendingClaimCitations, createdAt: new Date().toISOString(), latencyMs: null }} isPending />}
         {error && (
           <div key={error} className="rag-chat-shake mt-3">
             <p className="text-sm text-[var(--color-accent-burgundy)]">{error}</p>
@@ -729,7 +789,14 @@ function MessageCard({ message, isPending = false }: { message: Message; isPendi
       className={`app-mount rounded-lg p-3 text-sm ${message.role === "user" ? "ms-7 bg-[var(--color-surface)]" : "me-3 border border-[var(--color-border)]"} ${state === "notFound" ? "bg-[var(--color-surface-sunken)]" : ""}`}
       style={{ borderInlineStart: `3px solid ${TURN_ACCENT[state]}` }}
     >
-      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{message.role === "user" ? "You" : "Library companion"}</p>
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[var(--color-text-muted)]">
+        {message.role === "user" ? "You" : "Library companion"}
+        {/* Phase 28.6: which research mode produced this answer — absent for
+            socratic (the silent default) and for a user's own turn. */}
+        {message.role === "assistant" && message.mode && message.mode !== "socratic" && (
+          <span className="ms-1.5 font-normal normal-case text-[var(--color-accent-burgundy)]">· {RESEARCH_MODE_LABEL[message.mode]}</span>
+        )}
+      </p>
       <p className={`whitespace-pre-wrap leading-6 ${state === "notFound" ? "text-[var(--color-accent-umber)]" : ""}`}>
         {message.content}
         {/* Caret shimmer: only while this turn is still streaming (never on
@@ -754,6 +821,24 @@ function MessageCard({ message, isPending = false }: { message: Message; isPendi
               <span className="min-w-0">
                 <a href={citation.href} className="block truncate font-serif text-xs font-semibold underline" target={citation.sourceType === "open_access" ? "_blank" : undefined} rel={citation.sourceType === "open_access" ? "noreferrer" : undefined}>[{citation.ordinal + 1}] {citation.label}</a>
                 <span className="block text-[10px] text-[var(--color-text-muted)]">{citation.sourceType === "uploaded" ? "Your upload" : "Open-access source"}{citation.license ? ` · ${citation.license}` : ""}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {message.claimCitations.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-2">
+          {message.claimCitations.map((citation) => (
+            <li key={citation.claimId} className="rag-chat-citation-enter flex items-start gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-sunken)] p-2 text-xs" style={{ ["--stagger-index" as string]: citation.ordinal }}>
+              {/* Same verified `--color-accent-ink`/`--color-background`
+                  glyph pairing the reader's own Claims tab uses for a claim
+                  marker (`CLAIM_MARKER_COLOR_VAR`, `researchClaims.tsx`) —
+                  reused here rather than inventing a new token, for both
+                  visual consistency and contrast safety in both themes. */}
+              <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-serif text-[10px] text-[var(--color-background)]" style={{ backgroundColor: `var(${CLAIM_MARKER_COLOR_VAR})` }}>{CLAIM_MARKER_GLYPH}</span>
+              <span className="min-w-0">
+                <a href={citation.href} className="block truncate font-serif text-xs font-semibold underline">[{citation.ordinal + 1}] {citation.label}</a>
+                <span className="block text-[10px] text-[var(--color-text-muted)]">Claim · {citation.claimNature}</span>
               </span>
             </li>
           ))}

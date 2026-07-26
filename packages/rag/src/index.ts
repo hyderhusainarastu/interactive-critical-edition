@@ -22,6 +22,12 @@ import { rankLexically } from "./lexicalRetrieval";
 export * from "./hybridRetrieval";
 import { ragHybridRetrievalEnabled, rankOwnerChunks, type EmbedQuery } from "./hybridRetrieval";
 
+// Phase 28.6 (Ask Library research modes): per-mode retrieval over the
+// judged claim_relationship/debate_cluster graph, the unified SOURCE_N +
+// CLAIM_N label-then-validate pair, and deterministic $0 fallbacks. See
+// `researchModes.ts`'s own doc comment for the full rationale.
+export * from "./researchModes";
+
 export const RAG_MAX_CHARS_PER_CHUNK = 1_400;
 export const RAG_MAX_CHUNKS_PER_DOCUMENT = 256;
 export const RAG_MAX_AUTOMATIC_EMBEDDINGS = 32;
