@@ -10,7 +10,14 @@
 export type TaskType =
   | "relationship_classification"
   | "metadata_extraction"
-  | "citation_parse";
+  | "citation_parse"
+  // Phase 25 (ScholarLens integration) task types — routed cheap-first
+  // like every existing task (routing.ts), no different cost posture.
+  | "claim_extraction"
+  | "claim_relationship_judgment"
+  | "debate_cluster_naming"
+  | "evidence_chamber_synthesis"
+  | "hypothesis_generation";
 
 export interface LLMCompletionParams {
   task: TaskType;

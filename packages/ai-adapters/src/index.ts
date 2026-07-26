@@ -7,8 +7,17 @@ import type { ClassificationInput, ClassificationResult, LLMProvider } from "./t
 
 export * from "./types";
 export { CLASSIFY_PROMPT_VERSION } from "./classify";
-export { estimateCostUsd, RESEARCH_ROUTE } from "./routing";
-export { OpenAIEmbeddingsClient, estimateEmbeddingCostUsd, type EmbeddingResult } from "./embeddings";
+export { estimateCostUsd, RESEARCH_ROUTE, TASK_ROUTES, type ProviderName, type RouteConfig } from "./routing";
+export { OpenAIEmbeddingsClient, estimateEmbeddingCostUsd, type EmbeddingResult, type EmbedManyResult } from "./embeddings";
+export {
+  OpenAIEmbeddingsProvider,
+  VoyageEmbeddingsProvider,
+  NullEmbeddingProvider,
+  resolveEmbeddingProvider,
+  type EmbeddingProvider,
+  type EmbeddingBatchResult,
+  type EmbeddingEnv,
+} from "./embeddingProvider";
 export { heuristicClassify } from "./providers/heuristic";
 export {
   OpenAIResponsesClient,
@@ -17,6 +26,7 @@ export {
   type StructuredCall,
   type StructuredResult,
 } from "./responses";
+export { AnthropicStructuredClient, type AnthropicStructuredCall } from "./anthropicStructured";
 
 /**
  * Selects the LLM provider for a task based on which API keys are

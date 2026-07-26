@@ -44,6 +44,28 @@ export const TASK_ROUTES: Record<TaskType, { preferred: RouteConfig; alternate: 
     preferred: { provider: "openai", model: OPENAI_CHEAP },
     alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
   },
+  // Phase 25 (ScholarLens integration) tasks — same cheap-first posture as
+  // every task above, no bespoke tier.
+  claim_extraction: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  claim_relationship_judgment: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  debate_cluster_naming: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  evidence_chamber_synthesis: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
+  hypothesis_generation: {
+    preferred: { provider: "openai", model: OPENAI_CHEAP },
+    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+  },
 };
 
 // The research/synthesis tier is opt-in for the v2 orchestrator. It is not
