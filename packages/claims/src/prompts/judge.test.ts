@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildJudgePrompt, buildJudgePromptVariant, validateJudgeResponse, JUDGE_PROMPT_VERSION } from "./judge";
+import {
+  buildJudgePrompt,
+  buildJudgePromptVariant,
+  validateJudgeResponse,
+  JUDGE_PROMPT_VERSION,
+  JUDGE_OUTPUT_SCHEMA,
+} from "./judge";
 
 const CLAIM_A = { text: "ACE feedback produced greater deal prices (p<0.001).", workTitle: "ACE Paper" };
 const CLAIM_B = { text: "Dialogue metrics predicted outcomes with r=0.67.", workTitle: "Metrics Paper" };
@@ -26,28 +32,23 @@ describe("buildJudgePrompt — empirical branch", () => {
     expect(prompt).not.toContain('"mechanism"');
   });
 
-  it("does NOT include the decision-tree preamble — the Phase 25.5b variant selection found few-shot alone scored higher on train (0.582 vs 0.540 for the full combination)", () => {
+  it("does NOT include the decision-tree preamble — no v2 addition is on in the shipped v3 BASELINE prompt", () => {
     const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
     expect(prompt).not.toContain("DECISION TREE");
     expect(prompt).not.toContain("ORTHOGONAL");
   });
 
-  it("includes the anti-catch-all instruction for nuance", () => {
+  it("does NOT include the anti-catch-all instruction — Phase 25.5c found the BASELINE (all v2 additions off) outperforms every v2 combination as a structured prompt (spike-25-5c-output-mode.md)", () => {
     const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
-    expect(prompt).toContain("SPECIFIC boundary condition");
-    expect(prompt).toContain("If you cannot name");
+    expect(prompt).not.toContain("SPECIFIC boundary condition");
+    expect(prompt).not.toContain("nuance` is not a default");
   });
 
-  it("includes 4-6 boundary-case few-shot examples from domains outside the gold set", () => {
+  it("does NOT include the few-shot examples block", () => {
     const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
-    expect(prompt).toContain("FEW-SHOT EXAMPLES");
-    // Domains not present in relationshipPairs.empirical.json or .humanities.json.
-    expect(prompt).toContain("shift workers");
-    expect(prompt).toContain("Minimum-wage");
-    expect(prompt).not.toContain("Aristotle");
-    const exampleCount = (prompt.match(/→ `(nuance|contradiction|support|unrelated)`/g) ?? []).length;
-    expect(exampleCount).toBeGreaterThanOrEqual(4);
-    expect(exampleCount).toBeLessThanOrEqual(6);
+    expect(prompt).not.toContain("FEW-SHOT EXAMPLES");
+    expect(prompt).not.toContain("shift workers");
+    expect(prompt).not.toContain("Minimum-wage");
   });
 
   it("keeps the HARD RULES and JSON-schema instructions unchanged from v1", () => {
@@ -90,9 +91,63 @@ describe("buildJudgePromptVariant — the Phase 25.5b A/B harness's toggle surfa
 });
 
 describe("JUDGE_PROMPT_VERSION", () => {
-  it("is bumped to a v2 identifier reflecting the shipped few-shot/anti-catch-all iteration", () => {
+  it("is bumped to a v3 identifier reflecting the Phase 25.5c reversion to the BASELINE prompt + reasoning-first schema", () => {
     expect(JUDGE_PROMPT_VERSION).not.toBe("v1");
-    expect(JUDGE_PROMPT_VERSION).toMatch(/v2/);
+    expect(JUDGE_PROMPT_VERSION).not.toContain("v2");
+    expect(JUDGE_PROMPT_VERSION).toMatch(/v3/);
+  });
+});
+
+describe("buildJudgePrompt — v3 ships the BASELINE prompt (Phase 25.5c)", () => {
+  it("is byte-identical to buildJudgePromptVariant with every v2 flag off", () => {
+    const shipped = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    const explicitBaseline = buildJudgePromptVariant(
+      { claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" },
+      { includeDecisionTree: false, includeAntiCatchAll: false, includeFewShot: false },
+    );
+    expect(shipped).toBe(explicitBaseline);
+  });
+
+  it("still ends with the unchanged 'Return ONLY valid JSON... No preamble, no markdown fences.' instruction, which raw-text mode (not shipped) relies on verbatim", () => {
+    const prompt = buildJudgePrompt({ claimA: CLAIM_A, claimB: CLAIM_B, branch: "empirical" });
+    expect(prompt).toContain("Return ONLY valid JSON with these fields");
+    expect(prompt.trim().endsWith("No preamble, no markdown fences.")).toBe(true);
+  });
+});
+
+describe("JUDGE_OUTPUT_SCHEMA", () => {
+  it("lists reasoning as the first property, ahead of every verdict field", () => {
+    const propertyOrder = Object.keys(JUDGE_OUTPUT_SCHEMA.properties);
+    expect(propertyOrder[0]).toBe("reasoning");
+    expect(propertyOrder).toEqual([
+      "reasoning",
+      "relationship",
+      "category",
+      "explanation",
+      "strongerEvidence",
+      "mechanism",
+      "resolution",
+    ]);
+  });
+
+  it("requires every property (OpenAI strict json_schema mode compatibility)", () => {
+    expect([...JUDGE_OUTPUT_SCHEMA.required].sort()).toEqual(
+      Object.keys(JUDGE_OUTPUT_SCHEMA.properties).sort(),
+    );
+    expect(JUDGE_OUTPUT_SCHEMA.additionalProperties).toBe(false);
+  });
+
+  it("validateJudgeResponse ignores a reasoning field entirely — it never appears on JudgeResult", () => {
+    const result = validateJudgeResponse({
+      reasoning: "Both claims share a construct and are compatible under stated conditions, so this is support.",
+      relationship: "support",
+      category: "findings",
+      explanation: "specific explanation",
+      strongerEvidence: "paper_a",
+      resolution: "run a replication",
+    });
+    expect(result.relationship).toBe("support");
+    expect(result).not.toHaveProperty("reasoning");
   });
 });
 
