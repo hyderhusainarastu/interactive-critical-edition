@@ -1,0 +1,336 @@
+[
+  {
+    "id": "cf_001",
+    "citation": "Bostock, David. Aristotle's Ethics. Oxford: Oxford University Press, 2000.",
+    "goldForm": "book",
+    "citationShape": "monograph",
+    "source": "packages/bibliographic/src/resolve.test.ts:154-159 (\"classifies a publisher-bearing book citation as book-form\")"
+  },
+  {
+    "id": "cf_002",
+    "citation": "Liddell, H.G. and R. Scott, A Greek-English Lexicon, Clarendon Press",
+    "goldForm": "book",
+    "citationShape": "reference-work",
+    "source": "packages/bibliographic/src/resolve.test.ts:163 (\"classifies a lexicon/critical-edition citation as book-form\")"
+  },
+  {
+    "id": "cf_003",
+    "citation": "Bywater, Ingram, ed., Aristotelis Ethica Nicomachea, Clarendon Press",
+    "goldForm": "book",
+    "citationShape": "critical-edition",
+    "source": "packages/bibliographic/src/resolve.test.ts:164 (\"classifies a lexicon/critical-edition citation as book-form\")"
+  },
+  {
+    "id": "cf_004",
+    "citation": "Bywater, Ingram, ed., Aristotelis Ethica Nicomachea 1894",
+    "goldForm": "book",
+    "citationShape": "critical-edition",
+    "source": "packages/bibliographic/src/sources.test.ts:173 (GoogleBooksSource resolution test)"
+  },
+  {
+    "id": "cf_005",
+    "citation": "These translations are all found in the standard Greek-English Lexicon of Liddell and Scott 18 20",
+    "goldForm": "book",
+    "citationShape": "reference-work",
+    "source": "packages/bibliographic/src/resolve.test.ts:430 (\"resolves the post-fix (contamination-free) Liddell & Scott lexicon query\", D-20-84)"
+  },
+  {
+    "id": "cf_006",
+    "citation": "David Bostock, Aristotle's Ethics (Oxford: Oxford University Press, 2000)",
+    "goldForm": "book",
+    "citationShape": "monograph",
+    "source": "packages/bibliographic/src/resolve.test.ts:357 (rawText param, D-20-81 cleanQuery-stripped-signal test)"
+  },
+  {
+    "id": "cf_007",
+    "citation": "Some Book Title, University Press, 1990",
+    "goldForm": "book",
+    "citationShape": "monograph",
+    "source": "packages/bibliographic/src/resolve.test.ts:322 (\"never drops a provider — book-form still falls back to Crossref/OpenAlex\")"
+  },
+  {
+    "id": "cf_008",
+    "citation": "Ross, W. D., trans. Aristotle: Nicomachean Ethics. 3rd ed. Oxford University Press, 2009.",
+    "goldForm": "book",
+    "citationShape": "translated-edition",
+    "source": "synthetic — probes BOOK_MARKERS's ordinal-edition alternation (`\\d+(?:st|nd|rd|th)\\s+ed\\.?`, types.ts:151) alongside `trans.`",
+    "synthetic": true
+  },
+  {
+    "id": "cf_009",
+    "citation": "Kenny, Anthony. Aristotle's Theory of the Will. Reprint, Duckworth, 1979.",
+    "goldForm": "book",
+    "citationShape": "monograph",
+    "source": "synthetic — probes BOOK_MARKERS's \"Reprint\" alternation (types.ts:151)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_010",
+    "citation": "Irwin, Terence, translated by, Aristotle: Nicomachean Ethics, Hackett, 1999.",
+    "goldForm": "book",
+    "citationShape": "translated-edition",
+    "source": "synthetic — probes BOOK_MARKERS's \"translated\" alternation (types.ts:151)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_011",
+    "citation": "Rorty, Amélie O., ed., Essays on Aristotle's Ethics, University of California Press, 1980.",
+    "goldForm": "book",
+    "citationShape": "edited-volume",
+    "source": "synthetic — probes EDITOR_MARKER (types.ts:158) on a whole edited-volume citation (not an individual chapter within it, contrast cf_042/cf_043)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_012",
+    "citation": "Nussbaum, Martha C. The Fragility of Goodness. 2nd ed. Cambridge University Press, 2001.",
+    "goldForm": "book",
+    "citationShape": "monograph",
+    "source": "synthetic — probes BOOK_MARKERS's ordinal-edition alternation a second time with a different ordinal suffix (\"2nd\" vs. cf_008's \"3rd\")",
+    "synthetic": true
+  },
+  {
+    "id": "cf_013",
+    "citation": "Brickhouse, Thomas C. and Nicholas D. Smith, \"Does Aristotle Have a Consistent Account of Vice?\" Review of Metaphysics 57 2003",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "packages/bibliographic/src/resolve.test.ts:145 (\"classifies a quoted-title citation as journal-form\")"
+  },
+  {
+    "id": "cf_014",
+    "citation": "Annas, Julia, Plato and Aristotle on Friendship, Mind 86 1977",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "packages/bibliographic/src/resolve.test.ts:150-151 (\"classifies a venue-word citation as journal-form even without quotes\")"
+  },
+  {
+    "id": "cf_015",
+    "citation": "Smith, \"Aristotelica\" (Classical Quarterly 1920)",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "docs/PROJECT-LOG.md Remaining Tasks, \"Remaining explicit-citation misses\" bullet (Smith, \"Aristotelica\", Classical Quarterly 1920, not resolving)",
+    "synthetic": true,
+    "notes": "The log records author/title/venue/year, not the verbatim extracted citation string, so the exact characters here are reconstructed from that description rather than transcribed byte-for-byte — hence synthetic:true despite describing a real, documented miss."
+  },
+  {
+    "id": "cf_016",
+    "citation": "Kosman, L. A., \"Being Properly Affected,\" Phronesis 45, 2000.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — probes JOURNAL_MARKERS's \"Phronesis\" alternation (types.ts:144)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_017",
+    "citation": "Broadie, Sarah, \"Aristotle and Contemporary Ethics,\" Proceedings of the Aristotelian Society 105, 2005.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — probes JOURNAL_MARKERS's \"Proceedings\" alternation (types.ts:144)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_018",
+    "citation": "Owen, G. E. L., \"Tithenai ta Phainomena,\" Bulletin of the Institute of Classical Studies, 1961.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — probes JOURNAL_MARKERS's \"Bulletin\" alternation (types.ts:144)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_019",
+    "citation": "Whiting, Jennifer, \"Aristotle's Function Argument,\" Oxford Studies in Ancient Philosophy, 1988.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — probes JOURNAL_MARKERS's \"Studies\" alternation (types.ts:144)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_020",
+    "citation": "Urmson, J. O., \"Aristotle's Doctrine of the Mean,\" American Philosophical Quarterly, 1973.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — probes JOURNAL_MARKERS's \"Quarterly\" alternation a second time in a different venue name",
+    "synthetic": true
+  },
+  {
+    "id": "cf_021",
+    "citation": "Cooper, John M., \"Aristotle on the Forms of Friendship,\" Review of Metaphysics 30, 1977.",
+    "goldForm": "journal",
+    "citationShape": "journal-article",
+    "source": "synthetic — a second, distinct Review of Metaphysics article citation (contrast cf_013's Brickhouse/Smith article in the same venue)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_022",
+    "citation": "NE 1103a15",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "packages/bibliographic/src/resolve.test.ts:176 (\"classifies a Bekker locus citation as classical, ahead of book/journal\")"
+  },
+  {
+    "id": "cf_023",
+    "citation": "Pol. 1252a1",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "packages/bibliographic/src/resolve.test.ts:177 (\"classifies a Bekker locus citation as classical, ahead of book/journal\")"
+  },
+  {
+    "id": "cf_024",
+    "citation": "Plato, Rep. 514a",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "packages/bibliographic/src/resolve.test.ts:180 (\"classifies a Stephanus (Plato) locus citation as classical\")"
+  },
+  {
+    "id": "cf_025",
+    "citation": "NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57 (September 2003): 3-23. Copyright (c) 2003 The Review of Metaphysics.",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "docs/PROJECT-LOG.md, 2026-07-25 changelog entry \"canary follow-up: fused-masthead classical citations + untranscribable calibration\" — the real, pre-split GROBID-fused Brickhouse-article masthead glued onto footnote-3's NE locus citation",
+    "notes": "Deliberately includes journal markers (\"Review\") alongside the classical signal, to prove classifyCitationForm's classical-first branch order (types.ts:170, checked before the journal/book branches) resolves this correctly as classical even with a real, documented contamination case that historically caused problems at the extraction layer (a different module, `@ice/ingestion`'s `classicalReferences.ts`)."
+  },
+  {
+    "id": "cf_026",
+    "citation": "NE 7.8.1150b29-30 and 1151a5-7.",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "docs/PROJECT-LOG.md, 2026-07-25 changelog entry (same fused-masthead case as cf_025) — the leading clause `splitLeadingClause()` isolates once the masthead contamination is stripped at the ingestion extraction stage",
+    "notes": "Companion to cf_025: same underlying case, contamination already removed. Both are gold-labeled classical, since classifyCitationForm's own classical check needs no contamination fix to get either one right — the fix that mattered was upstream, at extraction."
+  },
+  {
+    "id": "cf_027",
+    "citation": "Met. 1028a10-15",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's \"Met.\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_028",
+    "citation": "Rhet. 1355a1",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's \"Rhet.\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_029",
+    "citation": "Gorg. 465a",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's \"Gorg.\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_030",
+    "citation": "EE 1220a5",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's standalone \"EE\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_031",
+    "citation": "Top. 100a18",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's \"Top.\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_032",
+    "citation": "Phdr. 230a",
+    "goldForm": "classical",
+    "citationShape": "classical-locus",
+    "source": "synthetic — probes CLASSICAL_ABBREV's \"Phdr.\" alternation (types.ts:125)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_033",
+    "citation": "Kant, Critique of Pure Reason",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "packages/bibliographic/src/resolve.test.ts:167-168 (\"classifies a plain author-year query with no signal as unknown\")"
+  },
+  {
+    "id": "cf_034",
+    "citation": "NE plans for next quarter",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "packages/bibliographic/src/resolve.test.ts:184-186 (\"does not classify an abbreviation-shaped word or a bare number alone as classical (needs both signals)\")",
+    "notes": "Real regression fixture: an abbreviation-shaped token with no locus number. Confirms looksClassical needs BOTH signals, not just one."
+  },
+  {
+    "id": "cf_035",
+    "citation": "Ethics (2001",
+    "goldForm": "unknown",
+    "citationShape": "junk-fragment",
+    "source": "docs/PROJECT-LOG.md Remaining Tasks, \"Remaining explicit-citation misses\" bullet — the documented junk candidate the inline author-year extraction pass emits and that the extractor should filter"
+  },
+  {
+    "id": "cf_036",
+    "citation": "Williams, Bernard, 1985.",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "synthetic — a bare author-year citation with no venue/publisher/locus signal at all",
+    "synthetic": true
+  },
+  {
+    "id": "cf_037",
+    "citation": "Hardie, W. F. R. Aristotle's Ethical Theory",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "synthetic — a real book's author+title with every book/journal/classical marker deliberately absent, to probe the \"unknown\" default path itself rather than any specific marker",
+    "synthetic": true
+  },
+  {
+    "id": "cf_038",
+    "citation": "Af?;7.8.1151a20-8.",
+    "goldForm": "unknown",
+    "citationShape": "junk-fragment",
+    "source": "docs/PROJECT-LOG.md, 2026-07-25 changelog entry \"Bekker/classical-citation fix\" — the exact pre-fix junk Library-entry text (\"Needs bibliographic resolution — Af?;7.8.1151a20-8.\")",
+    "notes": "Carries a real classical LOCUS shape (\"1151a20-8\") but no recognized CLASSICAL_ABBREV token (\"Af?\" is OCR/extraction noise, not a real abbreviation) — looksClassical correctly requires both signals and returns false, and there is no journal/book signal either, so this resolves \"unknown\" even at this package's own classical backstop. Illustrates why the real fix for this case lived at the ingestion extraction stage (`classicalReferences.ts`), not here."
+  },
+  {
+    "id": "cf_039",
+    "citation": "See page 1103a15 for details.",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "synthetic — probes the \"needs both signals\" rule from the locus-present/abbreviation-absent direction (contrast cf_034, which is abbreviation-present/locus-absent)",
+    "synthetic": true
+  },
+  {
+    "id": "cf_040",
+    "citation": "See the NE for his account of virtue.",
+    "goldForm": "unknown",
+    "citationShape": "ambiguous-plain",
+    "source": "synthetic — probes the \"needs both signals\" rule from the abbreviation-present/locus-absent direction, a second, more explicit instance alongside the real cf_034 fixture",
+    "synthetic": true
+  },
+  {
+    "id": "cf_041",
+    "citation": "aiQoijvxai ?vxi x v ?oxouvxoov ?avxo?",
+    "goldForm": "unknown",
+    "citationShape": "garbled-noise",
+    "source": "docs/PROJECT-LOG.md, 2026-07-25 changelog entry \"canary follow-up: fused-masthead classical citations + untranscribable calibration\" — the real production untranscribable-Greek garble string cited verbatim in that entry (D-23-39)",
+    "notes": "Non-bibliographic, non-Latin-adjacent noise. Confirms classifyCitationForm degrades gracefully to \"unknown\" rather than false-triggering any of the three positive branches on garbage input."
+  },
+  {
+    "id": "cf_042",
+    "citation": "Brickhouse, \"Aristotle's Generation,\" in Aristotle Today (Brickhouse 2015)",
+    "goldForm": "book",
+    "citationShape": "chapter-in-edited-volume",
+    "source": "docs/audits/phase-19-product-audit.md, D-20-88 row (\"Chapter-in-edited-volume citations ... were not detected as a valid citation shape during extraction\") — the exact raw-text example cited there (Roochnik footnote 15)",
+    "provisional": true,
+    "notes": "classifyCitationForm has no fifth \"chapter\" output value (see goldSchema.ts's module doc comment), so this gold label is a provider-routing judgment call, not a value directly attested by any test: an individual chapter within an edited volume is judged more likely to resolve (if at all) via a book catalogue than via Crossref/OpenAlex DOI lookup, so goldForm is set to \"book\". The classifier's own quoted-title branch (types.ts:171) is checked BEFORE the book-marker branch, so classifyCitationForm actually predicts \"journal\" for this exact string — a genuine, expected miss this eval surfaces rather than silently averages away (see the eval report's misclassification findings; not fixed in this lane, per scope). D-20-88 itself further notes this shape currently isn't even reached as an extraction candidate in production, so this row is a probe of classifier behavior on the string shape, independent of that separate extraction gap."
+  },
+  {
+    "id": "cf_043",
+    "citation": "Nussbaum, Martha C., \"Saving Aristotle's Appearances,\" in Language and Logos, Cambridge University Press, 1982.",
+    "goldForm": "book",
+    "citationShape": "chapter-in-edited-volume",
+    "source": "synthetic — constructed specifically to collide QUOTED_TITLE (a quoted chapter title) with BOOK_MARKERS (\"Press\") in one string, probing classifyCitationForm's journal-before-book branch order (types.ts:171-172)",
+    "synthetic": true,
+    "provisional": true,
+    "notes": "Same provider-routing judgment as cf_042 (goldForm=\"book\" for a chapter-in-edited-volume shape), deliberately paired with a second, independently-constructed example of the same journal-wins-priority collision so the finding isn't resting on a single fixture. classifyCitationForm predicts \"journal\" here (quoted title checked first), producing the same kind of expected miss as cf_042."
+  }
+]
