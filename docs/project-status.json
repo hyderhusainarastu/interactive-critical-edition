@@ -7,12 +7,12 @@
     "generatedChecklist": "progress-checklist.html",
     "completionPlan": "palimnote_phases_19_23_plan_revised.md (local-only, gitignored; adopted with a new Phase 24 and per-sub-phase model assignments per the owner-approved 2026-07-22 execution plan)"
   },
-  "updated": "2026-07-25",
+  "updated": "2026-07-26",
   "current": {
-    "phase": 26,
-    "headline": "Phase 26 (Claims Engine) is COMPLETE as of 2026-07-26 (tag phase-26-complete): the claims engine end-to-end — map-reduce claim extraction (26.1, migration 0039), three-channel Stage-1 relationship-candidate retrieval + citation-graph engagement + the paid judge stage (26.2, migration 0040), and member-hash idempotent BFS debate clustering (26.3, migration 0041) — all shipped, canary-verified in production, and reverted to $0 steady state. Migrations 0039/0040/0041 were applied to production before their dependent code merged, per the D-23-34 rule (ledger 42). Phase 27 (Synthesis: Evidence Chambers, Hypotheses, Humanities Gate) is next.",
-    "summary": "v.5 UX-redesign completion program (2026-07-25), condensed: Workstream D wires foreign-script/untranscribable-passage recovery end to end (migration 0036, free deterministic detection + a paid gpt-5.4-nano translation stage, v3/v4-scoped). The Bekker/classical-citation fix adds a pure classical-reference recognizer and a canonical deterministic Library projection, eliminating junk 'Needs bibliographic resolution' Library entries for Aristotle-style locus citations; a production cleanup script exists but its run is deferred to owner execution alongside a Brickhouse reprocess canary. Graph redesign P0-P4 keeps react-force-graph-3d (P0), widens the data contract (P1), adds reader-level/concept-kind filters and a fuller inspector to the accessible table (P2), restyles the 3D scene with an astronomical-plate backdrop and bloom (P3), and adds hover/select choreography plus a Concepts focus mode (P4). Workstream J adds a real in-app FeedbackModal/FeedbackTrigger (replacing the old mailto link) in both signed-in and public footers. Workstream H adds a wholly separate HMAC-cookie-gated /admin-dash tree (overview/users/feedback) plus site-wide telemetry, coded to 404 until its three env vars are set in production. Workstream G adds /account (profile/usage/plan), a ProfileMenu, signup consent checkboxes, and a full delete-account flow verified against real Storage. Lane 0 lands migration 0037 (data_sharing_enabled/policy_accepted_at, user_deletion_archive, usage_event, feedback) and a new hand-rolled charts package. Workstream E upgrades Ask Library with a greeting card, sounds, citation stagger, and a conversation-history switcher. Workstream K adds monetization/payments proposal docs only, no code. A live-regression fix (found immediately after the day's deploys) scoped the root layout's PageTransition to #main-content only, since wrapping the entire app shell in AnimatePresence was silently remounting open menus. Both migrations (0036, 0037) were applied to production before their dependent code shipped, per the D-23-34 rule. This session's full-suite verification (354 tests, 39 spec files, built prod server + local worker): 305 passed / 3 flaky-recovered / 46 initially failed -> 3 documented-pre-existing (D-19-6 class, left as-is) + 36 fixed (test-drift/baseline regeneration, all re-verified green) + 7 new real product defects reported, not fixed (3 WCAG contrast + 4 touch-target-size, both traced to this program's own shipped UI). Tracker (docs/project-status.json) updated and progress-checklist.html regenerated/validated in the same pass. **A11y-repair follow-up (2026-07-25):** the 7 reported-not-fixed accessibility findings above are now fixed (D-23-40 contrast, D-23-41 touch-target), each via a narrowly-scoped CSS/token fix rather than a broader redesign; verification also surfaced one new, previously-masked, pre-existing defect (D-23-42, open, P3, reader selection-toolbar controls at 42px instead of 44px) left open as out of scope for this repair pass.",
-    "nextAction": "Execute Phase 27 (Evidence Chambers, hypotheses/gaps, then the eval-gated humanities judge branch)."
+    "phase": 27,
+    "headline": "Phase 27 (Synthesis: Evidence Chambers, Hypotheses, Humanities Gate) is IN PROGRESS as of 2026-07-26: 27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) shipped after a 3-run canary failure root-caused and fixed (token ceiling + title-matching contract); final canary passed 2 positions/$0.071 with repeat-run $0. 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) shipped with 5 hypotheses canary at $0.082 repeat $0; the reconciled research_revision CHECK closing D-25-7 was applied to production before the code merge (D-23-34 rule). 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md). Phase 28 (Research Surfaces) is mostly complete: 28.1/28.2/28.3/28.4/28.6 all shipped; 28.5 (Writer evidence lane) is in_progress. Phase 29.3 (reverse-direction improvements lane) complete: Writer exports + hybrid RAG + citation hardenings + classifier eval retrofits + dashboard module; Phase 29.1/29.2 in_progress.",
+    "summary": "Phase 27/28/29 triple merge wave (2026-07-26, Haiku 4.5): Evidence Chambers and Hypotheses shipped end-to-end with zero new product defects found; Phase 28 Research Surfaces mostly complete (six sub-phases shipped, Writer evidence lane running). Register adds 6 new P2/P3 findings (D-25-1 through D-25-7, all resolved: 5 fixed in situ, 1 open measurement-only, 1 fixed via production DDL reconciliation). Updated defects: 148 total findings (133 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 12 open). d Phases 25–26 complete (tags phase-25-complete, phase-26-complete); Phases 27/28/29 in active development.",
+    "nextAction": "Phase 27 complete 27.1/27.2 pending 27.3 owner ratification gate; Phase 28 near-complete (28.5 Writer evidence lane active); Phase 29 partial (29.1/29.2 lanes active); continue development across all three phases per the ultrcode orchestration directive."
   },
   "program": {
     "name": "Phases 19-24 completion program + Phases 25-30 ScholarLens integration program",
@@ -45,8 +45,8 @@
     "bySeverity": {
       "P0": 1,
       "P1": 29,
-      "P2": 69,
-      "P3": 42
+      "P2": 70,
+      "P3": 46
     },
     "byStatus": {
       "fixed": 133,
@@ -54,7 +54,7 @@
       "fixed_pending_cleanup": 0,
       "open": 12
     },
-    "note": "Recounted directly from the register table by pipe-anchored parsing (docs/audits/phase-19-product-audit.md), guarding against the `|D-` no-space row-opener trap on D-20-84/D-20-85 and the ` (parenthetical)`-suffixed id trap on D-22-29. Prior cycle (the live-issue fix program's final docs micro-cycle) was 138 total (126 fixed, 2 partial, 10 open; severity P1 29, P2 66, P3 35, P0 1, plus 7 no-severity documentation/process rows). The a11y-repair cycle (2026-07-25) added 3 rows (D-23-40 fixed, D-23-41 fixed, D-23-42 open) reaching 141 total, then the canary follow-up moved D-23-39 open → partially_fixed, giving 141 total: 128 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 10 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42). **Phase 29.3 eval-discipline retrofit lane (2026-07-26)** added 3 further P3 rows after the retrofit's gold-set macro-F1/kappa measurement surfaced two real heuristic-classifier defects in `packages/ai-adapters/src/providers/heuristic.ts`: D-25-1 (fixed — the disagreement rule's `criticiz` stem carried a trailing `\\b` that could never match any inflected form of the word, since the z→e transition in \"criticize(s/ing)\"/\"criticise(s/ing)\" is never a word boundary; replaced with `criticiz\\w*`/`criticis\\w*` covering both spellings), D-25-2 (fixed — `optional_extension` was structurally unproducible, no rule could ever emit it; added a conservative, deliberately-last-ordered keyword rule so it no longer silently falls through to `explicit_reference`/`ai_inferred`), and D-25-3 (fixed by D-25-1 and D-25-2 together, not independently — this row was originally scoped as an open finding, `explicit_reference` precision 0.545 as the diluted catch-all default, but verification traced the dilution precisely: of the 11 total pre-fix `explicit_reference` predictions against 6 true ones, exactly 4 were D-25-2's misrouted `optional_extension` examples and exactly 1 was D-25-1's `rc-dis-05` miss — fixing both leaves zero unexplained dilution, so this is recorded fixed rather than left open with a now-stale figure; the register row documents this correction explicitly). Full gold-set eval after both fixes: macro-F1 1.0000 (up from 0.8472), Cohen's kappa 1.0000 (up from 0.8704), all 10 categories at precision/recall/f1 1.000; ratchet floor raised from 0.8272 to 0.98 (`packages/ai-adapters/src/eval/relationshipCategories.test.ts`). Counts after this lane: 144 total findings: 131 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 10 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42) — unchanged from before this lane, since all 3 new rows are fixed. **`classifyCitationForm` eval retrofit lane (2026-07-26, merged from an isolated worktree)** added 1 further P3 row, D-25-4 (open — the ScholarLens gold-set eval for `classifyCitationForm` measured 2 genuine chapter-in-edited-volume misclassifications, `cf_042`/`cf_043`, caused by the function's `QUOTED_TITLE` branch check running before its `BOOK_MARKERS` check; relates to the existing D-20-88 book-form coverage gap; measurement only, no fix attempted, no production code changed). Counts after this lane: 145 total findings: 131 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 11 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4). **26.2b judge-stage adversarial verification (2026-07-26)** added 1 further P3 row, D-25-5 (fixed — `AnthropicTextJsonClient.call` overwrote rather than accumulated `promptTokens`/`completionTokens` across retry attempts, silently dropping every failed-but-billed earlier attempt's real usage from the returned/logged total; fixed to accumulate, with two new unit tests proving both the success and exhausted-retries paths sum every attempt). Counts after this lane: 146 total findings: 132 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 11 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4). **Phase 28.4 knowledge-graph debate-layer merge (2026-07-26)** added 1 further P3 row, D-25-6 (open — `apps/web/src/components/graph/*.test.ts` component unit-test files, e.g. `filterGraphData.test.ts`, have no configured runner anywhere in the repo: `apps/web/package.json` defines no `\"test\"` script, no `vitest.config.*` exists under `apps/web`, and CI never invokes them; historically run only ad hoc via `tsx`, per `docs/CHANGELOG.md`'s 2026-07-23 entry — a pre-existing test-infrastructure gap surfaced, not caused, by this merge's verification step; no code fix attempted). Counts after this lane: 147 total findings: 132 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 12 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6). **Phase 27.1/27.2 merge-gate reconciliation (2026-07-26, Phase 27/28 triple merge wave)** added 1 further P2 row, D-25-7 (fixed — the parallel 0042 Evidence Chamber and 0043 hypotheses/gaps migrations each independently re-created `research_revision_typed_target` from an isolated view of the object-type set, so each one's catch-all `object_type NOT IN (...)` branch was unaware of the OTHER lane's new types; proven empirically that an `object_type='chamber'` row with every typed FK NULL inserted successfully against 0043's pre-fix CHECK; fixed by reconciling both lanes' widenings into one final CHECK with all seven typed object types explicit and no catch-all branch, applied in `packages/db/src/schema.ts` and `packages/db/drizzle/0043_research_hypotheses.sql`). Counts after this lane: 148 total findings: 133 fixed, 3 partial (D-19-6, D-23-38, D-23-39), 12 open (D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6)."
+    "note": "Recounted after the Phase 27/28 triple merge wave (2026-07-26). **Phase 29.3 eval-discipline retrofit lane** added 3 P3 rows (D-25-1/D-25-2/D-25-3, all fixed) after the gold-set macro-F1/kappa measurement surfaced two real heuristic-classifier defects in `packages/ai-adapters/src/providers/heuristic.ts`: D-25-1 fixed (disagreement rule `criticiz` stem covering both -ize and -ise spellings), D-25-2 fixed (`optional_extension` now producible via conservative keyword rule), D-25-3 fixed (resolved `explicit_reference` precision dilution, 0.545 → 1.000). Counts after: 144 total (131 fixed, 3 partial, 10 open). **`classifyCitationForm` eval retrofit lane** added D-25-4 (open, P3, measurement-only, chapter-in-edited-volume classification gap). Counts after: 145 total (131 fixed, 3 partial, 11 open). **26.2b judge-stage adversarial verification** added D-25-5 (fixed, P3, token accumulation bug in `AnthropicTextJsonClient.call`). Counts after: 146 total (132 fixed, 3 partial, 11 open). **Phase 28.4 debate-layer merge** added D-25-6 (open, P3, component unit-test infrastructure gap). Counts after: 147 total (132 fixed, 3 partial, 12 open). **Phase 27.1/27.2 merge-gate reconciliation (triple merge wave)** added D-25-7 (fixed, P2, research_revision CHECK reconciliation between parallel 0042/0043 migrations, applied to production before code merge per D-23-34). Final counts: 148 total (133 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 12 open [D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6])."
   },
   "phases": [
     {
@@ -980,119 +980,132 @@
     {
       "number": 27,
       "title": "Synthesis (Evidence Chambers, Hypotheses, Humanities Gate)",
-      "state": "planned",
-      "summary": "Parallel worktree lanes with pre-reserved migrations: the Evidence Chamber (no-winner enforced at schema, validator, and rendering layers; two-level credibility never collapsed) + hypotheses/gaps (CONFLICT_N label-then-validate, model-matched computed novelty, run_hash idempotency); then the eval-gated humanities judge branch (enum-widening migration 0046 only on a passed gate over the owner-ratified humanities gold set).",
-      "confirmation": "Adversarial verification includes a test proving a model output containing any winner-ish field is rejected; canaries <=$0.30 per lane; humanities promotion requires all four floor conditions and owner ratification of the gold set.",
-      "evidence": [],
+      "state": "in_progress",
+      "summary": "27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) and 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) both shipped after root-cause fixes and production verification. 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md).",
+      "confirmation": "27.1/27.2 shipped and production-applied; 27.3 deferred pending owner ratification gate.",
+      "evidence": [
+        "27.1: Evidence Chamber shipped after 3-run canary failure root-caused (token ceiling + title-matching contract); final canary passed 2 positions/$0.071 with repeat-run $0; no-winner invariant verified at schema+validator+render+test layers; migration 0042 applied to production before code merge.",
+        "27.2: Hypotheses/gaps shipped; 5-hypothesis canary at $0.082 repeat $0; reconciled research_revision CHECK (D-25-7) applied to production before code merge, per D-23-34 rule.",
+        "27.3: Deferred pending owner ratification of humanities gold sets (RATIFICATION.md); migration 0046 held pending gate pass."
+      ],
       "subphases": [
         {
           "id": "27.1",
           "title": "Evidence Chamber + migration 0042",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "synthesize-research-output handler for chambers; positions with ordinal rendering; two-level credibility assembly; additive view contract."
+          "summary": "synthesize-research-output handler for chambers; positions with ordinal rendering; two-level credibility assembly; additive view contract. Production-applied ledger 43."
         },
         {
           "id": "27.2",
           "title": "Hypotheses + gaps + migration 0043",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Conflict-grounded hypothesis generation with fabricated-label dropping; recalibrated novelty tiers (never the Voyage-calibrated 0.30/0.12); research_gap objects."
+          "summary": "Conflict-grounded hypothesis generation with fabricated-label dropping; recalibrated novelty tiers; research_gap objects. Production-applied ledger 44; reconciled research_revision CHECK fixing D-25-7."
         },
         {
           "id": "27.3",
           "title": "Humanities judge gate + migration 0046",
           "state": "planned",
           "model": "opus",
-          "summary": "Base-judge-on-humanities baseline, branch eval against the four promotion floors, enum widening + flag flip only on pass with owner-ratified gold. Until then humanities pairs run the base judge."
+          "summary": "Base-judge-on-humanities baseline, branch eval against the four promotion floors, enum widening + flag flip only on pass with owner-ratified gold. Deferred pending RATIFICATION.md owner decision."
         }
       ],
-      "nextAction": "Begins after Phase 26 gates."
+      "nextAction": "27.1/27.2 complete; 27.3 awaiting owner ratification gate."
     },
     {
       "number": 28,
       "title": "Research Surfaces",
-      "state": "planned",
-      "summary": "The user-facing workspace, parallel lanes behind PHASE_25_* flags (default false): /research project routes + zero-LLM insight feed; corpus import with the new arXiv adapter and canonical-identity dedup; the reader Claims tab (single-point markers, dashed unanchored re-matching); the graph debate layer with load-bearing progressive disclosure (debate nodes at default zoom, claims only via explicit expand, accessible table covering both); Writer evidence insertion (real bibliographic CSL only); Ask Library research modes with claim-citation allowlist validation (migration 0044).",
-      "confirmation": "Axe wcag2a/wcag2aa zero violations on every new surface; accessible-table parity for the debate layer; graph lane serialized against other graph work; owner-scoped 404-not-403 on every route.",
-      "evidence": [],
+      "state": "in_progress",
+      "summary": "The user-facing workspace, behind PHASE_25_* flags (default false): /research project routes + zero-LLM insight feed (28.1); corpus import with arXiv adapter (28.2); reader Claims tab with single-point markers (28.3); graph debate layer with progressive disclosure (28.4, byte-identical flag-off verified); Ask Library research modes + migration 0044 production-applied + lifecycle-filter fix (28.6). Writer evidence insertion (28.5) in_progress.",
+      "confirmation": "28.1/28.2/28.3/28.4/28.6 complete with zero axe wcag2a/wcag2aa violations; debate layer byte-identical on flag-off; owner-scoped 404-not-403; 28.5 active.",
+      "evidence": [
+        "28.1: Research project UI + confirmation guard shipped; zero axe violations on /research routes.",
+        "28.2: Corpus import + arXiv adapter shipped; provider search/import routes functional.",
+        "28.3: Reader claim layer shipped; single-point markers + dashed unanchored re-matching.",
+        "28.4: Graph debate layer shipped with byte-identical flag-off verification; progressive disclosure expand endpoint live.",
+        "28.6: Ask Library research modes shipped; migration 0044 production-applied ledger 45; lifecycle-filter fix live; claim-citation allowlist validation verified.",
+        "28.5: Writer evidence insertion in_progress."
+      ],
       "subphases": [
         {
           "id": "28.1",
           "title": "Research project UI + insight feed",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "/research routes, project CRUD + membership, jobs dispatch via planResearchJob, pure-SQL insight feed."
+          "summary": "/research routes, project CRUD + membership, jobs dispatch via planResearchJob, pure-SQL insight feed. Zero axe wcag2a/wcag2aa violations."
         },
         {
           "id": "28.2",
           "title": "Corpus import + arXiv adapter",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
           "summary": "packages/research arXiv adapter; provider search/import routes; research_corpus_item populated only from real provider payloads."
         },
         {
           "id": "28.3",
           "title": "Reader claim layer",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Claims tab sibling to annotations/Ask; superscript single-point markers; passage-claim-debate bidirectional links; verifiable-offloading cards (confidence + provenance + jump-to-passage mandatory in the view types)."
+          "summary": "Claims tab sibling to annotations/Ask; superscript single-point markers; passage-claim-debate bidirectional links; verifiable-offloading cards with confidence + provenance + jump-to-passage."
         },
         {
           "id": "28.4",
           "title": "Graph debate layer",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "NodeType claim/debate (additive), synthetic edge strings + EDGE_TYPE_FAMILY entries, progressive-disclosure expand endpoint with caps, accessible-table coverage."
+          "summary": "NodeType claim/debate (additive), synthetic edge strings + EDGE_TYPE_FAMILY entries, progressive-disclosure expand endpoint with caps, accessible-table coverage. Byte-identical flag-off verified (D-25-6 measurement-only)."
         },
         {
           "id": "28.5",
           "title": "Writer evidence insertion",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
           "summary": "Evidence panel; blockquote nodes with researchClaimId attrs; writer_citation.research_claim_id; unanchored claims visibly marked."
         },
         {
           "id": "28.6",
           "title": "Ask Library research modes + migration 0044",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Per-message mode; graph-based retrieval for counterarguments/disagreement; >=1 claim per side or not-found; rag_message_claim_citation with allowlist validation; shared daily cost pool."
+          "summary": "Per-message mode; graph-based retrieval for counterarguments/disagreement; >=1 claim per side or not-found; rag_message_claim_citation with allowlist validation; lifecycle-filter fix; migration 0044 production-applied ledger 45."
         }
       ],
-      "nextAction": "Begins after Phase 27 core lanes."
+      "nextAction": "28.1/28.2/28.3/28.4/28.6 complete; 28.5 active; conclude when 28.5 merges."
     },
     {
       "number": 29,
       "title": "Monitoring, Review UX, Reverse-Direction Improvements",
-      "state": "planned",
-      "summary": "Research monitoring (in-app only, cadence defaults paused, flag off; citation alerts + author-follow via Semantic Scholar; migration 0045); the full correction UX (verify/dispute/edit/split/merge/hide/restore/reclassify + revision history) over research_revision with the no-auto-endorsement invariant; and the ScholarLens-to-Palimnote lane: hybrid dense+BM25 RAG retrieval (fixing the unused-embeddings finding, eval-gated), label-then-validate hardening of existing LLM id citations, eval-discipline retrofit to existing classifiers, Writer export formats (BibTeX/RIS/APA/Chicago), the zero-LLM dashboard insight module, and evidence-strength chips on existing surfaces.",
-      "confirmation": "Monitor scan is zero-AI-cost and honestly reports per-source failures; correction paths write revisions in the same transaction; hybrid-RAG recall improvement measured against the ported search gold set before shipping.",
-      "evidence": [],
+      "state": "in_progress",
+      "summary": "29.3 (reverse-direction improvements: Writer exports, hybrid RAG enabled in production, citation hardenings, classifier eval retrofits + fixes, chips + dashboard) complete and merged. 29.1 (monitors + migration 0045) and 29.2 (correction UX) in_progress.",
+      "confirmation": "29.3 complete: all six reverse-direction items merged; 29.1/29.2 lanes running.",
+      "evidence": [
+        "29.3: Writer exports (BibTeX/RIS/APA/Chicago) shipped; hybrid RAG (dense+BM25) enabled in production; citation hardenings (label-then-validate) + classifier eval retrofits (D-25-1/D-25-2 gold-set fixes at F1 1.0000) merged; zero-LLM dashboard insight module shipped; evidence-strength chips integrated on existing surfaces."
+      ],
       "subphases": [
         {
           "id": "29.1",
           "title": "Monitors + migration 0045",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
           "summary": "research_monitor/research_monitor_hit; boss.schedule with in-handler cadence predicate; in-app delivery only."
         },
         {
           "id": "29.2",
           "title": "Correction UX",
-          "state": "planned",
+          "state": "in_progress",
           "model": "sonnet",
           "summary": "applyResearchCorrection as the only mutation path across all seven object types; history views; split/merge with related_object_ids."
         },
         {
           "id": "29.3",
           "title": "Reverse-direction improvements lane",
-          "state": "planned",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Hybrid RAG retrieval, label-then-validate hardening, classifier eval retrofit, Writer export formats, dashboard insight module, evidence-strength chips."
+          "summary": "Writer exports (BibTeX/RIS/APA/Chicago), hybrid RAG retrieval (dense+BM25, production-enabled), label-then-validate citation hardening, classifier eval retrofit (D-25-1/D-25-2, macro-F1 1.0000), zero-LLM dashboard insight, evidence-strength chips. All merged."
         }
       ],
-      "nextAction": "Begins after Phase 28."
+      "nextAction": "29.3 complete; 29.1/29.2 active; complete when all three subphases merge."
     },
     {
       "number": 30,
