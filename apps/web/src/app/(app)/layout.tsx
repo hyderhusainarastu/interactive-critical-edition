@@ -7,7 +7,7 @@ import { getUserReaderLevel } from "@/lib/readerLevel";
 import { AppShell } from "@/components/app/AppShell";
 import { PreferenceBootstrap } from "@/components/app/PreferenceBootstrap";
 import { TelemetryBeacon } from "@/components/app/TelemetryBeacon";
-import { phase12FeatureEnabled, phase18RagEnabled } from "@ice/config";
+import { phase12FeatureEnabled, phase18RagEnabled, phase25FeatureEnabled } from "@ice/config";
 
 /**
  * Single, centralized auth check for every route under (app) — replaces
@@ -31,7 +31,7 @@ export default async function AppLayout({
     <>
       <PreferenceBootstrap fallbackPreferences={preferences} />
       <TelemetryBeacon />
-      <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
+      <AppShell userId={session.user.id} email={session.user.email} name={me?.name} image={me?.image} admin={admin} writerEnabled={phase12FeatureEnabled("writer")} ragEnabled={phase18RagEnabled()} researchEnabled={phase25FeatureEnabled("research")} initialPreferences={preferences} initialReaderLevel={readerLevel}>{children}</AppShell>
     </>
   );
 }
