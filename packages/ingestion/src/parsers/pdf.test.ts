@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergePageTexts, metadataConfidenceFor, processedTextFromPages } from "./pdf";
+import { buildFallbackFootnoteBlocks, mergePageTexts, metadataConfidenceFor, processedTextFromPages } from "./pdf";
 
 describe("mergePageTexts (OCR reconstruction)", () => {
   it("joins non-empty page texts into one document string", () => {
@@ -53,6 +53,47 @@ describe("mergePageTexts (OCR reconstruction)", () => {
     expect(text).not.toContain("garbled footnote fragment");
     expect(text).not.toContain("This is authorial apparatus.");
     expect(text).not.toContain("Author, Work.");
+  });
+});
+
+describe("buildFallbackFootnoteBlocks (D-25-L4)", () => {
+  it("wires the plain-text footnote heuristic onto a fallback (no-GROBID) PDF's merged text", () => {
+    // Shape of what parsePdf's `text` var looks like on the flat-fallback
+    // path: a merged multi-page document with a trailing numbered notes run
+    // cross-checked against in-body [N] markers (same heuristic as
+    // text/markdown documents — see footnotes.test.ts for direct coverage).
+    const fallbackText = [
+      "How are we to understand the psychology of vice [1]? The question has",
+      "occupied commentators since antiquity [2].",
+      "",
+      "A further page of body prose with no additional citations.",
+      "",
+      "1. First footnote, citing the relevant passage.",
+      "2. Second footnote, a secondary source.",
+    ].join("\n");
+
+    const blocks = buildFallbackFootnoteBlocks(3, fallbackText);
+
+    expect(blocks).toEqual([
+      { kind: "footnote", text: "First footnote, citing the relevant passage.", marker: "1", recovered: true },
+      { kind: "footnote", text: "Second footnote, a secondary source.", marker: "2", recovered: true },
+    ]);
+  });
+
+  it("stays empty for a table-of-contents negative case (no in-body markers to cross-check)", () => {
+    const fallbackText = [
+      "Prose with no numbered in-text citations at all.",
+      "",
+      "1. Introduction",
+      "2. Method",
+      "3. Results",
+    ].join("\n");
+
+    expect(buildFallbackFootnoteBlocks(1, fallbackText)).toEqual([]);
+  });
+
+  it("returns nothing for a zero/negative page count without inspecting the text", () => {
+    expect(buildFallbackFootnoteBlocks(0, "1. Would-be note [1] present in body.")).toEqual([]);
   });
 });
 
