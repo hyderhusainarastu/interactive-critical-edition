@@ -1,7 +1,9 @@
 import { extractText, getDocumentProxy, getMeta } from "unpdf";
 import { collectBoilerplateLines, isEntirelyBoilerplate, normalizeBoilerplateCandidate, stripBoilerplateAtBoundaries, stripBoilerplateLines } from "./boilerplate";
 import { recoverLeadingBodyProse } from "./bodyRecovery";
+import { findColumnSplit, joinPositionedItems, orderItemsForColumns, type PositionedTextItem } from "./columns";
 import { recoverTruncatedEndnotes } from "./endnoteRecovery";
+import { detectFootnotes } from "./footnotes";
 import { recoverPageBottomFootnotes } from "./footnoteRecovery";
 import { type GrobidBbox, type GrobidResult, processWithGrobid } from "./grobid";
 import { ocrLowTextPages } from "./ocr";
@@ -11,11 +13,13 @@ export interface ParsedBlock {
   text: string;
   marker?: string;
   bbox?: GrobidBbox | null;
-  /** D-20-89: true only for an endnote block this module supplied from the
-   *  document's own text layer because GROBID's structural output omitted
-   *  it — never for a block GROBID itself produced. Downstream code uses
-   *  this to label provenance honestly (never presented as GROBID/
-   *  layout-aware structure) rather than to change what the block contains. */
+  /** D-20-89/D-25-L4: true for a footnote/endnote block this module supplied
+   *  from the document's own text layer — either GROBID's structural output
+   *  omitted it (text-layer recovery), or GROBID was unavailable entirely and
+   *  it came from the plain-text footnote heuristic on the flat fallback —
+   *  never for a block GROBID itself produced. Downstream code uses this to
+   *  label provenance honestly (never presented as GROBID/layout-aware
+   *  structure) rather than to change what the block contains. */
   recovered?: boolean;
 }
 
@@ -89,6 +93,74 @@ export function metadataConfidenceFor(titleSource: GrobidResult["titleSource"] |
 }
 
 /**
+ * D-25-L4: wire the plain-text footnote heuristic (`detectFootnotes`, cross-
+ * checked against in-body [N]/(N) markers — see `parsers/footnotes.ts`) onto
+ * the PDF flat-fallback path (no GROBID structure), so a fallback PDF that
+ * has real numbered footnotes gets labeled `footnote` blocks instead of
+ * none. Detection itself is untouched (same function, same rules) — this
+ * only decides where the already-decided results are attached: the heuristic
+ * only ever matches a TRAILING run of numbered lines, so every result
+ * belongs on the LAST page, exactly where such a run physically sits.
+ *
+ * These blocks only ADD labeled apparatus; they never remove anything from
+ * the (unstructured, whole-page) "body" block a fallback page already has,
+ * so the same source text can appear in both places. This is the same
+ * trade-off already accepted for text/markdown documents that have a
+ * trailing numbered-notes section but no explicit "Notes:" heading (see
+ * `parsers/text.ts`'s own, narrower, heading-triggered split) — not a new
+ * category of duplication. `processedTextFromPages` still excludes
+ * `footnote`-kind blocks from the reader-facing transcript either way, so no
+ * apparatus content is duplicated INTO processed body prose.
+ */
+export function buildFallbackFootnoteBlocks(pageCount: number, mergedFallbackText: string): ParsedBlock[] {
+  if (pageCount <= 0) return [];
+  return detectFootnotes(mergedFallbackText).map((note) => ({
+    kind: "footnote" as const,
+    text: note.content,
+    marker: note.marker,
+    recovered: true,
+  }));
+}
+
+/**
+ * D-25-L4: re-derive a page's text from pdf.js's own `getTextContent()` items
+ * (which carry real x/y geometry) instead of unpdf's flattened join, and
+ * reorder it via `columns.ts` when the page is genuinely two-column — ported
+ * from ScholarLens's column detection (see `columns.ts`'s own doc comment).
+ * `unpdfPageText` is unpdf's own already-computed text for this page; it is
+ * returned UNCHANGED whenever no split is detected (including on any error
+ * probing geometry), so a single-column page — the overwhelming majority,
+ * and every existing fixture — is provably unaffected by this function.
+ */
+async function extractColumnAwarePageText(
+  pdf: Awaited<ReturnType<typeof getDocumentProxy>>,
+  pageIndex: number,
+  unpdfPageText: string,
+): Promise<string> {
+  try {
+    const page = await pdf.getPage(pageIndex + 1);
+    const viewport = page.getViewport({ scale: 1 });
+    const content = await page.getTextContent();
+    const items: PositionedTextItem[] = [];
+    for (const raw of content.items) {
+      if (!("str" in raw) || raw.str == null) continue; // skip TextMarkedContent entries — no position data
+      const transform = raw.transform as number[];
+      items.push({ x: transform[4], y: transform[5], str: raw.str, hasEOL: Boolean(raw.hasEOL) });
+    }
+    if (items.length === 0) return unpdfPageText;
+    const split = findColumnSplit(
+      items.map((item) => item.x),
+      viewport.width,
+    );
+    if (split === null) return unpdfPageText; // single column — keep unpdf's own text byte-for-byte
+    return joinPositionedItems(orderItemsForColumns(items, viewport.width));
+  } catch {
+    // Best-effort probe — never fail extraction over a column-detection pass.
+    return unpdfPageText;
+  }
+}
+
+/**
  * PDF extraction via unpdf (pdf.js). Text-layer pages are read directly; pages
  * whose layer is sparse are rendered and OCR'd (scanned documents). When a
  * local GROBID service is configured, its TEI structure (headings, footnotes,
@@ -98,7 +170,17 @@ export function metadataConfidenceFor(titleSource: GrobidResult["titleSource"] |
 export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const { text: mergedText } = await extractText(pdf, { mergePages: true });
-  const { text: perPageText } = (await extractText(pdf, { mergePages: false })) as { text: string[] };
+  const { text: unpdfPerPageText } = (await extractText(pdf, { mergePages: false })) as { text: string[] };
+
+  // D-25-L4: dynamic two-column reordering (see `extractColumnAwarePageText`
+  // above). unpdf's own extractText() flattens pdf.js's text-item stream
+  // without looking at item geometry, so a genuine two-column page comes out
+  // with its columns interleaved line-by-line; pdf.js's lower-level
+  // `getTextContent()` DOES expose per-item x/y, so this re-derives text
+  // from that when — and only when — a page is confidently two-column.
+  const perPageText = await Promise.all(
+    unpdfPerPageText.map((pageText, pageIndex) => extractColumnAwarePageText(pdf, pageIndex, pageText)),
+  );
 
   let detectedTitle: string | null = null;
   let detectedAuthor: string | null = null;
@@ -148,6 +230,12 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
       .find((l) => l.length > 0 && l.length < 200) ?? null;
   }
 
+  // D-25-L4: tracks whether GROBID's own structural body blocks replaced the
+  // PDF.js fallback blocks below (mirrors `structureState`'s own condition).
+  // When it stays false, `pages[].blocks` are still the flat, unstructured
+  // fallback (see the footnote wiring right after this whole `if (grobid)`).
+  let structuralBodyUsed = false;
+
   const grobid = await processWithGrobid(buffer);
   if (grobid) {
     detectedTitle = grobid.title ?? detectedTitle;
@@ -161,6 +249,7 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
     const structured = grobid.blocks.filter((block) => block.text.trim().length > 0);
     const hasBody = structured.some((block) => block.kind === "body");
     if (hasBody) {
+      structuralBodyUsed = true;
       for (const page of pages) page.blocks = [];
       // D-24-G1: drop coordinate-less caption blocks (the class GROBID uses for
       // garbled page-bottom footnote fragments it mis-reads as `<figure>`
@@ -279,6 +368,21 @@ export async function parsePdf(buffer: Buffer): Promise<ParsedDocument> {
         const page = pages[index];
         if (page) page.blocks.push({ kind: "footnote", text: entry.text, marker: entry.marker, recovered: true });
       }
+    }
+  }
+
+  // D-25-L4: GROBID unavailable, or unusable (no body) — the flat PDF.js
+  // fallback path. Wire the same plain-text footnote heuristic used for
+  // text/markdown documents (see `buildFallbackFootnoteBlocks` above) onto
+  // this document's fallback text, so it gets labeled footnote blocks
+  // instead of none. `structureState` below stays "limited" exactly as
+  // before this change — these blocks are still explicitly not presented as
+  // layout-aware extraction, matching the fallback's existing discipline.
+  if (!structuralBodyUsed) {
+    const fallbackFootnoteBlocks = buildFallbackFootnoteBlocks(pages.length, text);
+    const lastPage = pages[pages.length - 1];
+    if (lastPage && fallbackFootnoteBlocks.length > 0) {
+      lastPage.blocks.push(...fallbackFootnoteBlocks);
     }
   }
 
