@@ -119,23 +119,28 @@ describe("relationship-category gold set (packages/ai-adapters/src/eval/gold/rel
 // Measured 2026-07-26 against this exact gold set (60 examples, 6/category)
 // on `heuristicClassify` (no API key configured in this environment — see
 // Design Decisions in docs/PROJECT-LOG.md for why the deterministic
-// heuristic is the CI-safe baseline): macro-F1 = 0.8472, Cohen's kappa =
-// 0.8704. Two real, reportable gaps drive the imperfect score (see this
-// lane's report for the full writeup, not fixed here — measurement only):
-// (1) `optional_extension` scores 0/0/0 (zero recall) because
-// `heuristicClassify` has no rule that can ever produce that category —
-// every gold example for it gets pulled into `explicit_reference` or
-// `ai_inferred` by the default-branch fallback; (2) the disagreement rule's
-// `criticiz` stem (`providers/heuristic.ts` RULES[0]) never actually
-// matches any real inflected form ("criticizes"/"criticizing") because the
-// regex's `\b` immediately after `criticiz` fails whenever more word
-// characters follow it — a latent dead-code trigger this eval surfaced.
-// Floor is that measurement minus a 0.02 margin, matching
-// `@ice/claims/src/eval/gates.ts`'s own regression-margin convention
-// (`EMPIRICAL_REGRESSION_MAX`). Re-measure and update this comment (with a
-// new date) whenever the gold set or the heuristic changes deliberately; a
-// silent drop below the floor should fail CI, not get quietly re-baselined.
-const RATCHET_FLOOR_MACRO_F1 = 0.8272;
+// heuristic is the CI-safe baseline): macro-F1 = 1.0000, Cohen's kappa =
+// 1.0000, following the Phase 29.3-lane fix of the two defects this eval
+// originally surfaced (`providers/heuristic.ts`): (1) the disagreement
+// rule's `criticiz` stem now matches inflected forms via `criticiz\w*`/
+// `criticis\w*` (American and British spellings) instead of a bare
+// `criticiz\b`, whose trailing `\b` could never match ("criticize"/
+// "criticizes"/"criticizing" all continue past the `z` with a word
+// character, so no boundary ever occurred there); (2) a new, deliberately
+// last-checked `optional_extension` rule (`optional|skippable|non-?essential|
+// nothing essential|not essential|bonus material|further reading|broader
+// treatment|those interested in`) gives the heuristic a way to ever produce
+// that category at all — previously every gold example for it fell through
+// to `explicit_reference`/`ai_inferred` via the default-branch fallback,
+// which is also why fixing this raised those two categories' precision to
+// 1.000 as a side effect (they were absorbing the misrouted
+// `optional_extension` predictions). Floor is that measurement minus a 0.02
+// margin, matching `@ice/claims/src/eval/gates.ts`'s own regression-margin
+// convention (`EMPIRICAL_REGRESSION_MAX`). Re-measure and update this
+// comment (with a new date) whenever the gold set or the heuristic changes
+// deliberately; a silent drop below the floor should fail CI, not get
+// quietly re-baselined.
+const RATCHET_FLOOR_MACRO_F1 = 0.98;
 
 describe("heuristicClassify — CI-safe, zero-network macro-F1/kappa/confusion-matrix gate", () => {
   it("meets the ratchet floor on the full gold set", () => {
