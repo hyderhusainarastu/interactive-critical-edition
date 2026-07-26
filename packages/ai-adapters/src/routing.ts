@@ -50,9 +50,33 @@ export const TASK_ROUTES: Record<TaskType, { preferred: RouteConfig; alternate: 
     preferred: { provider: "openai", model: OPENAI_CHEAP },
     alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
   },
+  // Promoted to anthropic/claude-haiku-4-5 on 2026-07-26 (Phase 25.5c,
+  // docs/eval/research-claims/spike-25-5c-output-mode.md): claude-haiku-4-5
+  // in RAW-TEXT mode with the BASELINE judge prompt (every v2 addition off)
+  // is the first config across three judge spikes (25.5, 25.5b, 25.5c) to
+  // clear all three quality gates (src/eval/gates.ts, packages/claims) —
+  // pooled macroF1 0.752 (>=0.75), kappa 0.650 (>=0.60), contradiction
+  // recall 1.000 (>=0.66) on the full 42-pair empirical gold set. openai's
+  // cheap tier (nano/mini) has never come close at any point across all
+  // three spikes (best: nano 0.582/0.450/0.333 in Phase 25.5).
+  // CAVEAT — read before relying on this route for real traffic: the
+  // passing evidence above is for RAW-TEXT calling (a hand-rolled
+  // fence-strip + JSON.parse + one retry, eval-only, NOT wired into any
+  // production client). Per the spike's own decision rule, raw-text mode
+  // was NOT wired into production because it weakens the retry/validation
+  // guarantees AnthropicStructuredClient/OpenAIResponsesClient both give —
+  // packages/claims/src/prompts/judge.ts's shipped `buildJudgePrompt` +
+  // `JUDGE_OUTPUT_SCHEMA` (structured tool-use, reasoning field first) is
+  // the best STRUCTURED config measured (macroF1 0.733, missing the 0.75
+  // gate by 0.017 — the closest any structured config has come, but still
+  // a miss). This task type has no production caller yet (grep finds none
+  // as of this comment), so nothing today actually executes this route —
+  // but whoever wires one up should re-measure the exact call shape they
+  // build against src/eval/gates.ts before trusting this promotion,
+  // rather than assuming the raw-text numbers above transfer unchanged.
   claim_relationship_judgment: {
-    preferred: { provider: "openai", model: OPENAI_CHEAP },
-    alternate: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+    preferred: { provider: "anthropic", model: ANTHROPIC_CHEAP },
+    alternate: { provider: "openai", model: OPENAI_CHEAP },
   },
   debate_cluster_naming: {
     preferred: { provider: "openai", model: OPENAI_CHEAP },
@@ -84,6 +108,9 @@ const PRICE_PER_MTOK: Record<string, { input: number; output: number }> = {
   "gpt-5.4-nano": { input: 0.2, output: 1.25 },
   "gpt-5.4-mini": { input: 0.75, output: 4.5 },
   "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
+  // Escalation-only rung (Phase 25.5b judge eval, used only if no cheaper
+  // rung passes the judge-quality gates) — not a TASK_ROUTES default.
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
 };
 
 export function estimateCostUsd(model: string, promptTokens: number, completionTokens: number): number {
