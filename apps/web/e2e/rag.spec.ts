@@ -147,4 +147,70 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await expect(trigger).toBeFocused();
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
   });
+
+  // Live-issue fix lane (2026-07-25): the conversation-history trigger
+  // inside the chat panel moved to the same open-only-pointer-click +
+  // outside-pointerdown design as `AppShell.tsx`'s profile/preferences
+  // menus (see `workspace-shell.spec.ts`'s equivalent tests for the full
+  // design rationale) — this is the third of the three menus the redesign
+  // applies to. 600ms is comfortably past the old `useReopenGuard(250)`
+  // window, which the pre-fix tree would have genuinely closed on.
+  test("the conversation history menu survives a switch-bounce double-fire well past the old 250ms guard window, and closes on outside click without stealing focus", async ({ page }) => {
+    await page.getByRole("button", { name: "Ask Library" }).click();
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+
+    // `exact` avoids matching the panel's own "Close conversation history"
+    // button, whose accessible name otherwise substring-contains this one
+    // once the panel is open (the same ambiguity class D-19-1 fixed once
+    // already for "Theme").
+    const historyTrigger = chat.getByRole("button", { name: "Conversation history", exact: true });
+    const box = await historyTrigger.boundingBox();
+    if (!box) throw new Error("history trigger has no layout box");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.waitForTimeout(600);
+    await page.mouse.down();
+    await page.mouse.up();
+
+    const history = chat.getByRole("dialog", { name: "Conversation history" });
+    await expect(history).toBeVisible();
+    await page.waitForTimeout(300);
+    await expect(history).toBeVisible();
+
+    // Outside click — the chat panel's own heading, outside both the
+    // history trigger and its panel — closes it. No focus-return to the
+    // trigger, unlike Escape/explicit-close (see `useOutsideMenuClose`'s
+    // doc comment).
+    await chat.getByRole("heading", { name: "Ask your Library" }).click();
+    await expect(history).toBeHidden();
+    await expect(historyTrigger).not.toBeFocused();
+  });
+
+  test("keyboard Enter toggles the conversation history menu open, then closed", async ({ page }) => {
+    await page.getByRole("button", { name: "Ask Library" }).click();
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+
+    // `exact` avoids matching the panel's own "Close conversation history"
+    // button, whose accessible name otherwise substring-contains this one
+    // once the panel is open (the same ambiguity class D-19-1 fixed once
+    // already for "Theme").
+    const historyTrigger = chat.getByRole("button", { name: "Conversation history", exact: true });
+    await historyTrigger.focus();
+    await expect(historyTrigger).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press("Enter");
+    const history = chat.getByRole("dialog", { name: "Conversation history" });
+    await expect(history).toBeVisible();
+    await expect(historyTrigger).toHaveAttribute("aria-expanded", "true");
+
+    // Opening moves focus into the panel (its own close button) — refocus
+    // the trigger to simulate a keyboard user tabbing back to it, which is
+    // what exercises the trigger's own toggle-to-close path.
+    await historyTrigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(history).toBeHidden();
+    await expect(historyTrigger).toHaveAttribute("aria-expanded", "false");
+  });
 });
