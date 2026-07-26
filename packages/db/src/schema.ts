@@ -3626,15 +3626,20 @@ export const evidenceChamberPositions = pgTable(
  * position >=1 claim enforced in the write transaction") — a position is
  * never persisted without at least one row here, and this is the ONLY
  * mechanism by which a position's neutral summary traces back to real
- * source text: the model's own JSON response carries no claim ids (the
- * evidence-chamber prompt/schema, shipped in 25.3, asks only for a
- * `label`/`summary`/`method`/`scope`/`stanceConfidence` per position), so
- * `matchChamberPositionClaims` (`@ice/claims`) deterministically matches
- * each position's `label` back to the cluster's own claims by their
- * OWNING WORK's title (exact, then substring, then best word-overlap) —
- * never a second model call, never a guess persisted when NO claim matches
- * at all (that case fails the whole synthesis rather than writing an
- * ungrounded position).
+ * source text. The chamber prompt presents each cluster claim to the model
+ * as a short synthetic label (`CLAIM_1`, `CLAIM_2`, ...), and asks each
+ * position for the `claimLabels` it draws from — the CONFLICT_N/`labelToReal`
+ * label-then-validate pattern `hypothesis.ts`'s `buildHypothesisPrompt`/
+ * `validateHypothesisResponse` already uses. `validateEvidenceChamberResponse`
+ * (`@ice/claims`) resolves those labels back to real claim ids via the SAME
+ * map the prompt was built with, dropping any label that doesn't resolve
+ * (a fabrication) and dropping a position outright if it's left with zero
+ * resolved claims — never a second model call, never a guess persisted.
+ * This replaced an earlier title-matching contract (`matchChamberPositionClaims`,
+ * matching a position's `label` against a claim's owning-work title) that a
+ * real canary found unworkable: a real synthesis's position labels are often
+ * granular interpretive-stance phrases ("Corrupt Rational Endorsement"), not
+ * work titles, so title-matching silently failed on real model output.
  *
  * `excerpt` is a snapshot of the matched claim's `supporting_excerpt` AT
  * SYNTHESIS TIME (not a live join) — the `research_revision` before/after

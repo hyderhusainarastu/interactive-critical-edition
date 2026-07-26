@@ -3,7 +3,6 @@ import {
   EVIDENCE_CHAMBER_PROMPT_VERSION,
   buildEvidenceChamberPrompt,
   computeChamberBasisHash,
-  matchChamberPositionClaims,
   validateEvidenceChamberResponse,
   type EvidenceChamberResult,
 } from "@ice/claims";
@@ -78,17 +77,27 @@ interface ChamberCallSuccess {
  * validator, `MAX_RETRIES`) before either surfaces failure here — this
  * function only decides what happens AFTER both providers' own retries are
  * exhausted.
+ *
+ * `buildEvidenceChamberPrompt` now returns the prompt text alongside a
+ * `labelToClaimId` map (the `hypothesis.ts` CONFLICT_N/`labelToReal`
+ * pattern) — `validateEvidenceChamberResponse` is bound to that SAME map
+ * via a closure for both providers, so a position's `claimLabels` resolve
+ * to real claim ids at validation time rather than needing a separate
+ * title-matching pass afterward (the earlier, conceptually wrong contract
+ * this replaces — see `EvidenceChamberPosition.claimIds`'s doc comment in
+ * `@ice/claims`).
  */
 export async function callChamberSynthesis(
   ctx: ResearchJobRunContext,
   openai: StructuredCaller,
   anthropic: JudgeAnthropicCaller,
   clusterName: string,
-  claims: { text: string; workTitle: string }[],
+  claims: { id: string; text: string; workTitle: string }[],
   safetyIdentifier: string,
 ): Promise<ChamberCallSuccess | null> {
   const route = TASK_ROUTES.evidence_chamber_synthesis;
-  const prompt = buildEvidenceChamberPrompt({ clusterName, claims });
+  const { prompt, labelToClaimId } = buildEvidenceChamberPrompt({ clusterName, claims });
+  const validate = (parsed: unknown) => validateEvidenceChamberResponse(parsed, labelToClaimId);
 
   if (openai.available) {
     try {
@@ -100,7 +109,7 @@ export async function callChamberSynthesis(
         input: prompt,
         safetyIdentifier,
         maxOutputTokens: CHAMBER_MAX_OUTPUT_TOKENS,
-        validate: validateEvidenceChamberResponse,
+        validate,
       });
       await ctx.logUsage({
         task: "evidence_chamber_synthesis",
@@ -124,7 +133,7 @@ export async function callChamberSynthesis(
       system: CHAMBER_SYSTEM_PROMPT,
       user: prompt,
       maxOutputTokens: CHAMBER_MAX_OUTPUT_TOKENS,
-      validate: validateEvidenceChamberResponse,
+      validate,
     });
     if (res.promptTokens > 0 || res.completionTokens > 0) {
       await ctx.logUsage({
@@ -210,7 +219,7 @@ export async function synthesizeChamberForCluster(
     openai,
     anthropic,
     cluster.name,
-    claims.map((c) => ({ text: c.claimText, workTitle: c.workTitle })),
+    claims.map((c) => ({ id: c.id, text: c.claimText, workTitle: c.workTitle })),
     safetyIdentifier,
   );
   if (!outcome) {
@@ -218,17 +227,13 @@ export async function synthesizeChamberForCluster(
     return { coverage: "partial", note: concerns.join(" | "), claimsInScope: claims.length, synthesized: false, reused: false, concerns };
   }
 
-  const assignment = matchChamberPositionClaims(
-    outcome.result.positions,
-    claims.map((c) => ({ claimId: c.id, workTitle: c.workTitle })),
-  );
-  if (!assignment) {
-    concerns.push(
-      "The synthesized response's positions could not be confidently matched back to any of this cluster's claims — discarded rather than persisted with a guessed pairing.",
-    );
-    return { coverage: "partial", note: concerns.join(" | "), claimsInScope: claims.length, synthesized: false, reused: false, concerns };
-  }
-
+  // Grounding is now resolved inside `validateEvidenceChamberResponse`
+  // itself (the label-then-validate contract, `EvidenceChamberPosition.claimIds`)
+  // — every returned position is already guaranteed >=1 real claim id, and
+  // the response as a whole is guaranteed >= EVIDENCE_CHAMBER_MIN_SURVIVING_POSITIONS
+  // positions, or `callChamberSynthesis` above would have failed (retried,
+  // then returned null) instead of reaching here. No separate title-matching
+  // pass is needed — see this file's own doc comment on `callChamberSynthesis`.
   const claimById = new Map(claims.map((c) => [c.id, c]));
   const positions: repo.NewChamberPosition[] = outcome.result.positions.map((position, index) => ({
     ordinal: index,
@@ -238,9 +243,10 @@ export async function synthesizeChamberForCluster(
     scope: position.scope,
     stanceConfidenceLabel: position.stanceConfidence,
     stanceConfidence: EVIDENCE_CHAMBER_STANCE_CONFIDENCE_VALUE[position.stanceConfidence],
-    claims: assignment[index].map((claimId) => ({
+    claims: position.claimIds.map((claimId) => ({
       claimId,
-      // Guaranteed non-null: every id in `assignment` came from `claims` above.
+      // Guaranteed non-null: every id in `claimIds` resolved via the SAME
+      // `labelToClaimId` map `buildEvidenceChamberPrompt` built from `claims` above.
       excerpt: claimById.get(claimId)!.supportingExcerpt,
     })),
   }));

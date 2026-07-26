@@ -96,8 +96,8 @@ function chamberResponse(overrides: Record<string, unknown> = {}) {
     missingEvidence: "A shared criterion for what counts as 'complete' practical reasoning.",
     nextAction: "Compare both readings against NE 7.3's own text directly.",
     positions: [
-      { label: "Work A", summary: "Incomplete syllogism.", method: "textual", scope: "NE 7.3", stanceConfidence: "high" },
-      { label: "Work B", summary: "Weakness of will.", method: "philosophical", scope: "general akrasia", stanceConfidence: "medium" },
+      { label: "Work A", summary: "Incomplete syllogism.", method: "textual", scope: "NE 7.3", stanceConfidence: "high", claimLabels: ["CLAIM_1"] },
+      { label: "Work B", summary: "Weakness of will.", method: "philosophical", scope: "general akrasia", stanceConfidence: "medium", claimLabels: ["CLAIM_2"] },
     ],
     ...overrides,
   };
@@ -318,7 +318,7 @@ describe.skipIf(!hasDb)("synthesize_chamber (integration)", () => {
     expect(chambers).toHaveLength(0);
   });
 
-  it("never fabricates: an unmatchable position (label shares no words with any claim's work) is discarded, not guessed", async () => {
+  it("never fabricates: fabricated claim labels (not in the prompt's own labelToClaimId map) collapse the response below the 2-position floor and it is discarded, not guessed", async () => {
     const userId = await seedUser();
     cleanupUsers.push(userId);
     const workA = await seedWork(userId, "Nicomachean Ethics");
@@ -328,10 +328,14 @@ describe.skipIf(!hasDb)("synthesize_chamber (integration)", () => {
     const projectId = await seedProject(userId, [workA, workB]);
     const clusterId = await seedCluster(userId, projectId, [claimA.id, claimB.id]);
 
+    // Only ever cites labels that don't exist in the real CLAIM_1/CLAIM_2
+    // map the prompt actually built — the model inventing labels, not a
+    // title-matching miss (the contract this test used to exercise, before
+    // the label-then-validate fix replaced title-matching entirely).
     const openai = new MockOpenAIChamberCaller(() =>
       chamberResponse({
         positions: [
-          { label: "Zzyzx Nonexistent Treatise", summary: "s", method: "m", scope: "sc", stanceConfidence: "high" },
+          { label: "Fabricated Position", summary: "s", method: "m", scope: "sc", stanceConfidence: "high", claimLabels: ["CLAIM_97", "CLAIM_98"] },
         ],
       }),
     );
@@ -340,10 +344,46 @@ describe.skipIf(!hasDb)("synthesize_chamber (integration)", () => {
 
     expect(outcome.synthesized).toBe(false);
     expect(outcome.coverage).toBe("partial");
-    expect(outcome.concerns.some((c) => c.includes("could not be confidently matched"))).toBe(true);
+    expect(outcome.concerns.some((c) => c.includes("Every configured synthesis provider failed"))).toBe(true);
 
     const chambers = await db.select().from(evidenceChambers).where(eq(evidenceChambers.clusterId, clusterId));
     expect(chambers).toHaveLength(0);
+  });
+
+  it("never fabricates: a mix of grounded and ungrounded positions keeps only the grounded ones when >=2 survive, and persists them", async () => {
+    const userId = await seedUser();
+    cleanupUsers.push(userId);
+    const workA = await seedWork(userId, "Work A");
+    const workB = await seedWork(userId, "Work B");
+    const workC = await seedWork(userId, "Work C");
+    const claimA = await seedClaim(userId, workA, "Claim A text.");
+    const claimB = await seedClaim(userId, workB, "Claim B text.");
+    const claimC = await seedClaim(userId, workC, "Claim C text.");
+    const projectId = await seedProject(userId, [workA, workB, workC]);
+    const clusterId = await seedCluster(userId, projectId, [claimA.id, claimB.id, claimC.id]);
+
+    const openai = new MockOpenAIChamberCaller(() =>
+      chamberResponse({
+        positions: [
+          // CLAIM_1/CLAIM_2/CLAIM_3 correspond, in order, to claimA/claimB/claimC
+          // (loadClusterMemberClaims is ordered by debate_cluster_member.created_at).
+          { label: "Grounded A", summary: "s", method: "m", scope: "sc", stanceConfidence: "high", claimLabels: ["CLAIM_1"] },
+          { label: "Fabricated", summary: "s", method: "m", scope: "sc", stanceConfidence: "medium", claimLabels: ["CLAIM_50"] },
+          { label: "Grounded B", summary: "s", method: "m", scope: "sc", stanceConfidence: "low", claimLabels: ["CLAIM_2", "CLAIM_3"] },
+        ],
+      }),
+    );
+    const requestId = await seedJobRequest(userId, projectId, clusterId);
+    const outcome = await runChamber(requestId, clusterId, openai);
+
+    expect(outcome.synthesized).toBe(true);
+
+    const [chamber] = await db.select().from(evidenceChambers).where(eq(evidenceChambers.clusterId, clusterId));
+    const positions = await db.select().from(evidenceChamberPositions).where(eq(evidenceChamberPositions.chamberId, chamber.id)).orderBy(evidenceChamberPositions.ordinal);
+    expect(positions.map((p) => p.label)).toEqual(["Grounded A", "Grounded B"]); // "Fabricated" dropped, ordinals renumbered by survival order
+
+    const groundedBClaims = await db.select().from(evidenceChamberPositionClaims).where(eq(evidenceChamberPositionClaims.positionId, positions[1].id));
+    expect(groundedBClaims.map((c) => c.claimId).sort()).toEqual([claimB.id, claimC.id].sort());
   });
 
   it("transaction rollback: insertEvidenceChamber refuses (and writes nothing) when a position carries zero claims", async () => {

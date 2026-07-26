@@ -1074,10 +1074,16 @@ export interface ChamberSourceClaimRow {
 }
 
 /** Every ACTIVE, non-hidden claim in a cluster's current membership — the
- *  chamber prompt's entire input population, and `matchChamberPositionClaims`'s
- *  candidate pool. A claim a user has since hidden, or one superseded by a
- *  reprocess, is silently excluded (the `loadScopedClaimsForRelationshipDetection`
- *  precedent) rather than fed to a synthesis prompt as if it still stood. */
+ *  chamber prompt's entire input population, and the CLAIM_N label
+ *  assignment order `buildEvidenceChamberPrompt` uses (`@ice/claims`'s
+ *  `evidenceChamber.ts`). Ordered by `debate_cluster_member.created_at`
+ *  (tiebroken by claim id) so that assignment is STABLE run to run — this
+ *  didn't matter under the old title-matching contract (a position's claims
+ *  were found by matching `workTitle` text, order-independent), but does now
+ *  that a claim's label depends on its position in this list. A claim a
+ *  user has since hidden, or one superseded by a reprocess, is silently
+ *  excluded (the `loadScopedClaimsForRelationshipDetection` precedent)
+ *  rather than fed to a synthesis prompt as if it still stood. */
 export async function loadClusterMemberClaims(clusterId: string): Promise<ChamberSourceClaimRow[]> {
   const rows = await db
     .select({
@@ -1090,7 +1096,8 @@ export async function loadClusterMemberClaims(clusterId: string): Promise<Chambe
     .from(debateClusterMembers)
     .innerJoin(researchClaims, eq(researchClaims.id, debateClusterMembers.claimId))
     .innerJoin(works, eq(works.id, researchClaims.workId))
-    .where(and(eq(debateClusterMembers.clusterId, clusterId), eq(researchClaims.status, "active"), eq(researchClaims.hidden, false)));
+    .where(and(eq(debateClusterMembers.clusterId, clusterId), eq(researchClaims.status, "active"), eq(researchClaims.hidden, false)))
+    .orderBy(asc(debateClusterMembers.createdAt), asc(researchClaims.id));
   return rows.filter((r): r is ChamberSourceClaimRow => r.workId !== null).map((r) => ({ ...r, workId: r.workId as string }));
 }
 
