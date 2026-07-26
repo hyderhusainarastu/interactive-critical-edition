@@ -17,10 +17,10 @@ The empirical relationship-pair and search-query gold sets in this directory ori
 
 ## Palimnote-Authored Drafts
 
-The following files in this package are Palimnote-authored domain-specific drafts, not derived from ScholarLens, and are pending owner ratification:
+The following files in this package are Palimnote-authored domain-specific drafts, not derived from ScholarLens:
 
 - `relationshipPairs.humanities.json` — humanities-domain relationship classification gold set
 - `retrievalNegatives.json` — hard-negative retrieval cases for dense-embedding evaluation
 - `claimNature.json` — claim-type classification fixtures
 
-These will be reconciled against Palimnote's own scholarly-claim taxonomy once ownership and licensing are finalized.
+**Ratification status: ratified.** The owner reviewed the full packet (`docs/eval/research-claims/humanities-ratification-packet.md`) on 2026-07-26 and approved all records as labeled, including the 11 same-work-flagged pairs. Every record in these three files now carries `"provisional": false`. See `RATIFICATION.md` for the ratification record. These remain candidates for reconciliation against Palimnote's own scholarly-claim taxonomy as that taxonomy evolves, but are no longer pending ratification.

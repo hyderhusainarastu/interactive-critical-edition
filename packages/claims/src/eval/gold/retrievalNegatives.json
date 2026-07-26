@@ -20,7 +20,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A classical moral-psychology definition and an empirical negotiation-training finding share no topical or logical overlap.",
     "split": "train"
   },
@@ -45,7 +45,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "An ancient moral typology and a modern information-retrieval benchmark result have nothing in common beyond both being scholarly claims.",
     "split": "train"
   },
@@ -70,7 +70,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A thesis about Aristotelian textual inconsistency and an empirical LLM-scale hallucination finding share no relationship.",
     "split": "train"
   },
@@ -95,7 +95,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A claim about Aristotelian self-friendship and an empirical conflict-training transfer result are unrelated.",
     "split": "test"
   },
@@ -120,7 +120,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A Homeric interpretive claim and an embedding-dimensionality scaling result share no logical relationship.",
     "split": "train"
   },
@@ -145,7 +145,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A definitional distinction in Aristotelian ethics and an empirical psychological-outcome comparison bear no relationship.",
     "split": "train"
   },
@@ -170,7 +170,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A developmental reconciliation of Aristotle's account of vice and a self-consistency decoding result are unrelated.",
     "split": "test"
   },
@@ -195,7 +195,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A Greek lexical-range fact and a two-stage retrieval latency/precision tradeoff have no logical relationship.",
     "split": "train"
   },
@@ -220,7 +220,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A Platonic comparative claim and a study's recruitment/randomization method are unrelated.",
     "split": "train"
   },
@@ -245,7 +245,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A thesis about Aristotelian vice and an empirical RAG hallucination-reduction finding share no relationship.",
     "split": "test"
   },
@@ -270,7 +270,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A methodological principle about ethical inquiry's precision and an empirical negotiation-tactics correlation are unrelated.",
     "split": "train"
   },
@@ -295,7 +295,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A characterization of Aristotelian vice and a corpus-preprocessing method detail have no logical relationship.",
     "split": "train"
   },
@@ -320,7 +320,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A curable/incurable-vice reconciliation thesis and a model-selection engineering detail are unrelated.",
     "split": "test"
   },
@@ -345,7 +345,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A Presocratic fragment's content and a training-data composition detail have no logical relationship.",
     "split": "train"
   },
@@ -370,7 +370,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A habituation account of Aristotelian vice and a qualitative finding about negotiator tool preferences are unrelated.",
     "split": "train"
   },
@@ -395,7 +395,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A textual claim about intemperate desire and an empirical readability comparison are unrelated.",
     "split": "test"
   },
@@ -420,7 +420,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A chronological-composition hypothesis about Aristotle's text and a query-expansion recall result share no relationship.",
     "split": "train"
   },
@@ -445,7 +445,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A medieval scholastic distinction about sin and an empirical prompting-method comparison are unrelated.",
     "split": "train"
   },
@@ -470,7 +470,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A definitional claim about Aristotelian self-love and a chain-of-thought scope finding have no logical relationship.",
     "split": "test"
   },
@@ -495,7 +495,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A paper's acknowledgements detail and an empirical coaching-outcome finding are unrelated.",
     "split": "train"
   },
@@ -520,7 +520,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A digital-tooling detail for checking a classical text and an empirical cultural-moderation finding share no relationship.",
     "split": "train"
   },
@@ -545,7 +545,7 @@
     },
     "label": "unrelated",
     "category": "scope",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A critical-edition citation detail and a bi-encoder-versus-cross-encoder retrieval result are unrelated.",
     "split": "test"
   }
