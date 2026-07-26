@@ -9,6 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@ice/claims": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^24",
     "typescript": "^5",

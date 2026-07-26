@@ -20,7 +20,14 @@ import { SUSTAINED_CITATION_THRESHOLD, type ClassificationInput, type Classifica
 const RULES: { category: RelationshipCategory; pattern: RegExp }[] = [
   {
     category: "disagreement_polemical_target",
-    pattern: /\b(reject|refute|criticiz|against|contra\b|error|mistaken|contrary to|takes issue|polemic|opposes?)\b/i,
+    // `criticiz\w*`/`criticis\w*` (not a bare `criticiz\b`) so both American
+    // ("criticize"/"criticizes"/"criticizing") and British ("criticise"/
+    // "criticises"/"criticising") inflected forms match — a bare `criticiz\b`
+    // can never match any of them, since `\b` fails at the z→e transition
+    // where the next letter continues the word (see the dated eval-floor
+    // comment in eval/relationshipCategories.test.ts for how this was found).
+    pattern:
+      /\b(reject|refute|criticiz\w*|criticis\w*|against|contra\b|error|mistaken|contrary to|takes issue|polemic|opposes?)\b/i,
   },
   {
     category: "conceptual_influence",
@@ -37,6 +44,14 @@ const RULES: { category: RelationshipCategory; pattern: RegExp }[] = [
   {
     category: "parallel_comparison",
     pattern: /\b(compare|cf\.|see also|parallel|analogous|similarly|as with|likewise)\b/i,
+  },
+  {
+    // Placed last among the keyword rules deliberately: these are weak,
+    // generic words ("optional", "further reading") that would otherwise
+    // risk preempting a stronger, more specific signal earlier in this
+    // list (e.g. a disagreement or influence cue) if checked first.
+    category: "optional_extension",
+    pattern: /\b(optional|skippable|non-?essential|nothing essential|not essential|bonus material|further reading|broader treatment|those interested in)\b/i,
   },
 ];
 
