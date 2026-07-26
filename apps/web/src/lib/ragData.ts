@@ -22,6 +22,7 @@ import {
   type RetrievedRagChunk,
   validateSocraticAnswer,
 } from "@ice/rag";
+import { reportEvent } from "@ice/observability";
 import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { processCompetencySignals, type CompetencyNoticeView } from "./competencyData";
 import { deriveRagConversationTitle } from "./ragTitle";
@@ -186,7 +187,7 @@ function withRagLatencyCap<T>(promise: Promise<T>): Promise<T> {
   });
 }
 
-async function generateSocraticAnswer(userId: string, question: string, history: Array<{ role: "user" | "assistant"; content: string }>, chunks: RetrievedRagChunk[]) {
+async function generateSocraticAnswer(userId: string, conversationId: string, question: string, history: Array<{ role: "user" | "assistant"; content: string }>, chunks: RetrievedRagChunk[]) {
   const fallback = fallbackSocraticAnswer(question, chunks);
   if (!chunks.length) return { answer: fallback, provider: "deterministic-retrieval", model: "not-found", promptTokens: 0, completionTokens: 0, cost: 0 };
 
@@ -198,16 +199,34 @@ async function generateSocraticAnswer(userId: string, question: string, history:
   }
 
   try {
+    // Phase 29.3 (label-then-validate hardening): the prompt exposes each
+    // chunk only as a short "SOURCE_N" label (never the real chunk UUID —
+    // see `buildSocraticInput`'s doc comment), and `validateSocraticAnswer`
+    // resolves the model's cited labels back through `labelToChunkId`,
+    // dropping (and counting) any that don't resolve.
+    const { prompt, labelToChunkId } = buildSocraticInput({ question, history, chunks });
     const result = await withRagLatencyCap(client.call({
       model,
       system: SOCRATIC_SYSTEM_PROMPT,
-      input: buildSocraticInput({ question, history, chunks }),
+      input: prompt,
       schema: answerSchema(),
       schemaName: "library_grounded_socratic_answer",
       safetyIdentifier: safetyIdentifierFor(userId),
       maxOutputTokens: 700,
-      validate: (parsed) => validateSocraticAnswer(parsed, chunks.map((chunk) => chunk.id)),
+      validate: (parsed) => validateSocraticAnswer(parsed, labelToChunkId),
     }));
+    // Content-free observability for the trust-calibration posture: how
+    // often the model cites a label that doesn't resolve to a real chunk.
+    // No source text, question text, or answer text is logged — counts and
+    // ids only, matching this codebase's other `reportEvent` call sites.
+    if (result.data.droppedCitationCount > 0) {
+      reportEvent("rag.citation_labels_dropped", {
+        conversationId,
+        droppedCitationCount: result.data.droppedCitationCount,
+        acceptedCitationCount: result.data.citedChunkIds.length,
+        retrievedChunkCount: chunks.length,
+      });
+    }
     return {
       answer: result.data,
       provider: "openai",
@@ -254,7 +273,7 @@ export async function answerRagConversation(input: { userId: string; conversatio
     },
   });
   const started = Date.now();
-  const generated = await generateSocraticAnswer(input.userId, question, [...prior].reverse(), chunks);
+  const generated = await generateSocraticAnswer(input.userId, conversation.id, question, [...prior].reverse(), chunks);
   const latencyMs = Date.now() - started;
   const [assistantMessage] = await db.insert(ragMessages).values({
     conversationId: conversation.id,
