@@ -9,10 +9,10 @@
   },
   "updated": "2026-07-26",
   "current": {
-    "phase": 27,
-    "headline": "Phase 27 (Synthesis: Evidence Chambers, Hypotheses, Humanities Gate) is IN PROGRESS as of 2026-07-26: 27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) shipped after a 3-run canary failure root-caused and fixed (token ceiling + title-matching contract); final canary passed 2 positions/$0.071 with repeat-run $0. 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) shipped with 5 hypotheses canary at $0.082 repeat $0; the reconciled research_revision CHECK closing D-25-7 was applied to production before the code merge (D-23-34 rule). 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md). Phase 28 (Research Surfaces) is complete: 28.1-28.6 all shipped, including 28.5 (Writer evidence insertion, merge 2dac37e). Phase 29.3 (reverse-direction improvements lane) complete: Writer exports + hybrid RAG + citation hardenings + classifier eval retrofits + dashboard module; Phase 29.1/29.2 in_progress.",
-    "summary": "Phase 27/28/29 triple merge wave (2026-07-26, Haiku 4.5): Evidence Chambers and Hypotheses shipped end-to-end with zero new product defects found; Phase 28 Research Surfaces complete (all six sub-phases shipped, including Writer evidence insertion). Register adds 9 new P2/P3 findings across the wave (D-25-1 through D-25-9): 6 fixed (D-25-1/2/3/5/7/9) and 3 open (D-25-4/6/8), including the Phase 28.5 merge's own D-25-8 (open, documented editor-architecture limit) and D-25-9 (fixed, schema-widening data-loss risk caught pre-merge). Updated defects: 150 total findings (134 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 13 open). d Phases 25–26 complete (tags phase-25-complete, phase-26-complete); Phases 27/28/29 in active development.",
-    "nextAction": "Phase 27 complete 27.1/27.2 pending 27.3 owner ratification gate; Phase 28 complete (all sub-phases 28.1-28.6 shipped); Phase 29 partial (29.1/29.2 lanes active); continue development across all three phases per the ultrcode orchestration directive."
+    "phase": 29,
+    "headline": "Phase 29 (Monitoring, Review UX, Reverse-Direction Improvements) is COMPLETE as of 2026-07-26: 29.1 (monitors, migration 0045, production-applied ledger 46), 29.2 (correction UX — applyResearchCorrection single mutation path, single corrections endpoint + revisions read, 15/15 spec), and 29.3 (reverse-direction improvements lane) all shipped and merged. Phase 28 (Research Surfaces) remains complete: 28.1-28.6 all shipped, including 28.5 (Writer evidence insertion, merge 2dac37e). Phase 27 (Synthesis) stays IN PROGRESS: 27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) and 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) both shipped; 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md). Phase 30 (program verification) is next; 27.3 humanities judge gate awaits owner ratification of the gold sets.",
+    "summary": "Phase 29 closeout (2026-07-26): the 29.2 correction-UX merge closed the phase's last open sub-phase with zero new product defects found in review (CorrectionEditor has no 'system' member, verified at both the TypeScript compile-time level and via a live e2e test proving the DB-level research_revision_no_auto_endorsement CHECK rolls back a rejected revision insert together with its paired object update; every write path is one db.transaction; excerpt edits re-validate as literal substrings and flip anchor_state to unanchored on mismatch, never silently; owner-scoped 404-not-403 on both new endpoints). Migration 0045 (Phase 29.1 monitors) is production-applied (ledger 46, drizzle check green). Register recount holds at 150 total findings (134 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 13 open) — the 29.2 merge added no new rows. Phases 25-26 complete (tags phase-25-complete, phase-26-complete); Phase 27 in progress (27.3 owner-gated); Phase 28 complete; Phase 29 now complete.",
+    "nextAction": "Phase 30 (program verification) is next; 27.3 humanities judge gate awaits owner ratification of the gold sets."
   },
   "program": {
     "name": "Phases 19-24 completion program + Phases 25-30 ScholarLens integration program",
@@ -1077,26 +1077,28 @@
     {
       "number": 29,
       "title": "Monitoring, Review UX, Reverse-Direction Improvements",
-      "state": "in_progress",
-      "summary": "29.3 (reverse-direction improvements: Writer exports, hybrid RAG enabled in production, citation hardenings, classifier eval retrofits + fixes, chips + dashboard) complete and merged. 29.1 (monitors + migration 0045) and 29.2 (correction UX) in_progress.",
-      "confirmation": "29.3 complete: all six reverse-direction items merged; 29.1/29.2 lanes running.",
+      "state": "complete",
+      "summary": "All three sub-phases shipped and merged. 29.1: research_monitor/research_monitor_hit (migration 0045, production-applied ledger 46), boss.schedule with in-handler cadence predicate, in-app delivery only. 29.2: applyResearchCorrection single mutation path into research_revision across all seven object types, single corrections endpoint + revision-history read, 15/15 spec. 29.3: Writer exports, hybrid RAG enabled in production, citation hardenings, classifier eval retrofits, dashboard + chips.",
+      "confirmation": "29.1/29.2/29.3 all complete and merged; migration 0045 production-applied before its code (D-23-34 rule); no new register findings from the 29.2 merge review.",
       "evidence": [
+        "29.1: research_monitor/research_monitor_hit schema, boss.schedule cadence predicate, in-app-only delivery; migration 0045 production-applied, ledger 46, drizzle check green.",
+        "29.2: single /api/research/corrections + /api/research/revisions endpoints; applyResearchCorrection is the only mutation path (one db.transaction per call); DB-level research_revision_no_auto_endorsement CHECK + TypeScript CorrectionEditor (no 'system' member) jointly make an auto-endorsed revision unwritable; rollback proven live by a dedicated e2e test; 15/15 research-corrections.spec.ts incl. axe. evidence_chamber_position has no verification_status/hidden column of its own, so chamber review stays chamber-granularity, not position-granularity, until a schema change adds one.",
         "29.3: Writer exports (BibTeX/RIS/APA/Chicago) shipped; hybrid RAG (dense+BM25) enabled in production; citation hardenings (label-then-validate) + classifier eval retrofits (D-25-1/D-25-2 gold-set fixes at F1 1.0000) merged; zero-LLM dashboard insight module shipped; evidence-strength chips integrated on existing surfaces."
       ],
       "subphases": [
         {
           "id": "29.1",
           "title": "Monitors + migration 0045",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "research_monitor/research_monitor_hit; boss.schedule with in-handler cadence predicate; in-app delivery only."
+          "summary": "research_monitor/research_monitor_hit; boss.schedule with in-handler cadence predicate; in-app delivery only. Migration 0045 production-applied, ledger 46."
         },
         {
           "id": "29.2",
           "title": "Correction UX",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "applyResearchCorrection as the only mutation path across all seven object types; history views; split/merge with related_object_ids."
+          "summary": "applyResearchCorrection is the ONLY mutation path into research_revision (verify/dispute/hide/restore across all six status-bearing object types, plus claim-only edit/reclassify/split/merge), each call one db.transaction so the object update and its revision row land together or not at all. Single /api/research/corrections endpoint (zod-discriminated union) + /api/research/revisions read endpoint, owner-scoped 404-not-403. CorrectionEditor has no 'system' member (compile-time-asserted in corrections.test.ts); atomicity proven live by a dedicated e2e test that casts past the type guard and confirms the DB-level research_revision_no_auto_endorsement CHECK rejects the write and rolls back the paired object update, leaving zero revision rows. Split/merge inherit anchors and re-validate excerpts as literal substrings; excerpt edits re-verify against live source text and flip anchor_state to unanchored on mismatch, never silently. Correction controls + revision-history drawer UI. 15/15 research-corrections.spec.ts, incl. zero axe wcag2a/wcag2aa violations. Known limitation: evidence_chamber_position has no independent verification_status/hidden column, so a chamber's neutral comparison is reviewed only at the chamber level today (position-level correction granularity is out of scope, would need a schema change)."
         },
         {
           "id": "29.3",
@@ -1106,7 +1108,7 @@
           "summary": "Writer exports (BibTeX/RIS/APA/Chicago), hybrid RAG retrieval (dense+BM25, production-enabled), label-then-validate citation hardening, classifier eval retrofit (D-25-1/D-25-2, macro-F1 1.0000), zero-LLM dashboard insight, evidence-strength chips. All merged."
         }
       ],
-      "nextAction": "29.3 complete; 29.1/29.2 active; complete when all three subphases merge."
+      "nextAction": "Phase 29 complete — all three subphases (29.1/29.2/29.3) merged."
     },
     {
       "number": 30,
