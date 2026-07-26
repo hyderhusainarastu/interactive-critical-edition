@@ -153,6 +153,25 @@ describe("ArxivAdapter", () => {
     // total — a regression that drops the throttle would run near-instantly.
     expect(Date.now() - start).toBeGreaterThanOrEqual(45);
   });
+
+  it("still spaces out requests when callers overlap concurrently, not just sequentially", async () => {
+    // A bare read-then-write throttle lets two calls started in the same
+    // tick both observe the same stale `lastRequestAt` and proceed
+    // immediately — this is exactly the shape `corpusImport.ts` uses when
+    // it fans out several searches at once. Firing three calls with
+    // `Promise.all` (not awaited one at a time) must still take at least
+    // 2 * the floor, proving they were serialized rather than racing.
+    global.fetch = mockFetchText(200, EMPTY_FEED);
+    process.env.ARXIV_MIN_INTERVAL_MS = "50";
+    const adapter = new ArxivAdapter();
+    const start = Date.now();
+    await Promise.all([
+      adapter.search(["first query"], opts),
+      adapter.search(["second query"], opts),
+      adapter.search(["third query"], opts),
+    ]);
+    expect(Date.now() - start).toBeGreaterThanOrEqual(95);
+  });
 });
 
 describe("lookupArxivById", () => {

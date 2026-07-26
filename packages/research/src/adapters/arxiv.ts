@@ -33,10 +33,27 @@ function minIntervalMs(): number {
 }
 
 let lastRequestAt = 0;
-async function politeThrottle(): Promise<void> {
-  const wait = lastRequestAt + minIntervalMs() - Date.now();
-  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
-  lastRequestAt = Date.now();
+
+/** Serializes every `politeThrottle()` call onto one promise chain so
+ *  concurrent callers (e.g. `corpusImport.ts` fanning out several searches
+ *  at once) can never both read `lastRequestAt` before either has written
+ *  it back — a bare read-then-write here would let two callers observe the
+ *  same stale timestamp and both proceed immediately, defeating the
+ *  politeness floor entirely under concurrency. Chaining onto
+ *  `throttleChain` (rather than a `Promise.resolve()` local) means each
+ *  call's read/wait/write happens strictly after the previous call's,
+ *  regardless of how many callers invoke this at once. `.catch(() => {})`
+ *  keeps the chain alive even if a link somehow rejects, since a wedged
+ *  chain would silently disable throttling for every future caller. */
+let throttleChain: Promise<void> = Promise.resolve();
+function politeThrottle(): Promise<void> {
+  const turn = throttleChain.then(async () => {
+    const wait = lastRequestAt + minIntervalMs() - Date.now();
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastRequestAt = Date.now();
+  });
+  throttleChain = turn.catch(() => {});
+  return turn;
 }
 
 // fast-xml-parser's normal (non-preserveOrder) mode is enough for Atom's flat

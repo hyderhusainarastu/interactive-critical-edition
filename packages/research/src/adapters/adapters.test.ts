@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CrossrefAdapter, OpenAlexAdapter, SemanticScholarAdapter, lookupOpenAlexById, lookupSemanticScholarById } from "./scholarly";
 import { TavilyAdapter, YouTubeAdapter } from "./web";
 import { MastodonAdapter } from "./social";
+import { ArxivAdapter } from "./arxiv";
+import { allAdapters, enabledAdapters } from "./index";
 
 /** Build a mock `fetch` returning a given status + json body. */
 function mockFetch(status: number, body: unknown) {
@@ -213,5 +215,22 @@ describe("direct-by-id lookups (Phase 28.2 corpus import)", () => {
     const { resource, attempt } = await lookupOpenAlexById("W0000000000");
     expect(resource).toBeNull();
     expect(attempt.status).toBe("queried");
+  });
+});
+
+describe("arXiv adapter isolation (Phase 28.2)", () => {
+  // `ArxivAdapter` deliberately powers only `corpusImport.ts`'s corpus
+  // search, not the general per-document discovery pipeline — see the
+  // module doc comment on `adapters/index.ts`. If a future edit adds it to
+  // either list, every existing analysis run's provider fan-out (and cost)
+  // changes silently; this test exists to make that an intentional,
+  // reviewed change rather than an accidental one.
+  it("is absent from allAdapters()", () => {
+    expect(allAdapters().some((a) => a.provider === "arxiv")).toBe(false);
+  });
+
+  it("is absent from enabledAdapters(), even though it is itself keyless-enabled", () => {
+    expect(new ArxivAdapter().isEnabled()).toBe(true);
+    expect(enabledAdapters().some((a) => a.provider === "arxiv")).toBe(false);
   });
 });
