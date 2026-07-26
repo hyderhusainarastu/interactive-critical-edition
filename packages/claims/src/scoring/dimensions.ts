@@ -1,6 +1,13 @@
 import { scoreEvidenceStrength, type EvidenceStrength } from "./evidenceStrength";
 import { scoreTextualSupport, type TextualSupport } from "./textualSupport";
 
+/** Bumped whenever either scorer's signal/weight logic changes — stored on
+ *  every `claim_score` row (`scorer_version`) and keys its dedup unique
+ *  alongside `(claim_id, dimension)`, so an algorithm change legitimately
+ *  re-scores instead of silently keeping a stale row (mirrors
+ *  `CLAIM_EXTRACTION_PROMPT_VERSION`'s role for extraction). */
+export const CLAIM_SCORER_VERSION = "dimensions-v1";
+
 export type ClaimScoreDimension = "evidence_strength" | "textual_support";
 
 export interface ClaimScore {

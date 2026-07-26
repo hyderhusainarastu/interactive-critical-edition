@@ -274,6 +274,13 @@
       "when": 1785037189187,
       "tag": "0038_research_workspace_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1785041321065,
+      "tag": "0039_research_claims",
+      "breakpoints": true
     }
   ]
 }

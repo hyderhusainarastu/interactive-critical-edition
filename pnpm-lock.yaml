@@ -19,6 +19,9 @@ importers:
       '@ice/ai-adapters':
         specifier: workspace:*
         version: link:../../packages/ai-adapters
+      '@ice/claims':
+        specifier: workspace:*
+        version: link:../../packages/claims
       '@ice/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -137,6 +140,9 @@ importers:
       '@ice/bibliographic':
         specifier: workspace:*
         version: link:../../packages/bibliographic
+      '@ice/claims':
+        specifier: workspace:*
+        version: link:../../packages/claims
       '@ice/config':
         specifier: workspace:*
         version: link:../../packages/config

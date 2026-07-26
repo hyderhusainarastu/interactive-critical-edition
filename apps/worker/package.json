@@ -12,6 +12,7 @@
   "dependencies": {
     "@ice/ai-adapters": "workspace:*",
     "@ice/bibliographic": "workspace:*",
+    "@ice/claims": "workspace:*",
     "@ice/config": "workspace:*",
     "@ice/consistency": "workspace:*",
     "@ice/db": "workspace:*",
