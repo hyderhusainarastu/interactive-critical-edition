@@ -45,6 +45,7 @@ export function ReaderShell({
   enablePhase12Reader = false,
   enablePhase18Rag = false,
   enableReaderClaimLayer = false,
+  enableEvidenceChips = false,
 }: {
   workId: string;
   embedded?: boolean;
@@ -55,6 +56,9 @@ export function ReaderShell({
   /** Phase 28.3: the Claims tab + in-text claim markers, behind
    *  `readerClaimLayer` (plan §"Web surfaces (reader)"). */
   enableReaderClaimLayer?: boolean;
+  /** Phase 29.3 reverse-direction lane, behind `phase25FeatureEnabled("research")`
+   *  (no new flag) — see `EditionAnnotationsPanel`'s own doc comment. */
+  enableEvidenceChips?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -635,7 +639,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableEvidenceChips={enableEvidenceChips} />
           </div>
         )}
       </div>
@@ -661,6 +665,7 @@ export function ReaderShell({
             flushTop={readerFocus}
             claims={enableReaderClaimLayer ? claims : []}
             enableReaderClaimLayer={enableReaderClaimLayer}
+            enableEvidenceChips={enableEvidenceChips}
             onLocatePassage={setActiveReaderBlockId}
           />
         ) : (

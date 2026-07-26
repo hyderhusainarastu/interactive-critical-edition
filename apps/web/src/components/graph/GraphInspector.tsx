@@ -1,9 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
+import { scoreBothDimensions } from "@ice/claims";
 import { TIER_LABEL, type ReaderLevel } from "@ice/roadmap";
 import { CATEGORY_META, categoryMetaFor, confidenceLabel } from "../shared/annotationMeta";
 import { RelationBadge } from "../shared/annotationPrimitives";
+import { ClaimScoreChips } from "../shared/ClaimScoreChips";
 import {
   CREDIBILITY_DIMENSIONS,
   CREDIBILITY_DIMENSION_LABEL,
@@ -63,14 +66,29 @@ function sourceTextLabel(status: string, accessStatus?: string | null) {
   return accessStatus === "open" ? "Open source record; no eligible source text has been indexed." : "Metadata only — Palimnote did not retrieve source text without license evidence.";
 }
 
-function EvidenceAnchors({ evidence }: { evidence: unknown }) {
+function EvidenceAnchors({ evidence, enableEvidenceChips }: { evidence: unknown; enableEvidenceChips: boolean }) {
   const record = evidence && typeof evidence === "object" ? evidence as { sourceClaims?: { claim?: string; excerpt?: string }[]; targetClaims?: { claim?: string; excerpt?: string }[] } : null;
   if (!record) return null;
   const anchors = [...(record.sourceClaims ?? []), ...(record.targetClaims ?? [])].slice(0, 6);
   if (!anchors.length) return null;
   return <ul className="mt-3 space-y-2 border-l-2 border-[var(--color-border)] pl-3 text-xs text-[var(--color-text-muted)]" aria-label="Grounded claim evidence">
-    {anchors.map((anchor, index) => <li key={index}><span className="font-medium text-[var(--color-text)]">{anchor.claim}</span>{anchor.excerpt ? <span> — “{anchor.excerpt}”</span> : null}</li>)}
+    {anchors.map((anchor, index) => (
+      <li key={index}>
+        <span className="font-medium text-[var(--color-text)]">{anchor.claim}</span>{anchor.excerpt ? <span> — “{anchor.excerpt}”</span> : null}
+        {/* Phase 29.3 reverse-direction lane, `phase25FeatureEnabled("research")`
+         *  (no new flag): scores this `work_claim.claim` text at render time
+         *  with `@ice/claims`'s `scoreBothDimensions` — pure regex, free,
+         *  nothing persisted (see `ClaimView`'s sibling doc comment in
+         *  EditionReader.tsx for the full rationale). */}
+        {enableEvidenceChips && anchor.claim && <EvidenceAnchorScoreChips text={anchor.claim} />}
+      </li>
+    ))}
   </ul>;
+}
+
+function EvidenceAnchorScoreChips({ text }: { text: string }) {
+  const scores = useMemo(() => scoreBothDimensions(text), [text]);
+  return <ClaimScoreChips scores={scores} className="mt-1 flex flex-wrap gap-1" />;
 }
 
 /**
@@ -159,6 +177,7 @@ export function GraphInspector({
   onCloseNode,
   onCloseLink,
   allNodes = [],
+  enableEvidenceChips = false,
 }: {
   selected: GraphNode | null;
   selectedLink: GraphLink | null;
@@ -171,6 +190,10 @@ export function GraphInspector({
    *  "why this, here" basis line (feature plan §2.4); never used to change
    *  which node is selected. */
   allNodes?: readonly GraphNode[];
+  /** Phase 29.3 reverse-direction lane, `phase25FeatureEnabled("research")`
+   *  (no new flag): shows render-time evidence-strength/textual-support
+   *  chips on `EvidenceAnchors`' `work_claim` text. */
+  enableEvidenceChips?: boolean;
 }) {
   const groupedConnections = groupConnectionsByFamily(connections);
   const creatorFact = selected ? factLine(selected.credibility?.creator) : null;
@@ -337,7 +360,7 @@ export function GraphInspector({
               {" · "}{selectedLink.directed === false ? "bidirectional" : "directed"}{selectedLink.provenance ? ` · provenance depth ${selectedLink.provenance.depth}` : ""}
               {selectedLink.readerLevel ? ` · ${READER_LEVEL_LABEL[selectedLink.readerLevel as ReaderLevel] ?? selectedLink.readerLevel}` : ""}
             </p>
-            {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} />}
+            {Boolean(selectedLink.evidence) && <EvidenceAnchors evidence={selectedLink.evidence} enableEvidenceChips={enableEvidenceChips} />}
             {(selectedLink.provenances?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Merged from {selectedLink.provenances!.length} evidence/provenance records.</p>}
           </div>
         );

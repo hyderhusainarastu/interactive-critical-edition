@@ -83,6 +83,7 @@ export function EditionAnnotationsPanel({
   flushTop = false,
   claims = [],
   enableReaderClaimLayer = false,
+  enableEvidenceChips = false,
   onLocatePassage,
 }: {
   edition: EditionWithReview;
@@ -110,6 +111,14 @@ export function EditionAnnotationsPanel({
    *  work, fetched separately from `edition` (a different table/route). */
   claims?: ResearchClaimSummary[];
   enableReaderClaimLayer?: boolean;
+  /** Phase 29.3 reverse-direction lane, `phase25FeatureEnabled("research")`
+   *  (no new flag): shows render-time evidence-strength/textual-support
+   *  chips on the generated critical-note cards' nested `generated_claim`
+   *  content — see `ClaimView`'s own doc comment. Independent of
+   *  `enableReaderClaimLayer` (the Claims tab): this is the "Critical
+   *  notes" tab, ships even when the Research workspace itself is off, as
+   *  long as `research` is on. */
+  enableEvidenceChips?: boolean;
   /** Scrolls the main reader pane to a text block — the "Locate passage"
    *  card affordance, reusing the same `activeReaderBlockId` mechanism the
    *  outline rail and bookmark selection already use. */
@@ -266,7 +275,7 @@ export function EditionAnnotationsPanel({
         {tab === "annotations" ? (
           <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} onSelectAnnotation={onSelectAnnotation} />
         ) : tab === "notes" ? (
-          <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} />
+          <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} enableEvidenceChips={enableEvidenceChips} />
         ) : tab === "apparatus" ? (
           <ApparatusTab edition={edition} kind={filters.apparatusKind} onKindChange={(apparatusKind) => onFiltersChange({ ...filters, apparatusKind })} />
         ) : tab === "terms" ? (
@@ -287,11 +296,13 @@ function NotesTab({
   activeId,
   resourceById,
   activeIsGeneratedNote,
+  enableEvidenceChips,
 }: {
   edition: EditionPayload;
   activeId: string | null;
   resourceById: Map<string, EditionResource>;
   activeIsGeneratedNote: boolean;
+  enableEvidenceChips: boolean;
 }) {
   if (edition.generatedNotes.length === 0 && edition.authorialNotes.length === 0) {
     return <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">No critical notes or source footnotes for this edition.</p>;
@@ -315,6 +326,7 @@ function NotesTab({
                 active={activeIsGeneratedNote && note.id === activeId}
                 matched={matchNoteToBlock(note, edition.blocks) !== null}
                 resourceById={resourceById}
+                enableEvidenceChips={enableEvidenceChips}
               />
             ))}
           </ul>
@@ -383,11 +395,13 @@ function CriticalNoteCard({
   active,
   matched,
   resourceById,
+  enableEvidenceChips,
 }: {
   note: EditionGeneratedNote;
   active: boolean;
   matched: boolean;
   resourceById: Map<string, EditionResource>;
+  enableEvidenceChips: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement | null>(null);
@@ -443,7 +457,7 @@ function CriticalNoteCard({
           />
           {note.claims.length > 0 && (
             <ul className="mt-2 flex flex-col gap-2">
-              {note.claims.map((claim) => <ClaimView key={claim.id} claim={claim} />)}
+              {note.claims.map((claim) => <ClaimView key={claim.id} claim={claim} enableEvidenceChips={enableEvidenceChips} />)}
             </ul>
           )}
         </div>
