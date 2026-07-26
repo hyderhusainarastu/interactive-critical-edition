@@ -1,0 +1,699 @@
+{
+  "generatedAt": "2026-07-26T04:21:24.670Z",
+  "counts": {
+    "empirical": 42,
+    "humanities": 36,
+    "negatives": 22,
+    "pooled": 100,
+    "distinctTexts": 197
+  },
+  "analysis": {
+    "text-embedding-3-small": {
+      "pooled": {
+        "guard": {
+          "gap": 0.40308000420776113,
+          "nSurface": 63,
+          "nReject": 37,
+          "overlapCount": 4,
+          "overlapFraction": 0.10810810810810811,
+          "weakSeparation": false,
+          "heavyOverlap": false,
+          "refuseThreshold": false
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 63,
+            "recall": 1,
+            "rejectedCount": 31,
+            "rejectionRate": 0.8378378378378378,
+            "f1": 0.9545454545454545
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 61,
+            "recall": 0.9682539682539683,
+            "rejectedCount": 35,
+            "rejectionRate": 0.9459459459459459,
+            "f1": 0.9682539682539683
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 60,
+            "recall": 0.9523809523809523,
+            "rejectedCount": 35,
+            "rejectionRate": 0.9459459459459459,
+            "f1": 0.96
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 54,
+            "recall": 0.8571428571428571,
+            "rejectedCount": 35,
+            "rejectionRate": 0.9459459459459459,
+            "f1": 0.9075630252100839
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 47,
+            "recall": 0.746031746031746,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.8545454545454546
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 43,
+            "recall": 0.6825396825396826,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.8113207547169812
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 31,
+            "recall": 0.49206349206349204,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.6595744680851063
+          }
+        ]
+      },
+      "empiricalOnly": {
+        "guard": {
+          "gap": 0.24915925812408096,
+          "nSurface": 33,
+          "nReject": 9,
+          "overlapCount": 4,
+          "overlapFraction": 0.4444444444444444,
+          "weakSeparation": false,
+          "heavyOverlap": true,
+          "refuseThreshold": true
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 33,
+            "recall": 1,
+            "rejectedCount": 3,
+            "rejectionRate": 0.3333333333333333,
+            "f1": 0.9166666666666666
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 32,
+            "recall": 0.9696969696969697,
+            "rejectedCount": 7,
+            "rejectionRate": 0.7777777777777778,
+            "f1": 0.955223880597015
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 32,
+            "recall": 0.9696969696969697,
+            "rejectedCount": 7,
+            "rejectionRate": 0.7777777777777778,
+            "f1": 0.955223880597015
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 27,
+            "recall": 0.8181818181818182,
+            "rejectedCount": 7,
+            "rejectionRate": 0.7777777777777778,
+            "f1": 0.8709677419354839
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 25,
+            "recall": 0.7575757575757576,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.8620689655172413
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 23,
+            "recall": 0.696969696969697,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.8214285714285715
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 19,
+            "recall": 0.5757575757575758,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.7307692307692308
+          }
+        ]
+      },
+      "humanitiesOnly": {
+        "guard": {
+          "gap": 0.44316900334210296,
+          "nSurface": 30,
+          "nReject": 6,
+          "overlapCount": 0,
+          "overlapFraction": 0,
+          "weakSeparation": false,
+          "heavyOverlap": false,
+          "refuseThreshold": false
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 30,
+            "recall": 1,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 1
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 29,
+            "recall": 0.9666666666666667,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.983050847457627
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 28,
+            "recall": 0.9333333333333333,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.9655172413793104
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 27,
+            "recall": 0.9,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.9473684210526316
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 22,
+            "recall": 0.7333333333333333,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.846153846153846
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 20,
+            "recall": 0.6666666666666666,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.8
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 12,
+            "recall": 0.4,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.5714285714285715
+          }
+        ]
+      },
+      "domainBreakdown": {
+        "ancient_philosophy": {
+          "n": 36,
+          "nSurface": 30,
+          "nReject": 6,
+          "meanSurface": 0.5858013225259456,
+          "meanReject": 0.14263231918384267,
+          "provisional": true
+        },
+        "cross_domain": {
+          "n": 22,
+          "nSurface": 0,
+          "nReject": 22,
+          "meanSurface": null,
+          "meanReject": 0.1317145830678232,
+          "provisional": true
+        },
+        "empirical": {
+          "n": 30,
+          "nSurface": 24,
+          "nReject": 6,
+          "meanSurface": 0.5561357060579452,
+          "meanReject": 0.3544684717177749,
+          "provisional": false
+        },
+        "information_retrieval": {
+          "n": 6,
+          "nSurface": 5,
+          "nReject": 1,
+          "meanSurface": 0.6645667712804527,
+          "meanReject": 0.34015074657832334,
+          "provisional": false
+        },
+        "llm_reasoning": {
+          "n": 6,
+          "nSurface": 4,
+          "nReject": 2,
+          "meanSurface": 0.6833026017856655,
+          "meanReject": 0.29120726030854993,
+          "provisional": false
+        }
+      }
+    },
+    "text-embedding-3-large": {
+      "pooled": {
+        "guard": {
+          "gap": 0.40740367648698417,
+          "nSurface": 63,
+          "nReject": 37,
+          "overlapCount": 8,
+          "overlapFraction": 0.21621621621621623,
+          "weakSeparation": false,
+          "heavyOverlap": false,
+          "refuseThreshold": false
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 61,
+            "recall": 0.9682539682539683,
+            "rejectedCount": 33,
+            "rejectionRate": 0.8918918918918919,
+            "f1": 0.953125
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 60,
+            "recall": 0.9523809523809523,
+            "rejectedCount": 35,
+            "rejectionRate": 0.9459459459459459,
+            "f1": 0.96
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 58,
+            "recall": 0.9206349206349206,
+            "rejectedCount": 36,
+            "rejectionRate": 0.972972972972973,
+            "f1": 0.9508196721311476
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 53,
+            "recall": 0.8412698412698413,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.9137931034482758
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 45,
+            "recall": 0.7142857142857143,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.8333333333333333
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 36,
+            "recall": 0.5714285714285714,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.7272727272727273
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 29,
+            "recall": 0.4603174603174603,
+            "rejectedCount": 37,
+            "rejectionRate": 1,
+            "f1": 0.6304347826086957
+          }
+        ]
+      },
+      "empiricalOnly": {
+        "guard": {
+          "gap": 0.2478981923482978,
+          "nSurface": 33,
+          "nReject": 9,
+          "overlapCount": 7,
+          "overlapFraction": 0.7777777777777778,
+          "weakSeparation": false,
+          "heavyOverlap": true,
+          "refuseThreshold": true
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 31,
+            "recall": 0.9393939393939394,
+            "rejectedCount": 5,
+            "rejectionRate": 0.5555555555555556,
+            "f1": 0.9117647058823529
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 31,
+            "recall": 0.9393939393939394,
+            "rejectedCount": 7,
+            "rejectionRate": 0.7777777777777778,
+            "f1": 0.9393939393939394
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 30,
+            "recall": 0.9090909090909091,
+            "rejectedCount": 8,
+            "rejectionRate": 0.8888888888888888,
+            "f1": 0.9374999999999999
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 27,
+            "recall": 0.8181818181818182,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.9
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 22,
+            "recall": 0.6666666666666666,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.8
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 18,
+            "recall": 0.5454545454545454,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.7058823529411764
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 13,
+            "recall": 0.3939393939393939,
+            "rejectedCount": 9,
+            "rejectionRate": 1,
+            "f1": 0.5652173913043478
+          }
+        ]
+      },
+      "humanitiesOnly": {
+        "guard": {
+          "gap": 0.42898487966358756,
+          "nSurface": 30,
+          "nReject": 6,
+          "overlapCount": 0,
+          "overlapFraction": 0,
+          "weakSeparation": false,
+          "heavyOverlap": false,
+          "refuseThreshold": false
+        },
+        "sweep": [
+          {
+            "threshold": 0.3,
+            "surfaced": 30,
+            "recall": 1,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 1
+          },
+          {
+            "threshold": 0.35,
+            "surfaced": 29,
+            "recall": 0.9666666666666667,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.983050847457627
+          },
+          {
+            "threshold": 0.4,
+            "surfaced": 28,
+            "recall": 0.9333333333333333,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.9655172413793104
+          },
+          {
+            "threshold": 0.45,
+            "surfaced": 26,
+            "recall": 0.8666666666666667,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.9285714285714286
+          },
+          {
+            "threshold": 0.5,
+            "surfaced": 23,
+            "recall": 0.7666666666666667,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.8679245283018869
+          },
+          {
+            "threshold": 0.55,
+            "surfaced": 18,
+            "recall": 0.6,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.7499999999999999
+          },
+          {
+            "threshold": 0.6,
+            "surfaced": 16,
+            "recall": 0.5333333333333333,
+            "rejectedCount": 6,
+            "rejectionRate": 1,
+            "f1": 0.6956521739130436
+          }
+        ]
+      },
+      "domainBreakdown": {
+        "ancient_philosophy": {
+          "n": 36,
+          "nSurface": 30,
+          "nReject": 6,
+          "meanSurface": 0.580134546952978,
+          "meanReject": 0.15114966728939036,
+          "provisional": true
+        },
+        "cross_domain": {
+          "n": 22,
+          "nSurface": 0,
+          "nReject": 22,
+          "meanSurface": null,
+          "meanReject": 0.09960081176543584,
+          "provisional": true
+        },
+        "empirical": {
+          "n": 30,
+          "nSurface": 24,
+          "nReject": 6,
+          "meanSurface": 0.5040710447001354,
+          "meanReject": 0.3025502493388195,
+          "provisional": false
+        },
+        "information_retrieval": {
+          "n": 6,
+          "nSurface": 5,
+          "nReject": 1,
+          "meanSurface": 0.670669725302405,
+          "meanReject": 0.3248526796511426,
+          "provisional": false
+        },
+        "llm_reasoning": {
+          "n": 6,
+          "nSurface": 4,
+          "nReject": 2,
+          "meanSurface": 0.6827045999368704,
+          "meanReject": 0.2937272419173698,
+          "provisional": false
+        }
+      }
+    }
+  },
+  "decision": {
+    "recommendation": "ship-3-small",
+    "refused": false,
+    "operatingThreshold": 0.35,
+    "decisionNotes": [
+      "3-small passes: gap=0.403 >= 0.05; operating threshold 0.35 gives recall=0.968, rejection=0.946, F1=0.968; humanities recall at that threshold = 0.967.",
+      "3-large comparison at same operating threshold 0.35: gapDelta=0.004 (need >=0.02), F1delta=-0.008 (need >=0.03).",
+      "3-large does not clear the promotion bar — 3-small remains the ship recommendation."
+    ],
+    "chosenModelForNovelty": "text-embedding-3-small",
+    "noveltyModelIsFallback": false
+  },
+  "novelty": {
+    "corpusSize": 42,
+    "rows": [
+      {
+        "sourceId": "eval_001",
+        "text": "ACE's structured, turn-by-turn feedback led to a statistically meaningful gain in negotiation outcomes between trials, whereas GPT-4's zero-shot feedback did not move the needle.",
+        "kind": "near_duplicate",
+        "distance": 0.0998
+      },
+      {
+        "sourceId": "eval_003",
+        "text": "Rehearsal's simulated-conflict rehearsal cut competitive tactics by roughly two-thirds and about doubled cooperative moves in a genuine, unassisted follow-up conflict.",
+        "kind": "near_duplicate",
+        "distance": 0.1613
+      },
+      {
+        "sourceId": "eval_005",
+        "text": "The negotiation transcripts came from 50 business-school students role-playing used-car deals, converted to text via Whisper with human corrections.",
+        "kind": "near_duplicate",
+        "distance": 0.2068
+      },
+      {
+        "sourceId": "eval_008",
+        "text": "Opening with a high first offer correlates positively with how much a negotiator ultimately earns (r=0.47, p<0.001).",
+        "kind": "near_duplicate",
+        "distance": 0.1524
+      },
+      {
+        "sourceId": "eval_011",
+        "text": "Trucey's theory-grounded AI coach cut negotiation fear more than either generic AI or a printed handbook did.",
+        "kind": "near_duplicate",
+        "distance": 0.1509
+      },
+      {
+        "sourceId": "ir_001",
+        "text": "Layering BM25 on top of a dense retriever pushed Recall@100 up from 0.71 to 0.88 relative to using the dense retriever alone.",
+        "kind": "near_duplicate",
+        "distance": 0.2431
+      },
+      {
+        "sourceId": "ir_003",
+        "text": "Reranking the top 100 candidates with a cross-encoder markedly boosted Precision@10 over the first-stage retriever's own ranking.",
+        "kind": "near_duplicate",
+        "distance": 0.0651
+      },
+      {
+        "sourceId": "llm_001",
+        "text": "Chain-of-thought prompting gave a substantial accuracy lift on multi-step arithmetic and symbolic-reasoning problems.",
+        "kind": "near_duplicate",
+        "distance": 0.0588
+      },
+      {
+        "sourceId": "llm_004",
+        "text": "Sampling several reasoning chains and taking the majority vote raised benchmark accuracy compared to plain greedy decoding.",
+        "kind": "near_duplicate",
+        "distance": 0.1377
+      },
+      {
+        "sourceId": "llm_005",
+        "text": "Grounding answers in retrieved passages cut down on factual hallucination for knowledge-heavy queries.",
+        "kind": "near_duplicate",
+        "distance": 0.242
+      },
+      {
+        "topic": "marine biology",
+        "text": "Deep-sea hydrothermal vent communities sustain primary production through chemosynthesis rather than photosynthesis, decoupling their food webs from sunlight entirely.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.8496
+      },
+      {
+        "topic": "urban planning",
+        "text": "Converting one-way downtown streets to two-way traffic reduced average vehicle speeds and measurably increased ground-floor retail foot traffic in the studied city center.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7354
+      },
+      {
+        "topic": "materials science",
+        "text": "Introducing a small fraction of graphene oxide into a cement matrix increased its compressive strength while reducing the material's overall carbon footprint per unit strength.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7926
+      },
+      {
+        "topic": "epidemiology",
+        "text": "Household crowding was a stronger predictor of tuberculosis transmission risk than individual nutritional status in the surveyed informal settlements.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7504
+      },
+      {
+        "topic": "avian ecology",
+        "text": "Migratory songbirds that departed their breeding grounds earlier in years with warmer springs arrived at wintering sites with measurably better body condition.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7918
+      },
+      {
+        "topic": "monetary economics",
+        "text": "Central bank forward guidance moved long-term bond yields more effectively when paired with a numerical inflation target than when issued as qualitative language alone.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.6974
+      },
+      {
+        "topic": "soil science",
+        "text": "No-till farming practices increased topsoil organic carbon content over a decade relative to conventional tillage on comparable plots.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7589
+      },
+      {
+        "topic": "linguistics",
+        "text": "Bilingual children acquiring two typologically distant languages showed no measurable delay in reaching early grammatical milestones compared to monolingual peers.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.6913
+      },
+      {
+        "topic": "astrophysics",
+        "text": "Fast radio bursts originating from magnetars in dense circumstellar environments showed systematically higher dispersion measures than those from more isolated sources.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.7438
+      },
+      {
+        "topic": "occupational health",
+        "text": "Standing-desk adoption in open-plan offices was associated with reduced self-reported lower-back discomfort but no measurable change in self-reported productivity.",
+        "kind": "genuinely_novel",
+        "sourceId": null,
+        "distance": 0.6594
+      }
+    ],
+    "percentiles": {
+      "p33": 0.17358500000000002,
+      "p67": 0.7251400000000001,
+      "min": 0.0588,
+      "max": 0.8496,
+      "mean": 0.449425,
+      "nearDuplicateMean": 0.15178999999999998,
+      "genuinelyNovelMean": 0.7470600000000001
+    }
+  },
+  "cost": {
+    "totalCostUsd": 0.00085881,
+    "byStage": [
+      {
+        "stage": "stage1-separation-embed",
+        "model": "text-embedding-3-small",
+        "inputTokens": 5655,
+        "costUsd": 0.00011310000000000001
+      },
+      {
+        "stage": "stage1-separation-embed",
+        "model": "text-embedding-3-large",
+        "inputTokens": 5655,
+        "costUsd": 0.0007351500000000001
+      },
+      {
+        "stage": "novelty-recalibration-embed",
+        "model": "text-embedding-3-small",
+        "inputTokens": 528,
+        "costUsd": 0.00001056
+      }
+    ]
+  }
+}
