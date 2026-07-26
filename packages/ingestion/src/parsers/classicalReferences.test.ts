@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BEKKER_WORK_RANGES, isLocusDominated, recognizeClassicalReference } from "./classicalReferences";
+import { BEKKER_WORK_RANGES, isLocusDominated, recognizeClassicalReference, splitLeadingClause } from "./classicalReferences";
 
 describe("recognizeClassicalReference — the real production fixture", () => {
   it("recognizes 'Af?;7.8.1151a20-8.' as Nicomachean Ethics via the standalone page-range path (1151 falls in [1094, 1181])", () => {
@@ -110,6 +110,66 @@ describe("isLocusDominated", () => {
 
   it("is true for a bare abbreviation plus locus with nothing else", () => {
     expect(isLocusDominated("NE 1151a20-8.")).toBe(true);
+  });
+});
+
+describe("splitLeadingClause", () => {
+  it("splits the real fused masthead fixture at the locus clause's own period", () => {
+    const fused =
+      "NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57 (September 2003): 3-23. Copyright ? 2003 by The Review of Metaphysics";
+    expect(splitLeadingClause(fused)).toEqual({
+      leading: "NE 7.8.1150b29-30 and 1151a5-7.",
+      remainder: "The Review of Metaphysics 57 (September 2003): 3-23. Copyright ? 2003 by The Review of Metaphysics",
+    });
+  });
+
+  it("recognizes the leading clause alone as Nicomachean Ethics once split (proves the fix's core mechanism)", () => {
+    const fused =
+      "NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57 (September 2003): 3-23. Copyright ? 2003 by The Review of Metaphysics";
+    const split = splitLeadingClause(fused)!;
+    expect(recognizeClassicalReference(split.leading)).toEqual({
+      author: "aristotle",
+      work: "Nicomachean Ethics",
+      query: "Aristotle, Nicomachean Ethics",
+      locus: "1150b29-30",
+    });
+    // The whole fused segment is still vetoed if tried directly — the fix's
+    // value is entirely in trying the leading clause FIRST.
+    expect(recognizeClassicalReference(fused)).toBeNull();
+  });
+
+  it("does not split a decimal-shaped locus (no whitespace after the internal periods)", () => {
+    expect(splitLeadingClause("NE 7.8.1150b29-30")).toBeNull();
+  });
+
+  it("does not split on an abbreviation period followed by a lowercase cue word (only the terminal period is a boundary, and it leaves no remainder)", () => {
+    expect(splitLeadingClause("As discussed, cf. the 2015 survey of the secondary literature.")).toBeNull();
+  });
+
+  it("returns null when the only period is the segment's own terminal period (single clause)", () => {
+    expect(splitLeadingClause("Pol. 1252a1.")).toBeNull();
+    expect(
+      splitLeadingClause('Smith, "A Note on Bekker 1106a14," Journal of Ancient Philosophy 12 (2015).'),
+    ).toBeNull();
+  });
+
+  it("returns null for a segment with no period at all", () => {
+    expect(splitLeadingClause("NE 1103a15")).toBeNull();
+  });
+});
+
+describe("classical recognition — leading-clause veto direction is preserved", () => {
+  it("a modern secondary-source citation whose OWN clause carries the locus and the year stays vetoed even when a second clause follows", () => {
+    // The year lives in the SAME clause as the locus here (unlike the fused
+    // masthead fixture, where the year is in a separate trailing clause) —
+    // splitLeadingClause must not tear the veto-triggering year away from
+    // the locus it's meant to protect.
+    const segment =
+      '"A Note on Bekker 1106a14," Journal of Ancient Philosophy 12 (2015): 45-67. Republished with permission from the Journal of Ancient Philosophy.';
+    const split = splitLeadingClause(segment);
+    expect(split).not.toBeNull();
+    expect(recognizeClassicalReference(split!.leading)).toBeNull();
+    expect(recognizeClassicalReference(segment)).toBeNull();
   });
 });
 

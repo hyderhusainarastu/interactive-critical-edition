@@ -1,4 +1,9 @@
-import { isLocusDominated, recognizeClassicalReference, type ClassicalReferenceMatch } from "./classicalReferences";
+import {
+  isLocusDominated,
+  recognizeClassicalReference,
+  splitLeadingClause,
+  type ClassicalReferenceMatch,
+} from "./classicalReferences";
 
 /**
  * Heuristic citation extraction (plan §10 step 6) — the cheap first
@@ -429,10 +434,30 @@ export function extractCitationMentions(
         // real production case this closes: "Needs bibliographic resolution
         // — Af?;7.8.1151a20-8.", a corrupted abbreviation plus a Bekker
         // number that used to clear the ">= 8 chars" bar below trivially).
+        //
+        // Try the segment's LEADING CLAUSE first, before the whole-segment
+        // veto ever runs: closes a second real production defect, GROBID
+        // fusing a journal's page-1 masthead onto genuine footnote content
+        // ("NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57
+        // (September 2003): 3-23. Copyright (c) 2003 ..."). The masthead's
+        // own year vetoed the whole segment even though the leading clause
+        // alone is a perfectly legible locus citation. When the leading
+        // clause resolves on its own, its (unvetoed) result wins and the
+        // masthead remainder is dropped entirely — never split out as a
+        // second candidate, mirroring the locus-dominated suppression
+        // above. A genuine secondary-source citation whose OWN clause
+        // carries both a locus and a modern year (e.g. an article titled
+        // "A Note on Bekker 1106a14," published 2015) stays vetoed exactly
+        // as before, because there the year lives in the SAME clause as
+        // the locus — `splitLeadingClause` never separates them, so the
+        // leading-clause attempt sees the veto trigger too.
         if (segmentCandidates.length === 0) {
-          const classical = recognizeClassicalReference(segment);
+          const split = splitLeadingClause(segment);
+          const leadingClassical = split ? recognizeClassicalReference(split.leading) : null;
+          const classical = leadingClassical ?? recognizeClassicalReference(segment);
+          const classicalText = leadingClassical ? split!.leading.trim() : segment.trim();
           if (classical) {
-            add(source, { text: segment.trim(), query: classical.query, kind: "reference", classical });
+            add(source, { text: classicalText, query: classical.query, kind: "reference", classical });
           } else if (!isLocusDominated(segment)) {
             const query = cleanQuery(segment);
             if (query.length >= 8) add(source, { text: segment.trim(), query, kind: "reference" });

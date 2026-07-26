@@ -268,6 +268,60 @@ describe("classical (Bekker/Stephanus) citation extraction gate", () => {
     expect(found[0].classical).toBeUndefined();
     expect(found[0].query).not.toBe("Aristotle, Nicomachean Ethics");
   });
+
+  // Real production defect (canary follow-up, 2026-07-26): GROBID glued the
+  // Brickhouse article's own page-1 journal masthead onto genuine
+  // footnote-3 content. The leading clause is a perfectly legible NE locus
+  // citation; the masthead's "2003" used to veto recognition of the WHOLE
+  // segment (`recognizeClassicalReference` sees the year, not just the
+  // locus clause), falling through to a junk "Needs bibliographic
+  // resolution" fallback stub instead.
+  it("recognizes a classical locus citation trapped in the leading clause of a footnote fused with a journal masthead, and drops the masthead entirely", () => {
+    const fused =
+      "NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57 (September 2003): 3-23. Copyright ? 2003 by The Review of Metaphysics";
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: fused, textBlockId: "note-fused-masthead", pageIndex: 1, blockOrder: 3, marker: "3" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      sourceType: "footnote",
+      query: "Aristotle, Nicomachean Ethics",
+      classical: { author: "aristotle", work: "Nicomachean Ethics" },
+    });
+    // The masthead is dropped entirely: the persisted text is only the
+    // leading locus clause, never the whole fused segment, and it is never
+    // emitted as a second, separate junk candidate.
+    expect(found[0].text).toBe("NE 7.8.1150b29-30 and 1151a5-7.");
+    expect(found[0].text).not.toContain("Review of Metaphysics");
+    expect(found[0].query).not.toMatch(/Needs bibliographic resolution/);
+  });
+
+  it("still vetoes a genuine modern secondary-source citation whose own clause carries the locus and year, even with a second clause glued on afterward", () => {
+    // Distinguishes the fused-masthead case above: here the year lives in
+    // the SAME clause as the locus (a real article citing itself by a
+    // Bekker number in its own title), so the leading-clause-first attempt
+    // must not accidentally strip the veto away.
+    const text =
+      '"A Note on Bekker 1106a14," Journal of Ancient Philosophy 12 (2015): 45-67. Republished with permission from the Journal of Ancient Philosophy.';
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text, textBlockId: "note-veto-clause", pageIndex: 4, blockOrder: 2, marker: "9" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0].classical).toBeUndefined();
+    expect(found[0].query).not.toBe("Aristotle, Nicomachean Ethics");
+  });
+
+  it("leaves a clean locus-only footnote (no glued second clause) unchanged", () => {
+    const found = extractCitationMentions([
+      { sourceType: "footnote", text: "Af?;7.8.1151a20-8.", textBlockId: "note-classical-1", pageIndex: 6, blockOrder: 3, marker: "12" },
+    ]);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatchObject({
+      query: "Aristotle, Nicomachean Ethics",
+      classical: { author: "aristotle", work: "Nicomachean Ethics" },
+    });
+    expect(found[0].text).toBe("Af?;7.8.1151a20-8.");
+  });
 });
 
 describe("footnote unbundling (real strings audited from the baseline_test fixture)", () => {

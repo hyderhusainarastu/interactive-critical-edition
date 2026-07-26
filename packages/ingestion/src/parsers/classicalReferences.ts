@@ -248,6 +248,52 @@ export function recognizeClassicalReference(segment: string): ClassicalReference
 }
 
 /**
+ * A period counts as a sentence boundary only when followed by whitespace
+ * then a capital letter, or when it is the segment's own final character
+ * (optionally followed by trailing whitespace). This deliberately does
+ * NOT split on a period with no following whitespace (a decimal-shaped
+ * locus like "7.8.1150b29-30", where every internal period is immediately
+ * followed by a digit) or one followed by a lowercase letter (an
+ * abbreviation like "cf. the ..."), so a locus and its corroborating
+ * abbreviation/cue are never torn apart by an accidental mid-clause period.
+ */
+const SENTENCE_BOUNDARY = /\.(?=\s+[A-Z]|\s*$)/;
+
+/**
+ * Splits `segment` at its first sentence-terminating period, returning the
+ * leading clause (inclusive of that period) and whatever remains — or
+ * `null` when the segment is already effectively one clause (no boundary
+ * found before the end, or the "boundary" found is just the segment's own
+ * end with nothing left over).
+ *
+ * Exists for `citations.ts`'s footnote/endnote fallback, which uses it to
+ * recognize a classical citation trapped in the FIRST clause of a segment
+ * that has unrelated prose glued onto it afterward. The real production
+ * case: GROBID fusing a journal's page-1 masthead onto genuine footnote
+ * content — "NE 7.8.1150b29-30 and 1151a5-7. The Review of Metaphysics 57
+ * (September 2003): 3-23. Copyright (c) 2003 by The Review of
+ * Metaphysics." The masthead's own year would otherwise veto recognition
+ * of the perfectly legible locus clause that precedes it, via
+ * `recognizeClassicalReference`'s modern-work veto reading the WHOLE
+ * segment. Calling `recognizeClassicalReference` on just the leading
+ * clause first sidesteps that — while the veto itself is untouched, so a
+ * real secondary-source citation whose OWN clause contains both a locus
+ * and a modern year (e.g. an article titled "A Note on Bekker 1106a14,"
+ * published 2015) still gets vetoed exactly as before, since in that case
+ * the leading clause and the veto-triggering year are the same clause.
+ */
+export function splitLeadingClause(segment: string): { leading: string; remainder: string } | null {
+  const trimmed = segment.trim();
+  const match = SENTENCE_BOUNDARY.exec(trimmed);
+  if (!match) return null;
+  const boundary = match.index + 1; // include the period itself
+  const leading = trimmed.slice(0, boundary);
+  const remainder = trimmed.slice(boundary).trim();
+  if (!remainder) return null; // the "boundary" found was just the segment's own end
+  return { leading, remainder };
+}
+
+/**
  * True when, after stripping every recognized abbreviation token and every
  * locus-shaped number from the segment, fewer than 8 alphabetic characters
  * remain — i.e. the segment is essentially just locus noise with no real
