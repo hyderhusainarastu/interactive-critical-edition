@@ -157,66 +157,199 @@ test.describe("Phase 12 workspace foundation", () => {
   // OWN toggle logic firing twice for a single physical click — on the
   // owner's hardware (mouse switch-bounce, some macOS trackpad double-fire
   // cases), a single physical click delivers two full pointerdown/click
-  // event pairs roughly 74-100ms apart, proven by live in-browser
-  // instrumentation: pointerdown/click → open → NODE-ADDED → ~74ms later a
-  // SECOND pointerdown/click on the SAME node → close → NODE-REMOVED. No
-  // outside-click handler exists in this codebase and no remount occurs
-  // (node identity stable) — this is purely `isOpen ? close() : open()`
-  // reading its own just-set state. Fixed by `useReopenGuard` (see that
-  // hook's doc comment): a close attempt within 250ms of the panel opening
-  // is ignored, so a genuine deliberate click-to-close still works once
-  // that window has passed (asserted below), while a bounced echo of the
-  // opening click does not close it.
-  test("survives two click events ~75ms apart on the same trigger (switch-bounce/double-fire), staying open", async ({ page }) => {
+  // event pairs at a VARIABLE gap apart. A first fix (`useReopenGuard(250)`)
+  // provably suppressed bounces up to ~250ms, but the owner kept seeing the
+  // panel close anyway — their hardware's real bounce gap sometimes exceeds
+  // any fixed window, so a timing window is a losing game no matter how
+  // wide. The definitive fix removes the window entirely: a pointer click
+  // on the trigger while the panel is already open now does NOTHING (see
+  // `AppShell.tsx`'s trigger `onClick` handlers, `event.detail >= 1`
+  // branch), so no bounce gap, however large, can close the panel via the
+  // trigger itself. Real dismissal-by-pointer now happens through
+  // `useOutsideMenuClose` (tested separately below); the panel's own
+  // close button and Escape are unaffected.
+  //
+  // Parametrized across three gaps — 75ms (the originally captured bounce
+  // gap), 400ms and 600ms (both comfortably past the OLD 250ms guard
+  // window) — because the whole point of the redesign is that NO gap can
+  // close the panel via the trigger anymore. The 400ms/600ms cases are the
+  // actual red→green proof: run this exact test (unchanged) against the
+  // pre-fix tree — `git stash push -u -- apps/web/src/hooks/useReopenGuard.ts
+  // apps/web/src/hooks/useOutsideMenuClose.ts apps/web/src/components/app/
+  // AppShell.tsx "apps/web/src/app/(app)/works/[workId]/reader/
+  // RagChatPanel.tsx"`, rebuild, and only the 400ms/600ms cases fail (the
+  // second click lands past the 250ms guard window and genuinely closes the
+  // panel); `git stash pop`, rebuild, and all three pass.
+  for (const gapMs of [75, 400, 600]) {
+    test(`survives two click events ~${gapMs}ms apart on the same trigger (switch-bounce/double-fire), staying open`, async ({ page }) => {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      async function doubleFireClick(locator: ReturnType<typeof page.getByRole>) {
+        const box = await locator.boundingBox();
+        if (!box) throw new Error("trigger has no layout box");
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.up();
+        await page.waitForTimeout(gapMs);
+        await page.mouse.down();
+        await page.mouse.up();
+      }
+
+      // A safe, non-interactive outside target for the deliberate-close
+      // assertion below — a raw native `mouse.down()` on the trigger (as
+      // `doubleFireClick` does, unlike Playwright's own higher-level
+      // `.click()`) moves DOM focus to that button by itself (ordinary
+      // browser mousedown-focuses-the-target behavior), which lands focus
+      // OUTSIDE the panel's own DOM subtree — so Escape (scoped to the
+      // panel's `onKeyDown`) would not reliably reach it after a bounce.
+      // Outside-click is both the realistic next user action and the
+      // deliberate-close path guaranteed to work regardless of where the
+      // bounce left focus.
+      const background = page.getByRole("heading", { level: 1 });
+
+      const preferencesTrigger = page.getByRole("button", { name: "Workspace preferences" });
+      await doubleFireClick(preferencesTrigger);
+      const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
+      await expect(preferencesDialog).toBeVisible();
+      // Not just an instant-after check: staying visible across a longer
+      // real wait is the actual proof, not just surviving the immediate
+      // aftermath of the second click.
+      await page.waitForTimeout(300);
+      await expect(preferencesDialog).toBeVisible();
+      // A genuine, deliberate close must still work — the fix must not make
+      // the panel permanently sticky.
+      await background.click();
+      await expect(preferencesDialog).toBeHidden();
+
+      // `exact` avoids matching the panel's own "Close account menu" button,
+      // whose accessible name otherwise substring-contains this one once the
+      // panel is open (the same ambiguity class D-19-1 fixed once already
+      // for "Theme").
+      const profileTrigger = page.getByRole("button", { name: "Account menu", exact: true });
+      await doubleFireClick(profileTrigger);
+      const profileDialog = page.getByRole("dialog", { name: "Account menu" });
+      await expect(profileDialog).toBeVisible();
+      await page.waitForTimeout(300);
+      await expect(profileDialog).toBeVisible();
+      await background.click();
+      await expect(profileDialog).toBeHidden();
+    });
+  }
+
+  // Live-issue fix lane (2026-07-25, continued): the outside-click half of
+  // the redesign — this codebase had no outside-click-to-close at all before
+  // this fix. `useOutsideMenuClose` listens for `pointerdown` in the capture
+  // phase and excludes both the trigger and the panel (siblings inside one
+  // `position: relative` container), so it cannot be confused by the very
+  // click that opened the menu (see that hook's doc comment for the full
+  // sequencing argument).
+  test("a pointer click on the page background closes an open preferences/account menu, without stealing focus back to the trigger", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(EMAIL);
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL("/dashboard");
 
-    async function doubleFireClick(locator: ReturnType<typeof page.getByRole>) {
-      const box = await locator.boundingBox();
-      if (!box) throw new Error("trigger has no layout box");
-      const x = box.x + box.width / 2;
-      const y = box.y + box.height / 2;
-      await page.mouse.move(x, y);
-      await page.mouse.down();
-      await page.mouse.up();
-      // The captured production timeline: ~74-100ms between the two
-      // synthetic event pairs from one physical click.
-      await page.waitForTimeout(75);
-      await page.mouse.down();
-      await page.mouse.up();
-    }
+    // A real, non-interactive page element well outside either menu's
+    // container — the dashboard's own `PageHeader` heading.
+    const background = page.getByRole("heading", { level: 1 });
+    await expect(background).toBeVisible();
 
     const preferencesTrigger = page.getByRole("button", { name: "Workspace preferences" });
-    await doubleFireClick(preferencesTrigger);
+    await preferencesTrigger.click();
     const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
     await expect(preferencesDialog).toBeVisible();
-    // Not just an instant-after check: the bug's second, closing event
-    // lands ~75ms after the first, which the guard window (250ms) covers,
-    // but staying visible across a longer real wait is the actual proof.
-    await page.waitForTimeout(300);
-    await expect(preferencesDialog).toBeVisible();
-
-    // A genuine, deliberate close well past the guard window must still
-    // work — the fix must not make the panel permanently sticky.
-    await page.waitForTimeout(300);
-    await preferencesTrigger.click();
+    await background.click();
     await expect(preferencesDialog).toBeHidden();
+    // Deliberately the opposite of the Escape/explicit-close convention:
+    // an outside click must not yank focus back to the trigger — see
+    // `useOutsideMenuClose`'s doc comment.
+    await expect(preferencesTrigger).not.toBeFocused();
 
-    // `exact` avoids matching the panel's own "Close account menu" button,
-    // whose accessible name otherwise substring-contains this one once the
-    // panel is open (the same ambiguity class D-19-1 fixed once already for
-    // "Theme") — this locator is reused below to click-close the panel.
     const profileTrigger = page.getByRole("button", { name: "Account menu", exact: true });
-    await doubleFireClick(profileTrigger);
+    await profileTrigger.click();
     const profileDialog = page.getByRole("dialog", { name: "Account menu" });
     await expect(profileDialog).toBeVisible();
-    await page.waitForTimeout(300);
+    await background.click();
+    await expect(profileDialog).toBeHidden();
+    await expect(profileTrigger).not.toBeFocused();
+  });
+
+  // Live-issue fix lane (2026-07-25, continued): keyboard activation is
+  // deliberately exempt from the open-only-pointer restriction — a real
+  // second keypress is never bounce-fast, and screen-reader users expect an
+  // aria-expanded trigger button to toggle. The click event's own `detail`
+  // (0 for a keyboard-synthesized click, >=1 for a real pointer click) is
+  // what the trigger's `onClick` handler checks to tell the two apart.
+  test("keyboard Enter toggles the preferences and account menus open, then closed", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const preferencesTrigger = page.getByRole("button", { name: "Workspace preferences" });
+    await preferencesTrigger.focus();
+    await expect(preferencesTrigger).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press("Enter");
+    const preferencesDialog = page.getByRole("dialog", { name: "Workspace preferences" });
+    await expect(preferencesDialog).toBeVisible();
+    await expect(preferencesTrigger).toHaveAttribute("aria-expanded", "true");
+
+    // Opening moves focus into the panel (its own close button, existing
+    // convention) — refocusing the trigger here simulates a keyboard user
+    // tabbing back to it, which is what actually exercises the trigger's
+    // own toggle-to-close path rather than the panel's separate close
+    // button.
+    await preferencesTrigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(preferencesDialog).toBeHidden();
+    await expect(preferencesTrigger).toHaveAttribute("aria-expanded", "false");
+    // `closePreferences` restores focus via `requestAnimationFrame`, which
+    // can still be pending here — waiting for it to actually land avoids a
+    // race where the next `profileTrigger.focus()` below gets silently
+    // overridden by that delayed rAF callback re-focusing the preferences
+    // trigger a tick later (observed flake: Enter then re-opened
+    // preferences instead of opening the account menu).
+    await expect(preferencesTrigger).toBeFocused();
+
+    const profileTrigger = page.getByRole("button", { name: "Account menu", exact: true });
+    await profileTrigger.focus();
+    await expect(profileTrigger).toHaveAttribute("aria-expanded", "false");
+    await page.keyboard.press("Enter");
+    const profileDialog = page.getByRole("dialog", { name: "Account menu" });
     await expect(profileDialog).toBeVisible();
-    await page.waitForTimeout(300);
+    await expect(profileTrigger).toHaveAttribute("aria-expanded", "true");
+
+    await profileTrigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(profileDialog).toBeHidden();
+    await expect(profileTrigger).toHaveAttribute("aria-expanded", "false");
+  });
+
+  // Live-issue fix lane (2026-07-25, continued): the redesign leaves
+  // item-click-to-close untouched (point 3 of the design) — this exercises
+  // that path directly for the account menu, since nothing else in this
+  // file previously clicked one of `ProfileMenu`'s own links.
+  test("clicking an account menu item closes the menu and navigates", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    const profileTrigger = page.getByRole("button", { name: "Account menu", exact: true });
     await profileTrigger.click();
+    const profileDialog = page.getByRole("dialog", { name: "Account menu" });
+    await expect(profileDialog).toBeVisible();
+    await profileDialog.getByRole("link", { name: "Profile" }).click();
+    await page.waitForURL("**/account/profile");
     await expect(profileDialog).toBeHidden();
   });
 

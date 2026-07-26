@@ -12,6 +12,7 @@ import { Wordmark } from "@/components/site/Wordmark";
 import { SoundToggle } from "@/components/site/SoundToggle";
 import { PageTransition } from "@/components/shared/PageTransition";
 import { useReopenGuard } from "@/hooks/useReopenGuard";
+import { useOutsideMenuClose } from "@/hooks/useOutsideMenuClose";
 import { AppFooter } from "./AppFooter";
 import { CommandPalette } from "./CommandPalette";
 import { GlobalRagSidebar } from "./GlobalRagSidebar";
@@ -82,16 +83,21 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
   const focusModeExitRef = useRef<HTMLButtonElement>(null);
   const focusModeFocusRequestRef = useRef<"enter" | "exit" | null>(null);
+  // Wraps trigger + panel as siblings (see each render below) so a single
+  // ref serves both `useOutsideMenuClose`'s trigger-exclusion and its panel
+  // containment check — see that hook's doc comment for why excluding the
+  // trigger from "outside" is what makes hardware bounce harmless here.
+  const preferencesContainerRef = useRef<HTMLDivElement>(null);
+  const profileContainerRef = useRef<HTMLDivElement>(null);
   const preferencesMenuId = useId();
   const ragSidebarId = useId();
   const profileMenuId = useId();
-  // Switch-bounce / trackpad double-fire guard (see `useReopenGuard`'s own
-  // doc comment): each of these three menus is toggled by a single trigger
-  // button, and each was observed opening then instantly closing again from
-  // one physical click on affected hardware.
-  const preferencesReopenGuard = useReopenGuard();
-  const ragReopenGuard = useReopenGuard();
-  const profileReopenGuard = useReopenGuard();
+  // The RAG sidebar is a toggle-style trigger, not a menu (see
+  // `useReopenGuard`'s doc comment for why it alone keeps this guard, now
+  // with a widened 450ms window). The profile/preferences menus moved to the
+  // open-only-pointer-click + outside-pointerdown design below — no timing
+  // window, see `useOutsideMenuClose`.
+  const ragReopenGuard = useReopenGuard(450);
   const { preferences, updatePreferences } = useWorkspacePreferences();
   const routeWorkId = WORK_ROUTE_PATTERN.exec(pathname)?.[1] ?? null;
   const navItems: NavItem[] = [
@@ -156,6 +162,14 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
     setPreferencesOpen(false);
     window.requestAnimationFrame(() => preferencesTriggerRef.current?.focus());
   }
+  // Outside-click close, deliberately WITHOUT the focus-return above: the
+  // user just pressed somewhere else on the page (e.g. a link, another
+  // control), and yanking focus back to the trigger would fight whatever
+  // they were actually doing — standard menu UX leaves focus where the
+  // dismissing press landed. See `useOutsideMenuClose`'s doc comment.
+  function closePreferencesFromOutside() {
+    setPreferencesOpen(false);
+  }
   function closeRag() {
     setRagOpen(false);
     window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
@@ -164,6 +178,12 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
     setProfileOpen(false);
     window.requestAnimationFrame(() => profileTriggerRef.current?.focus());
   }
+  function closeProfileFromOutside() {
+    setProfileOpen(false);
+  }
+
+  useOutsideMenuClose(preferencesOpen, closePreferencesFromOutside, preferencesContainerRef);
+  useOutsideMenuClose(profileOpen, closeProfileFromOutside, profileContainerRef);
 
   return (
     <div className="app-shell flex min-h-full min-w-0 flex-col overflow-x-clip">
@@ -195,8 +215,19 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
               <button type="button" className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs ${preferences.theme === "light" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "light"} onClick={() => updatePreferences({ theme: "light" })}>Light</button>
               <button type="button" className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs ${preferences.theme === "dark" ? "bg-[var(--color-surface)] font-medium" : "text-[var(--color-text-muted)]"}`} aria-pressed={preferences.theme === "dark"} onClick={() => updatePreferences({ theme: "dark" })}>Dark</button>
             </div>
-            <div className="relative">
-              <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={() => { if (preferencesOpen) { if (preferencesReopenGuard.shouldIgnoreClose()) return; closePreferences(); } else { setPreferencesOpen(true); preferencesReopenGuard.markOpened(); } }}>⚙</button>
+            <div className="relative" ref={preferencesContainerRef}>
+              {/* Open-only-for-pointer design (live-issue fix, 2026-07-25):
+                  a pointer click (`event.detail >= 1`) while open does
+                  nothing — no timing window for hardware bounce to beat.
+                  Keyboard activation (`event.detail === 0`, Enter/Space on a
+                  focused button) keeps full open<->close toggle behavior,
+                  since a deliberate second keypress is never bounce-fast and
+                  screen-reader users expect an aria-expanded button to
+                  toggle. Real dismissal-by-pointer now happens via
+                  `useOutsideMenuClose` above, plus Escape/the panel's own
+                  close button (both still call `closePreferences` directly,
+                  unaffected by this). */}
+              <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesOpen} aria-controls={preferencesMenuId} onClick={(event) => { if (preferencesOpen) { if (event.detail === 0) closePreferences(); return; } setPreferencesOpen(true); }}>⚙</button>
               {preferencesOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={setFocusMode} readerLevel={readerLevel} onReaderLevelChange={updateReaderLevel} onClose={closePreferences} />}
             </div>
             {ragEnabled && (
@@ -217,7 +248,9 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
                 </svg>
               </button>
             )}
-            <div className="relative hidden lg:block">
+            <div className="relative hidden lg:block" ref={profileContainerRef}>
+              {/* Same open-only-for-pointer / keyboard-toggle design as the
+                  preferences trigger above — see that button's comment. */}
               <button
                 ref={profileTriggerRef}
                 type="button"
@@ -226,7 +259,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
                 aria-label="Account menu"
                 aria-expanded={profileOpen}
                 aria-controls={profileMenuId}
-                onClick={() => { if (profileOpen) { if (profileReopenGuard.shouldIgnoreClose()) return; closeProfile(); } else { setProfileOpen(true); profileReopenGuard.markOpened(); } }}
+                onClick={(event) => { if (profileOpen) { if (event.detail === 0) closeProfile(); return; } setProfileOpen(true); }}
               >
                 <InitialsAvatar userId={userId} name={name} imageSrc={image} size={30} />
               </button>
