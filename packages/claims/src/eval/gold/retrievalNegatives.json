@@ -1,0 +1,552 @@
+[
+  {
+    "id": "negx_001",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Akrasia denotes a failure to act on one's own better judgment under the pull of appetite or emotion, distinct from vice.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII (baseline glossary)",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "ACE's structured, turn-by-turn feedback produced a statistically significant improvement in negotiation performance between trials, while unstructured zero-shot feedback did not.",
+      "paper_title": "ACE: A LLM-based Negotiation Coaching System",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A classical moral-psychology definition and an empirical negotiation-training finding share no topical or logical overlap.",
+    "split": "train"
+  },
+  {
+    "id": "negx_002",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "Aristotle's sixfold moral typology places superhuman virtue, virtue, continence, incontinence, vice, and brutishness as distinct character categories.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII.1",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Combining a lexical BM25 retrieval pass with dense retrieval substantially raised Recall@100 relative to dense retrieval alone.",
+      "paper_title": "Hybrid Sparse-Dense Retrieval for Open-Domain QA",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "An ancient moral typology and a modern information-retrieval benchmark result have nothing in common beyond both being scholarly claims.",
+    "split": "train"
+  },
+  {
+    "id": "negx_003",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "llm_reasoning"
+    ],
+    "claim_a": {
+      "text": "Aristotle's two incompatible portraits of the vicious person are best explained, not resolved, because together they capture how radical vice appears to an ethical reader.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Larger language models were found to hallucinate more confidently in the reported experiments, producing fluent but false statements harder for users to detect.",
+      "paper_title": "Confident Hallucination at Scale",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A thesis about Aristotelian textual inconsistency and an empirical LLM-scale hallucination finding share no relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_004",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "The virtuous person is a friend to himself because his rational and non-rational parts agree and he wishes himself well.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.4",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Participants trained with Rehearsal's simulated conflict practice substantially reduced competitive strategy use and increased cooperative strategy use in a subsequent real, unaided conflict.",
+      "paper_title": "Rehearsal: Simulating Conflict to Teach Conflict Resolution",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A claim about Aristotelian self-friendship and an empirical conflict-training transfer result are unrelated.",
+    "split": "test"
+  },
+  {
+    "id": "negx_005",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "Homer's Odyssey XI presents shades of the dead as nearly insubstantial yet capable of fear and of suffering deserved punishment.",
+      "paper_title": "Homer, Odyssey XI",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Retrieval accuracy plateaued beyond a moderate embedding dimensionality and degraded at very high dimensions in the reported experiments.",
+      "paper_title": "Diminishing Returns in High-Dimensional Embeddings",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A Homeric interpretive claim and an embedding-dimensionality scaling result share no logical relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_006",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Virtuous agents choose for the sake of the fine (kalon), while vicious agents orient toward the merely expedient (sumpheron).",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "A theory-driven AI negotiation coach produced a larger reduction in negotiation-related fear than either a generic AI chatbot or a static handbook.",
+      "paper_title": "Does AI Coaching Prepare us for Workplace Negotiations?",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A definitional distinction in Aristotelian ethics and an empirical psychological-outcome comparison bear no relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_007",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "llm_reasoning"
+    ],
+    "claim_a": {
+      "text": "A vicious person can be internally harmonious at one time and later conflicted once growing appetite defeats a plan for maximal pleasure.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Majority voting over independently sampled reasoning paths raised accuracy on arithmetic and commonsense benchmarks.",
+      "paper_title": "Sampling-and-Voting for Reasoning",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A developmental reconciliation of Aristotle's account of vice and a self-consistency decoding result are unrelated.",
+    "split": "test"
+  },
+  {
+    "id": "negx_008",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "Syngnome ranges in sense across acknowledgment, fellow-feeling, allowance, excuse, and pardon, with no single fixed modern equivalent.",
+      "paper_title": "Liddell, Scott, Jones and McKenzie, A Greek-English Lexicon (9th ed.), s.v. syngnome",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Cross-encoder reranking of top candidates substantially improved Precision@10 over the first-stage retriever but added several hundred milliseconds of query latency.",
+      "paper_title": "Reranking for Precision in Two-Stage Retrieval / The Latency Cost of Neural Reranking",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A Greek lexical-range fact and a two-stage retrieval latency/precision tradeoff have no logical relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_009",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Plato's Republic Book IX portrays the tyrannical soul as self-punishing and internally divided.",
+      "paper_title": "Plato, Republic IX",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The Trucey study recruited 267 participants through Prolific and randomly assigned them across three conditions in a 2:1:1 ratio.",
+      "paper_title": "Does AI Coaching Prepare us for Workplace Negotiations?",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A Platonic comparative claim and a study's recruitment/randomization method are unrelated.",
+    "split": "train"
+  },
+  {
+    "id": "negx_010",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "llm_reasoning"
+    ],
+    "claim_a": {
+      "text": "Vice is best understood as a settled commitment to a corrupted conception of the good, arrived at through mistaken practical reasoning.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Retrieval-augmented generation reduced factual hallucination on knowledge-intensive queries by grounding model answers in retrieved passages.",
+      "paper_title": "Retrieval-Augmented Generation for Knowledge Tasks",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A thesis about Aristotelian vice and an empirical RAG hallucination-reduction finding share no relationship.",
+    "split": "test"
+  },
+  {
+    "id": "negx_011",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Ethical inquiry should seek only the precision its subject matter allows, not the exactness proper to mathematics.",
+      "paper_title": "Aristotle, Nicomachean Ethics I.3",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Making a high initial offer in a negotiation was found to correlate positively and significantly with eventual earnings.",
+      "paper_title": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A methodological principle about ethical inquiry's precision and an empirical negotiation-tactics correlation are unrelated.",
+    "split": "train"
+  },
+  {
+    "id": "negx_012",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "The vicious person lacks a stable, unified rational conception of the good; his apparent commitments merely track whatever pleasure is present.",
+      "paper_title": "Muller, Aristotle on Vice",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The retrieval corpus was deduplicated using MinHash locality-sensitive hashing at a Jaccard similarity threshold of 0.8 before indexing.",
+      "paper_title": "Scaling Embedding Dimensions for Retrieval",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A characterization of Aristotelian vice and a corpus-preprocessing method detail have no logical relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_013",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "An incurable form of vice matches Book VII's unregretful portrait, and a curable form matches Book IX.4's regretful portrait -- two distinct varieties rather than one inconsistently described type.",
+      "paper_title": "Solis, Curable and Incurable Vice in Aristotle",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "ACE used GPT-4 for its negotiation chat agent and GPT-4o for feedback generation, chosen for speed after expert evaluation.",
+      "paper_title": "ACE: A LLM-based Negotiation Coaching System",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A curable/incurable-vice reconciliation thesis and a model-selection engineering detail are unrelated.",
+    "split": "test"
+  },
+  {
+    "id": "negx_014",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "llm_reasoning"
+    ],
+    "claim_a": {
+      "text": "Parmenides' fragment 4 concerns whether what is absent can nonetheless be brought before thought as present.",
+      "paper_title": "Parmenides, fragment 4",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The model evaluated for chain-of-thought prompting was instruction-tuned on 1.5 million examples drawn from a mixture of twelve task families.",
+      "paper_title": "Chain-of-Thought Prompting Elicits Reasoning",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A Presocratic fragment's content and a training-data composition detail have no logical relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_015",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Vice arises through habituation, a reason-corrupting process of becoming bad distinct from a single akratic lapse.",
+      "paper_title": "Barney, Becoming Bad: Aristotle on Vice and Moral Habituation",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Frontline humanitarian negotiators found process-oriented AI tools that surfaced options and risks more effective than tools providing direct strategy recommendations.",
+      "paper_title": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A habituation account of Aristotelian vice and a qualitative finding about negotiator tool preferences are unrelated.",
+    "split": "train"
+  },
+  {
+    "id": "negx_016",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "At NE VII 1148a17-18, Aristotle describes the intemperate person as pursuing excessive pleasures without desire, or with only weak desire, for them.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Trucey's responses were substantially less verbose than a generic chatbot's and scored significantly higher on standard readability measures.",
+      "paper_title": "Does AI Coaching Prepare us for Workplace Negotiations?",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A textual claim about intemperate desire and an empirical readability comparison are unrelated.",
+    "split": "test"
+  },
+  {
+    "id": "negx_017",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "Book IX.4's conflicted, regretful portrait of vice may reflect an earlier stage of composition, locally influenced by the Platonic Lysis.",
+      "paper_title": "Annas, Plato and Aristotle on Friendship and Altruism",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Query expansion with generated paraphrases improved recall for short, underspecified queries by several points.",
+      "paper_title": "Generative Query Expansion for Sparse Queries",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A chronological-composition hypothesis about Aristotle's text and a query-expansion recall result share no relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_018",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Aquinas distinguishes sin from passion, sin from ignorance, and deliberate badness (certa malitia) as three separate categories.",
+      "paper_title": "Aquinas, Summa Theologiae (per Irwin, note 1)",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Theory-grounded prompting significantly outperformed standard instruction-following prompting for generating realistic conflict simulations.",
+      "paper_title": "Rehearsal: Simulating Conflict to Teach Conflict Resolution",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A medieval scholastic distinction about sin and an empirical prompting-method comparison are unrelated.",
+    "split": "train"
+  },
+  {
+    "id": "negx_019",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "llm_reasoning"
+    ],
+    "claim_a": {
+      "text": "Philautia, self-love, is equivocal in Aristotle between a blameworthy selfish sense and a proper sense of rational self-concern.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.8 (baseline glossary)",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Chain-of-thought prompting provided negligible benefit on single-step tasks and occasionally hurt accuracy by introducing spurious intermediate steps.",
+      "paper_title": "When Chain-of-Thought Does Not Help",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A definitional claim about Aristotelian self-love and a chain-of-thought scope finding have no logical relationship.",
+    "split": "test"
+  },
+  {
+    "id": "negx_020",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "Roochnik credits an extended conversation with Anna Lannstrom for originating the idea behind his paper.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious (acknowledgements)",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "ACE's interactive LLM coaching significantly outperformed both no-feedback and alternative-feedback conditions on objective negotiation outcomes.",
+      "paper_title": "ACE: A LLM-based Negotiation Coaching System",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A paper's acknowledgements detail and an empirical coaching-outcome finding are unrelated.",
+    "split": "train"
+  },
+  {
+    "id": "negx_021",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "negotiation_coaching"
+    ],
+    "claim_a": {
+      "text": "The Perseus Digital Library provides an aligned Greek/English reading interface used to check Bekker-referenced passages.",
+      "paper_title": "Perseus Digital Library, Nicomachean Ethics text tool",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Cultural background significantly moderated AI coaching effectiveness in negotiation, with outcomes varying across participant backgrounds.",
+      "paper_title": "Does AI Coaching Prepare us for Workplace Negotiations?",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A digital-tooling detail for checking a classical text and an empirical cultural-moderation finding share no relationship.",
+    "split": "train"
+  },
+  {
+    "id": "negx_022",
+    "domain": "cross_domain",
+    "domains": [
+      "ancient_philosophy",
+      "information_retrieval"
+    ],
+    "claim_a": {
+      "text": "Bywater's 1962 Oxford reprint of the Greek Ethica Nicomachea is the critical-edition text Roochnik cites as his source.",
+      "paper_title": "Bywater (ed.), Ethica Nicomachea",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "In-domain fine-tuned bi-encoders matched cross-encoder relevance while retrieving an order of magnitude faster.",
+      "paper_title": "Closing the Bi-Encoder Gap with In-Domain Training",
+      "section": "findings",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "scope",
+    "provisional": true,
+    "rationale": "A critical-edition citation detail and a bi-encoder-versus-cross-encoder retrieval result are unrelated.",
+    "split": "test"
+  }
+]
