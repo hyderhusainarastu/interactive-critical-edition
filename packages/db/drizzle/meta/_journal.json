@@ -288,6 +288,13 @@
       "when": 1785045175355,
       "tag": "0040_claim_relationships",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1785047851483,
+      "tag": "0041_empty_mastermind",
+      "breakpoints": true
     }
   ]
 }

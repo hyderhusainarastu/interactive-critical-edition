@@ -4,7 +4,11 @@ import {
   citations,
   claimLoci,
   claimPairCandidates,
+  claimRelationships,
   claimScores,
+  debateClusterMembers,
+  debateClusterRelationships,
+  debateClusters,
   db,
   docMetadata,
   documents,
@@ -706,4 +710,333 @@ export async function insertClaimPairCandidates(userId: string, projectId: strin
     .onConflictDoNothing({ target: [claimPairCandidates.userId, claimPairCandidates.claimLoId, claimPairCandidates.claimHiId] })
     .returning({ id: claimPairCandidates.id });
   return inserted.length;
+}
+
+// ---------------------------------------------------------------------------
+// detect_relationships JUDGE stage (Phase 26.2b).
+// ---------------------------------------------------------------------------
+
+export interface CandidatePairRow {
+  id: string;
+  claimLoId: string;
+  claimHiId: string;
+  bestRetrievalScore: number;
+  engagement: string;
+  engagementEvidence: Record<string, unknown> | null;
+}
+
+/** Every persisted `claim_pair_candidate` for a project — the judge stage's
+ *  entire input population, ranked by `bestRetrievalScore` (descending) so a
+ *  caller applying `RETRIEVAL_LIMITS.maxJudgedPairsPerRequest` drops the
+ *  weakest candidates first, matching Stage-1's own truncation discipline. */
+export async function loadClaimPairCandidatesForProject(userId: string, projectId: string): Promise<CandidatePairRow[]> {
+  const rows = await db
+    .select({
+      id: claimPairCandidates.id,
+      claimLoId: claimPairCandidates.claimLoId,
+      claimHiId: claimPairCandidates.claimHiId,
+      bestRetrievalScore: claimPairCandidates.bestRetrievalScore,
+      engagement: claimPairCandidates.engagement,
+      engagementEvidence: claimPairCandidates.engagementEvidence,
+    })
+    .from(claimPairCandidates)
+    .where(and(eq(claimPairCandidates.userId, userId), eq(claimPairCandidates.projectId, projectId)))
+    .orderBy(sql`${claimPairCandidates.bestRetrievalScore} desc`);
+  return rows.map((r) => ({ ...r, engagementEvidence: r.engagementEvidence as Record<string, unknown> | null }));
+}
+
+export interface ClaimJudgeDetail {
+  id: string;
+  workId: string;
+  workTitle: string;
+  claimText: string;
+  supportingExcerpt: string;
+  claimNature: string;
+}
+
+/** Judge-input detail for a set of claims — text, excerpt, nature, and the
+ *  OWNING WORK's title (`JudgeClaimInput.workTitle`; `work.title` rather
+ *  than `doc_metadata.title` — simpler than `loadWorkExtractionScope`'s
+ *  resolved-run title and sufficient for naming a work in a judge prompt). A
+ *  corpus-item-sourced claim (`work_id` null) is silently absent from the
+ *  returned map — Stage 1 retrieval never surfaces one today (Phase 28.2's
+ *  own typed TODO), so this is unreachable in practice, not silently wrong. */
+export async function loadClaimJudgeDetails(claimIds: string[]): Promise<Map<string, ClaimJudgeDetail>> {
+  const out = new Map<string, ClaimJudgeDetail>();
+  if (claimIds.length === 0) return out;
+  const rows = await db
+    .select({
+      id: researchClaims.id,
+      workId: researchClaims.workId,
+      workTitle: works.title,
+      claimText: researchClaims.claimText,
+      supportingExcerpt: researchClaims.supportingExcerpt,
+      claimNature: researchClaims.claimNature,
+    })
+    .from(researchClaims)
+    .innerJoin(works, eq(works.id, researchClaims.workId))
+    .where(inArray(researchClaims.id, claimIds));
+  for (const row of rows) {
+    if (!row.workId) continue;
+    out.set(row.id, { id: row.id, workId: row.workId, workTitle: row.workTitle, claimText: row.claimText, supportingExcerpt: row.supportingExcerpt, claimNature: row.claimNature });
+  }
+  return out;
+}
+
+export interface ExistingRelationshipKey {
+  claimLoId: string;
+  claimHiId: string;
+  basisHash: string;
+}
+
+/** Every `claim_relationship` row already covering one of the given claim
+ *  ids, for THIS user — the judge stage's "already judged under an
+ *  unchanged world" check. Not project-scoped: `claim_relationship`'s own
+ *  dedup unique is `(user_id, claim_lo_id, claim_hi_id, basis_hash)`, with no
+ *  project_id in it (the same claim pair surfacing in two different
+ *  projects is still one judgment, not two) — so this reads by claim id
+ *  membership, matching the real key rather than narrowing by project and
+ *  silently re-paying for a pair another project already judged. */
+export async function loadExistingRelationshipKeys(userId: string, claimIds: string[]): Promise<ExistingRelationshipKey[]> {
+  if (claimIds.length === 0) return [];
+  return db
+    .select({ claimLoId: claimRelationships.claimLoId, claimHiId: claimRelationships.claimHiId, basisHash: claimRelationships.basisHash })
+    .from(claimRelationships)
+    .where(
+      and(
+        eq(claimRelationships.userId, userId),
+        inArray(claimRelationships.claimLoId, claimIds),
+        inArray(claimRelationships.claimHiId, claimIds),
+      ),
+    );
+}
+
+export interface NewClaimRelationship {
+  claimLoId: string;
+  claimHiId: string;
+  valence: string;
+  category: string;
+  judgeBranch: string;
+  strongerSide: string;
+  explanation: string;
+  resolution: string;
+  engagement: string;
+  evidenceGap: number | null;
+  evidenceGapDimension: string | null;
+  basisHash: string;
+  promptVersion: string;
+  provider: string;
+  model: string;
+}
+
+/** Idempotent insert on the `(user_id, claim_lo_id, claim_hi_id, basis_hash)`
+ *  unique — a re-run that recomputes the SAME basis hash for a pair already
+ *  judged inserts nothing new (the "repeat run costs $0" canary guarantee).
+ *  `mechanism` is never accepted as a parameter here: Stage 1's DB enum only
+ *  contains `'unspecified'`, and this lane never persists it (see
+ *  `detectRelationships.ts`'s judge-stage doc comment) — the column is left
+ *  at its SQL-level NULL default. Returns the inserted row's id, or null on
+ *  a dedup hit. */
+export async function insertClaimRelationship(userId: string, projectId: string, rel: NewClaimRelationship): Promise<string | null> {
+  const [inserted] = await db
+    .insert(claimRelationships)
+    .values({
+      userId,
+      projectId,
+      claimLoId: rel.claimLoId,
+      claimHiId: rel.claimHiId,
+      valence: rel.valence as (typeof claimRelationships.$inferInsert)["valence"],
+      category: rel.category as (typeof claimRelationships.$inferInsert)["category"],
+      judgeBranch: rel.judgeBranch as (typeof claimRelationships.$inferInsert)["judgeBranch"],
+      strongerSide: rel.strongerSide as (typeof claimRelationships.$inferInsert)["strongerSide"],
+      explanation: rel.explanation,
+      resolution: rel.resolution,
+      engagement: rel.engagement as (typeof claimRelationships.$inferInsert)["engagement"],
+      evidenceGap: rel.evidenceGap,
+      evidenceGapDimension: rel.evidenceGapDimension as (typeof claimRelationships.$inferInsert)["evidenceGapDimension"],
+      basisHash: rel.basisHash,
+      promptVersion: rel.promptVersion,
+      provider: rel.provider,
+      model: rel.model,
+    })
+    .onConflictDoNothing({
+      target: [claimRelationships.userId, claimRelationships.claimLoId, claimRelationships.claimHiId, claimRelationships.basisHash],
+    })
+    .returning({ id: claimRelationships.id });
+  return inserted?.id ?? null;
+}
+
+export interface ClaimScoreRow {
+  dimension: string;
+  score: number;
+}
+
+/** Every `claim_score` row for a set of claims, grouped by claim id — the
+ *  judge stage's `evidence_gap` input. A claim with zero rows here is
+ *  honestly unscored on every dimension (see `claim_score`'s own doc
+ *  comment); the judge stage's `evidence_gap` computation treats that as
+ *  "no gap to report", never a fabricated 0. */
+export async function loadClaimScoresForClaims(claimIds: string[]): Promise<Map<string, ClaimScoreRow[]>> {
+  const out = new Map<string, ClaimScoreRow[]>();
+  if (claimIds.length === 0) return out;
+  const rows = await db
+    .select({ claimId: claimScores.claimId, dimension: claimScores.dimension, score: claimScores.score })
+    .from(claimScores)
+    .where(inArray(claimScores.claimId, claimIds));
+  for (const row of rows) {
+    const existing = out.get(row.claimId) ?? [];
+    existing.push({ dimension: row.dimension, score: row.score });
+    out.set(row.claimId, existing);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// cluster_debates (Phase 26.3).
+// ---------------------------------------------------------------------------
+
+export interface JudgedRelationshipEdge {
+  id: string;
+  claimLoId: string;
+  claimHiId: string;
+  valence: string;
+}
+
+/** Every active, non-hidden `claim_relationship` for a project — the BFS
+ *  clustering pass's whole edge population. `status = 'active'` excludes a
+ *  future superseded judgment (there is no such write path yet, but the
+ *  filter costs nothing and keeps this query correct the day one exists);
+ *  `hidden = false` excludes a user-hidden relationship (the correction-
+ *  workflow precedent) from contributing to cluster membership. */
+export async function loadJudgedRelationshipsForProject(userId: string, projectId: string): Promise<JudgedRelationshipEdge[]> {
+  return db
+    .select({ id: claimRelationships.id, claimLoId: claimRelationships.claimLoId, claimHiId: claimRelationships.claimHiId, valence: claimRelationships.valence })
+    .from(claimRelationships)
+    .where(
+      and(
+        eq(claimRelationships.userId, userId),
+        eq(claimRelationships.projectId, projectId),
+        eq(claimRelationships.status, "active"),
+        eq(claimRelationships.hidden, false),
+      ),
+    );
+}
+
+export interface ExistingDebateClusterRow {
+  id: string;
+  memberHash: string;
+  status: string;
+}
+
+/** Every `debate_cluster` row (any status) for a project — the naming-
+ *  idempotency lookup (`memberHash` -> row) and the stale-transition input
+ *  (every currently-`active` row whose `memberHash` didn't survive this
+ *  run's BFS becomes `stale`). */
+export async function loadExistingDebateClustersForProject(userId: string, projectId: string): Promise<ExistingDebateClusterRow[]> {
+  return db
+    .select({ id: debateClusters.id, memberHash: debateClusters.memberHash, status: debateClusters.status })
+    .from(debateClusters)
+    .where(and(eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId)));
+}
+
+export interface NewDebateCluster {
+  memberHash: string;
+  name: string;
+  researchQuestion: string | null;
+  description: string | null;
+  edgeCount: number;
+  counts: Record<string, number>;
+  promptVersion: string | null;
+  provider: string | null;
+  model: string | null;
+}
+
+/** Inserts a newly-named cluster, respecting the `(user_id, project_id,
+ *  member_hash)` unique — a concurrent duplicate insert (two overlapping
+ *  runs) is a no-op here, not a duplicate row; the caller re-selects on a
+ *  dedup hit exactly like `upsertResearchCorpusItem`. */
+export async function insertDebateCluster(userId: string, projectId: string, cluster: NewDebateCluster): Promise<string> {
+  const [inserted] = await db
+    .insert(debateClusters)
+    .values({
+      userId,
+      projectId,
+      name: cluster.name,
+      researchQuestion: cluster.researchQuestion,
+      description: cluster.description,
+      memberHash: cluster.memberHash,
+      edgeCount: cluster.edgeCount,
+      counts: cluster.counts,
+      status: "active",
+      promptVersion: cluster.promptVersion,
+      provider: cluster.provider,
+      model: cluster.model,
+    })
+    .onConflictDoNothing({ target: [debateClusters.userId, debateClusters.projectId, debateClusters.memberHash] })
+    .returning({ id: debateClusters.id });
+  if (inserted) return inserted.id;
+
+  const [existing] = await db
+    .select({ id: debateClusters.id })
+    .from(debateClusters)
+    .where(and(eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId), eq(debateClusters.memberHash, cluster.memberHash)))
+    .limit(1);
+  if (!existing) {
+    throw new Error(`Debate cluster insert conflicted on memberHash ${cluster.memberHash} but no existing row was found.`);
+  }
+  return existing.id;
+}
+
+/** Reactivates a cluster whose exact prior membership recurred (a `stale`
+ *  row's component reappeared) — also refreshes `edgeCount`/`counts` in case
+ *  the edge set changed shape (e.g. a `nuance` edge was corrected to
+ *  `contradiction`) without changing WHICH claims belong, which would
+ *  otherwise leave stale counts on an otherwise-correct row. */
+export async function reactivateDebateCluster(clusterId: string, edgeCount: number, counts: Record<string, number>): Promise<void> {
+  await db
+    .update(debateClusters)
+    .set({ status: "active", edgeCount, counts, updatedAt: new Date() })
+    .where(eq(debateClusters.id, clusterId));
+}
+
+/** Marks every currently-`active` cluster for a project whose id is NOT in
+ *  `survivingClusterIds` as `stale` — never deleted (plan §Pipeline
+ *  "membership shifts mark old clusters `stale`, never delete (user
+ *  verifications survive)"). Called with the FULL set of this run's
+ *  surviving cluster ids, so a cluster this run didn't touch at all (because
+ *  its component vanished entirely — e.g. its sole edge was hidden) is
+ *  correctly marked stale too, not just ones whose membership changed shape. */
+export async function markStaleDebateClusters(userId: string, projectId: string, survivingClusterIds: string[]): Promise<number> {
+  const condition =
+    survivingClusterIds.length > 0
+      ? and(
+          eq(debateClusters.userId, userId),
+          eq(debateClusters.projectId, projectId),
+          eq(debateClusters.status, "active"),
+          sql`${debateClusters.id} NOT IN ${survivingClusterIds}`,
+        )
+      : and(eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId), eq(debateClusters.status, "active"));
+  const rows = await db.update(debateClusters).set({ status: "stale", updatedAt: new Date() }).where(condition).returning({ id: debateClusters.id });
+  return rows.length;
+}
+
+/** Replaces a cluster's member/edge join rows wholesale (delete-then-insert)
+ *  — simpler and equally correct for this table's size than a diff, since
+ *  the join rows carry no independent state of their own worth preserving
+ *  row-for-row. */
+export async function replaceDebateClusterMembership(clusterId: string, claimIds: string[], claimRelationshipIds: string[]): Promise<void> {
+  await db.delete(debateClusterMembers).where(eq(debateClusterMembers.clusterId, clusterId));
+  await db.delete(debateClusterRelationships).where(eq(debateClusterRelationships.clusterId, clusterId));
+  if (claimIds.length > 0) {
+    await db
+      .insert(debateClusterMembers)
+      .values(claimIds.map((claimId) => ({ clusterId, claimId })))
+      .onConflictDoNothing();
+  }
+  if (claimRelationshipIds.length > 0) {
+    await db
+      .insert(debateClusterRelationships)
+      .values(claimRelationshipIds.map((claimRelationshipId) => ({ clusterId, claimRelationshipId })))
+      .onConflictDoNothing();
+  }
 }

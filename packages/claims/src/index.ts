@@ -15,6 +15,7 @@ export * from "./taxonomy";
 export * from "./thresholds";
 export * from "./limits";
 export * from "./anchoring";
+export * from "./basisHash";
 
 export * from "./scoring/evidenceStrength";
 export * from "./scoring/textualSupport";

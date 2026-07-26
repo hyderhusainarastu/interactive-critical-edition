@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildClusterNamingPrompt, deterministicFallbackName } from "./clusterNaming";
+import {
+  CLUSTER_NAMING_OUTPUT_SCHEMA,
+  buildClusterNamingPrompt,
+  deterministicFallbackName,
+  validateClusterNamingResponse,
+} from "./clusterNaming";
 
 describe("buildClusterNamingPrompt", () => {
   it("formats each claim as a bullet", () => {
@@ -40,5 +45,52 @@ describe("deterministicFallbackName", () => {
 
   it('falls back to plain "Debate" for a whitespace-only first claim', () => {
     expect(deterministicFallbackName(["   "])).toBe("Debate");
+  });
+});
+
+describe("CLUSTER_NAMING_OUTPUT_SCHEMA", () => {
+  it("requires every declared property (OpenAI strict-mode contract)", () => {
+    expect([...CLUSTER_NAMING_OUTPUT_SCHEMA.required].sort()).toEqual(
+      Object.keys(CLUSTER_NAMING_OUTPUT_SCHEMA.properties).sort(),
+    );
+    expect(CLUSTER_NAMING_OUTPUT_SCHEMA.additionalProperties).toBe(false);
+  });
+});
+
+describe("validateClusterNamingResponse", () => {
+  it("accepts a full valid response", () => {
+    const result = validateClusterNamingResponse({
+      name: "Akrasia and Practical Knowledge",
+      researchQuestion: "Does the akratic agent know what they are doing?",
+      description: "Two readings of NE 7 disagree on whether akrasia involves ignorance.",
+    });
+    expect(result).toEqual({
+      name: "Akrasia and Practical Knowledge",
+      researchQuestion: "Does the akratic agent know what they are doing?",
+      description: "Two readings of NE 7 disagree on whether akrasia involves ignorance.",
+    });
+  });
+
+  it("normalizes null/missing researchQuestion and description to null", () => {
+    const result = validateClusterNamingResponse({ name: "A Debate", researchQuestion: null, description: null });
+    expect(result.researchQuestion).toBeNull();
+    expect(result.description).toBeNull();
+  });
+
+  it("throws on a missing name", () => {
+    expect(() => validateClusterNamingResponse({ researchQuestion: null, description: null })).toThrow(/name/i);
+  });
+
+  it("throws on an empty/whitespace-only name", () => {
+    expect(() => validateClusterNamingResponse({ name: "   ", researchQuestion: null, description: null })).toThrow(/name/i);
+  });
+
+  it("trims whitespace from every field", () => {
+    const result = validateClusterNamingResponse({
+      name: "  A Debate  ",
+      researchQuestion: "  A question?  ",
+      description: "  A description.  ",
+    });
+    expect(result).toEqual({ name: "A Debate", researchQuestion: "A question?", description: "A description." });
   });
 });

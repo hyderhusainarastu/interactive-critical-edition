@@ -25,6 +25,7 @@ import { analyzeWork, resolveCitationMetadata } from "./analyze";
 import { activePipelineVersion, handleEditionExtraction, handleExtractText } from "./extraction";
 import { sweepAbandonedRuns } from "./runLifecycle";
 import { expandCrossLibraryGraph } from "./crossLibraryGraph";
+import { clusterDebates } from "./research/clusterDebates";
 import { detectRelationships } from "./research/detectRelationships";
 import { extractClaims } from "./research/extractClaims";
 import { importCorpus } from "./research/importCorpus";
@@ -136,17 +137,18 @@ async function main() {
     }
   });
 
-  // Phase 26.2a: analyze-claim-debates gets its real handler for the
-  // DETERMINISTIC half only — `detect_relationships` (Stage-1 candidate
-  // retrieval + citation engagement, $0). `cluster_debates` — the other job
-  // type sharing this queue (packages/db/src/queue.ts's doc comment on why
-  // relationship detection and clustering are staged as one resumable
-  // request) — stays the honest no-op below until its own lane (26.3)
-  // replaces it. The request's OWN `jobType` decides which path a given
-  // message takes; a stale/pre-26.2a `detect_relationships` request enqueued
-  // before this shipped is handled the same as any other, since
-  // `runResearchJob` re-reads current DB state rather than trusting the
-  // queue message.
+  // Phase 26.2a/26.2b/26.3: analyze-claim-debates gets its real handler for
+  // BOTH job types this queue carries — `detect_relationships` (Stage-1
+  // candidate retrieval + citation engagement + the paid judge stage) and
+  // `cluster_debates` (BFS clustering + naming over judged relationships).
+  // `packages/db/src/queue.ts`'s doc comment explains why these run as two
+  // job types on ONE queue rather than two separate queues: relationship
+  // detection and clustering are staged as one resumable request family, so
+  // a paid judgement is never stranded with nothing enqueued to group it.
+  // The request's OWN `jobType` decides which path a given message takes; a
+  // stale request enqueued before this shipped is handled the same as any
+  // other, since `runResearchJob` re-reads current DB state rather than
+  // trusting the queue message.
   await boss.work<ResearchJobPayload>(QUEUE_ANALYZE_CLAIM_DEBATES, async (jobs) => {
     const batch = Array.isArray(jobs) ? jobs : [jobs];
     for (const job of batch) {
@@ -163,6 +165,8 @@ async function main() {
       }
       if (request.jobType === "detect_relationships") {
         await runResearchJob(job.data.requestId, detectRelationships);
+      } else if (request.jobType === "cluster_debates") {
+        await runResearchJob(job.data.requestId, clusterDebates);
       } else {
         try {
           await handleUnimplementedResearchJob(QUEUE_ANALYZE_CLAIM_DEBATES, job.data.requestId);
