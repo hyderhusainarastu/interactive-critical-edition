@@ -373,6 +373,25 @@ function NodeRow({
           {node.year ? <span className="text-[var(--color-text-muted)]"> ({node.year})</span> : null}
         </button>
         {node.authors && <div className="text-xs text-[var(--color-text-muted)]">{node.authors}</div>}
+        {/* Debate layer (Phase 28.4): the table's own "name, question, claim
+            count, works" requirement for a debate row — "works" is already
+            covered by the Connections column below (`in_debate` edges), and
+            a claim row's "valence relationships" are already covered there
+            too (`claim_contradicts`/`claim_supports`/`claim_nuances`
+            edges), so this only adds the two facts Connections can't show:
+            the debate's own question, and a claim's own nature/tally. */}
+        {node.type === "debate" && (
+          <div className="text-xs text-[var(--color-text-muted)]">
+            {node.debateQuestion && <p className="italic">“{node.debateQuestion}”</p>}
+            <p>{node.debateClaimCount ?? 0} claim{node.debateClaimCount === 1 ? "" : "s"}</p>
+          </div>
+        )}
+        {node.type === "claim" && (
+          <div className="text-xs text-[var(--color-text-muted)]">
+            {node.claimNature && <p>Nature: {node.claimNature}</p>}
+            {node.valenceSummary && <p>{node.valenceSummary}</p>}
+          </div>
+        )}
         <div className="flex gap-3">
           {node.destination && node.type !== "work" && (
             <Link href={node.destination} className="text-xs underline" onClick={(event) => event.stopPropagation()}>

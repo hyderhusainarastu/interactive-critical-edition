@@ -1,9 +1,11 @@
 import { conceptMastery, db, readingRecords, understandingRatings, workRelationshipJudgments } from "@ice/db";
+import { phase25FeatureEnabled } from "@ice/config";
 import { KNOWN_THRESHOLD, READER_LEVELS } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { edgeTypeForRelationshipCategory, isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
 import { deriveEdgeCategory } from "@/lib/graphEdgeCategory";
 import { mapConceptConceptEdges, selectVisualNodes } from "@/lib/graphConnectivity";
+import { loadDebateGraphAdditions } from "@/lib/graphDebate";
 
 /**
  * Builds the per-user knowledge-graph data (plan §9/§16, extended by plan
@@ -53,6 +55,11 @@ import { mapConceptConceptEdges, selectVisualNodes } from "@/lib/graphConnectivi
  * the SAME `edge_type` vocabulary the citation/classification edges
  * already use — so no new edge family, legend entry, or relation-filter
  * case is needed for either source.
+ *
+ * **Phase 28.4 (behind `phase25FeatureEnabled('graphDebateLayer')`):** the
+ * knowledge-graph debate layer. See `@/lib/graphDebate`'s own doc comment —
+ * `debate` cluster nodes are added here at default zoom, `claim` nodes only
+ * via the dedicated per-cluster expansion route.
  */
 
 // The node/edge shapes are the ONE shared graph contract (plan §21.1),
@@ -255,6 +262,17 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
   if (works.length === 0) {
     return { nodes: [], links: [], stats: { works: 0, references: 0, sources: 0, concepts: 0, people: 0, missing: 0, read: 0 } };
   }
+
+  // 1b) Debate layer (Phase 28.4, behind `phase25FeatureEnabled('graphDebateLayer')`):
+  // `debate` cluster nodes + `in_debate` edges to the participating work(s)
+  // in `works` above (all of the user's works, or just `rootWorkId`). Flag
+  // off means zero extra queries and a byte-identical payload to before this
+  // phase existed — see `loadDebateGraphAdditions`'s own doc comment for why
+  // individual `claim` nodes never appear here (only via the dedicated
+  // per-cluster expansion route).
+  const debateAdditions = phase25FeatureEnabled("graphDebateLayer")
+    ? await loadDebateGraphAdditions(userId, works.map((w) => w.id))
+    : { nodes: [], links: [] };
 
   // 2) Edges out of those works.
   const edges = (await db.execute(sql`
@@ -734,6 +752,9 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     type: "section", state: "structural", authors: null, year: null, url: null,
     authority: null, credibilityScore: null, provider: null, kind: s.kind,
   });
+  // Debate layer (Phase 28.4): a no-op loop when the flag is off or no
+  // active cluster reaches this scope (`debateAdditions.nodes` is `[]`).
+  for (const d of debateAdditions.nodes) addNode(d);
 
   const directRelationBySource = new Map<string, ResourceRelationRow>();
   for (const relation of resourceRelations) {
@@ -848,6 +869,8 @@ export async function buildGraph(userId: string, rootWorkId?: string): Promise<G
     // `mapConceptConceptEdges`'s own doc comment for why this is always a
     // no-op today.
     ...mapConceptConceptEdges(conceptConceptEdges, deriveEdgeCategory),
+    // Debate layer (Phase 28.4) — see the `debateAdditions` fetch above.
+    ...debateAdditions.links,
   ];
 
   // Phase 12.5: only a durable, evidence-hashed judgement becomes a

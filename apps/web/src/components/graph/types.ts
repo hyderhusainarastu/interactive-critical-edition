@@ -2,7 +2,16 @@ import type { CurriculumStage } from "@ice/curriculum";
 import { matchesReaderLevel, type PriorityTier, type ReaderLevel, type ReaderLevelFilter, type RelationshipCategory } from "@ice/roadmap";
 
 export type NodeState = "primary" | "read" | "reading" | "unread" | "missing" | "structural";
-export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section";
+/** `claim`/`debate` (Phase 28.4, the knowledge-graph debate layer, behind
+ *  `phase25FeatureEnabled('graphDebateLayer')`) are ADDITIVE — every existing
+ *  NodeType value and every place that switches on it keeps working
+ *  unmodified; a consumer that has never heard of `claim`/`debate` simply
+ *  never sees one while the flag is off (`buildGraph()` never emits either
+ *  type unless the flag is on). A `debate` node is a named `debate_cluster`
+ *  (a BFS connected component over judged, non-`unrelated` `claim_relationship`
+ *  edges); a `claim` node is one `research_claim` row, surfaced only via the
+ *  debate-cluster expansion endpoint, never in the base payload. */
+export type NodeType = "work" | "reference" | "peer_reviewed_source" | "online_source" | "concept" | "person" | "section" | "claim" | "debate";
 
 /**
  * THE graph data contract (plan §21.1). This module is the single typed
@@ -127,6 +136,31 @@ export interface GraphNode {
   venue?: string | null;
   /** Digital Object Identifier, when known. */
   doi?: string | null;
+
+  // ---- Debate layer (Phase 28.4, additive, `graphDebateLayer`-flagged) ----
+
+  /** `debate`-typed nodes only: how many `research_claim` rows are members
+   *  of this `debate_cluster` (`ClaimCluster.memberIds.length`, always ≥2 —
+   *  `findClaimClusters` never emits a singleton component). Absent on
+   *  every other node type. */
+  debateClaimCount?: number;
+  /** `debate`-typed nodes only: `debate_cluster.research_question`, when the
+   *  naming pass produced one — null on the $0 deterministic-fallback-named
+   *  path (`deterministicFallbackName` never invents a question), absent on
+   *  every other node type. */
+  debateQuestion?: string | null;
+  /** `claim`-typed nodes only (surfaced by a debate expansion, never the
+   *  base payload): `research_claim.claim_nature`. Absent on every other
+   *  node type. */
+  claimNature?: string | null;
+  /** `claim`-typed nodes only: a short, deterministic tally of this claim's
+   *  own judged `claim_relationship` edges within the SAME debate expansion
+   *  (e.g. "2 support · 1 contradiction") — never a model-authored summary.
+   *  Null when none of the expansion's returned relationship edges touch
+   *  this claim (never fabricated as "no relationships" vs. "not computed"
+   *  — the two are the same fact here since every returned claim is a real
+   *  cluster member). Absent on every other node type. */
+  valenceSummary?: string | null;
 }
 
 /**
@@ -214,8 +248,23 @@ export interface GraphData extends GraphPayload {
 
 /** Relation types that are symmetric — direction carries no meaning.
  *  Everything else in the vocabulary (cites/review_of/translates/…) is a
- *  directed claim about which end does what. */
-export const UNDIRECTED_EDGE_TYPES: ReadonlySet<string> = new Set(["is_comparable_to", "parallel_comparison"]);
+ *  directed claim about which end does what.
+ *
+ *  Debate layer (Phase 28.4, additive): `claim_contradicts`/`claim_supports`/
+ *  `claim_nuances` join this set too. `claim_relationship.claim_lo_id <
+ *  claim_hi_id` is a DB-enforced CANONICAL STORAGE order (so a pair is never
+ *  stored twice), not an argumentative direction — the judge never records
+ *  "which claim is doing the supporting/contradicting to which", so treating
+ *  these as directed would silently assert a direction the data doesn't
+ *  carry. `asserts_claim`/`in_debate` are genuinely directed (a work asserts
+ *  a claim / is part of a debate) and are NOT added here. */
+export const UNDIRECTED_EDGE_TYPES: ReadonlySet<string> = new Set([
+  "is_comparable_to",
+  "parallel_comparison",
+  "claim_contradicts",
+  "claim_supports",
+  "claim_nuances",
+]);
 
 export function isDirectedEdgeType(edgeType: string): boolean {
   return !UNDIRECTED_EDGE_TYPES.has(edgeType);
@@ -245,6 +294,8 @@ export const TYPE_LABEL: Record<NodeType, string> = {
   concept: "Concept",
   person: "Person",
   section: "Section",
+  claim: "Claim",
+  debate: "Debate",
 };
 
 // The 3D projection is type-coloured. Read state remains a textual/table
@@ -257,6 +308,14 @@ export const TYPE_META: Record<NodeType, { colorVar: string }> = {
   concept: { colorVar: "--color-accent-burgundy" },
   person: { colorVar: "--color-credibility-warning" },
   section: { colorVar: "--color-text-muted" },
+  // Debate layer (Phase 28.4): `debate` reuses `--color-credibility-critical`
+  // — unused elsewhere in this table, and thematically apt for a contested
+  // cluster. `claim` gets a dedicated token (`--color-graph-claim`,
+  // `app/globals.css`) rather than reusing another type's color, since claim
+  // nodes appear ALONGSIDE their asserting work/reference nodes once a
+  // debate is expanded and would otherwise be indistinguishable by color.
+  claim: { colorVar: "--color-graph-claim" },
+  debate: { colorVar: "--color-credibility-critical" },
 };
 
 export function edgeTypeLabel(edgeType: string): string {
@@ -323,6 +382,19 @@ const EDGE_TYPE_FAMILY: Record<string, EdgeFamily> = {
   edition_of: "structural",
   translation_of: "structural",
   excerpt_of: "structural",
+  // Debate layer (Phase 28.4, additive): synthetic edge-type strings the
+  // debate-cluster base payload and expansion delta produce (never DB enum
+  // values — the `outline_section` precedent, no migration). Contradiction
+  // is opposition; support/nuance both read as agreement-with-qualification,
+  // the same "influence" family `is_comparable_to`/`interpretive_aid` already
+  // share. `asserts_claim`/`in_debate` are structural: they describe WHICH
+  // work is attached to WHICH claim/debate, not a scholarly relationship
+  // between two works.
+  claim_contradicts: "opposition",
+  claim_supports: "influence",
+  claim_nuances: "influence",
+  asserts_claim: "structural",
+  in_debate: "structural",
 };
 
 export function edgeFamilyFor(edgeType: string, category?: string | null): EdgeFamily {
@@ -645,4 +717,37 @@ export function roadmapSubset(data: GraphData): GraphData {
     (l) => visibleIds.has(linkEndpointId(l.source)) && visibleIds.has(linkEndpointId(l.target)),
   );
   return { ...data, nodes, links };
+}
+
+/**
+ * Debate layer (Phase 28.4): the additive delta `GET
+ * /api/graph/debate/[clusterId]/expand` returns — a debate cluster's claim
+ * nodes plus their `claim_relationship`/`asserts_claim` edges. Deliberately
+ * NOT a full `GraphPayload` (no `stats`) — it is only ever merged into an
+ * already-loaded `GraphData` via `mergeGraphDelta` below, never rendered on
+ * its own.
+ */
+export interface GraphExpansionDelta {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+/**
+ * Client-side merge for an expansion delta (Phase 28.4, the `graphExpansion`
+ * request/response precedent — `apps/web/src/lib/graphExpansion.ts`/
+ * `GraphExpansionControls` — but merged in place rather than requiring a
+ * full page reload, since this delta is a $0 synchronous DB read, not a
+ * queued paid job). Idempotent: re-merging an already-merged delta (a
+ * second click on the same "Expand debate" control) adds nothing new,
+ * since every id is deduplicated against what `data` already has. Never
+ * mutates `data` — same "returns a new object" discipline as
+ * `filterGraphData`/`roadmapSubset` above.
+ */
+export function mergeGraphDelta(data: GraphData, delta: GraphExpansionDelta): GraphData {
+  const existingNodeIds = new Set(data.nodes.map((n) => n.id));
+  const newNodes = delta.nodes.filter((n) => !existingNodeIds.has(n.id));
+  const existingLinkIds = new Set(data.links.map((l) => l.id));
+  const newLinks = delta.links.filter((l) => !existingLinkIds.has(l.id));
+  if (newNodes.length === 0 && newLinks.length === 0) return data;
+  return { ...data, nodes: [...data.nodes, ...newNodes], links: [...data.links, ...newLinks] };
 }
