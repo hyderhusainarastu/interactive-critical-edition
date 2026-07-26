@@ -53,3 +53,13 @@ A delta is only called "meaningful" at or above 0.02 absolute — small enough t
 - Every query's own candidate-passage set is the corpus for that query only (matching the gold set's own shape) — this is a per-query relevance-ranking eval, not a full-Library retrieval simulation.
 - A ranking that drops a relevant passage entirely (both `rankLexically` and `rankHybrid` filter out zero-score rows) is scored as if that passage were ranked below the cutoff — the honest outcome, not excused from the comparison.
 - No reranker of any kind is used on either side, per the task scope.
+
+## Moderator decision (2026-07-26)
+
+The measured improvement clears this eval's own meaningful-difference bar (>= 0.02 absolute; nDCG@5 delta 0.0373, MRR delta 0.0200): `RAG_HYBRID_RETRIEVAL` will be enabled in production as a reversible env toggle once this merge deploys — no code change is needed to roll it back, only flipping the var back to unset/`false`.
+
+Recorded caveats, not treated as blockers:
+
+- **Small and off-domain gold set.** 25 queries, ported from ScholarLens's own `rerank_eval` set rather than authored against this app's actual Library corpus/query distribution — a real effect at this sample size, but not a guarantee the same margin holds on Palimnote's own reader traffic. Revisit with an in-domain eval once there's enough real Ask Library query volume to build one.
+- **Per-query regressions exist and are monitor items, not gates.** Several queries (e.g. s4, s6, s9, s13, s14, s18, s23) score lower under hybrid than lexical-only, and one (s25) regresses on both metrics at once (nDCG@5 1.000 → 0.757, MRR 1.000 → 0.500) — the aggregate gain is real, but not uniform across queries. Nothing here indicates a systemic failure mode (no shared query shape, work, or candidate-count pattern across the regressions), so this is recorded as something to watch in production query logs after rollout, not a reason to hold the toggle back.
+- **Cost impact.** The query-embedding call this merge now logs to `ai_usage_log` (`socratic_rag_query_embedding`, same `socratic-rag` stage/pool as the existing completion call) costs a fraction of a cent per question at `text-embedding-3-small` rates — pennies per question at most, well inside the existing `RAG_DAILY_SOFT_CAP_USD` pool, and now fully visible in the cost ledger rather than the previously-unlogged gap this merge closed.

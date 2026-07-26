@@ -1,4 +1,4 @@
-import { OpenAIResponsesClient, estimateCostUsd, safetyIdentifierFor } from "@ice/ai-adapters";
+import { OpenAIResponsesClient, estimateCostUsd, estimateEmbeddingCostUsd, safetyIdentifierFor } from "@ice/ai-adapters";
 import {
   aiUsageLogs,
   db,
@@ -13,6 +13,7 @@ import {
   SOCRATIC_SYSTEM_PROMPT,
   buildSocraticInput,
   canonicalWorkDisplayTitles,
+  defaultEmbedQuery,
   fallbackSocraticAnswer,
   retrieveOwnerRagChunks,
   RAG_RESPONSE_HARD_CAP_USD,
@@ -233,7 +234,25 @@ export async function answerRagConversation(input: { userId: string; conversatio
     .where(eq(ragMessages.conversationId, conversation.id))
     .orderBy(desc(ragMessages.createdAt))
     .limit(MAX_HISTORY_MESSAGES);
-  const chunks = await retrieveOwnerRagChunks(input.userId, question);
+  // Phase 29.3 follow-up: `retrieveOwnerRagChunks` only ever invokes
+  // `embedQuery` when `RAG_HYBRID_RETRIEVAL` is on (the flag-off path returns
+  // before touching `options.embedQuery` at all — see `@ice/rag`'s
+  // `index.ts`), so this wrapper is safe to pass unconditionally: flag-off
+  // behavior stays byte-identical (no fetch, no usage row, `queryEmbeddingUsage`
+  // stays null) and flag-on behavior gains real cost accounting for the query
+  // embedding call that was previously invisible to `ai_usage_log`.
+  let queryEmbeddingUsage: { model: string; inputTokens: number; estimatedCostUsd: number } | null = null;
+  const chunks = await retrieveOwnerRagChunks(input.userId, question, undefined, {
+    embedQuery: async (text) => {
+      const embedded = await defaultEmbedQuery(text);
+      queryEmbeddingUsage = {
+        model: embedded.model,
+        inputTokens: embedded.inputTokens,
+        estimatedCostUsd: estimateEmbeddingCostUsd(embedded.model, embedded.inputTokens),
+      };
+      return embedded;
+    },
+  });
   const started = Date.now();
   const generated = await generateSocraticAnswer(input.userId, question, [...prior].reverse(), chunks);
   const latencyMs = Date.now() - started;
@@ -262,6 +281,28 @@ export async function answerRagConversation(input: { userId: string; conversatio
       promptTokens: generated.promptTokens,
       completionTokens: generated.completionTokens,
       estimatedCostUsd: generated.cost,
+    });
+  }
+  // Same "socratic-rag" stage as the completion log above (not a separate
+  // stage) so the query-embedding cost naturally falls inside the existing
+  // `RAG_SPEND_STAGES`/`RAG_DAILY_SOFT_CAP_USD` pool `currentRagSpend` sums,
+  // with no change to that gating logic needed. `documentId` uses the same
+  // "attribute to the first retrieved chunk's document" convention as the
+  // completion log; a hybrid query that surfaces no chunks at all still
+  // incurred a real embedding cost, so it's logged with a null documentId
+  // rather than dropped (`ai_usage_log.document_id` is nullable, `set null`
+  // on delete, by design — see the Design Decisions log entry).
+  if (queryEmbeddingUsage) {
+    const usage: { model: string; inputTokens: number; estimatedCostUsd: number } = queryEmbeddingUsage;
+    await db.insert(aiUsageLogs).values({
+      documentId: chunks[0]?.documentId ?? null,
+      task: "socratic_rag_query_embedding",
+      stage: "socratic-rag",
+      provider: "openai",
+      model: usage.model,
+      promptTokens: usage.inputTokens,
+      completionTokens: 0,
+      estimatedCostUsd: usage.estimatedCostUsd,
     });
   }
   const title = deriveRagConversationTitle(conversation.title, question);
