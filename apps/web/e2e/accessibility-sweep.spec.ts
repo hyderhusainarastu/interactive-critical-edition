@@ -3,6 +3,7 @@ import { db, users } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { expect, test, type Page } from "@playwright/test";
 import {
+  auditTouchTargets,
   createVerifiedTestUser,
   deleteTestUser,
   seedPublishedEdition,
@@ -350,51 +351,11 @@ test.describe("Phase 23.2 accessibility completion", () => {
    * `aria-label="Accessible graph browser"` hooks, and the annotations
    * panel's own `aria-label="Edition sidebar"`) so this stays reviewable
    * and any NEW small control OUTSIDE these named regions still fails.
+   *
+   * D-25-10: the audit function itself now lives in `helpers.ts`'s
+   * `auditTouchTargets` (imported above) so the research-workspace specs
+   * that also needed it don't duplicate this DOM-measurement logic.
    */
-  async function auditTouchTargets(page: Page): Promise<{ tag: string; label: string; width: number; height: number }[]> {
-    return page.evaluate(() => {
-      const MIN = 44;
-      const isInlineProse = (el: Element) => {
-        const parent = el.parentElement;
-        return el.tagName === "A" && !!parent && ["P", "LI", "SPAN"].includes(parent.tagName);
-      };
-      const isInlineTextMarker = (el: Element) =>
-        el.classList.contains("reader-footnote-marker") || el.classList.contains("reader-annotation-marker");
-      const isInClosedDetails = (el: Element) => {
-        const details = el.closest("details");
-        return !!details && !details.open && el.tagName !== "SUMMARY";
-      };
-      const ACCEPTED_DENSE_REGION_SELECTOR = [
-        "[data-dense-controls]",
-        "[data-graph-roadmap-progress]",
-        "[data-graph-stage]",
-        '[aria-label="Accessible graph browser"]',
-        '[aria-label="Edition sidebar"]',
-      ].join(", ");
-      const isAcceptedDenseRegion = (el: Element) => !!el.closest(ACCEPTED_DENSE_REGION_SELECTOR);
-      const candidates = Array.from(document.querySelectorAll<HTMLElement>('button, [role="button"], summary'));
-      const violations: { tag: string; label: string; width: number; height: number }[] = [];
-      for (const el of candidates) {
-        if (el.closest('[aria-hidden="true"]')) continue;
-        if ((el as HTMLButtonElement).disabled) continue;
-        if (el.closest('[role="separator"]')) continue;
-        const style = window.getComputedStyle(el);
-        if (style.display === "none" || style.visibility === "hidden") continue;
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 && rect.height === 0) continue; // not actually rendered
-        if (isInlineProse(el) || isInlineTextMarker(el) || isInClosedDetails(el) || isAcceptedDenseRegion(el)) continue;
-        if (rect.width < MIN || rect.height < MIN) {
-          violations.push({
-            tag: el.tagName.toLowerCase(),
-            label: (el.getAttribute("aria-label") || el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 60),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-          });
-        }
-      }
-      return violations;
-    });
-  }
 
   test("reader controls meet the 44x44 touch-target minimum", async ({ page }) => {
     const { workId } = await seedPublishedEdition(zoomUserId);

@@ -238,7 +238,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
             id="monitor-type"
             value={monitorType}
             onChange={(e) => setMonitorType(e.target.value as MonitorType)}
-            className="app-control rounded border border-[var(--color-border)] px-3 py-2 text-sm"
+            className="app-control min-h-11 rounded border border-[var(--color-border)] px-3 py-2 text-sm"
           >
             <option value="topic">Topic</option>
             <option value="citation_alert">Citation alert</option>
@@ -251,14 +251,14 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={MONITOR_TYPE_HINT[monitorType]}
-            className="app-control min-w-0 flex-1 rounded border border-[var(--color-border)] px-3 py-2 text-sm"
+            className="app-control min-h-11 min-w-0 flex-1 rounded border border-[var(--color-border)] px-3 py-2 text-sm"
           />
           <label className="sr-only" htmlFor="monitor-cadence">Cadence</label>
           <select
             id="monitor-cadence"
             value={cadence}
             onChange={(e) => setCadence(e.target.value as Cadence)}
-            className="app-control rounded border border-[var(--color-border)] px-3 py-2 text-sm"
+            className="app-control min-h-11 rounded border border-[var(--color-border)] px-3 py-2 text-sm"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
@@ -266,7 +266,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
           </select>
           <button
             type="submit"
-            className="app-control app-press rounded border border-[var(--color-border)] px-3 py-2 text-sm disabled:opacity-50"
+            className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-2 text-sm disabled:opacity-50"
             disabled={creating || !query.trim()}
           >
             {creating ? "Creating…" : "Create monitor"}
@@ -296,7 +296,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
                     value={m.cadence}
                     onChange={(e) => updateCadence(m.id, e.target.value as Cadence)}
                     disabled={busyMonitorId === m.id}
-                    className="app-control rounded border border-[var(--color-border)] px-2 py-1 text-xs"
+                    className="app-control min-h-11 rounded border border-[var(--color-border)] px-2 py-1 text-xs"
                   >
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -304,7 +304,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
                   </select>
                   <button
                     type="button"
-                    className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
                     onClick={() => scanNow(m.id)}
                     disabled={busyMonitorId === m.id}
                   >
@@ -312,7 +312,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
                   </button>
                   <button
                     type="button"
-                    className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-error,#b3261e)] disabled:opacity-50"
+                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-error,#b3261e)] disabled:opacity-50"
                     onClick={() => deleteMonitor(m.id)}
                     disabled={busyMonitorId === m.id}
                   >
@@ -334,7 +334,11 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       <section className="mt-8" aria-labelledby="hits-list-title">
         <div className="flex items-center justify-between gap-2">
           <h2 id="hits-list-title" className="font-serif text-lg font-semibold">New findings</h2>
-          <button type="button" className="app-control text-xs underline text-[var(--color-text-muted)]" onClick={() => { void refreshHits(); void refreshMonitors(); }}>
+          <button
+            type="button"
+            className="app-control app-press inline-flex min-h-11 items-center px-2 text-xs underline text-[var(--color-text-muted)]"
+            onClick={() => { void refreshHits(); void refreshMonitors(); }}
+          >
             Refresh
           </button>
         </div>
@@ -354,13 +358,13 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
                     From monitor: {h.monitorQuery} ({MONITOR_TYPE_LABEL[h.monitorType]})
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   {h.importedCorpusItemId ? (
-                    <span className="app-control inline-block rounded-full border border-[var(--color-accent)] px-2 py-1 text-xs">In corpus</span>
+                    <span className="app-control inline-flex min-h-11 items-center rounded-full border border-[var(--color-accent)] px-3 text-xs">In corpus</span>
                   ) : (
                     <button
                       type="button"
-                      className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                      className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
                       onClick={() => addToCorpus(h.id)}
                       disabled={busyHitId === h.id}
                     >
@@ -369,7 +373,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
                   )}
                   <button
                     type="button"
-                    className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:opacity-50"
+                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
                     onClick={() => dismissHit(h.id)}
                     disabled={busyHitId === h.id}
                   >

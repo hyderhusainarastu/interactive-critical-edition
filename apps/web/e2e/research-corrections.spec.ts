@@ -32,7 +32,7 @@ import {
   listResearchRevisions,
   type ApplyResearchCorrectionInput,
 } from "@/lib/research/corrections";
-import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { auditTouchTargets, createVerifiedTestUser, deleteTestUser } from "./helpers";
 
 /**
  * Phase 29.2: the review/correction UX for every research object.
@@ -631,6 +631,69 @@ test.describe("Research corrections (Phase 29.2)", () => {
       await expect(main(page).getByRole("heading", { name: "Hypotheses & gaps" })).toBeVisible();
       expect((await scan(page)).violations, `/research/[projectId]/hypotheses (${colorScheme})`).toEqual([]);
     }
+  });
+
+  // D-25-10: the Phase 30 axe sweep found the claim-permalink correction UI
+  // (verify/dispute/hide/restore/edit/reclassify/split/merge buttons, the
+  // history drawer toggle) below the 44px touch-target minimum — some as
+  // low as 16px. Fixed sizing-only (min-h-11/min-w-11, the D-23-41
+  // precedent) on the non-compact `ResearchCorrectionControls`/
+  // `ClaimCorrectionExtras` render path; the SAME components render
+  // `compact` on the hypotheses/gaps page and stay deliberately dense
+  // (`data-dense-controls`-exempted), asserted separately below.
+  test("claim permalink page controls meet the 44x44 touch-target minimum, including every open sub-form", async ({ page }) => {
+    const { claim } = await seedWorkAndClaim(userId, `touch-${Date.now()}`);
+    await login(page);
+    await page.goto(`/research/claims/${claim.id}`);
+    await expect(main(page).getByRole("heading", { name: "Review" })).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+
+    // Open every sub-form so its own buttons/inputs render and get measured
+    // too — the audit run on plain page load never sees a form that only
+    // mounts once its own toggle is clicked (the reader-popover precedent
+    // this pattern follows, `accessibility-sweep.spec.ts`'s own comment).
+    await main(page).getByRole("button", { name: "Dispute" }).click();
+    await expect(main(page).getByPlaceholder(/Why does this look wrong/)).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+    await main(page).getByRole("button", { name: "Cancel" }).click();
+
+    await main(page).getByRole("button", { name: "History" }).click();
+    await expect(main(page).getByRole("button", { name: "Hide history" })).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+
+    await main(page).getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(main(page).locator("#claim-edit-text")).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+    await main(page).getByRole("button", { name: "Cancel edit" }).click();
+
+    await main(page).getByRole("button", { name: "Reclassify", exact: true }).click();
+    await expect(main(page).getByLabel("Claim nature")).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+    await main(page).getByRole("button", { name: "Cancel reclassify" }).click();
+
+    await main(page).getByRole("button", { name: "Split", exact: true }).click();
+    await expect(main(page).getByRole("button", { name: "Split claim" })).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+    await main(page).getByRole("button", { name: "Cancel split" }).click();
+
+    await main(page).getByRole("button", { name: "Merge with another claim" }).click();
+    await expect(main(page).getByRole("button", { name: "Merge claims" })).toBeVisible();
+    expect(await auditTouchTargets(page)).toEqual([]);
+  });
+
+  test("hypotheses page's compact correction controls stay dense-exempted from the touch-target audit", async ({ page }) => {
+    const fixture = await seedDebateWebFixture(userId, `touch-hyp-${Date.now()}`);
+    await login(page);
+    await page.goto(`/research/${fixture.projectId}/hypotheses`);
+    await expect(main(page).getByRole("heading", { name: "Hypotheses & gaps" })).toBeVisible();
+    // Scoped to the two lists the compact review chips actually live in —
+    // this page also has an unrelated, pre-existing "Generate hypotheses"
+    // button below the 44px floor that is genuinely out of THIS task's
+    // scope (D-25-10 named the monitors page, the correction UI, and the
+    // Ask Library mode selector, not this button), so a whole-page audit
+    // here would assert something this task was never asked to fix.
+    expect(await auditTouchTargets(page, '[aria-label="Generated hypotheses"]')).toEqual([]);
+    expect(await auditTouchTargets(page, '[aria-label="Research gaps"]')).toEqual([]);
   });
 
   test("corrections/revisions API and the claim permalink page are 404 while PHASE_25_RESEARCH_ENABLED is off", async ({ page }) => {

@@ -1,5 +1,7 @@
+import { isCorpusProvider, type CorpusProvider } from "@ice/research";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { dispatchImportCorpusJob } from "@/lib/research/corpus";
 import { dispatchGenerateHypothesesJob } from "@/lib/research/hypotheses";
 import { dispatchExtractClaimsJob, dispatchSynthesizeChamberJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
@@ -19,6 +21,22 @@ const postSchema = z.discriminatedUnion("jobType", [
     question: z.string().trim().min(1).max(500).optional(),
     maxHypotheses: z.coerce.number().int().min(1).max(5).optional(),
     confirm: z.boolean().default(false),
+  }),
+  z.object({
+    jobType: z.literal("import_corpus"),
+    // A bounded batch of search-result picks (Phase 30's Corpus page) — the
+    // worker's own `parseImportCorpusScope` re-validates this shape too, but
+    // failing loudly here (400, not a queued job that later errors) is
+    // cheaper for the caller.
+    items: z
+      .array(
+        z.object({
+          provider: z.string().refine(isCorpusProvider, { message: "provider must be one of the corpus-import providers." }),
+          externalId: z.string().trim().min(1),
+        }),
+      )
+      .min(1)
+      .max(10),
   }),
 ]);
 
@@ -62,6 +80,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
         return NextResponse.json({ error: result.reason }, { status: 409 });
       case "needs_confirmation":
         return NextResponse.json({ error: result.reason, needsConfirmation: true, estimatedUnits: result.estimatedUnits }, { status: 409 });
+      case "reused":
+        return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
+      case "queued":
+        return NextResponse.json({ requestId: result.requestId }, { status: 202 });
+    }
+  }
+
+  if (parsed.data.jobType === "import_corpus") {
+    // isCorpusProvider already gated each item in the zod schema above, so
+    // this cast is re-asserting a fact zod's own `.refine` type-guard
+    // narrowing doesn't reliably propagate through, not skipping a check.
+    const items = parsed.data.items.map((item) => ({ provider: item.provider as CorpusProvider, externalId: item.externalId }));
+    const result = await dispatchImportCorpusJob(userId, projectId, items);
+    switch (result.action) {
+      case "not_found":
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
       case "reused":
         return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
       case "queued":
