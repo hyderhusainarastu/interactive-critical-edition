@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "generate:project-status": "node scripts/generate-progress-checklist.mjs",
-    "check:project-status": "node scripts/generate-progress-checklist.mjs --check"
+    "check:project-status": "node scripts/generate-progress-checklist.mjs --check",
+    "check:migration-ledger": "node scripts/check-migration-ledger.mjs"
   }
 }

@@ -18,6 +18,7 @@ export {
   phase22CompetencyProviderEnabled,
   type Phase22CompetencyFeature,
 } from "./phase22";
+export { PHASE_25_FEATURE_FLAGS, phase25FeatureEnabled, type Phase25Feature } from "./phase25";
 export {
   STAGE_LABEL,
   V2_STAGE_SEQUENCE,

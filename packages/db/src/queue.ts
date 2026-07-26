@@ -18,6 +18,40 @@ export const QUEUE_RESOLVE_CITATION_METADATA = "resolve-citation-metadata";
 /** Paid, source-grounded cross-work judgements (Phase 12.5). */
 export const QUEUE_EXPAND_CROSS_LIBRARY_GRAPH = "expand-cross-library-graph";
 
+/**
+ * Phase 25 research engine. Four queues, grouped by cost profile and trigger
+ * rather than one queue per pipeline stage:
+ *
+ *  - `extract-research-claims` — paid extraction over project members. Never
+ *    auto-fires on upload (plan §Pipeline): membership, an explicit action, or
+ *    a corpus import triggers it, so nothing spends money without a user action.
+ *  - `analyze-claim-debates` — relationship detection AND clustering as one
+ *    staged, resumable request. Deliberately not two queues: a separate
+ *    clustering enqueue would introduce a lost-enqueue failure mode where paid
+ *    judgements exist with nothing to group them.
+ *  - `synthesize-research-output` — Evidence Chamber + hypotheses, explicit
+ *    action only (the most expensive, least automatic stage).
+ *  - `import-research-corpus` — zero AI cost; also carries scheduled monitors,
+ *    whose cadence defaults to paused behind a flag that defaults off.
+ *
+ * These run on their OWN queues, independent of `extract-text`: the edition
+ * pipeline's stage sequence is untouched by the research engine.
+ */
+export const QUEUE_EXTRACT_RESEARCH_CLAIMS = "extract-research-claims";
+export const QUEUE_ANALYZE_CLAIM_DEBATES = "analyze-claim-debates";
+export const QUEUE_SYNTHESIZE_RESEARCH = "synthesize-research-output";
+export const QUEUE_IMPORT_RESEARCH_CORPUS = "import-research-corpus";
+
+/** Every research queue carries the same payload. */
+export const RESEARCH_QUEUES = [
+  QUEUE_EXTRACT_RESEARCH_CLAIMS,
+  QUEUE_ANALYZE_CLAIM_DEBATES,
+  QUEUE_SYNTHESIZE_RESEARCH,
+  QUEUE_IMPORT_RESEARCH_CORPUS,
+] as const;
+
+export type ResearchQueueName = (typeof RESEARCH_QUEUES)[number];
+
 export interface ExtractTextJob {
   documentId: string;
 }
@@ -32,6 +66,18 @@ export interface ResolveCitationMetadataJob {
 
 export interface ExpandCrossLibraryGraphJob {
   expansionRequestId: string;
+}
+
+/**
+ * The ONLY payload any research queue carries. Everything a handler needs —
+ * scope, budget, confirmation state, progress, coverage — lives on the
+ * `research_job_request` row this id points at, so a queue message can never
+ * disagree with the ledger, and a redelivered message re-reads current state
+ * instead of acting on a stale snapshot (the `graph_expansion_request`
+ * precedent).
+ */
+export interface ResearchJobPayload {
+  requestId: string;
 }
 
 let bossPromise: Promise<PgBoss> | undefined;
@@ -81,6 +127,10 @@ export function getQueue(): Promise<PgBoss> {
       .then(() => boss.createQueue(QUEUE_ANALYZE_WORK))
       .then(() => boss.createQueue(QUEUE_RESOLVE_CITATION_METADATA))
       .then(() => boss.createQueue(QUEUE_EXPAND_CROSS_LIBRARY_GRAPH))
+      .then(() => boss.createQueue(QUEUE_EXTRACT_RESEARCH_CLAIMS))
+      .then(() => boss.createQueue(QUEUE_ANALYZE_CLAIM_DEBATES))
+      .then(() => boss.createQueue(QUEUE_SYNTHESIZE_RESEARCH))
+      .then(() => boss.createQueue(QUEUE_IMPORT_RESEARCH_CORPUS))
       .then(() => boss);
   }
   return bossPromise;
@@ -131,6 +181,52 @@ export async function enqueueGraphExpansion(expansionRequestId: string) {
   return boss.send(
     QUEUE_EXPAND_CROSS_LIBRARY_GRAPH,
     { expansionRequestId } satisfies ExpandCrossLibraryGraphJob,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
+}
+
+/**
+ * Phase 25 research enqueues. Idempotency lives entirely in
+ * `research_job_request` (partial unique on the in-flight statuses), so these
+ * helpers deliberately do nothing but hand the durable request id to pg-boss —
+ * exactly like `enqueueGraphExpansion`. They reuse the generous extraction
+ * expiration window for the same reason it exists there: the worker processes
+ * one job at a time, so a queued research job's clock includes everything ahead
+ * of it in the backlog, and the 15-minute pg-boss default would retry live work
+ * into duplicate paid runs.
+ */
+export async function enqueueExtractResearchClaims(requestId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_EXTRACT_RESEARCH_CLAIMS,
+    { requestId } satisfies ResearchJobPayload,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
+}
+
+export async function enqueueAnalyzeClaimDebates(requestId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_ANALYZE_CLAIM_DEBATES,
+    { requestId } satisfies ResearchJobPayload,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
+}
+
+export async function enqueueSynthesizeResearch(requestId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_SYNTHESIZE_RESEARCH,
+    { requestId } satisfies ResearchJobPayload,
+    { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
+  );
+}
+
+export async function enqueueImportResearchCorpus(requestId: string) {
+  const boss = await getQueue();
+  return boss.send(
+    QUEUE_IMPORT_RESEARCH_CORPUS,
+    { requestId } satisfies ResearchJobPayload,
     { expireInMinutes: EXTRACT_EXPIRE_MINUTES },
   );
 }

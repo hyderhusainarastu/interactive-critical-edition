@@ -648,6 +648,18 @@ export const aiUsageLogs = pgTable("ai_usage_log", {
   // processingRuns is declared later in this incrementally-grown schema;
   // the database FK is supplied by migration 0010.
   runId: uuid("run_id"),
+  /**
+   * Phase 25.6: the research engine's jobs are NOT document-scoped (a project
+   * spans works, corpus items and conversations), so neither `documentId` nor
+   * `runId` can attribute their spend. `ON DELETE set null` matches
+   * `documentId`'s precedent above: usage/cost history outlives the request it
+   * paid for (plan §22), so a deleted request nulls the link rather than
+   * destroying the ledger row. Forward reference — `researchJobRequests` is
+   * declared at the end of this incrementally-grown file.
+   */
+  researchRequestId: uuid("research_request_id").references((): AnyPgColumn => researchJobRequests.id, {
+    onDelete: "set null",
+  }),
   task: text("task").notNull(),
   stage: text("stage"),
   provider: text("provider").notNull(),
@@ -656,7 +668,11 @@ export const aiUsageLogs = pgTable("ai_usage_log", {
   completionTokens: integer("completion_tokens").notNull().default(0),
   estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // The research job runner seeds its budget by summing this table for its own
+  // request id (the `analyze.ts` idiom), so this is a hot read, not reporting.
+  index("ai_usage_log_research_request_idx").on(t.researchRequestId),
+]);
 
 /**
  * Phase 5 scope: reading roadmap + knowledge profile (plan §7/§13).
@@ -2373,5 +2389,337 @@ export const feedback = pgTable(
   (t) => [
     index("feedback_created_at_idx").on(t.createdAt),
     check("feedback_body_length", sql`char_length(${t.body}) <= 10000`),
+  ],
+);
+
+/* ------------------------------------------------------------------------- *
+ * Phase 25 — Research workspace foundation (migration 0038)
+ *
+ * The ScholarLens integration's *foundation* only: the project model, the job
+ * ledger, and the revision spine. The objects those jobs produce
+ * (`research_claim`, `claim_score`, `claim_locus`, `research_claim_embedding`,
+ * `claim_pair_candidate`, `claim_relationship`, `debate_cluster`,
+ * `evidence_chamber`, `research_hypothesis`, `research_gap`,
+ * `research_corpus_item`) land in migrations 0039–0045, each with its own lane.
+ *
+ * Nothing here repurposes an existing table. `work_claim`, `generated_claim`,
+ * `claim_evidence`, `work_relationship_candidate`/`work_relationship_judgment`
+ * stay untouched — they feed the Phase 12.5 cross-library graph and generated
+ * notes, and reusing them would break shipped behaviour (plan §Schema). The new
+ * tables copy their proven patterns instead: `basisHash`-style idempotency,
+ * DB-enforced XOR CHECKs, and the reused `verification_status`/
+ * `provenance_source` enums rather than a second vocabulary.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * What a research project can contain. `corpus_item` is declared here in 0038
+ * even though `research_corpus_item` does not exist until 0039 — a pgEnum value
+ * cannot be added inside a transaction alongside its first use in older
+ * Postgres, and staging the *value* now keeps 0039 additive (one column, one
+ * FK, one widened CHECK). Until then the typed-target CHECK below has no
+ * `corpus_item` branch, so a row claiming that type is rejected by the database
+ * rather than being silently accepted with no target.
+ */
+export const researchMemberTypeEnum = pgEnum("research_member_type", [
+  "work",
+  "corpus_item",
+  "writer_project",
+  "rag_conversation",
+]);
+
+/**
+ * How central a member is to the project's question. This drives what claim
+ * extraction is allowed to spend money on: `central`/`supporting` membership is
+ * one of the three triggers for extraction (plan §Pipeline — extraction never
+ * auto-fires on upload), `background` is context only.
+ */
+export const researchMemberRoleEnum = pgEnum("research_member_role", [
+  "central",
+  "supporting",
+  "background",
+]);
+
+/** The seven research job kinds, one per pipeline stage the program ships. */
+export const researchJobTypeEnum = pgEnum("research_job_type", [
+  "extract_claims",
+  "detect_relationships",
+  "cluster_debates",
+  "synthesize_chamber",
+  "generate_hypotheses",
+  "import_corpus",
+  "run_monitor",
+]);
+
+/**
+ * Deliberately a superset of `graph_expansion_status` (which this table is
+ * modelled on) rather than a reuse of it: research jobs add `cancelled`, and
+ * widening the shipped graph-expansion enum to get it would change the domain
+ * of a table already in production for no benefit.
+ */
+export const researchJobStatusEnum = pgEnum("research_job_status", [
+  "planned",
+  "queued",
+  "running",
+  "complete",
+  "failed",
+  "cancelled",
+]);
+
+/**
+ * The honesty column's vocabulary. A job that hit a cap must say so: `partial`
+ * (a soft cap stopped it, with the covered scope recorded in `note`) and
+ * `sampled` (it deliberately looked at a subset) are both first-class outcomes,
+ * never silently reported as `full`. Same discipline as the pipeline's
+ * `structure-limited` labelling.
+ */
+export const researchJobCoverageEnum = pgEnum("research_job_coverage", ["full", "partial", "sampled"]);
+
+/** Every generated research object that a user can correct, for `research_revision`. */
+export const researchObjectTypeEnum = pgEnum("research_object_type", [
+  "claim",
+  "relationship",
+  "cluster",
+  "chamber",
+  "position",
+  "hypothesis",
+  "gap",
+]);
+
+/**
+ * The correction vocabulary. `generated` is the immutable revision-0 snapshot
+ * the pipeline writes; every other action is a human decision. There is
+ * deliberately no `endorsed`/`accepted` action and no system-authored variant
+ * of one — see `research_revision_no_auto_endorsement` below.
+ */
+export const researchRevisionActionEnum = pgEnum("research_revision_action", [
+  "generated",
+  "verified",
+  "disputed",
+  "edited",
+  "split",
+  "merged",
+  "hidden",
+  "restored",
+  "reclassified",
+]);
+
+/**
+ * A research project: the scoping unit for every paid research job. Pair
+ * detection is project-scoped and never library-scoped, which is what bounds
+ * the O(n²) judgement surface (plan §Pipeline/Budget). Shape deliberately
+ * mirrors `writer_project` above — same ownership, sort, archive and index
+ * conventions — so the two workspaces behave identically where they overlap.
+ */
+export const researchProjects = pgTable(
+  "research_project",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** Optional free-text framing of the project; never model-authored. */
+    summary: text("summary"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_project_user_archived_idx").on(t.userId, t.archivedAt, t.sortOrder),
+  ],
+);
+
+/**
+ * The user's own research questions, in their own order. Kept as rows rather
+ * than a jsonb array on the project so a question can later be referenced by a
+ * gap/hypothesis FK without depending on an array position.
+ */
+export const researchProjectQuestions = pgTable(
+  "research_project_question",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    unique("research_project_question_order_unique").on(t.projectId, t.sortOrder),
+  ],
+);
+
+/**
+ * What is in a project. Typed nullable FKs plus a DB CHECK that ties the
+ * declared `memberType` to the column actually populated — the
+ * `reading_record_exactly_one_target` precedent, extended so the type column
+ * can never disagree with the target.
+ *
+ * STAGED ACROSS TWO MIGRATIONS (deliberate, documented deviation from the
+ * plan's single-table sketch): `research_corpus_item` does not exist until
+ * migration 0039, so a `corpus_item_id` column and its FK cannot be created
+ * here. 0038 therefore ships three target columns and a three-branch CHECK;
+ * 0039 adds `corpus_item_id` + its FK and REPLACES this CHECK with the
+ * four-branch version. Until that happens `memberType = 'corpus_item'` matches
+ * no branch of the CHECK and is rejected by Postgres — the staging is enforced,
+ * not merely intended.
+ */
+export const researchProjectMembers = pgTable(
+  "research_project_member",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    memberType: researchMemberTypeEnum("member_type").notNull(),
+    workId: uuid("work_id").references(() => works.id, { onDelete: "cascade" }),
+    // 0039 adds: corpusItemId -> research_corpus_item.id (cascade).
+    writerProjectId: uuid("writer_project_id").references(() => writerProjects.id, { onDelete: "cascade" }),
+    ragConversationId: uuid("rag_conversation_id").references(() => ragConversations.id, { onDelete: "cascade" }),
+    role: researchMemberRoleEnum("role").notNull().default("supporting"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_project_member_project_idx").on(t.projectId, t.memberType),
+    index("research_project_member_work_idx").on(t.workId),
+    // Postgres's DEFAULT null handling (NULLS DISTINCT) is exactly what is
+    // wanted here and is the opposite of `resource_role`'s case: these indexes
+    // must stop the same work/project/conversation being added to one project
+    // twice, while allowing any number of rows whose target column is null
+    // because they point at a different member type.
+    uniqueIndex("research_project_member_work_unique").on(t.projectId, t.workId),
+    uniqueIndex("research_project_member_writer_unique").on(t.projectId, t.writerProjectId),
+    uniqueIndex("research_project_member_conversation_unique").on(t.projectId, t.ragConversationId),
+    check(
+      "research_project_member_typed_target",
+      sql`(${t.memberType} = 'work' AND ${t.workId} IS NOT NULL AND ${t.writerProjectId} IS NULL AND ${t.ragConversationId} IS NULL)
+        OR (${t.memberType} = 'writer_project' AND ${t.writerProjectId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.ragConversationId} IS NULL)
+        OR (${t.memberType} = 'rag_conversation' AND ${t.ragConversationId} IS NOT NULL AND ${t.workId} IS NULL AND ${t.writerProjectId} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * The single idempotency / cost / progress ledger for every research job,
+ * modelled on `graph_expansion_request` (plan §Schema). Every research queue
+ * payload is just `{ requestId }` — this row, not the queue message, is the
+ * durable record of what was asked for, what it may spend, how far it got and
+ * how honestly it covered its scope.
+ *
+ * `idempotencyKey` is a hash of job type + scope + the prompt/vocabulary/
+ * threshold versions in force, so a re-request under an unchanged world reuses
+ * the in-flight row while a prompt-version bump legitimately re-runs. The
+ * unique index is PARTIAL — only in-flight statuses collide, so completed and
+ * failed history accumulates instead of blocking the next identical request
+ * (the shipped `graph_expansion_request_idempotency_unique` is total, which is
+ * why that table can never re-run an identical expansion; deliberate divergence).
+ */
+export const researchJobRequests = pgTable(
+  "research_job_request",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    jobType: researchJobTypeEnum("job_type").notNull(),
+    /** What the job operates on: `{ projectId, claimIds?, workIds?, ... }`. Shape is owned by `planResearchJob()`, validated before insert. */
+    scope: jsonb("scope").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: researchJobStatusEnum("status").notNull().default("planned"),
+    /** Human-readable current stage, same role as `processing_run.stage`. */
+    stage: text("stage"),
+    progressIndex: integer("progress_index"),
+    progressTotal: integer("progress_total"),
+    estimatedCostUsd: real("estimated_cost_usd").notNull().default(0),
+    /** Reconciled from `ai_usage_log.research_request_id`, never trusted from a client. */
+    actualCostUsd: real("actual_cost_usd").notNull().default(0),
+    /** True when the shown estimate crossed the confirmation threshold; the worker refuses to start until `confirmedAt` is set. */
+    requiresConfirmation: boolean("requires_confirmation").notNull().default(false),
+    confirmedAt: timestamp("confirmed_at"),
+    /** Null until the job finishes — an unfinished job has no coverage claim to make. */
+    coverage: researchJobCoverageEnum("coverage"),
+    /** Free-text honesty companion to `coverage`, e.g. the exact sections covered by a `partial` run. */
+    note: text("note"),
+    error: text("error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_job_request_user_type_status_idx").on(t.userId, t.jobType, t.status),
+    index("research_job_request_user_created_idx").on(t.userId, t.createdAt),
+    uniqueIndex("research_job_request_inflight_idempotency_unique")
+      .on(t.userId, t.idempotencyKey)
+      .where(sql`${t.status} in ('planned', 'queued', 'running')`),
+    check("research_job_request_cost_valid", sql`${t.estimatedCostUsd} >= 0 AND ${t.actualCostUsd} >= 0`),
+    check(
+      "research_job_request_progress_valid",
+      sql`(${t.progressIndex} IS NULL OR ${t.progressIndex} >= 0)
+        AND (${t.progressTotal} IS NULL OR ${t.progressTotal} >= 0)`,
+    ),
+  ],
+);
+
+/**
+ * The revision spine: corrections never overwrite. Every generated research
+ * object gets an immutable `revision = 0` / `action = 'generated'` snapshot,
+ * and every subsequent human decision appends a row carrying full before/after
+ * snapshots. History views read this table; `applyResearchCorrection()` is the
+ * only writer.
+ *
+ * STAGED ACROSS SEVEN MIGRATIONS (deliberate, documented deviation from the
+ * plan's single-table sketch — recorded here because a reader of 0038 alone
+ * would otherwise see a revision table with nothing to revise): the seven typed
+ * object FKs cannot be created before their target tables exist, so 0038 ships
+ * the shared shape plus the two CHECKs that need no FK. Each later migration
+ * adds ITS OWN nullable FK column, its per-type partial unique
+ * `(<object>_id, revision)`, and extends the typed-target XOR CHECK:
+ *
+ *   0039 → `research_claim_id`        (research_claim)
+ *   0040 → `claim_relationship_id`    (claim_relationship)
+ *   0041 → `debate_cluster_id`        (debate_cluster)
+ *   0042 → `evidence_chamber_id` + `evidence_chamber_position_id`
+ *   0043 → `research_hypothesis_id`, `research_gap_id`
+ *
+ * Until a type's column exists, `objectType` naming it is unsatisfiable for the
+ * same reason `memberType = 'corpus_item'` is above — once the XOR CHECK lands
+ * in 0039 there is no branch to satisfy. Between 0038 and 0039 the table is
+ * shape-only and nothing writes to it.
+ */
+export const researchRevisions = pgTable(
+  "research_revision",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    objectType: researchObjectTypeEnum("object_type").notNull(),
+    // 0039-0043 add the seven typed object FK columns listed above.
+    /** Monotonic per object. 0 is always the immutable generated snapshot. */
+    revision: integer("revision").notNull(),
+    action: researchRevisionActionEnum("action").notNull(),
+    /** Null on revision 0 — a generated object had no prior state. */
+    before: jsonb("before"),
+    after: jsonb("after").notNull(),
+    editor: provenanceEnum("editor").notNull(),
+    /** Null for the system-authored generated snapshot; set for every human action. */
+    editorUserId: uuid("editor_user_id").references(() => users.id, { onDelete: "set null" }),
+    reason: text("reason"),
+    promptVersion: text("prompt_version"),
+    provider: text("provider"),
+    model: text("model"),
+    /** The other objects a `split`/`merge` produced or consumed. */
+    relatedObjectIds: jsonb("related_object_ids"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("research_revision_user_object_idx").on(t.userId, t.objectType, t.createdAt),
+    /**
+     * The schema-level expression of the research-gated no-auto-endorsement
+     * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
+     * database accepts from `editor = 'system'` is the immutable `generated`
+     * snapshot, and conversely a `generated` row can only come from the system.
+     * Combined with `applyResearchCorrection`'s editor type having no
+     * `'system'` member, an auto-endorsement path cannot be written, compiled
+     * OR inserted. Do not relax this to add a "system verified" convenience.
+     */
+    check(
+      "research_revision_no_auto_endorsement",
+      sql`(${t.action} = 'generated' AND ${t.editor} = 'system') OR (${t.action} <> 'generated' AND ${t.editor} <> 'system')`,
+    ),
+    /** The generated snapshot is revision 0 by definition, so history is always rooted at a known state. */
+    check("research_revision_generated_is_zero", sql`(${t.action} <> 'generated') OR (${t.revision} = 0)`),
   ],
 );
