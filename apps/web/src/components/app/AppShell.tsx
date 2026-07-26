@@ -43,6 +43,7 @@ export function AppShell({
   admin,
   writerEnabled,
   ragEnabled,
+  researchEnabled,
   initialPreferences,
   initialReaderLevel = null,
   children,
@@ -54,6 +55,7 @@ export function AppShell({
   admin: boolean;
   writerEnabled: boolean;
   ragEnabled: boolean;
+  researchEnabled: boolean;
   initialPreferences: WorkspacePreferences;
   initialReaderLevel?: ReaderLevel | null;
   children: React.ReactNode;
@@ -61,13 +63,13 @@ export function AppShell({
   return (
     <ToastProvider>
       <WorkspacePreferencesProvider initialPreferences={initialPreferences}>
-        <AppShellContents userId={userId} email={email} name={name} image={image} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
+        <AppShellContents userId={userId} email={email} name={name} image={image} admin={admin} writerEnabled={writerEnabled} ragEnabled={ragEnabled} researchEnabled={researchEnabled} initialReaderLevel={initialReaderLevel}>{children}</AppShellContents>
       </WorkspacePreferencesProvider>
     </ToastProvider>
   );
 }
 
-function AppShellContents({ userId, email, name, image, admin, writerEnabled, ragEnabled, initialReaderLevel, children }: { userId: string; email: string | null | undefined; name: string | null | undefined; image: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
+function AppShellContents({ userId, email, name, image, admin, writerEnabled, ragEnabled, researchEnabled, initialReaderLevel, children }: { userId: string; email: string | null | undefined; name: string | null | undefined; image: string | null | undefined; admin: boolean; writerEnabled: boolean; ragEnabled: boolean; researchEnabled: boolean; initialReaderLevel: ReaderLevel | null; children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
@@ -107,6 +109,7 @@ function AppShellContents({ userId, email, name, image, admin, writerEnabled, ra
     { href: "/library", label: "Library" },
     ...(ragEnabled ? [{ href: "/ask-library", label: "Ask Library" }] : []),
     ...(writerEnabled ? [{ href: "/writer", label: "Writer" }] : []),
+    ...(researchEnabled ? [{ href: "/research", label: "Research" }] : []),
     { href: "/upload", label: "Upload" },
     ...(admin ? [{ href: "/admin", label: "Admin" }] : []),
   ];

@@ -1,0 +1,441 @@
+import AxeBuilder from "@axe-core/playwright";
+import {
+  claimLoci,
+  claimScores,
+  db,
+  documents,
+  pages,
+  processingRuns,
+  researchClaims,
+  researchJobRequests,
+  researchProjectMembers,
+  researchProjectQuestions,
+  textBlocks,
+  users,
+  works,
+} from "@ice/db";
+import { eq } from "drizzle-orm";
+import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
+import { expect, test, type Page } from "@playwright/test";
+import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+
+/**
+ * Next streams an unmounted server segment in a hidden holder near
+ * `</body>` while a page is hydrating (D-19-36, documented in
+ * docs/PROJECT-LOG.md as a self-healing Next.js/React streaming-SSR
+ * artifact) — a transient duplicate can make a bare `page.getByText(...)`
+ * match twice. Every real-page assertion in this file is scoped to
+ * `#main-content` (the same convention `curriculum.spec.ts`/
+ * `canonical-identity.spec.ts` already use) so that hidden holder can never
+ * make an assertion flaky.
+ */
+function main(page: Page) {
+  return page.locator("#main-content");
+}
+
+/**
+ * Phase 28.1: Research workspace web surfaces. Everything here is CI-safe —
+ * seeded directly against Postgres (no worker process, no live model/
+ * bibliographic call). The one exception is the "Extract claims" dispatch
+ * test, which drives the real POST /api/research/projects/:id/jobs route:
+ * that only needs pg-boss's own schema (already provisioned on this shared
+ * local Postgres — see docs/PROJECT-LOG.md) to accept an enqueue, never a
+ * running worker to consume it, so it stays CI-safe too.
+ */
+
+const EMAIL = `e2e-research-${Date.now()}@example.com`;
+const SECOND_EMAIL = `e2e-research-other-${Date.now()}@example.com`;
+const PASSWORD = "password123";
+let userId = "";
+
+async function login(page: Page, email = EMAIL) {
+  await page.goto("/login");
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Log in" }).click();
+  await page.waitForURL("**/dashboard");
+}
+
+async function markOnboarded(id: string) {
+  await db.update(users).set({ preferences: { onboardedAt: new Date().toISOString() } }).where(eq(users.id, id));
+}
+
+/** Same 300ms settle precedent as accessibility-sweep.spec.ts (D-19-8) —
+ *  gives `.app-control`/`.app-panel-enter` transitions time to finish
+ *  before axe reads computed color/contrast. */
+async function scan(page: Page) {
+  await page.waitForTimeout(300);
+  return new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+}
+
+/**
+ * Seeds one work with a published edition (a real `processing_run` +
+ * `text_block`, so `research_claim.text_block_id` anchors to something
+ * real) and 3 `research_claim` rows spanning distinct nature/anchor/
+ * verification combinations, plus `claim_score`/`claim_locus` rows on the
+ * first, and 2 `research_job_request` rows (one complete, one failed) — the
+ * full shape the claims table / permalink / insight feed / jobs panel all
+ * read from. Bypasses the worker entirely (same CI-safety reasoning as
+ * `seedPublishedEdition`).
+ */
+async function seedResearchClaimsFixture(ownerId: string, workTitle: string) {
+  const bodyText = "Vicious people act on decision, yet live according to passion, unlike the merely incontinent.";
+  const [work] = await db.insert(works).values({ userId: ownerId, title: workTitle, authorName: "Test Author" }).returning({ id: works.id });
+  const [doc] = await db
+    .insert(documents)
+    .values({
+      userId: ownerId,
+      workId: work.id,
+      storagePath: `${ownerId}/${work.id}/edition.txt`,
+      originalFilename: "edition.txt",
+      mimeType: "text/plain",
+      fileSize: 200,
+      processingStatus: "ready",
+      analysisStatus: "complete",
+      extractedText: bodyText,
+    })
+    .returning({ id: documents.id });
+  const [run] = await db
+    .insert(processingRuns)
+    .values({ documentId: doc.id, version: 1, pipelineVersion: "v2", status: "complete", stage: "publish", structureState: "full", isPublished: true, degraded: false })
+    .returning({ id: processingRuns.id });
+  const [page] = await db.insert(pages).values({ runId: run.id, pageIndex: 0, isOcr: false, text: bodyText }).returning({ id: pages.id });
+  const [bodyBlock] = await db
+    .insert(textBlocks)
+    .values({ pageId: page.id, blockOrder: 0, kind: "body", text: bodyText })
+    .returning({ id: textBlocks.id });
+
+  const [anchoredClaim] = await db
+    .insert(researchClaims)
+    .values({
+      userId: ownerId,
+      workId: work.id,
+      processingRunId: run.id,
+      textBlockId: bodyBlock.id,
+      quote: "live according to passion",
+      prefix: "yet ",
+      suffix: ", unlike",
+      anchorState: "anchored",
+      claimText: "Vicious agents act on decision while living according to passion.",
+      claimNature: "interpretive",
+      confidence: "high",
+      section: "",
+      sourceScope: "full_text",
+      supportingExcerpt: "Vicious people act on decision, yet live according to passion",
+      excerptVerified: true,
+      contentHash: "e2e-research-fixture-hash-1",
+      promptVersion: "claim-extraction-v1",
+      status: "active",
+      verificationStatus: "unreviewed",
+    })
+    .returning({ id: researchClaims.id });
+
+  const [empiricalClaim] = await db
+    .insert(researchClaims)
+    .values({
+      userId: ownerId,
+      workId: work.id,
+      processingRunId: run.id,
+      textBlockId: bodyBlock.id,
+      quote: "the merely incontinent",
+      prefix: "unlike ",
+      suffix: ".",
+      anchorState: "anchored",
+      claimText: "The vicious agent is distinct from the merely incontinent agent.",
+      claimNature: "empirical",
+      confidence: "medium",
+      section: "",
+      sourceScope: "full_text",
+      supportingExcerpt: "unlike the merely incontinent",
+      excerptVerified: true,
+      contentHash: "e2e-research-fixture-hash-2",
+      promptVersion: "claim-extraction-v1",
+      status: "active",
+      verificationStatus: "user_verified",
+    })
+    .returning({ id: researchClaims.id });
+
+  // A claim whose anchor was lost by a later reprocess (plan §Pipeline
+  // "Reprocess supersession") — never deleted, only marked, and the
+  // permalink must NOT offer a jump-to-reader link for this one.
+  const [unanchoredClaim] = await db
+    .insert(researchClaims)
+    .values({
+      userId: ownerId,
+      workId: work.id,
+      processingRunId: null,
+      textBlockId: null,
+      quote: null,
+      prefix: null,
+      suffix: null,
+      anchorState: "unanchored",
+      claimText: "A claim whose original passage no longer matches after reprocessing.",
+      claimNature: "historical",
+      confidence: "low",
+      section: "",
+      sourceScope: "full_text",
+      supportingExcerpt: "a passage that no longer matches",
+      excerptVerified: false,
+      contentHash: "e2e-research-fixture-hash-3",
+      promptVersion: "claim-extraction-v1",
+      status: "active",
+      verificationStatus: "disputed",
+    })
+    .returning({ id: researchClaims.id });
+
+  await db.insert(claimScores).values([
+    { claimId: anchoredClaim.id, dimension: "textual_support", score: 0.72, label: "strong", tier: "direct_quotation", signals: ["direct_quotation", "multiple_loci"], scorerVersion: "textual-support-v1" },
+    { claimId: empiricalClaim.id, dimension: "evidence_strength", score: 0.35, label: "weak", tier: "observational", signals: ["hedged_language"], scorerVersion: "evidence-strength-v1" },
+  ]);
+  await db.insert(claimLoci).values([
+    { claimId: anchoredClaim.id, locusKey: "aristotle:nicomachean-ethics:1150b", origin: "excerpt", rawLocus: "1150b19-22" },
+  ]);
+
+  await db.insert(researchJobRequests).values([
+    {
+      userId: ownerId,
+      jobType: "extract_claims",
+      scope: { workIds: [work.id] },
+      idempotencyKey: `e2e-research-complete-${work.id}`,
+      status: "complete",
+      coverage: "full",
+      note: "Extracted 3 claims from 1 chunk.",
+      estimatedCostUsd: 0.01,
+      actualCostUsd: 0.01,
+    },
+    {
+      userId: ownerId,
+      jobType: "extract_claims",
+      scope: { workIds: [work.id] },
+      idempotencyKey: `e2e-research-failed-${work.id}`,
+      status: "failed",
+      error: "Simulated extraction failure for testing.",
+      estimatedCostUsd: 0.01,
+      actualCostUsd: 0,
+    },
+  ]);
+
+  return { workId: work.id, documentId: doc.id, runId: run.id, bodyBlockId: bodyBlock.id, anchoredClaimId: anchoredClaim.id, unanchoredClaimId: unanchoredClaim.id };
+}
+
+async function createProjectViaApi(page: Page, title: string): Promise<string> {
+  const response = await page.request.post("/api/research/projects", { data: { title } });
+  const body = await response.json();
+  return body.project.id as string;
+}
+
+test.describe("Research workspace (Phase 28.1)", () => {
+  test.beforeAll(async () => {
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+    await markOnboarded(userId);
+    const otherId = await createVerifiedTestUser(SECOND_EMAIL, PASSWORD);
+    await markOnboarded(otherId);
+  });
+  test.afterAll(async () => {
+    await deleteTestUser(EMAIL);
+    await deleteTestUser(SECOND_EMAIL);
+  });
+
+  test("the /research workspace and its API are 404 while PHASE_25_RESEARCH_ENABLED is off", async ({ page, request }) => {
+    const port = 3111;
+    const webRoot = path.resolve(__dirname, "..");
+    let server: ChildProcess | undefined;
+    try {
+      // Spawn a second built server on its own port with the flag
+      // explicitly overridden false — Node's own env-var precedence (an
+      // explicitly-set `env` entry beats a `.env.local` value the app later
+      // loads) confirmed working by hand against a throwaway port before
+      // writing this. `next/dist/bin/next` (not the `.bin/next` shell
+      // wrapper) is spawned directly since it carries its own `#!/usr/bin/env
+      // node` shebang and is a real JS entry point `spawn()` can exec.
+      server = spawn(path.join(webRoot, "node_modules", "next", "dist", "bin", "next"), ["start", "-p", String(port)], {
+        cwd: webRoot,
+        env: { ...process.env, PORT: String(port), PHASE_25_RESEARCH_ENABLED: "false" },
+        stdio: "ignore",
+      });
+      const base = `http://localhost:${port}`;
+      const deadline = Date.now() + 30_000;
+      let ready = false;
+      while (Date.now() < deadline && !ready) {
+        try {
+          const response = await fetch(`${base}/login`);
+          if (response.ok) ready = true;
+        } catch {
+          // server not accepting connections yet
+        }
+        if (!ready) await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      expect(ready, "second server (flag off) never became ready").toBe(true);
+
+      // The API route checks the flag BEFORE authentication (see
+      // `requireResearchApiUser`), so an unauthenticated request already
+      // proves it, and route handlers set their status directly
+      // (`NextResponse.json(..., { status: 404 })`), so the HTTP status
+      // itself is a reliable signal here.
+      const apiResponse = await request.get(`${base}/api/research/projects`);
+      expect(apiResponse.status()).toBe(404);
+
+      // The PAGE route's own flag check runs inside `ResearchPage`, but two
+      // things make its HTTP status code an unreliable signal for a real
+      // logged-in visit: (1) the shared `(app)/layout.tsx` calls
+      // `requireSession()` first for every route in that group, so an
+      // unauthenticated visitor never even reaches the flag check; (2) the
+      // `(app)` route group has its own `loading.tsx`, which makes the
+      // whole subtree stream — Next commits the initial 200 status as soon
+      // as the shell starts streaming, before the page's own `notFound()`
+      // resolves deeper in that same stream, so even a real, correctly
+      // triggered `notFound()` can no longer change the already-sent status
+      // code (confirmed by inspecting the raw response: it carries a
+      // `NEXT_HTTP_ERROR_FALLBACK;404` digest and the real not-found
+      // content, wrapped in an HTTP 200). This is a structural property of
+      // every page under `(app)`, not specific to this route. What's
+      // actually verifiable — and what the flag is really for — is that a
+      // logged-in visitor sees the not-found content instead of the real
+      // Research page, which is checked below.
+      await page.goto(`${base}/login`);
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("**/dashboard");
+      await page.goto(`${base}/research`);
+      await expect(main(page).getByText("That page is not here.")).toBeVisible();
+      await expect(main(page).getByRole("heading", { name: "Research" })).toHaveCount(0);
+    } finally {
+      server?.kill("SIGTERM");
+    }
+  });
+
+  test("creates a project, adds questions and a work member, and dispatches claim extraction", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Dispatch-test work");
+    await login(page);
+    await page.goto("/research");
+    await expect(main(page).getByRole("heading", { name: "Research" })).toBeVisible();
+
+    page.once("dialog", (dialog) => dialog.accept("Vice and akrasia"));
+    await main(page).getByRole("button", { name: "New project" }).click();
+    await page.waitForURL("**/research/*");
+    await expect(main(page).getByRole("heading", { name: "Vice and akrasia" })).toBeVisible();
+
+    await main(page).getByLabel("New research question").fill("Are vice and akrasia the same psychological state?");
+    await main(page).getByRole("button", { name: "Add", exact: true }).click();
+    await expect(main(page).getByText("Are vice and akrasia the same psychological state?")).toBeVisible();
+
+    await main(page).getByLabel("Add a work from your Library").selectOption(fixture.workId);
+    await main(page).getByLabel("Role").selectOption("central");
+    await main(page).getByRole("button", { name: "Add to project" }).click();
+    await expect(main(page).getByText("Dispatch-test work")).toBeVisible();
+
+    const extractButton = main(page).getByRole("button", { name: "Extract claims" });
+    await expect(extractButton).toBeVisible();
+    await extractButton.click();
+    await expect(main(page).getByRole("heading", { name: "Research jobs" })).toBeVisible();
+    // The two seeded fixture requests already render "Complete"/"Failed" —
+    // "Queued" only appears for the request this click just created.
+    await expect(main(page).getByText("Queued").first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("archives and restores a project, and does not disclose another user's project", async ({ page, browser }) => {
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Archivable project");
+    await page.goto(`/research/${projectId}`);
+    await expect(main(page).getByRole("heading", { name: "Archivable project" })).toBeVisible();
+
+    const archiveResponse = await page.request.delete(`/api/research/projects/${projectId}`);
+    expect(archiveResponse.status()).toBe(200);
+
+    await page.goto("/research");
+    await expect(main(page).getByText("Archivable project")).not.toBeVisible();
+    await main(page).getByRole("button", { name: "Show archived projects" }).click();
+    await expect(main(page).getByRole("heading", { name: "Archived projects" })).toBeVisible();
+    await expect(main(page).getByRole("heading", { name: "Archivable project" })).toBeVisible();
+    await main(page).getByRole("button", { name: "Restore project" }).click();
+    await expect(main(page).getByRole("link", { name: "Archivable project" })).toBeVisible();
+
+    const other = await browser.newPage();
+    await login(other, SECOND_EMAIL);
+    const response = await other.request.get(`/api/research/projects/${projectId}`);
+    expect(response.status()).toBe(404);
+    await other.close();
+  });
+
+  test("claims table renders seeded claims and filters wire control to state to output", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Filterable work");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Claims filter project");
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixture.workId, role: "central" });
+
+    await page.goto(`/research/${projectId}/claims`);
+    await expect(main(page).getByRole("heading", { name: "Claims" })).toBeVisible();
+    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).toBeVisible();
+    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
+    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+
+    await main(page).getByLabel("Nature").selectOption("empirical");
+    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
+    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
+
+    await main(page).getByLabel("Nature").selectOption("");
+    await main(page).getByLabel("Anchor").selectOption("unanchored");
+    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
+
+    await main(page).getByLabel("Anchor").selectOption("");
+    await main(page).getByLabel("Verification").selectOption("disputed");
+    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).not.toBeVisible();
+  });
+
+  test("claim permalink shows excerpt, scores, loci, and a jump-to-reader link only when a real anchor exists", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Permalink work");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Permalink project");
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixture.workId, role: "central" });
+
+    await page.goto(`/research/claims/${fixture.anchoredClaimId}`);
+    await expect(main(page).getByRole("heading", { name: "Vicious agents act on decision while living according to passion." })).toBeVisible();
+    await expect(main(page).getByText("Passage verified")).toBeVisible();
+    await expect(main(page).getByText("Vicious people act on decision, yet live according to passion")).toBeVisible();
+    await expect(main(page).getByRole("heading", { name: "Scores" })).toBeVisible();
+    await expect(main(page).getByText(/Textual support: strong/)).toBeVisible();
+    await expect(main(page).getByRole("heading", { name: "Loci" })).toBeVisible();
+    await expect(main(page).getByText("1150b19-22")).toBeVisible();
+    await expect(main(page).getByRole("link", { name: "Open in reader" })).toHaveAttribute("href", `/works/${fixture.workId}/reader`);
+
+    await page.goto(`/research/claims/${fixture.unanchoredClaimId}`);
+    await expect(main(page).getByRole("heading", { name: "A claim whose original passage no longer matches after reprocessing." })).toBeVisible();
+    await expect(main(page).getByRole("link", { name: "Open in reader" })).toHaveCount(0);
+  });
+
+  test("axe: zero wcag2a/wcag2aa violations across the new research pages, light and dark", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Accessibility-sweep work");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Accessibility project");
+    await db.insert(researchProjectQuestions).values({ projectId, question: "Does the reader form matter?", sortOrder: 0 });
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixture.workId, role: "central" });
+
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+
+      await page.goto("/research");
+      await expect(main(page).getByRole("heading", { name: "Research" })).toBeVisible();
+      expect((await scan(page)).violations, `/research (${colorScheme})`).toEqual([]);
+
+      await page.goto(`/research/${projectId}`);
+      await expect(main(page).getByRole("heading", { name: "Accessibility project" })).toBeVisible();
+      expect((await scan(page)).violations, `/research/[projectId] (${colorScheme})`).toEqual([]);
+
+      await page.goto(`/research/${projectId}/claims`);
+      await expect(main(page).getByRole("heading", { name: "Claims" })).toBeVisible();
+      expect((await scan(page)).violations, `/research/[projectId]/claims (${colorScheme})`).toEqual([]);
+
+      await page.goto(`/research/claims/${fixture.anchoredClaimId}`);
+      await expect(main(page).getByRole("heading", { name: "Vicious agents act on decision while living according to passion." })).toBeVisible();
+      expect((await scan(page)).violations, `/research/claims/[claimId] (${colorScheme})`).toEqual([]);
+    }
+  });
+
+  // Every `research_*` row this file inserts directly cascades from
+  // `deleteTestUser(EMAIL)` in `afterAll` via its `user_id` FK (see
+  // schema.ts's Phase 25 tables) — no explicit sweep needed here.
+});
