@@ -1,6 +1,7 @@
 import {
   AUTO_APPROVE_MAX_CHUNKS,
   CLAIM_EXTRACTION_PROMPT_VERSION,
+  EVIDENCE_CHAMBER_PROMPT_VERSION,
   HARD_STOP_MAX_CHUNKS,
   planExtractionChunks,
   planResearchJob,
@@ -11,8 +12,10 @@ import {
 } from "@ice/claims";
 import {
   db,
+  debateClusters,
   documents,
   enqueueExtractResearchClaims,
+  enqueueSynthesizeResearch,
   pages,
   processingRuns,
   researchJobRequests,
@@ -256,8 +259,115 @@ export async function listResearchJobRequestsForProject(userId: string, projectI
     .limit(200);
 
   return rows.filter((row) => {
-    const scope = row.scope as { workIds?: unknown } | null;
+    const scope = row.scope as { workIds?: unknown; projectId?: unknown } | null;
+    // `extract_claims`/`detect_relationships`/`cluster_debates` scope by
+    // `workIds` (matched against the project's own members below);
+    // `synthesize_chamber` (Phase 27.1) scopes by `{projectId, clusterId}`
+    // directly — a cluster has no `workIds` of its own to match against, so
+    // this OR's a direct `scope.projectId` match rather than forcing every
+    // future job type onto the same `workIds` shape.
+    if (scope?.projectId === projectId) return true;
     const workIds = Array.isArray(scope?.workIds) ? (scope.workIds as unknown[]) : [];
     return workIds.some((id) => typeof id === "string" && memberWorkIds.has(id));
   });
+}
+
+/**
+ * The "Synthesize chamber" action a debate cluster's view offers (plan
+ * §Build "a Synthesize chamber action on the debates cluster view"). Unlike
+ * `dispatchExtractClaimsJob`'s size-dependent chunk estimate, a chamber
+ * synthesis is always one call regardless of cluster size — `estimatedUnits:
+ * 1` never approaches `AUTO_APPROVE_MAX_CHUNKS`, so this always auto-enqueues
+ * rather than needing confirmation (the worker's own `CHAMBER_COST_ESTIMATE_USD`
+ * ≈$0.03 stays well inside the per-run soft cap regardless).
+ */
+export type DispatchSynthesizeChamberResult =
+  | { action: "not_found" }
+  | { action: "reused"; requestId: string }
+  | { action: "queued"; requestId: string }
+  | { action: "conflict"; reason: string };
+
+export async function dispatchSynthesizeChamberJob(userId: string, projectId: string, clusterId: string): Promise<DispatchSynthesizeChamberResult> {
+  const project = await getOwnedResearchProject(userId, projectId, true);
+  if (!project) return { action: "not_found" };
+
+  const [cluster] = await db
+    .select({ id: debateClusters.id })
+    .from(debateClusters)
+    .where(and(eq(debateClusters.id, clusterId), eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId)))
+    .limit(1);
+  if (!cluster) return { action: "not_found" };
+
+  // `detail: clusterId` is exactly `ResearchJobScope.detail`'s documented
+  // purpose ("a single cluster or claim pair") — `workIds` stays empty
+  // since a chamber is cluster-scoped, not work-scoped.
+  const scope = { workIds: [], detail: clusterId };
+  // No separate taxonomy axis exists for chamber synthesis (unlike claim
+  // extraction's `TAXONOMY_VERSION_CLAIMS`) — the prompt version alone is
+  // what a re-synthesis needs to key off, so it fills both fields.
+  const versions = { taxonomyVersion: EVIDENCE_CHAMBER_PROMPT_VERSION, promptVersion: EVIDENCE_CHAMBER_PROMPT_VERSION };
+
+  const existingWithKeys = await db
+    .select({ id: researchJobRequests.id, status: researchJobRequests.status, idempotencyKey: researchJobRequests.idempotencyKey, createdAt: researchJobRequests.createdAt })
+    .from(researchJobRequests)
+    .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.jobType, "synthesize_chamber")));
+  const existingRequests: ExistingResearchRequest[] = existingWithKeys.map((r) => ({
+    id: r.id,
+    jobType: "chamber_synthesis",
+    idempotencyKey: r.idempotencyKey,
+    status: mapStatusForPlanner(r.status),
+    requestedAt: r.createdAt,
+  }));
+
+  const jobPlan: ResearchJobPlan = planResearchJob({
+    jobType: "chamber_synthesis",
+    scope,
+    versions,
+    existingRequests,
+    estimatedUnits: 1,
+    autoApproveMaxUnits: AUTO_APPROVE_MAX_CHUNKS,
+    hardStopMaxUnits: HARD_STOP_MAX_CHUNKS,
+  });
+
+  if (jobPlan.action === "reuse") return { action: "reused", requestId: jobPlan.reusedRequestId };
+  if (jobPlan.action === "conflict") return { action: "conflict", reason: jobPlan.reason };
+  // `needs_confirmation` is structurally unreachable here (1 unit is always
+  // <= AUTO_APPROVE_MAX_CHUNKS) but handled the same way `dispatchExtractClaimsJob`
+  // does rather than silently assuming it can never happen if the caps
+  // change later.
+  if (jobPlan.action === "needs_confirmation") {
+    return { action: "conflict", reason: jobPlan.reason };
+  }
+
+  const [created] = await db
+    .insert(researchJobRequests)
+    .values({
+      userId,
+      jobType: "synthesize_chamber",
+      scope: { projectId, clusterId },
+      idempotencyKey: jobPlan.idempotencyKey,
+      status: "queued",
+      estimatedCostUsd: 0.03,
+      requiresConfirmation: false,
+      confirmedAt: new Date(),
+    })
+    .onConflictDoNothing({
+      target: [researchJobRequests.userId, researchJobRequests.idempotencyKey],
+      where: sql`${researchJobRequests.status} in ('planned', 'queued', 'running')`,
+    })
+    .returning({ id: researchJobRequests.id });
+
+  if (!created) {
+    const [existing] = await db
+      .select({ id: researchJobRequests.id })
+      .from(researchJobRequests)
+      .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.idempotencyKey, jobPlan.idempotencyKey)))
+      .orderBy(desc(researchJobRequests.createdAt))
+      .limit(1);
+    if (existing) return { action: "reused", requestId: existing.id };
+    return { action: "conflict", reason: "Could not create the synthesis request; please try again." };
+  }
+
+  await enqueueSynthesizeResearch(created.id);
+  return { action: "queued", requestId: created.id };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEvidenceChamberPrompt, validateEvidenceChamberResponse } from "./evidenceChamber";
+import { buildEvidenceChamberPrompt, EVIDENCE_CHAMBER_MAX_CLAIMS, EVIDENCE_CHAMBER_OUTPUT_SCHEMA, EVIDENCE_CHAMBER_PROMPT_VERSION, matchChamberPositionClaims, validateEvidenceChamberResponse } from "./evidenceChamber";
 
 function validPayload(overrides: Partial<Record<string, unknown>> = {}) {
   return {
@@ -30,6 +30,13 @@ describe("buildEvidenceChamberPrompt", () => {
     expect(prompt).toContain('cluster named "Akrasia debate"');
     expect(prompt).toContain("[Position 1] Work A: Claim 1 text.");
     expect(prompt).toContain("[Position 2] Work B: Claim 2 text.");
+  });
+
+  it("caps the number of claims shown to EVIDENCE_CHAMBER_MAX_CLAIMS, never silently including every claim of an unboundedly large cluster", () => {
+    const claims = Array.from({ length: EVIDENCE_CHAMBER_MAX_CLAIMS + 5 }, (_, i) => ({ text: `Claim ${i + 1} text.`, workTitle: `Work ${i + 1}` }));
+    const prompt = buildEvidenceChamberPrompt({ clusterName: "Large cluster", claims });
+    expect(prompt).toContain(`[Position ${EVIDENCE_CHAMBER_MAX_CLAIMS}]`);
+    expect(prompt).not.toContain(`[Position ${EVIDENCE_CHAMBER_MAX_CLAIMS + 1}]`);
   });
 
   it("explicitly forbids declaring a winner and forbids winner-like field names", () => {
@@ -116,5 +123,95 @@ describe("validateEvidenceChamberResponse", () => {
     const payload = validPayload();
     delete (payload.positions[0] as Record<string, unknown>).method;
     expect(() => validateEvidenceChamberResponse(payload)).toThrow(/position 0: missing\/invalid string field "method"/);
+  });
+});
+
+describe("EVIDENCE_CHAMBER_PROMPT_VERSION / EVIDENCE_CHAMBER_OUTPUT_SCHEMA", () => {
+  it("is a non-empty string, never null (a chamber has no deterministic fallback path)", () => {
+    expect(typeof EVIDENCE_CHAMBER_PROMPT_VERSION).toBe("string");
+    expect(EVIDENCE_CHAMBER_PROMPT_VERSION.length).toBeGreaterThan(0);
+  });
+
+  it("the output schema lists every top-level field as required, matching OpenAI's strict json_schema mode", () => {
+    expect(EVIDENCE_CHAMBER_OUTPUT_SCHEMA.additionalProperties).toBe(false);
+    expect(EVIDENCE_CHAMBER_OUTPUT_SCHEMA.required).toEqual(
+      expect.arrayContaining(["question", "sharedGround", "pointOfDivergence", "possibleReconciliation", "unresolvedQuestion", "missingEvidence", "nextAction", "positions"]),
+    );
+    expect(EVIDENCE_CHAMBER_OUTPUT_SCHEMA.properties.positions.items.additionalProperties).toBe(false);
+    expect(EVIDENCE_CHAMBER_OUTPUT_SCHEMA.properties.positions.items.required).toEqual(["label", "summary", "method", "scope", "stanceConfidence"]);
+  });
+});
+
+describe("matchChamberPositionClaims", () => {
+  const claims = [
+    { claimId: "claim-a", workTitle: "Irwin's Reading of Akrasia" },
+    { claimId: "claim-b", workTitle: "Davidson on Weakness of Will" },
+  ];
+
+  it("matches a position to its claim by EXACT (normalized) work-title equality", () => {
+    const result = matchChamberPositionClaims(
+      [{ label: "Irwin's Reading of Akrasia" }, { label: "Davidson on Weakness of Will" }],
+      claims,
+    );
+    expect(result).toEqual([["claim-a"], ["claim-b"]]);
+  });
+
+  it("matches case/punctuation-insensitively (the prompt's own worked example uses a bare author surname)", () => {
+    const result = matchChamberPositionClaims([{ label: "irwins reading of akrasia!!" }], claims);
+    expect(result).toEqual([["claim-a"]]);
+  });
+
+  it("falls back to a SUBSTRING match when no exact match exists", () => {
+    const result = matchChamberPositionClaims([{ label: "Irwin" }], claims);
+    expect(result).toEqual([["claim-a"]]);
+  });
+
+  it("falls back to a best WORD-OVERLAP match when neither exact nor substring matches", () => {
+    // "Weakness of Will" shares two whole words with Davidson's work title
+    // ("Weakness of Will" -> "on Weakness of Will") and zero with Irwin's.
+    const result = matchChamberPositionClaims([{ label: "Weakness of Will, reconsidered" }], claims);
+    expect(result).toEqual([["claim-b"]]);
+  });
+
+  it("a position can match MULTIPLE claims when several share the same (normalized) work title", () => {
+    const twoFromSameWork = [
+      { claimId: "claim-a1", workTitle: "Irwin's Reading of Akrasia" },
+      { claimId: "claim-a2", workTitle: "Irwin's Reading of Akrasia" },
+    ];
+    const result = matchChamberPositionClaims([{ label: "Irwin's Reading of Akrasia" }], twoFromSameWork);
+    expect(result).toEqual([["claim-a1", "claim-a2"]]);
+  });
+
+  it("returns null (never guesses) when a position's label shares no words with ANY claim's work title", () => {
+    const result = matchChamberPositionClaims([{ label: "Zzyzx Nonexistent Treatise" }], claims);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when ANY position (not just the first) is unmatchable, even if earlier ones matched fine", () => {
+    const result = matchChamberPositionClaims(
+      [{ label: "Irwin's Reading of Akrasia" }, { label: "Completely Unrelated Nonsense" }],
+      claims,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for an empty/whitespace-only label rather than matching arbitrarily", () => {
+    expect(matchChamberPositionClaims([{ label: "   " }], claims)).toBeNull();
+  });
+
+  it("is index-aligned with the input positions array", () => {
+    const result = matchChamberPositionClaims(
+      [{ label: "Davidson on Weakness of Will" }, { label: "Irwin's Reading of Akrasia" }],
+      claims,
+    );
+    expect(result).toEqual([["claim-b"], ["claim-a"]]);
+  });
+
+  it("handles zero claims by returning null for any non-empty position list", () => {
+    expect(matchChamberPositionClaims([{ label: "Anything" }], [])).toBeNull();
+  });
+
+  it("handles zero positions by returning an empty array", () => {
+    expect(matchChamberPositionClaims([], claims)).toEqual([]);
   });
 });

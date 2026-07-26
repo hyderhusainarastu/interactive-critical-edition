@@ -2714,7 +2714,19 @@ export const researchRevisions = pgTable(
       (): AnyPgColumn => debateClusters.id,
       { onDelete: "cascade" },
     ),
-    // 0042-0043 add the remaining four typed object FK columns listed above.
+    // 0042: fourth and fifth of the seven typed object FK columns — same
+    // forward-reference pattern (`evidenceChambers`/`evidenceChamberPositions`
+    // are declared later in this incrementally-grown file, after
+    // `debateClusterRelationships`).
+    evidenceChamberId: uuid("evidence_chamber_id").references(
+      (): AnyPgColumn => evidenceChambers.id,
+      { onDelete: "cascade" },
+    ),
+    evidenceChamberPositionId: uuid("evidence_chamber_position_id").references(
+      (): AnyPgColumn => evidenceChamberPositions.id,
+      { onDelete: "cascade" },
+    ),
+    // 0043 adds the remaining two typed object FK columns listed above.
     /** Monotonic per object. 0 is always the immutable generated snapshot. */
     revision: integer("revision").notNull(),
     action: researchRevisionActionEnum("action").notNull(),
@@ -2737,6 +2749,8 @@ export const researchRevisions = pgTable(
     index("research_revision_claim_idx").on(t.researchClaimId),
     index("research_revision_relationship_idx").on(t.claimRelationshipId),
     index("research_revision_cluster_idx").on(t.debateClusterId),
+    index("research_revision_chamber_idx").on(t.evidenceChamberId),
+    index("research_revision_position_idx").on(t.evidenceChamberPositionId),
     /**
      * The schema-level expression of the research-gated no-auto-endorsement
      * rule (upgrade doc Tier 3.2, plan §Improvements 5): the ONLY row the
@@ -2757,23 +2771,27 @@ export const researchRevisions = pgTable(
      * introduced in 0039 (the first typed FK column to exist) and extended —
      * same constraint name, widened SQL — by each of 0040-0043 as their own
      * typed FK column lands, exactly like
-     * `research_project_member_typed_target` above. Widened here (0041) to
-     * a per-type branch that pins EVERY typed FK column, not just the one
-     * being added: `objectType = 'cluster'` now requires `debate_cluster_id
-     * IS NOT NULL` with both other typed FKs null, and the `'claim'`/
-     * `'relationship'` branches now also require `debate_cluster_id IS
-     * NULL`, so a row can never claim one type while also carrying another
-     * type's FK. Until 0042-0043 add their own columns, every objectType
-     * outside `{'claim','relationship','cluster'}` is constrained to leave
-     * all three typed FKs null, so a mismatched assignment can never be
+     * `research_project_member_typed_target` above. Widened here (0042) to
+     * add the `'chamber'`/`'position'` branches: `objectType = 'chamber'`
+     * requires `evidence_chamber_id IS NOT NULL` with every other typed FK
+     * (including `evidence_chamber_position_id`) null, `objectType =
+     * 'position'` requires `evidence_chamber_position_id IS NOT NULL` with
+     * every other typed FK (including `evidence_chamber_id`) null, and every
+     * existing branch now also pins both new columns to null — so a row can
+     * never claim one type while also carrying another type's FK. Until 0043
+     * adds its own columns, every objectType outside `{'claim',
+     * 'relationship', 'cluster', 'chamber', 'position'}` is constrained to
+     * leave all five typed FKs null, so a mismatched assignment can never be
      * inserted even before that type's own FK exists to check against.
      */
     check(
       "research_revision_typed_target",
-      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL)
-        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.debateClusterId} IS NULL)
-        OR (${t.objectType} = 'cluster' AND ${t.debateClusterId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL)
-        OR (${t.objectType} NOT IN ('claim', 'relationship', 'cluster') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL)`,
+      sql`(${t.objectType} = 'claim' AND ${t.researchClaimId} IS NOT NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
+        OR (${t.objectType} = 'relationship' AND ${t.claimRelationshipId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
+        OR (${t.objectType} = 'cluster' AND ${t.debateClusterId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
+        OR (${t.objectType} = 'chamber' AND ${t.evidenceChamberId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)
+        OR (${t.objectType} = 'position' AND ${t.evidenceChamberPositionId} IS NOT NULL AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL)
+        OR (${t.objectType} NOT IN ('claim', 'relationship', 'cluster', 'chamber', 'position') AND ${t.researchClaimId} IS NULL AND ${t.claimRelationshipId} IS NULL AND ${t.debateClusterId} IS NULL AND ${t.evidenceChamberId} IS NULL AND ${t.evidenceChamberPositionId} IS NULL)`,
     ),
     /** Per-type partial unique `(<object>_id, revision)` — the claim branch. */
     uniqueIndex("research_revision_claim_revision_unique")
@@ -2787,6 +2805,14 @@ export const researchRevisions = pgTable(
     uniqueIndex("research_revision_cluster_revision_unique")
       .on(t.debateClusterId, t.revision)
       .where(sql`${t.debateClusterId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the chamber branch. */
+    uniqueIndex("research_revision_chamber_revision_unique")
+      .on(t.evidenceChamberId, t.revision)
+      .where(sql`${t.evidenceChamberId} IS NOT NULL`),
+    /** Per-type partial unique `(<object>_id, revision)` — the position branch. */
+    uniqueIndex("research_revision_position_revision_unique")
+      .on(t.evidenceChamberPositionId, t.revision)
+      .where(sql`${t.evidenceChamberPositionId} IS NOT NULL`),
   ],
 );
 
@@ -3452,5 +3478,186 @@ export const debateClusterRelationships = pgTable(
     index("debate_cluster_relationship_cluster_idx").on(t.clusterId),
     index("debate_cluster_relationship_rel_idx").on(t.claimRelationshipId),
     uniqueIndex("debate_cluster_relationship_cluster_rel_unique").on(t.clusterId, t.claimRelationshipId),
+  ],
+);
+
+/* -------------------------------------------------------------------------
+ * Phase 27.1 (migration 0042): the Evidence Chamber — a neutral, structured
+ * comparison of the positions inside a `debate_cluster`
+ * (`packages/claims/src/prompts/evidenceChamber.ts`). This is the schema-
+ * level enforcement half of the plan's "never declares a winner" rule (the
+ * other two halves are the prompt's own instructions and
+ * `validateEvidenceChamberResponse`'s recursive forbidden-key rejection):
+ * NEITHER `evidence_chamber` NOR `evidence_chamber_position` NOR
+ * `evidence_chamber_position_claim` HAS A WINNER/VERDICT/STRONGER COLUMN,
+ * ANYWHERE, EVER — there is no column for a future migration to widen into
+ * one either, unlike `claim_relationship_mechanism_matches_valence`'s
+ * deliberate staged-widening CHECK above. Positions render in ordinal
+ * order (`evidence_chamber_position.ordinal`), never sorted or ranked by
+ * any derived score.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Mirrors `EvidenceChamberPosition.stanceConfidence` exactly — the model's
+ * own self-reported confidence in how strongly the SOURCE TEXT states this
+ * position (never the model's confidence in who is right, per the prompt's
+ * own instruction). Kept alongside a derived numeric `stance_confidence`
+ * column below (the `claim_score.score`/`label` precedent: a real column
+ * for filtering/display alongside the label a reader actually reads).
+ */
+export const evidenceChamberStanceConfidenceEnum = pgEnum("evidence_chamber_stance_confidence_label", [
+  "high",
+  "medium",
+  "low",
+]);
+
+/** Deterministic label -> [0,1] mapping for `evidence_chamber_position.stance_confidence`
+ *  (worker-side, reused by `apps/web`'s read path for display-only rounding
+ *  checks) — never a model-invented number, just a fixed, documented scale
+ *  applied to the model's own three-way self-report. */
+export const EVIDENCE_CHAMBER_STANCE_CONFIDENCE_VALUE: Record<"high" | "medium" | "low", number> = {
+  high: 0.9,
+  medium: 0.6,
+  low: 0.3,
+};
+
+/**
+ * One synthesis of a `debate_cluster`'s positions (plan §Schema
+ * `evidence_chamber`), produced by `buildEvidenceChamberPrompt`/
+ * `validateEvidenceChamberResponse`. Project-scoped like `claim_relationship`/
+ * `debate_cluster` (the same O(n²)-bounding discipline, even though a
+ * chamber synthesis is one call per cluster, not a pairwise scan).
+ *
+ * `basis_hash` (sha256 over the cluster's member claim ids + their own
+ * text/excerpt + prompt version — `computeChamberBasisHash`,
+ * `@ice/claims`'s `basisHash.ts`) is this table's re-synthesis/idempotency
+ * key: a re-run over an UNCHANGED cluster membership and prompt version
+ * reuses the key and costs $0 (`UNIQUE (user_id, cluster_id, basis_hash)`
+ * below), while a real change (the cluster's membership shifted, or a
+ * member claim's text/excerpt changed, or a prompt-version bump)
+ * legitimately re-synthesizes and re-pays. Multiple rows CAN exist for the
+ * same `cluster_id` over time (one per distinct basis hash, e.g. across a
+ * membership change) — the read path picks the most recent `active` one;
+ * older rows are never deleted, only left as history (no explicit
+ * `superseded`-marking sweep ships in this lane — a documented, narrower
+ * scope than `debate_cluster`'s own stale-marking pass, since a chamber's
+ * FULL content — not just a name — is comparatively expensive to keep
+ * continuously current).
+ *
+ * There is deliberately no deterministic fallback synthesis (unlike
+ * `debate_cluster`'s `deterministicFallbackName`): a chamber's entire value
+ * is its structured neutral comparison, so a row is only ever written on a
+ * genuine, validated model response — `provider`/`model`/`prompt_version`
+ * are therefore NOT NULL, unlike `debate_cluster`'s nullable provenance
+ * triple.
+ */
+export const evidenceChambers = pgTable(
+  "evidence_chamber",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id").notNull().references(() => researchProjects.id, { onDelete: "cascade" }),
+    clusterId: uuid("cluster_id").notNull().references(() => debateClusters.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    sharedGround: text("shared_ground").notNull(),
+    pointOfDivergence: text("point_of_divergence").notNull(),
+    possibleReconciliation: text("possible_reconciliation").notNull(),
+    unresolvedQuestion: text("unresolved_question").notNull(),
+    missingEvidence: text("missing_evidence").notNull(),
+    nextAction: text("next_action").notNull(),
+    /** sha256 over the cluster's member claim ids + text/excerpt + prompt version — this table's re-synthesis/idempotency key. */
+    basisHash: text("basis_hash").notNull(),
+    promptVersion: text("prompt_version").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    /** `active`/`superseded` — the `research_claim`/`claim_relationship` precedent; never deleted. */
+    status: researchObjectStatusEnum("status").notNull().default("active"),
+    /** Reused verbatim — the `claim_relationship`/`debate_cluster` correction-workflow precedent (the correction UX itself is Phase 29.2; this column exists so `research_revision` has somewhere real to point at). */
+    verificationStatus: verificationStatusEnum("verification_status").notNull().default("unreviewed"),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("evidence_chamber_project_idx").on(t.projectId),
+    index("evidence_chamber_cluster_idx").on(t.clusterId),
+    index("evidence_chamber_user_status_idx").on(t.userId, t.status),
+    /** The whole re-synthesis-idempotency contract: an UNCHANGED basis hash for this cluster reuses the existing row rather than paying to re-synthesize. */
+    uniqueIndex("evidence_chamber_user_cluster_basis_unique").on(t.userId, t.clusterId, t.basisHash),
+  ],
+);
+
+/**
+ * One position within a chamber (plan §Schema: "positions render in ordinal
+ * order") — `EvidenceChamberResult.positions[]`, persisted in the EXACT
+ * order the model returned them (`ordinal` = array index), never re-sorted
+ * by any score. `stance_confidence_label` is the model's own verbatim
+ * three-way self-report; `stance_confidence` is the fixed, documented
+ * `EVIDENCE_CHAMBER_STANCE_CONFIDENCE_VALUE` mapping of that label — a
+ * display/filter convenience derived from a closed three-value vocabulary,
+ * never a model-invented decimal (the `claim_score.score`/`label` split
+ * applied here to a three-way enum instead of a continuous scorer).
+ */
+export const evidenceChamberPositions = pgTable(
+  "evidence_chamber_position",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chamberId: uuid("chamber_id").notNull().references(() => evidenceChambers.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    label: text("label").notNull(),
+    summary: text("summary").notNull(),
+    method: text("method").notNull(),
+    scope: text("scope").notNull(),
+    stanceConfidenceLabel: evidenceChamberStanceConfidenceEnum("stance_confidence_label").notNull(),
+    /** Derived from `stance_confidence_label` via `EVIDENCE_CHAMBER_STANCE_CONFIDENCE_VALUE` — never itself a model output. */
+    stanceConfidence: real("stance_confidence").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("evidence_chamber_position_chamber_idx").on(t.chamberId),
+    /** Positions render in ordinal order — this is what makes that order stable and unambiguous per chamber. */
+    uniqueIndex("evidence_chamber_position_chamber_ordinal_unique").on(t.chamberId, t.ordinal),
+    check("evidence_chamber_position_stance_confidence_range", sql`${t.stanceConfidence} >= 0 AND ${t.stanceConfidence} <= 1`),
+  ],
+);
+
+/**
+ * Which `research_claim`(s) ground a chamber position (plan §Build "every
+ * position >=1 claim enforced in the write transaction") — a position is
+ * never persisted without at least one row here, and this is the ONLY
+ * mechanism by which a position's neutral summary traces back to real
+ * source text: the model's own JSON response carries no claim ids (the
+ * evidence-chamber prompt/schema, shipped in 25.3, asks only for a
+ * `label`/`summary`/`method`/`scope`/`stanceConfidence` per position), so
+ * `matchChamberPositionClaims` (`@ice/claims`) deterministically matches
+ * each position's `label` back to the cluster's own claims by their
+ * OWNING WORK's title (exact, then substring, then best word-overlap) —
+ * never a second model call, never a guess persisted when NO claim matches
+ * at all (that case fails the whole synthesis rather than writing an
+ * ungrounded position).
+ *
+ * `excerpt` is a snapshot of the matched claim's `supporting_excerpt` AT
+ * SYNTHESIS TIME (not a live join) — the `research_revision` before/after
+ * snapshot precedent, applied here so a chamber's displayed evidence never
+ * silently changes out from under a reader if the claim is later edited,
+ * hidden, or rebound by a reprocess.
+ */
+export const evidenceChamberPositionClaims = pgTable(
+  "evidence_chamber_position_claim",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    positionId: uuid("position_id").notNull().references(() => evidenceChamberPositions.id, { onDelete: "cascade" }),
+    claimId: uuid("claim_id").notNull().references(() => researchClaims.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    /** A literal snapshot of `research_claim.supporting_excerpt` at synthesis time — never re-derived, never empty. */
+    excerpt: text("excerpt").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("evidence_chamber_position_claim_position_idx").on(t.positionId),
+    index("evidence_chamber_position_claim_claim_idx").on(t.claimId),
+    uniqueIndex("evidence_chamber_position_claim_position_claim_unique").on(t.positionId, t.claimId),
+    uniqueIndex("evidence_chamber_position_claim_position_ordinal_unique").on(t.positionId, t.ordinal),
+    check("evidence_chamber_position_claim_excerpt_nonempty", sql`char_length(trim(${t.excerpt})) > 0`),
   ],
 );

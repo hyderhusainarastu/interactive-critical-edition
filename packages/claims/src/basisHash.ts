@@ -52,3 +52,31 @@ export function computeRelationshipBasisHash(input: RelationshipBasisInput): str
     .join("");
   return createHash("sha256").update(canonical).digest("hex");
 }
+
+/**
+ * `evidence_chamber.basis_hash` — the re-synthesis/idempotency key for one
+ * cluster's chamber (plan §Schema `evidence_chamber`: "UNIQUE (user_id,
+ * cluster_id, basis_hash)"). Covers every member claim's own text/excerpt
+ * (content-addressed, the `research_claim` precedent) plus the prompt
+ * version, so a re-synthesis over an UNCHANGED cluster membership and
+ * prompt reuses the key ($0), while an edited claim, a membership change, or
+ * a prompt-version bump legitimately re-synthesizes and re-pays.
+ */
+export interface ChamberBasisInput {
+  /** One entry per member claim, id-sorted by the caller before hashing so
+   *  the same membership always hashes identically regardless of query
+   *  order. */
+  claims: { id: string; text: string; excerpt: string }[];
+  promptVersion: string;
+}
+
+export function computeChamberBasisHash(input: ChamberBasisInput): string {
+  const sorted = [...input.claims].sort((a, b) => a.id.localeCompare(b.id));
+  const canonical = [
+    ...sorted.flatMap((c) => [c.id, c.text, c.excerpt]),
+    input.promptVersion,
+  ]
+    .map(lengthPrefixed)
+    .join("");
+  return createHash("sha256").update(canonical).digest("hex");
+}

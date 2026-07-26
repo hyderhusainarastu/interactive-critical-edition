@@ -1,13 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { dispatchExtractClaimsJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
+import { dispatchExtractClaimsJob, dispatchSynthesizeChamberJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
 
-const postSchema = z.object({
-  jobType: z.literal("extract_claims"),
-  workId: z.string().uuid(),
-  confirm: z.boolean().default(false),
-});
+const postSchema = z.discriminatedUnion("jobType", [
+  z.object({
+    jobType: z.literal("extract_claims"),
+    workId: z.string().uuid(),
+    confirm: z.boolean().default(false),
+  }),
+  z.object({
+    jobType: z.literal("synthesize_chamber"),
+    clusterId: z.string().uuid(),
+  }),
+]);
 
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const userId = await requireResearchApiUser();
@@ -22,6 +28,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   const parsed = postSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid job request." }, { status: 400 });
   const { projectId } = await params;
+
+  if (parsed.data.jobType === "synthesize_chamber") {
+    const result = await dispatchSynthesizeChamberJob(userId, projectId, parsed.data.clusterId);
+    switch (result.action) {
+      case "not_found":
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      case "conflict":
+        return NextResponse.json({ error: result.reason }, { status: 409 });
+      case "reused":
+        return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
+      case "queued":
+        return NextResponse.json({ requestId: result.requestId }, { status: 202 });
+    }
+  }
+
   const result = await dispatchExtractClaimsJob(userId, projectId, parsed.data.workId, parsed.data.confirm);
 
   switch (result.action) {
