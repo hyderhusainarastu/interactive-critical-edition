@@ -27,6 +27,12 @@ export const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
   research: "Research",
 };
 
+/** Debate layer (Phase 28.4): `debate:<uuid>` → `<uuid>`, the id shape the
+ *  expansion route (`GET /api/graph/debate/[clusterId]/expand`) expects. */
+function debateClusterIdFromNodeId(nodeId: string): string {
+  return nodeId.startsWith("debate:") ? nodeId.slice("debate:".length) : nodeId;
+}
+
 /**
  * Display-language override for the inspector's roadmap disclosure (feature
  * plan §2.4): the stored `relationship_category` enum value never changes —
@@ -159,6 +165,9 @@ export function GraphInspector({
   onCloseNode,
   onCloseLink,
   allNodes = [],
+  onExpandDebate,
+  expandedDebateClusterIds,
+  expandingDebateId,
 }: {
   selected: GraphNode | null;
   selectedLink: GraphLink | null;
@@ -171,6 +180,15 @@ export function GraphInspector({
    *  "why this, here" basis line (feature plan §2.4); never used to change
    *  which node is selected. */
   allNodes?: readonly GraphNode[];
+  /** Debate layer (Phase 28.4): the "Show claims" control's handler and its
+   *  loading/already-expanded state. All three are optional and simply
+   *  render nothing when omitted — this inspector has other callers besides
+   *  `GraphView` (Roadmap's own graph surfaces) that may not wire the debate
+   *  layer at all; a `selected.type === "debate"` node just never shows the
+   *  control in that case rather than throwing. */
+  onExpandDebate?: (clusterId: string) => void;
+  expandedDebateClusterIds?: ReadonlySet<string>;
+  expandingDebateId?: string | null;
 }) {
   const groupedConnections = groupConnectionsByFamily(connections);
   const creatorFact = selected ? factLine(selected.credibility?.creator) : null;
@@ -196,6 +214,46 @@ export function GraphInspector({
           {selected.venue && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{selected.venue}</p>}
           {selected.doi && <p className="mt-1 text-xs text-[var(--color-text-muted)]">DOI: {selected.doi}</p>}
           {selected.supplementary && <p className="mt-2 rounded border border-[var(--color-credibility-warning)] px-2 py-1 text-xs text-[var(--color-text-muted)]">Supplementary public material — useful context, not stand-alone factual support.</p>}
+
+          {/* Debate layer (Phase 28.4): a debate cluster's research question
+              + claim count, and the "Show claims" control that fetches and
+              merges that cluster's expansion delta — the ONE control this
+              feature exposes, shared by both the 3D scene and the
+              accessible table since both drive selection through the same
+              `onNodeClick`/`selected` state this inspector already renders
+              from (see `GraphView`'s own comment on why this satisfies
+              "reachable... in both views" without a second, duplicated
+              control). */}
+          {selected.type === "debate" && (() => {
+            const clusterId = debateClusterIdFromNodeId(selected.id);
+            const alreadyExpanded = expandedDebateClusterIds?.has(clusterId) ?? false;
+            const isExpanding = expandingDebateId === clusterId;
+            return (
+              <div className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs" data-graph-debate-panel>
+                {selected.debateQuestion && <p className="italic text-[var(--color-text-muted)]">“{selected.debateQuestion}”</p>}
+                <p className={selected.debateQuestion ? "mt-2 text-[var(--color-text-muted)]" : "text-[var(--color-text-muted)]"}>
+                  {selected.debateClaimCount ?? 0} claim{selected.debateClaimCount === 1 ? "" : "s"} in this debate
+                </p>
+                {onExpandDebate && (
+                  <button
+                    type="button"
+                    data-graph-expand-debate
+                    disabled={alreadyExpanded || isExpanding}
+                    onClick={() => onExpandDebate(clusterId)}
+                    className="app-control mt-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {alreadyExpanded ? "Claims shown" : isExpanding ? "Loading claims…" : "Show claims"}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+          {selected.type === "claim" && (
+            <div className="mt-3 rounded border border-[var(--color-border)] p-2 text-xs" data-graph-claim-panel>
+              {selected.claimNature && <p className="text-[var(--color-text-muted)]">Claim nature: {selected.claimNature}</p>}
+              {selected.valenceSummary && <p className={selected.claimNature ? "mt-1 text-[var(--color-text-muted)]" : "text-[var(--color-text-muted)]"}>{selected.valenceSummary}</p>}
+            </div>
+          )}
           {(selected.providers?.length ?? 0) > 1 && <p className="mt-2 text-xs text-[var(--color-text-muted)]">Providers: {selected.providers!.join(", ")}</p>}
 
           {/* Credibility dossier (plan §33/§34.2): authority + the six

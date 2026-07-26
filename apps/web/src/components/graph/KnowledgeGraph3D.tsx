@@ -93,6 +93,22 @@ function nodeShapeGeometry(
   if (geometryVariety) {
     if (node.type === "person") return new THREE.CapsuleGeometry(baseRadius * 0.5, baseRadius * 0.9, 4, 10);
     if (node.type === "section") return new THREE.CylinderGeometry(baseRadius, baseRadius, baseRadius * 0.22, 20);
+    // Debate layer (Phase 28.4): reuses the SAME crossed-tetrahedra
+    // composite the `concept_kind === "debate"` branch below already builds
+    // for a pre-existing philosophical-debate CONCEPT — thematically apt for
+    // a NodeType `"debate"` cluster too (a genuinely contested node), and
+    // distinguished from that concept case by color (`TYPE_META.debate` vs.
+    // `TYPE_META.concept`) plus label, never by shape alone. `claim` gets
+    // its own distinct pointed shape (an assertion "points at" something).
+    if (node.type === "debate") {
+      const a = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+      a.translate(-baseRadius * 0.28, 0, 0);
+      const b = new THREE.TetrahedronGeometry(baseRadius * 0.72);
+      b.rotateY(Math.PI);
+      b.translate(baseRadius * 0.28, 0, 0);
+      return mergeGeometries([a, b]) ?? new THREE.OctahedronGeometry(baseRadius);
+    }
+    if (node.type === "claim") return new THREE.ConeGeometry(baseRadius * 0.62, baseRadius * 1.15, 4);
     if (node.type === "concept") {
       switch (node.kind) {
         case "doctrine":
@@ -136,6 +152,12 @@ const NODE_SIZE: Record<NodeType, number> = {
   concept: 8,
   person: 8,
   section: 4,
+  // Debate layer (Phase 28.4): a debate cluster is a summary node (at most
+  // `MAX_DEBATE_NODES` of them, one per cluster) sized similarly to a
+  // concept; a claim only appears after an explicit expansion, at
+  // `section`-like granularity — small and numerous, not a headline node.
+  debate: 8,
+  claim: 5,
 };
 
 // Label canvas geometry — two SEPARATE sprites (title, type/state) rather

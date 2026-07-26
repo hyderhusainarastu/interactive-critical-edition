@@ -5,10 +5,14 @@ import {
   bookmarks,
   cancelQueuedJobsForDocuments,
   claimEvidence,
+  claimRelationships,
   concepts,
   conceptMastery,
   credibilityAssessments,
   db,
+  debateClusterMembers,
+  debateClusterRelationships,
+  debateClusters,
   documentApparatus,
   docFootnotes,
   documents,
@@ -27,6 +31,8 @@ import {
   processingRuns,
   providerAttempts,
   readingRecords,
+  researchClaims,
+  researchProjects,
   researchResources,
   researchResourceContents,
   resourceProvenance,
@@ -985,6 +991,117 @@ export async function seedWorkWithGraphData(
   }
 
   return { workId: work.id, documentId: doc.id, bibId: bib.id, resourceId: resource.id, relatedResourceId, publicResourceIds, conceptId: concept.id, sectionBlockId: sectionBlock.id, libraryResourceId };
+}
+
+/**
+ * Seeds a minimal, real debate cluster (Phase 28.4: the knowledge-graph
+ * debate layer) — `research_claim` → `claim_relationship` → `debate_cluster`/
+ * `debate_cluster_member`/`debate_cluster_relationship`, the exact tables
+ * `buildGraph()`'s `graphDebateLayer` addition and the `GET
+ * /api/graph/debate/[clusterId]/expand` route read. Two claims (from `workId`,
+ * or from `workId` and `options.secondWorkId` when both endpoints of the
+ * debate should attach to DIFFERENT owned works — the multi-work "linked to
+ * participating WORKS" shape) are judged as contradicting each other and
+ * clustered — the smallest real shape `findClaimClusters` ever emits
+ * (components need ≥2 members, plan §Pipeline). `buildGraph()` is a pure DB
+ * read (no worker/live-API dependency), so this stays CI-safe the same way
+ * `seedWorkWithGraphData` above already is.
+ *
+ * Claims are seeded `anchorState: "unanchored"` with a null `text_block_id`
+ * — a real, DB-CHECK-satisfying combination
+ * (`research_claim_grounded`/`research_claim_unanchored_no_block`) chosen
+ * deliberately over building out page/text_block infrastructure this
+ * feature doesn't read at all.
+ */
+export async function seedDebateCluster(
+  userId: string,
+  workId: string,
+  options: { secondWorkId?: string; hidden?: boolean; status?: "active" | "stale" } = {},
+): Promise<{
+  projectId: string;
+  clusterId: string;
+  claimAId: string;
+  claimBId: string;
+  claimLoId: string;
+  claimHiId: string;
+  relationshipId: string;
+}> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const [project] = await db
+    .insert(researchProjects)
+    .values({ userId, title: `Debate test project ${suffix}` })
+    .returning({ id: researchProjects.id });
+
+  async function insertClaim(text: string, targetWorkId: string): Promise<string> {
+    const [claim] = await db
+      .insert(researchClaims)
+      .values({
+        userId,
+        workId: targetWorkId,
+        anchorState: "unanchored",
+        claimText: text,
+        claimNature: "interpretive",
+        confidence: "high",
+        section: "Body",
+        sourceScope: "full_text",
+        supportingExcerpt: text,
+        excerptVerified: false,
+        contentHash: `seeded-claim-${crypto.randomUUID()}`,
+        promptVersion: "seed-v1",
+      })
+      .returning({ id: researchClaims.id });
+    return claim.id;
+  }
+
+  const claimAId = await insertClaim("The soul is inseparable from the body it is the form of.", workId);
+  const claimBId = await insertClaim("The soul can exist independently of any body.", options.secondWorkId ?? workId);
+  const [claimLoId, claimHiId] = [claimAId, claimBId].sort();
+
+  const [relationship] = await db
+    .insert(claimRelationships)
+    .values({
+      userId,
+      projectId: project.id,
+      claimLoId,
+      claimHiId,
+      valence: "contradiction",
+      category: "theoretical",
+      judgeBranch: "humanities",
+      explanation: "One claim asserts strict hylomorphic unity of soul and body; the other asserts separability — a direct contradiction.",
+      resolution: "Resolve by clarifying which faculty of soul each claim is actually about.",
+      engagement: "none_detected",
+      basisHash: `seeded-basis-${suffix}`,
+      promptVersion: "seed-v1",
+      provider: "seed",
+      model: "seed",
+    })
+    .returning({ id: claimRelationships.id });
+
+  const [cluster] = await db
+    .insert(debateClusters)
+    .values({
+      userId,
+      projectId: project.id,
+      name: "Is the soul separable from the body?",
+      researchQuestion: "Can the soul exist independently of the body it forms?",
+      memberHash: `seeded-member-hash-${suffix}`,
+      edgeCount: 1,
+      counts: { contradiction: 1, support: 0, nuance: 0 },
+      status: options.status ?? "active",
+      hidden: options.hidden ?? false,
+      promptVersion: "seed-v1",
+      provider: "seed",
+      model: "seed",
+    })
+    .returning({ id: debateClusters.id });
+
+  await db.insert(debateClusterMembers).values([
+    { clusterId: cluster.id, claimId: claimAId },
+    { clusterId: cluster.id, claimId: claimBId },
+  ]);
+  await db.insert(debateClusterRelationships).values({ clusterId: cluster.id, claimRelationshipId: relationship.id });
+
+  return { projectId: project.id, clusterId: cluster.id, claimAId, claimBId, claimLoId, claimHiId, relationshipId: relationship.id };
 }
 
 /**

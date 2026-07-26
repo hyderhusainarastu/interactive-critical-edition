@@ -120,6 +120,7 @@
   --color-graph-node-gold: #e8b968; /* uploaded/pinned/next-up ring + scale accent */
   --color-graph-node-wireframe: #a37e7e; /* missing (referenced, not acquired) node stroke */
   --color-graph-node-ring-lit: #f2ead9; /* credibility ring's lit segments */
+  --color-graph-claim: #5b7c8f; /* Phase 28.4 debate layer: claim-node type color, distinct from every other TYPE_META token */
 
   --color-focus-ring: #263a4f;
   --gradient-hero: linear-gradient(135deg, #fbf9f4 0%, #eee8dd 48%, #e4edf1 100%);
@@ -163,6 +164,7 @@
   --color-graph-node-gold: #f0c47c;
   --color-graph-node-wireframe: #c99b9b;
   --color-graph-node-ring-lit: #fdf8ee;
+  --color-graph-claim: #8db3c4;
   --color-focus-ring: #e9eff4;
   --color-surface-sunken: #202c37;
   --color-surface-strong: #4a6f93;
@@ -197,6 +199,7 @@
   --color-graph-node-gold: #e8b968;
   --color-graph-node-wireframe: #a37e7e;
   --color-graph-node-ring-lit: #f2ead9;
+  --color-graph-claim: #5b7c8f;
   --color-focus-ring: #263a4f;
   --color-surface-sunken: #eee8dd;
   --color-surface-strong: #263a4f;

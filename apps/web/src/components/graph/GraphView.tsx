@@ -23,8 +23,10 @@ import {
   edgeFamilyFor,
   filterGraphData,
   isDefaultFilters,
+  mergeGraphDelta,
   roadmapSubset,
   type GraphData,
+  type GraphExpansionDelta,
   type GraphFilters,
   type GraphLink,
   type GraphNode,
@@ -126,6 +128,15 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [resetSignal, setResetSignal] = useState(0);
+  // Debate layer (Phase 28.4): which `debate_cluster` ids have already had
+  // their claims merged in (so the "Show claims" control in `GraphInspector`
+  // becomes a no-op "Claims shown" state rather than re-fetching), and which
+  // one (if any) is mid-request right now. Both stay empty/null forever when
+  // the flag is off — `data.nodes` never contains a `debate`-typed node in
+  // that case, so `GraphInspector` never renders the control that would use
+  // them (see that component's own `selected.type === "debate"` guard).
+  const [expandedDebateClusterIds, setExpandedDebateClusterIds] = useState<Set<string>>(() => new Set());
+  const [expandingDebateId, setExpandingDebateId] = useState<string | null>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -257,6 +268,31 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
   // "stop focusing on anything" action, not two separate ones a user would
   // need to trigger independently.
   const clearFocus = useCallback(() => selectNode(null), [selectNode]);
+
+  // Debate layer (Phase 28.4): the "Show claims" control's handler. Fetches
+  // ONE cluster's additive expansion delta and merges it into the base
+  // `data` state (never `displayed`, which is derived) via `mergeGraphDelta`
+  // — so the merge survives whatever filter/layout-mode combination is
+  // active, exactly like every other piece of `data` this component holds.
+  // Idempotent: a second call for an already-expanded cluster is a no-op
+  // (checked before the fetch, and `mergeGraphDelta` itself is also
+  // idempotent if this ever races).
+  const expandDebate = useCallback(
+    async (clusterId: string) => {
+      if (expandedDebateClusterIds.has(clusterId) || expandingDebateId === clusterId) return;
+      setExpandingDebateId(clusterId);
+      try {
+        const res = await fetch(`/api/graph/debate/${encodeURIComponent(clusterId)}/expand`);
+        if (!res.ok) return;
+        const delta = (await res.json()) as GraphExpansionDelta;
+        setData((prev) => (prev ? mergeGraphDelta(prev, delta) : prev));
+        setExpandedDebateClusterIds((prev) => new Set(prev).add(clusterId));
+      } finally {
+        setExpandingDebateId(null);
+      }
+    },
+    [expandedDebateClusterIds, expandingDebateId],
+  );
 
   const setFocusMode = useCallback(
     (mode: FocusMode) => {
@@ -727,7 +763,18 @@ export function GraphView({ endpoint, backHref, backLabel, enableExpansion = fal
                     showReadingThread={showReadingThread}
                     exportRef={graphExportRef}
                   />
-                  <GraphInspector selected={selected} selectedLink={selectedLink} connections={directConnections} onSelectNode={onNodeClick} onCloseNode={clearFocus} onCloseLink={() => setSelectedLink(null)} allNodes={data.nodes} />
+                  <GraphInspector
+                    selected={selected}
+                    selectedLink={selectedLink}
+                    connections={directConnections}
+                    onSelectNode={onNodeClick}
+                    onCloseNode={clearFocus}
+                    onCloseLink={() => setSelectedLink(null)}
+                    allNodes={data.nodes}
+                    onExpandDebate={expandDebate}
+                    expandedDebateClusterIds={expandedDebateClusterIds}
+                    expandingDebateId={expandingDebateId}
+                  />
                 </div>
               </section>
               <details className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" aria-label="Accessible graph browser">
