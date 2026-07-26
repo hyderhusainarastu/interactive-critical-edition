@@ -38,6 +38,7 @@ export const developmentLog = [
       "Added account pages: edit your profile and avatar, see your reading activity at a glance, review your plan, control data sharing, and delete your account with a safe, fully verified cleanup.",
       "Fixed a glitch where the account and settings menus would close by themselves right after a page loaded.",
       "Menus now stay open even when a mouse or trackpad accidentally double-fires a click.",
+      "Menus now ignore accidental repeat clicks entirely and close when you click anywhere else — matching how menus usually behave.",
     ],
   },
   {
