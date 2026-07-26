@@ -9,11 +9,40 @@ type Citation = { id: string; cslJson: unknown; source: string };
 type Source = { id: string; title: string; workId: string; workTitle: string; url: string | null; doi: string | null };
 type Revision = { id: string; revision: number; reason: string; createdAt: string };
 
+// Phase 28.5 (Writer evidence insertion).
+type ResearchProjectOption = { id: string; title: string };
+type EvidenceClaim = {
+  id: string;
+  workId: string | null;
+  workTitle: string | null;
+  claimText: string;
+  claimNature: string;
+  confidence: string;
+  section: string;
+  anchorState: string;
+  sourceScope: string;
+  verificationStatus: string;
+  supportingExcerpt: string;
+};
+type EvidenceCluster = { id: string; name: string; researchQuestion: string | null; verificationStatus: string; latestChamberId: string | null };
+type EvidenceChamberSummary = { id: string; clusterId: string; clusterName: string; question: string; verificationStatus: string };
+type EvidenceView = { researchProject: ResearchProjectOption; claims: EvidenceClaim[]; debateClusters: EvidenceCluster[]; chambers: EvidenceChamberSummary[] };
+
 const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 460;
 const SIDEBAR_WIDTH_STEP = 20;
 
-export function WriterEditor({ project, initialDocuments, initialCitations }: { project: { id: string; title: string }; initialDocuments: Document[]; initialCitations: Citation[] }) {
+export function WriterEditor({
+  project,
+  initialDocuments,
+  initialCitations,
+  evidenceEnabled = false,
+}: {
+  project: { id: string; title: string };
+  initialDocuments: Document[];
+  initialCitations: Citation[];
+  evidenceEnabled?: boolean;
+}) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [projectTitle, setProjectTitle] = useState(project.title);
   const [activeId, setActiveId] = useState(initialDocuments[0]?.id ?? "");
@@ -31,6 +60,16 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
   const citationList = useMemo(() => citations.map((citation) => citation.cslJson as CslJson), [citations]);
   const activeDocumentId = active?.id;
 
+  // Phase 28.5 (Writer evidence insertion).
+  const [researchLink, setResearchLink] = useState<ResearchProjectOption | null>(null);
+  const [researchOptions, setResearchOptions] = useState<ResearchProjectOption[]>([]);
+  const [selectedResearchProjectId, setSelectedResearchProjectId] = useState("");
+  const [evidence, setEvidence] = useState<EvidenceView | null>(null);
+  const [evidenceWorkFilter, setEvidenceWorkFilter] = useState("");
+  const [evidenceNatureFilter, setEvidenceNatureFilter] = useState("");
+  const [linkingResearch, setLinkingResearch] = useState(false);
+  const [insertingClaimId, setInsertingClaimId] = useState<string | null>(null);
+
   useEffect(() => {
     if (!active) return;
     const frame = window.requestAnimationFrame(() => { setTitle(active.title); setText(proseMirrorToPlainText(active.content)); setStatus("Saved"); });
@@ -47,6 +86,24 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDocumentId, project.id]);
   useEffect(() => { fetch(`/api/writer/projects/${project.id}/sources`).then((response) => response.ok ? response.json() : { sources: [] }).then((data) => setSources(data.sources ?? [])); }, [project.id]);
+  useEffect(() => {
+    if (!evidenceEnabled) return;
+    fetch(`/api/writer/projects/${project.id}/research-link`)
+      .then((response) => (response.ok ? response.json() : { linked: null, options: [] }))
+      .then((data) => { setResearchLink(data.linked ?? null); setResearchOptions(data.options ?? []); });
+  }, [project.id, evidenceEnabled]);
+  useEffect(() => {
+    // `unlinkResearchProject` already clears `evidence` itself when the link
+    // is removed — this effect only ever needs to FETCH, never reset, so it
+    // never calls setState on its own early-return branch (react-hooks/set-state-in-effect).
+    if (!evidenceEnabled || !researchLink) return;
+    const query = new URLSearchParams();
+    if (evidenceWorkFilter) query.set("workId", evidenceWorkFilter);
+    if (evidenceNatureFilter) query.set("claimNature", evidenceNatureFilter);
+    fetch(`/api/writer/projects/${project.id}/evidence?${query.toString()}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setEvidence(data && data.researchProject ? data : null));
+  }, [project.id, evidenceEnabled, researchLink, evidenceWorkFilter, evidenceNatureFilter]);
   useEffect(() => {
     if (!activeDocumentId || status !== "Editing") return;
     const timeout = window.setTimeout(async () => {
@@ -104,6 +161,49 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
     setText(proseMirrorToPlainText(document.content)); setStatus("Saved");
   }
   function insertCitation(citation: CslJson) { updateDraft(`${text}${text && !text.endsWith(" ") ? " " : ""}${mlaParenthetical(citation)} `); }
+  // Phase 28.5 (Writer evidence insertion).
+  async function linkResearchProject() {
+    if (!selectedResearchProjectId) return;
+    setLinkingResearch(true);
+    try {
+      const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ researchProjectId: selectedResearchProjectId }) });
+      const data = await response.json();
+      if (!response.ok) return window.alert(data.error ?? "Could not link that research project.");
+      setResearchLink(data.linked);
+    } finally { setLinkingResearch(false); }
+  }
+  async function unlinkResearchProject() {
+    if (!window.confirm("Unlink this research project? The Evidence panel will hide its claims until you link a project again.")) return;
+    const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "DELETE" });
+    if (response.ok) { setResearchLink(null); setEvidence(null); }
+    else window.alert("Could not unlink the research project.");
+  }
+  async function insertEvidence(claim: EvidenceClaim) {
+    if (!activeDocumentId) return;
+    setInsertingClaimId(claim.id);
+    try {
+      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}/evidence`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claimId: claim.id }) });
+      const data = await response.json();
+      if (!response.ok) return window.alert(data.error ?? "Could not insert this evidence.");
+      setDocuments((items) => items.map((document) => (document.id === data.document.id ? { ...document, content: data.document.content } : document)));
+      if (data.document.id === activeDocumentId) {
+        // Rehydrate the visible draft from the server's authoritative
+        // content (which now carries the inserted blockquote + any marker
+        // paragraphs), but land on "Saved" — NOT "Editing" — so the
+        // autosave effect above does not immediately re-run
+        // `plainTextToProseMirror` over it. That round trip flattens every
+        // block back to a plain paragraph (the textarea has no concept of a
+        // `blockquote` node), which would silently destroy the structured
+        // node's `attrs` the moment it fired. Landing on "Saved" defers that
+        // loss until the user's own next real edit — a documented trade-off
+        // of this editor being a plain textarea, not a rich ProseMirror view.
+        setText(proseMirrorToPlainText(data.document.content));
+        setStatus("Saved");
+      }
+      const citationsResponse = await fetch(`/api/writer/projects/${project.id}/citations`);
+      if (citationsResponse.ok) setCitations((await citationsResponse.json()).citations ?? []);
+    } finally { setInsertingClaimId(null); }
+  }
   function boundedSidebarWidth(width: number) { return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width)); }
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     const startX = event.clientX; const initial = sidebarWidth;
@@ -132,6 +232,80 @@ export function WriterEditor({ project, initialDocuments, initialCitations }: { 
           <h2 className="font-medium">Library sources</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
           <ul className="app-reveal-stagger mt-3 max-h-52 space-y-2 overflow-auto">{sources.map((source) => <li key={source.id} className="app-card app-lift app-mount rounded p-2 text-sm"><strong className="block">{source.title}</strong><span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span><div className="mt-1 flex gap-2"><button type="button" className="app-control app-press underline" onClick={() => importCitation("library", "", source.id)}>Cite</button><Link className="app-control app-press underline" href={`/works/${source.workId}/reader`}>Read</Link></div></li>)}</ul>
           <div className="mt-5 border-t border-[var(--color-border)] pt-3"><h3 className="text-sm font-medium">Add citation</h3><div className="mt-2 flex gap-1"><select aria-label="Citation import format" className="app-control" value={importKind} onChange={(event) => setImportKind(event.target.value as typeof importKind)}><option value="doi">DOI</option><option value="isbn">ISBN</option><option value="title">Title</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select><button type="button" className="app-control rounded border px-2 text-sm" onClick={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}>Add</button></div><textarea aria-label="Citation metadata" value={importValue} onChange={(event) => setImportValue(event.target.value)} className="app-control mt-2 min-h-20 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm" placeholder="DOI, ISBN, title, BibTeX, or RIS" /></div>
+          {evidenceEnabled && (
+            <section className="mt-5 border-t border-[var(--color-border)] pt-3" aria-label="Research evidence">
+              <h3 className="text-sm font-medium">Research evidence</h3>
+              {!researchLink ? (
+                <div className="mt-2">
+                  <p className="text-xs text-[var(--color-text-muted)]">Link a research project to bring in its claims, debates, and evidence chambers.</p>
+                  {researchOptions.length ? (
+                    <div className="mt-2 flex gap-1">
+                      <label htmlFor="research-link-select" className="sr-only">Research project to link</label>
+                      {/* `min-w-0` is load-bearing, not decorative: a plain
+                          `<select>` sizes itself to its selected option's
+                          text, and a user-authored research-project title
+                          has no length limit. Without `min-w-0` (which lets
+                          a flex item shrink below its content's intrinsic
+                          width) a long title pushed the sibling "Link"
+                          button outside this fixed-width sidebar's flex row
+                          entirely, landing it over the document editor card
+                          at real screen coordinates and silently eating
+                          every click — caught by this lane's own e2e run,
+                          not a cosmetic nit. */}
+                      <select id="research-link-select" aria-label="Research project to link" className="app-control min-w-0 flex-1" value={selectedResearchProjectId} onChange={(event) => setSelectedResearchProjectId(event.target.value)}>
+                        <option value="">Select a research project…</option>
+                        {researchOptions.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}
+                      </select>
+                      <button type="button" className="app-control app-press shrink-0 rounded border px-2 text-sm disabled:opacity-50" onClick={linkResearchProject} disabled={!selectedResearchProjectId || linkingResearch}>{linkingResearch ? "Linking…" : "Link"}</button>
+                    </div>
+                  ) : (
+                    <p className="app-empty mt-2 rounded p-2 text-xs text-[var(--color-text-muted)]">No research projects yet. Create one in the Research workspace first.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <div className="flex items-center justify-between gap-2 text-sm"><span>Linked: <strong>{researchLink.title}</strong></span><button type="button" className="app-control app-press text-xs underline" onClick={unlinkResearchProject}>Unlink</button></div>
+                  {evidence && (
+                    <>
+                      <div className="mt-2 flex gap-1">
+                        <label htmlFor="evidence-work-filter" className="sr-only">Filter evidence by work</label>
+                        <select id="evidence-work-filter" aria-label="Filter evidence by work" className="app-control min-w-0 flex-1 text-xs" value={evidenceWorkFilter} onChange={(event) => setEvidenceWorkFilter(event.target.value)}>
+                          <option value="">All works</option>
+                          {[...new Map(evidence.claims.filter((claim) => claim.workId).map((claim) => [claim.workId as string, claim.workTitle ?? "Untitled work"])).entries()].map(([workId, workTitle]) => <option key={workId} value={workId}>{workTitle}</option>)}
+                        </select>
+                        <label htmlFor="evidence-nature-filter" className="sr-only">Filter evidence by claim nature</label>
+                        <select id="evidence-nature-filter" aria-label="Filter evidence by claim nature" className="app-control min-w-0 flex-1 text-xs" value={evidenceNatureFilter} onChange={(event) => setEvidenceNatureFilter(event.target.value)}>
+                          <option value="">All natures</option>
+                          {[...new Set(evidence.claims.map((claim) => claim.claimNature))].map((nature) => <option key={nature} value={nature}>{nature}</option>)}
+                        </select>
+                      </div>
+                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Claims</h4>
+                      <ul className="app-reveal-stagger mt-1 max-h-64 space-y-2 overflow-auto">
+                        {evidence.claims.map((claim) => (
+                          <li key={claim.id} className="app-card app-mount rounded p-2 text-sm">
+                            <p className="text-xs text-[var(--color-text-muted)]">{claim.workTitle ?? "Untitled source"} · {claim.claimNature} · {claim.verificationStatus}{claim.anchorState === "unanchored" ? " · unanchored" : ""}</p>
+                            <p className="mt-1">“{claim.supportingExcerpt}”</p>
+                            <button type="button" className="app-control app-press mt-1 rounded border px-2 py-1 text-xs disabled:opacity-50" onClick={() => insertEvidence(claim)} disabled={insertingClaimId === claim.id}>{insertingClaimId === claim.id ? "Inserting…" : "Insert"}</button>
+                          </li>
+                        ))}
+                        {!evidence.claims.length && <li className="app-empty rounded p-2 text-xs text-[var(--color-text-muted)]">No claims match the current filters.</li>}
+                      </ul>
+                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Debates</h4>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        {evidence.debateClusters.map((cluster) => <li key={cluster.id}><Link className="underline" href={`/research/${researchLink.id}/debates/${cluster.id}`}>{cluster.name}</Link></li>)}
+                        {!evidence.debateClusters.length && <li className="text-[var(--color-text-muted)]">No debates yet.</li>}
+                      </ul>
+                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Evidence chambers</h4>
+                      <ul className="mt-1 space-y-1 text-xs">
+                        {evidence.chambers.map((chamber) => <li key={chamber.id}><Link className="underline" href={`/research/chambers/${chamber.id}`}>{chamber.question}</Link></li>)}
+                        {!evidence.chambers.length && <li className="text-[var(--color-text-muted)]">No evidence chambers yet.</li>}
+                      </ul>
+                    </>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
           <div
             role="separator"
             aria-label="Resize Library source sidebar"

@@ -36,6 +36,13 @@ export interface ResearchClaimListRow {
   verificationStatus: string;
   hidden: boolean;
   createdAt: Date;
+  /** Added Phase 28.5 (Writer evidence panel): the literal, re-verified
+   *  excerpt this claim was grounded in — the "verifiable-offloading
+   *  essential" the Evidence panel shows per entry, and the exact text
+   *  `buildEvidenceBlockquote()` inserts. Purely additive to this existing
+   *  row shape; the pre-existing `/research/[projectId]/claims` consumer
+   *  simply doesn't read the new field. */
+  supportingExcerpt: string;
 }
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -85,6 +92,7 @@ export async function listResearchClaims(
       verificationStatus: researchClaims.verificationStatus,
       hidden: researchClaims.hidden,
       createdAt: researchClaims.createdAt,
+      supportingExcerpt: researchClaims.supportingExcerpt,
     })
     .from(researchClaims)
     .innerJoin(researchProjectMembers, eq(researchProjectMembers.workId, researchClaims.workId))

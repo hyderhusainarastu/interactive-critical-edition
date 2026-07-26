@@ -1,5 +1,5 @@
-import { claimScores, db, evidenceChamberPositionClaims, evidenceChamberPositions, evidenceChambers, researchClaims, works } from "@ice/db";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { claimScores, db, debateClusters, evidenceChamberPositionClaims, evidenceChamberPositions, evidenceChambers, researchClaims, works } from "@ice/db";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 /**
  * Owner-scoped reads over `evidence_chamber` (Phase 27.1), assembling the
@@ -177,6 +177,40 @@ export interface EvidenceChamberView {
   createdAt: Date;
   /** Rendered in ordinal order — never re-sorted by any score. */
   positions: ChamberPositionView[];
+}
+
+export interface EvidenceChamberSummaryRow {
+  id: string;
+  clusterId: string;
+  clusterName: string;
+  question: string;
+  verificationStatus: string;
+  hidden: boolean;
+  createdAt: Date;
+}
+
+/** Lightweight, project-scoped chamber summaries — the Phase 28.5 Writer
+ *  Evidence panel's list ("...debate clusters, and chambers"), which only
+ *  needs enough to link out to `/research/chambers/[chamberId]` and show the
+ *  verification status, not the full `EvidenceChamberView` positions/scores
+ *  assembly above. `active` status only — the `listDebateClustersForProject`
+ *  precedent (superseded chambers are re-synthesis history, not something a
+ *  citation-picking panel needs to surface). */
+export async function listEvidenceChambersForProject(userId: string, projectId: string): Promise<EvidenceChamberSummaryRow[]> {
+  return db
+    .select({
+      id: evidenceChambers.id,
+      clusterId: evidenceChambers.clusterId,
+      clusterName: debateClusters.name,
+      question: evidenceChambers.question,
+      verificationStatus: evidenceChambers.verificationStatus,
+      hidden: evidenceChambers.hidden,
+      createdAt: evidenceChambers.createdAt,
+    })
+    .from(evidenceChambers)
+    .innerJoin(debateClusters, eq(debateClusters.id, evidenceChambers.clusterId))
+    .where(and(eq(evidenceChambers.userId, userId), eq(evidenceChambers.projectId, projectId), eq(evidenceChambers.status, "active")))
+    .orderBy(desc(evidenceChambers.createdAt));
 }
 
 /** A chamber is directly owner-scoped (`evidence_chamber.user_id`) — no
