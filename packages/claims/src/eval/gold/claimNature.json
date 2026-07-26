@@ -1,0 +1,522 @@
+[
+  {
+    "id": "nat_001",
+    "text": "At NE VII 1145b11-14, Aristotle first characterizes akrasia as a condition to be examined alongside continence, endurance, and softness.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics VII, 1145b11-14",
+    "provisional": true,
+    "rationale": "States what a specific locus literally introduces, with no interpretive claim layered on top."
+  },
+  {
+    "id": "nat_002",
+    "text": "At NE VII 1146b22-24, the intemperate person is said to act on choice and to think that present pleasure ought always to be pursued.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics VII, 1146b22-24",
+    "provisional": true,
+    "rationale": "A direct report of what the passage says about the intemperate agent's choice and belief."
+  },
+  {
+    "id": "nat_003",
+    "text": "At NE IX.4 1166b19-25, Aristotle describes the vicious soul as torn, with one part pained and another pleased by the same past act, and says such people are full of regret.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics IX.4, 1166b19-25",
+    "provisional": true,
+    "rationale": "A direct textual report of the IX.4 conflict passage central to the whole VII/IX.4 debate."
+  },
+  {
+    "id": "nat_004",
+    "text": "At NE VII 1150a21-31, Aristotle discusses whether akratic wrongdoing is curable and compares chronic akrasia to a disease.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics VII, 1150a21-31",
+    "provisional": true,
+    "rationale": "Reports the content of a specific passage about curability without adding interpretation."
+  },
+  {
+    "id": "nat_005",
+    "text": "At NE I.3 1094b24-25, Aristotle states that a well-educated person seeks only as much precision in a subject as its nature allows.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics I.3, 1094b24-25",
+    "provisional": true,
+    "rationale": "A direct report of the ethical-precision passage's content."
+  },
+  {
+    "id": "nat_006",
+    "text": "At NE VII.1 1145a16-19, Aristotle lays out a sixfold typology of character: superhuman virtue, virtue, continence, incontinence, vice, and brutishness.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics VII.1, 1145a16-19",
+    "provisional": true,
+    "rationale": "Reports the structural content of the typology passage itself."
+  },
+  {
+    "id": "nat_007",
+    "text": "At NE IX.8 1169a12, Aristotle notes that 'philautos' (friend to oneself) is a term some apply pejoratively to selfish people, while a positive sense is reserved for the genuinely virtuous.",
+    "nature": "textual",
+    "source": "Aristotle, Nicomachean Ethics IX.8, 1169a12",
+    "provisional": true,
+    "rationale": "A direct report of the passage's dual usage of philautos."
+  },
+  {
+    "id": "nat_008",
+    "text": "Irwin's paper opens by stating a textual puzzle: Aristotle's vicious agents act on decision (prohairesis), which implies rational guidance, yet Aristotle elsewhere says they live according to passion rather than reason.",
+    "nature": "textual",
+    "source": "Irwin, Vice and Reason, opening/abstract",
+    "provisional": true,
+    "rationale": "Reports what the paper's own opening states as the textual puzzle it addresses, without endorsing a solution."
+  },
+  {
+    "id": "nat_009",
+    "text": "Homer's Odyssey XI.393 and 475-491 describes Achilles' shade lamenting that he would rather be a poor man's living slave than rule over all the dead.",
+    "nature": "textual",
+    "source": "Homer, Odyssey XI.393, 475-491",
+    "provisional": true,
+    "rationale": "A direct report of the Achilles-lament passage's content, cited by Roochnik as part of the Hades analogy."
+  },
+  {
+    "id": "nat_010",
+    "text": "Aristotle's two portraits of the vicious person in Books VII and IX.4 are genuinely inconsistent yet philosophically forgivable, because together they capture a difficult truth about how radical vice appears to an ethical reader.",
+    "nature": "interpretive",
+    "source": "Roochnik, Aristotle's Account of the Vicious",
+    "provisional": true,
+    "rationale": "Roochnik's own thesis, an interpretive verdict about the text rather than a report of what the text literally says."
+  },
+  {
+    "id": "nat_011",
+    "text": "Aristotle's descriptions of the fully vicious person in Books VII and IX.4 cannot be reconciled as descriptions of one settled character type.",
+    "nature": "interpretive",
+    "source": "Bostock, Aristotle's Ethics",
+    "provisional": true,
+    "rationale": "An interpretive verdict about textual coherence, not a report of a single passage's content."
+  },
+  {
+    "id": "nat_012",
+    "text": "Aristotle can be given a consistent account of vice if the Book VII and Book IX.4 portraits are read as describing different temporal stages of one developing vicious character.",
+    "nature": "interpretive",
+    "source": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+    "provisional": true,
+    "rationale": "A reconciliation strategy proposed by the scholar, going beyond what either passage states on its own."
+  },
+  {
+    "id": "nat_013",
+    "text": "The vicious person lacks a stable, unified rational conception of the good, so 'principled vice' overstates the coherence Aristotle attributes to vicious character.",
+    "nature": "interpretive",
+    "source": "Muller, Aristotle on Vice",
+    "provisional": true,
+    "rationale": "An interpretive characterization of the vicious agent's psychology, contested by other scholars."
+  },
+  {
+    "id": "nat_014",
+    "text": "Vice is best understood as a settled commitment to a corrupted conception of the good, arrived at through mistaken practical reasoning.",
+    "nature": "interpretive",
+    "source": "Nielsen, Vice in the Nicomachean Ethics",
+    "provisional": true,
+    "rationale": "A general interpretive thesis synthesizing multiple passages, not a report of one locus."
+  },
+  {
+    "id": "nat_015",
+    "text": "An incurable form of vice matches Book VII, and a curable form matches Book IX.4, treating them as genuinely distinct varieties rather than one inconsistently described type.",
+    "nature": "interpretive",
+    "source": "Solis, Curable and Incurable Vice in Aristotle",
+    "provisional": true,
+    "rationale": "A reconciling interpretive move that redefines the scope of 'vice' to resolve the apparent tension."
+  },
+  {
+    "id": "nat_016",
+    "text": "In vice, practical reason remains active but becomes subordinated to antecedent inclination, functioning strategically rather than authoritatively over ends.",
+    "nature": "interpretive",
+    "source": "Irwin, Vice and Reason",
+    "provisional": true,
+    "rationale": "Irwin's own solution to the puzzle he poses, an interpretive construction rather than a direct textual report."
+  },
+  {
+    "id": "nat_017",
+    "text": "Book IX.4's conflicted portrait of vice may reflect an earlier stage of composition, locally influenced by the Platonic Lysis.",
+    "nature": "interpretive",
+    "source": "Annas, Plato and Aristotle on Friendship and Altruism",
+    "provisional": true,
+    "rationale": "A compositional-historical interpretive hypothesis, not a claim about a passage's literal content."
+  },
+  {
+    "id": "nat_018",
+    "text": "Vice is the outcome of habituation, a reason-corrupting process of becoming bad distinct from a single akratic lapse.",
+    "nature": "interpretive",
+    "source": "Barney, Becoming Bad: Aristotle on Vice and Moral Habituation",
+    "provisional": true,
+    "rationale": "An interpretive synthesis of the habituation material across NE II and VII."
+  },
+  {
+    "id": "nat_019",
+    "text": "'Akrasia' denotes a failure to act on one's own better judgment under the pull of appetite or emotion, distinct from ignorance and from settled vice.",
+    "nature": "definitional",
+    "source": "Baseline glossary CON-004, per Aristotle NE VII",
+    "provisional": true,
+    "rationale": "A working definition of a key term, not a claim about a specific passage or a scholarly thesis."
+  },
+  {
+    "id": "nat_020",
+    "text": "'Syngnome' ranges in sense across acknowledgment, fellow-feeling, allowance, excuse, and pardon, with no single fixed modern equivalent.",
+    "nature": "definitional",
+    "source": "Liddell, Scott, Jones and McKenzie, A Greek-English Lexicon (9th ed.), s.v. syngnome",
+    "provisional": true,
+    "rationale": "A lexical-semantic claim about a term's range of meaning, sourced from a lexicon rather than an argument."
+  },
+  {
+    "id": "nat_021",
+    "text": "'Prohairesis' denotes deliberative choice arrived at through prior deliberation about means to an already-wished-for end, not a momentary urge or bare intention.",
+    "nature": "definitional",
+    "source": "Irwin gold-eval fixture, expectedConcepts",
+    "provisional": true,
+    "rationale": "A definitional gloss of a technical term central to the vice/akrasia distinction."
+  },
+  {
+    "id": "nat_022",
+    "text": "'Kalon,' the fine or the noble, names the end for the sake of which the virtuous agent, but not the vicious agent, characteristically chooses.",
+    "nature": "definitional",
+    "source": "Irwin, Vice and Reason",
+    "provisional": true,
+    "rationale": "A definitional claim about a term's role in the theory, distinct from the interpretive mechanism built on it."
+  },
+  {
+    "id": "nat_023",
+    "text": "'Akolasia' is variously rendered as intemperance, self-indulgence, licentiousness, or lack of restraint, and each translation foregrounds a different modern psychological model.",
+    "nature": "definitional",
+    "source": "Baseline glossary CON-006",
+    "provisional": true,
+    "rationale": "A claim about translation options and their differing connotations, a definitional/lexical matter."
+  },
+  {
+    "id": "nat_024",
+    "text": "'Philautia,' self-love, is equivocal in Aristotle between a blameworthy sense of selfish self-seeking and a proper sense of rational self-concern.",
+    "nature": "definitional",
+    "source": "Baseline glossary CON-020",
+    "provisional": true,
+    "rationale": "A definitional claim isolating two senses of a single term."
+  },
+  {
+    "id": "nat_025",
+    "text": "'Theriotes,' brutishness, names a condition Aristotle treats as categorically outside ordinary vice, paired against superhuman virtue rather than ordinary virtue.",
+    "nature": "definitional",
+    "source": "Baseline glossary CON-017",
+    "provisional": true,
+    "rationale": "A definitional claim about a term's place in the typology, not an interpretive argument about its instability."
+  },
+  {
+    "id": "nat_026",
+    "text": "'Metameleia,' regret, is the term Aristotle uses to mark an agent's retrospective moral pain at a past act.",
+    "nature": "definitional",
+    "source": "Baseline glossary CON-010",
+    "provisional": true,
+    "rationale": "A definitional gloss of the term central to the VII/IX.4 debate's regret criterion."
+  },
+  {
+    "id": "nat_027",
+    "text": "Akratic wrongdoing is voluntary and therefore blameworthy for Aristotle, even though the agent retains correct judgment he fails to act on.",
+    "nature": "normative",
+    "source": "Aristotle, Nicomachean Ethics III, per PAS-003/PAS-006",
+    "provisional": true,
+    "rationale": "A claim about moral responsibility and blame, an evaluative/normative matter rather than a bare textual report."
+  },
+  {
+    "id": "nat_028",
+    "text": "Giving in to anger is more pardonable, on Aristotle's view, than giving in to appetite for pleasure, because anger listens to reason in a way appetite does not.",
+    "nature": "normative",
+    "source": "Aristotle, Nicomachean Ethics VII, 1149a26-1149b4",
+    "provisional": true,
+    "rationale": "A claim about degrees of pardon, i.e. a normative ranking rather than a description."
+  },
+  {
+    "id": "nat_029",
+    "text": "The fully vicious person, unlike the akratic, is neither curable nor a fit object of pardon, because his ruling practical principle has been corrupted rather than merely overridden.",
+    "nature": "normative",
+    "source": "Aristotle, Nicomachean Ethics VI 1140b20 / VII 1151a6-15",
+    "provisional": true,
+    "rationale": "A normative claim about who is and is not a fit object of pardon or moral rehabilitation."
+  },
+  {
+    "id": "nat_030",
+    "text": "A decent ethical reader cannot, and should not, fully identify with or normalize the fully unregretful Book VII vicious agent.",
+    "nature": "normative",
+    "source": "Roochnik, Aristotle's Account of the Vicious, Part Four",
+    "provisional": true,
+    "rationale": "A normative claim about the appropriate reader stance, not a descriptive report."
+  },
+  {
+    "id": "nat_031",
+    "text": "Aristotle requires that a student of ethics already possess decent habits before the subject can be properly studied, making ethical understanding partly conditional on the student's own character.",
+    "nature": "normative",
+    "source": "Aristotle, Nicomachean Ethics I.4, 1095b4-6",
+    "provisional": true,
+    "rationale": "A normative claim about who is fit to study ethics."
+  },
+  {
+    "id": "nat_032",
+    "text": "Treating the vicious as brutish or subhuman is a moralizing overreach that misdescribes a condition which remains, on Aristotle's own terms, a fully human failure of practical reason.",
+    "nature": "normative",
+    "source": "Nielsen, Vice in the Nicomachean Ethics (per baseline CON-022 framing)",
+    "provisional": true,
+    "rationale": "A normative claim about how the vicious ought, and ought not, to be characterized."
+  },
+  {
+    "id": "nat_033",
+    "text": "Vice, because it is acquired through habituation rather than a single choice, carries a distinctive form of responsibility tied to the agent's own history of habituating himself badly.",
+    "nature": "normative",
+    "source": "Barney, Becoming Bad: Aristotle on Vice and Moral Habituation",
+    "provisional": true,
+    "rationale": "A claim about the grounds and character of moral responsibility for an acquired state."
+  },
+  {
+    "id": "nat_034",
+    "text": "It is more pardonable to be overcome by desires and emotions that are natural and shared by most people than by those that are unnatural or excessive.",
+    "nature": "normative",
+    "source": "Aristotle, Nicomachean Ethics VII, per PAS-025 through PAS-027",
+    "provisional": true,
+    "rationale": "A normative ranking of the pardonability of different failures."
+  },
+  {
+    "id": "nat_035",
+    "text": "Psychic harmony, reason and desire aligned, can characterize either virtue or vice for Aristotle, since harmony is a formal condition rather than by itself a good one.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-012, per ARG-003",
+    "provisional": true,
+    "rationale": "A claim about how a concept (harmony) relates structurally to two other concepts (virtue, vice), not a definition of any one term alone."
+  },
+  {
+    "id": "nat_036",
+    "text": "Self-friendship is modeled by Aristotle on ordinary interpersonal friendship, extended reflexively to a single agent's relation to himself.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-019, per NE IX.4/IX.8",
+    "provisional": true,
+    "rationale": "A claim about the conceptual structure linking two ideas -- interpersonal friendship and self-relation."
+  },
+  {
+    "id": "nat_037",
+    "text": "Voluntariness and full moral responsibility come apart in Aristotle's framework: an act can be voluntary and blameworthy without being fully and knowingly chosen in the technical sense of prohairesis.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-014",
+    "provisional": true,
+    "rationale": "A claim about the relationship between two distinct technical concepts, voluntariness and prohairesis."
+  },
+  {
+    "id": "nat_038",
+    "text": "'Saving the phenomena' in ethics, for Roochnik, is not the same as the standard philosophy-of-science sense Kosman warns against, but concerns faithfully rendering how a phenomenon like vice appears to ethical readers.",
+    "nature": "conceptual",
+    "source": "Roochnik n.2; Kosman, Saving the Phenomena; baseline CON-023",
+    "provisional": true,
+    "rationale": "A claim distinguishing two senses of the same phrase across two conceptual frameworks."
+  },
+  {
+    "id": "nat_039",
+    "text": "Wish (boulesis) is a form of rational desire for an apparent good, distinct from appetite, and its status as practically active or inert is central to later reconciliations of the VII/IX.4 tension.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-037; Solis, Curable and Incurable Vice in Aristotle",
+    "provisional": true,
+    "rationale": "A claim about how one concept (wish) functions within a broader theoretical structure and debate."
+  },
+  {
+    "id": "nat_040",
+    "text": "The ruling practical principle (arche) that vice is said to destroy should not be reduced to a single propositional belief, since Aristotle's practical reason involves more than assertoric belief about means and ends.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-013",
+    "provisional": true,
+    "rationale": "A claim about the conceptual scope of a technical term relative to a narrower modern notion (propositional belief)."
+  },
+  {
+    "id": "nat_041",
+    "text": "Brutishness and vice occupy structurally parallel but distinct positions in Aristotle's sixfold moral typology, mirroring how superhuman virtue and ordinary virtue are structurally parallel but distinct.",
+    "nature": "conceptual",
+    "source": "Aristotle, Nicomachean Ethics VII.1, 1145a16-19",
+    "provisional": true,
+    "rationale": "A claim about the structural relationships among four concepts within one typology."
+  },
+  {
+    "id": "nat_042",
+    "text": "Endoxa, reputable opinions or appearances, function in Aristotelian inquiry as a starting point to be tested and refined, not as an infallible source of truth.",
+    "nature": "conceptual",
+    "source": "Baseline glossary CON-024; Pritzl, Endoxa as Appearances",
+    "provisional": true,
+    "rationale": "A claim about the role a concept plays within Aristotelian method, not a definition of the term alone."
+  },
+  {
+    "id": "nat_043",
+    "text": "Plato's Republic Book IX portrays the tyrannical soul as self-punishing and internally divided, a resource later commentators use as a comparative model for Aristotle's IX.4 vicious person.",
+    "nature": "historical",
+    "source": "Plato, Republic IX, 579b-e",
+    "provisional": true,
+    "rationale": "A claim about intellectual context and comparative influence between two authors' works."
+  },
+  {
+    "id": "nat_044",
+    "text": "Aquinas's Summa Theologiae distinguishes sin from passion, sin from ignorance, and deliberate badness (certa malitia), a threefold distinction Irwin invokes in his opening note.",
+    "nature": "historical",
+    "source": "Aquinas, Summa Theologiae, per Irwin note 1",
+    "provisional": true,
+    "rationale": "A claim about a medieval philosophical source's later use in a modern scholarly argument, i.e. historical/contextual."
+  },
+  {
+    "id": "nat_045",
+    "text": "Plato's Gorgias stages Callicles' immoralist defense of the strong pursuing their own advantage, a dialogue Irwin uses to illustrate what unrestrained intemperance looks like prior to his own analysis.",
+    "nature": "historical",
+    "source": "Plato, Gorgias, per Irwin, Vice and Reason",
+    "provisional": true,
+    "rationale": "A claim about an earlier dialogue's role as historical/intellectual background for a later argument."
+  },
+  {
+    "id": "nat_046",
+    "text": "The scholarly debate over Aristotle's account of vice runs from Annas's 1977 chronological hypothesis through Bostock (2000), Brickhouse (2003), Roochnik (2007), Muller (2015), Nielsen (2017/2023), Barney (2020), to Solis (2025), remaining an active, unsettled question.",
+    "nature": "historical",
+    "source": "Baseline reception finding, sections 9-10",
+    "provisional": true,
+    "rationale": "A claim about the historical trajectory of a scholarly debate across nearly five decades."
+  },
+  {
+    "id": "nat_047",
+    "text": "Homer's Odyssey depicts an afterlife whose bleakness is complicated by the Elysium passage in Book IV, where a peaceful, painless existence is promised to a favored few.",
+    "nature": "historical",
+    "source": "Homer, Odyssey IV.561-569",
+    "provisional": true,
+    "rationale": "A claim about a related passage's place in the broader Homeric corpus, contextual background for the Book XI analogy."
+  },
+  {
+    "id": "nat_048",
+    "text": "Parmenides' fragment 4 concerns whether what is absent can nonetheless be brought before thought as present, an idea Roochnik uses as a brief analogy for remembering the dead.",
+    "nature": "historical",
+    "source": "Parmenides, fragment 4, per Roochnik n.20",
+    "provisional": true,
+    "rationale": "A claim about a much earlier Presocratic source's use as historical/philosophical background for a later argument."
+  },
+  {
+    "id": "nat_049",
+    "text": "Roochnik's paper has been received unevenly in later scholarship: Carter reconstructs and engages it while preferring an Irwin-style account, Solis classifies it among inconsistency readings and proposes an alternative, and Muller and Nielsen develop independent accounts that implicitly bypass it.",
+    "nature": "historical",
+    "source": "Baseline reception finding, section 6",
+    "provisional": true,
+    "rationale": "A claim about the historical reception and citation pattern of one paper within its field."
+  },
+  {
+    "id": "nat_050",
+    "text": "ACE's structured, turn-by-turn feedback produced a statistically significant improvement in negotiation performance between trials, while unstructured zero-shot GPT-4 feedback did not.",
+    "nature": "empirical",
+    "source": "ACE: A LLM-based Negotiation Coaching System, findings",
+    "provisional": true,
+    "rationale": "A quantitative, hypothesis-tested finding (t=2.97, p=0.003) reported from a human-subjects experiment."
+  },
+  {
+    "id": "nat_051",
+    "text": "Participants trained with Rehearsal's simulated conflict practice substantially reduced competitive strategy use and increased cooperative strategy use in a subsequent real, unaided conflict.",
+    "nature": "empirical",
+    "source": "Rehearsal: Simulating Conflict to Teach Conflict Resolution, findings",
+    "provisional": true,
+    "rationale": "A behavioral outcome measured in a real (not simulated) follow-up interaction, an empirical transfer result."
+  },
+  {
+    "id": "nat_052",
+    "text": "Making a high initial offer in a negotiation correlates positively and significantly with eventual earnings.",
+    "nature": "empirical",
+    "source": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills, findings",
+    "provisional": true,
+    "rationale": "A reported correlation coefficient (r=0.47, p<0.001) from empirical negotiation data."
+  },
+  {
+    "id": "nat_053",
+    "text": "A theory-driven AI negotiation coach produced a larger reduction in negotiation-related fear than either a generic AI chatbot or a static handbook.",
+    "nature": "empirical",
+    "source": "Does AI Coaching Prepare us for Workplace Negotiations?, findings",
+    "provisional": true,
+    "rationale": "A between-condition comparison with reported effect sizes, an empirical experimental result."
+  },
+  {
+    "id": "nat_054",
+    "text": "Combining a lexical BM25 retrieval pass with dense retrieval substantially raised Recall@100 relative to dense retrieval alone on the benchmark tested.",
+    "nature": "empirical",
+    "source": "Hybrid Sparse-Dense Retrieval for Open-Domain QA, findings",
+    "provisional": true,
+    "rationale": "A benchmark metric result (Recall@100 0.71 to 0.88), an empirical IR finding."
+  },
+  {
+    "id": "nat_055",
+    "text": "Retrieval accuracy plateaued beyond a moderate embedding dimensionality and degraded at very high dimensions in the reported experiments.",
+    "nature": "empirical",
+    "source": "Diminishing Returns in High-Dimensional Embeddings, findings",
+    "provisional": true,
+    "rationale": "An empirical scaling result across tested embedding sizes."
+  },
+  {
+    "id": "nat_056",
+    "text": "Larger language models were found to hallucinate more confidently in the reported experiments, producing fluent but false statements that were harder for users to detect.",
+    "nature": "empirical",
+    "source": "Confident Hallucination at Scale, findings",
+    "provisional": true,
+    "rationale": "An empirical finding about model scale and hallucination confidence from reported experiments."
+  },
+  {
+    "id": "nat_057",
+    "text": "Retrieval-augmented generation reduced factual hallucination on knowledge-intensive queries by grounding model answers in retrieved passages.",
+    "nature": "empirical",
+    "source": "Retrieval-Augmented Generation for Knowledge Tasks, findings",
+    "provisional": true,
+    "rationale": "An empirical result comparing RAG to a non-retrieval baseline on hallucination rate."
+  },
+  {
+    "id": "nat_058",
+    "text": "The negotiation dataset underlying ACE's evaluation was collected from 50 MBA students conducting simulated used-car negotiations, transcribed via OpenAI's Whisper API with manual correction.",
+    "nature": "methodological",
+    "source": "ACE: A LLM-based Negotiation Coaching System, methods",
+    "provisional": true,
+    "rationale": "A description of data-collection procedure, a methodological rather than a findings claim."
+  },
+  {
+    "id": "nat_059",
+    "text": "The Trucey study recruited 267 participants through Prolific and randomly assigned them across three conditions in a 2:1:1 ratio.",
+    "nature": "methodological",
+    "source": "Does AI Coaching Prepare us for Workplace Negotiations?, methods",
+    "provisional": true,
+    "rationale": "A description of sampling and randomization procedure."
+  },
+  {
+    "id": "nat_060",
+    "text": "The Rehearsal user study used a between-subjects design in which 40 participants engaged in an actual conflict with a confederate after training.",
+    "nature": "methodological",
+    "source": "Rehearsal: Simulating Conflict to Teach Conflict Resolution, methods",
+    "provisional": true,
+    "rationale": "A description of experimental design, a methodological claim distinct from the study's findings."
+  },
+  {
+    "id": "nat_061",
+    "text": "The retrieval corpus was deduplicated using MinHash locality-sensitive hashing at a Jaccard similarity threshold of 0.8 before indexing.",
+    "nature": "methodological",
+    "source": "Scaling Embedding Dimensions for Retrieval, methods",
+    "provisional": true,
+    "rationale": "A description of a preprocessing pipeline step, purely methodological."
+  },
+  {
+    "id": "nat_062",
+    "text": "The language model evaluated for chain-of-thought prompting was instruction-tuned on 1.5 million examples drawn from a mixture of twelve task families.",
+    "nature": "methodological",
+    "source": "Chain-of-Thought Prompting Elicits Reasoning, methods",
+    "provisional": true,
+    "rationale": "A description of model training data composition, methodological in nature."
+  },
+  {
+    "id": "nat_063",
+    "text": "Evaluation of self-consistency sampling used 5-shot prompting at temperature 0 with a single fixed prompt template applied across all tasks.",
+    "nature": "methodological",
+    "source": "Self-Consistency Improves Chain-of-Thought, methods",
+    "provisional": true,
+    "rationale": "A description of the evaluation protocol's fixed parameters."
+  },
+  {
+    "id": "nat_064",
+    "text": "The Rehearsal pipeline classifies and scores conflict-resolution utterances using an 8-strategy taxonomy drawn from the Interests-Rights-Power framework.",
+    "nature": "methodological",
+    "source": "Rehearsal: Simulating Conflict to Teach Conflict Resolution, methods",
+    "provisional": true,
+    "rationale": "A description of an annotation/scoring scheme, a methodological design choice."
+  },
+  {
+    "id": "nat_065",
+    "text": "The Trucey study's willingness-to-initiate result depended on the analytical choice made: an adjusted regression found a significant effect, while an unadjusted Kruskal-Wallis group comparison found no significant difference.",
+    "nature": "methodological",
+    "source": "Does AI Coaching Prepare us for Workplace Negotiations?, methodological note",
+    "provisional": true,
+    "rationale": "A claim about how the choice of statistical method itself changed the reported result, a methodological claim about analysis technique."
+  }
+]

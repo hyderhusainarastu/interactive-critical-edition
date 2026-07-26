@@ -1,0 +1,769 @@
+[
+  {
+    "id": "hum_001",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle's descriptions of the fully vicious person in NE VII and NE IX.4 cannot both describe one settled, stable character type; the two portraits are genuinely inconsistent.",
+      "paper_title": "Bostock, Aristotle's Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The Book VII intemperate agent's unregretful harmony and the Book IX.4 vicious agent's regretful inner conflict cannot be reconciled as descriptions of the same fixed character; the tension is real, not merely apparent.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik explicitly adopts Bostock's inconsistency diagnosis (Roochnik p.212, n.12); both scholars reach the same verdict on the VII/IX.4 mismatch.",
+    "split": "train"
+  },
+  {
+    "id": "hum_002",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Homer's underworld in Odyssey XI presents the dead as nearly nothing -- insubstantial shades without real embodiment -- yet capable of fear and of suffering deserved punishment, an inconsistency Homer leaves unresolved.",
+      "paper_title": "Homer, Odyssey XI",
+      "section": "narrative",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Aristotle's two incompatible portraits of the vicious person are best explained, not resolved, because holding both in view captures how a genuinely alien moral possibility appears to an ethically decent reader.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "historical",
+    "provisional": true,
+    "rationale": "Roochnik's Homeric excursus (pp.214-216) functions as an explicit argumentative analogy for his forgivable-inconsistency conclusion (pp.214-218), not as decorative context.",
+    "split": "train"
+  },
+  {
+    "id": "hum_003",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The Book VII intemperate agent should not be read as literally lacking desire; Aristotle elsewhere attributes real appetite to the intemperate person, so the 'without desire' language must exclude only desire strong enough to overpower correct reason.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "In vice, practical reason remains active rather than absent; it becomes subordinated to antecedent inclination and operates strategically rather than as the authoritative source of the agent's ends.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "Both readings converge on the same underlying point: neither reason nor desire is simply switched off in the vicious agent (Roochnik pp.209-210 on NE VII 1148a17-18/1119a1; Irwin's instrumental-reason solution, sections 5-7).",
+    "split": "train"
+  },
+  {
+    "id": "hum_004",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Vice is best understood as a settled, general commitment to a corrupted conception of the good, arrived at through mistaken practical reasoning, not a mere decision-by-decision failure.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Vice arises through habituation, a reason-corrupting process of becoming bad that produces a stable corrupted state of character, distinct from a single akratic lapse.",
+      "paper_title": "Barney, Becoming Bad: Aristotle on Vice and Moral Habituation",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Both accounts affirm vice as a settled, principled corruption of practical reason rather than an unprincipled appetite-driven failure; Barney's habituation account contextualizes the same corrupted-reason picture Nielsen defends (per baseline SRC-028 CONTEXTUALIZES CON-013).",
+    "split": "test"
+  },
+  {
+    "id": "hum_005",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle requires that a student of ethics already possess decent habits before ethics can be properly studied; this audience condition is explicit in the text.",
+      "paper_title": "Aristotle, Nicomachean Ethics I.4",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Because the ethical reader already cares about being good, the fully vicious agent of Book VII remains partly unintelligible to that reader even after the two portraits are laid side by side.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik's closing reader-position claim (pp.217-218, ARG-010) is presented as a direct consequence of NE I.4 1095b4-6's habituation requirement, not a rival claim.",
+    "split": "train"
+  },
+  {
+    "id": "hum_006",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle holds that the akratic person's wrongful actions are voluntary, since he is not compelled and retains the capacity to have acted otherwise.",
+      "paper_title": "Aristotle, Nicomachean Ethics III",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Aristotle compares the akratic person's inactive knowledge to a sleeping, mad, or drunk person's use of correct words without genuine understanding, explaining how voluntary wrongdoing coexists with dormant moral knowledge.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "The sleep-metaphor passages (1147a13-1147b7) supply the mechanism behind the voluntariness claim at 1109b30-1111b4 rather than conflicting with it; both are premises in the same VII argument (PAS-006, PAS-020/021).",
+    "split": "train"
+  },
+  {
+    "id": "hum_007",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "There is a real interpretive puzzle in Aristotle: the vicious, like the virtuous, act on decision (prohairesis), which implies rational guidance, even though Aristotle elsewhere associates vice with living according to passion rather than reason.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The Book VII intemperate agent acts through settled choice on a corrupted principle; he is not a passion-driven eruption that simply overwhelms reason.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Irwin's opening puzzle-statement and Roochnik's own reading of the Book VII intemperate agent (pp.208-210) independently converge on treating vice as choice-guided rather than a mere appetitive eruption.",
+    "split": "test"
+  },
+  {
+    "id": "hum_008",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "A vicious person's Book VII harmony and Book IX.4 conflict can be reconciled if his settled plan for maximal pleasure is later disrupted by growing appetite, generating conflict and regret only at that later stage.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Book IX.4's regret can be explained along similar lines: it arises once the vicious person's earlier plan for pleasure begins to fail.",
+      "paper_title": "Irwin, Aristotle's Nicomachean Ethics (2nd ed. commentary)",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "support",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik reports that Irwin 'is cited as moving in a similar direction' to Brickhouse's developmental reconciliation (Part Three commentary, n.16); both scholars offer the same reconciliation strategy.",
+    "split": "train"
+  },
+  {
+    "id": "hum_009",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle's descriptions of the fully vicious person in NE VII and NE IX.4 are genuinely inconsistent and cannot be reconciled as one settled character type.",
+      "paper_title": "Bostock, Aristotle's Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "A vicious person's Book VII harmony and Book IX.4 conflict can be reconciled once the two portraits are read as describing different temporal stages of one developing character.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "The two positions are opposed on the central question of whether Aristotle's account of vice is coherent: Bostock affirms genuine inconsistency, Brickhouse denies it via reconciliation.",
+    "split": "train"
+  },
+  {
+    "id": "hum_010",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The vicious person lacks any stable, unified rational conception of the good; his apparent commitments merely track whatever pleasure is present, so 'principled vice' overstates the coherence Aristotle attributes to vicious character.",
+      "paper_title": "Müller, Aristotle on Vice",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Vice is best understood as a settled, general commitment to a false or corrupted conception of the good, arrived at through mistaken practical reasoning rather than a decision-by-decision failure.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Nielsen explicitly argues that Müller's unprincipled-agent account cannot accommodate Aristotle's technical choice and wish claims; the two positions are directly opposed characterizations of the vicious agent's psychology.",
+    "split": "test"
+  },
+  {
+    "id": "hum_011",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "At NE VII 1150a21-31, the fully vicious, intemperate person is incurable and pursues excess without regret, having no ongoing struggle against his own settled state.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "At NE IX.4 1166b19-25, the vicious person's soul is torn between two parts, one pained and one pleased by the same recollected act, and such people are said to be full of regret.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.4",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "Taken at face value the two loci attribute opposite psychological states (unregretful harmony vs regretful conflict) to the same kind of agent; this raw textual tension is the datum the whole VII/IX.4 debate addresses.",
+    "split": "train"
+  },
+  {
+    "id": "hum_012",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "A vicious person's apparent Book VII harmony and Book IX.4 conflict can be reconciled by reading them as different temporal stages of one developing character, driven by growing appetite that eventually defeats his plan for pleasure.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "This developmental reconciliation should be rejected: it has no explicit textual basis, understates the intensity of Book IX.4's self-loathing, and conflicts with Book VII's description of the intemperate agent as not requiring an overpowering appetite.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik directly rejects Brickhouse's account on three stated grounds (pp.213-214), an explicit REJECTS relationship, not a milder disagreement.",
+    "split": "train"
+  },
+  {
+    "id": "hum_013",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Book IX.4's conflicted, regretful portrait of vice may reflect an earlier stage of composition, locally influenced by the Platonic Lysis, and not yet fully integrated with Book VII's psychology.",
+      "paper_title": "Annas, Plato and Aristotle on Friendship and Altruism",
+      "section": "interpretive",
+      "confidence": "medium"
+    },
+    "claim_b": {
+      "text": "Vice admits a unified, non-chronological, systematic account across both books; no compositional or developmental conclusion about an early, unintegrated passage is established by the evidence.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Annas's chronological/local-Platonizing hypothesis and Nielsen's systematic, non-chronological account are opposed on whether the VII/IX.4 tension requires (or supports) any compositional explanation at all.",
+    "split": "test"
+  },
+  {
+    "id": "hum_014",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The fully unregretful, harmonious Book VII vicious agent risks sliding into the very brutish, monstrous category that Aristotle's own typology treats as distinct from ordinary vice.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Vice, properly understood, is a fully human, corrigible failure of practical reasoning about the good, continuous with ordinary moral psychology rather than a brutish or inhuman condition.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik's dehumanization worry (pp.216-217, ARG-009) and Nielsen's systematic, humanizing account of vice reach opposite verdicts on how alien or monstrous the vicious agent's psychology is.",
+    "split": "train"
+  },
+  {
+    "id": "hum_015",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "In vice, practical reason remains active but subordinated to antecedent inclination, giving the vicious agent a genuine, if corrupted, rational structure.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The vicious person lacks any stable, unified rational conception of the good; his apparent commitments merely track whatever pleasure is present.",
+      "paper_title": "Müller, Aristotle on Vice",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "contradiction",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Müller's account is a documented, explicit challenge to harmonizing, principled readings of vice like Irwin's instrumental-reason solution -- it denies the vicious soul is principled or harmonious at all.",
+    "split": "train"
+  },
+  {
+    "id": "hum_016",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "At NE VII 1148a17-18, Aristotle describes the intemperate person as pursuing excessive pleasures without desire, or with only weak desire, for them.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Elsewhere Aristotle attributes real appetite to the intemperate person, confirming that vicious pursuit of pleasure is desire-driven rather than a purely rational calculation performed without desire at all.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "Roochnik reconciles the two loci (1148a17-18 and 1119a1) by reading 'without desire' as excluding only desire strong enough to overpower correct reason, not desire as such (pp.209-210).",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "test"
+  },
+  {
+    "id": "hum_017",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "NE VII's unregretful intemperate person and NE IX.4's remorseful vicious person cannot straightforwardly describe one and the same stable character type at a single moment.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "A vicious person can be internally harmonious and unregretful at one stage, then become conflicted and regretful once his increasing appetite for pleasure begins to defeat his own settled plan for maximal pleasure.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Brickhouse relativizes the two portraits to different temporal stages of one developing character rather than treating them as simultaneous claims about one fixed type (Roochnik pp.212-214 reporting Brickhouse).",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "train"
+  },
+  {
+    "id": "hum_018",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "An incurable form of vice matches Book VII's unregretful intemperate portrait, and a curable form of vice matches Book IX.4's regretful portrait -- two genuinely distinct varieties rather than one inconsistently described type.",
+      "paper_title": "Solis, Curable and Incurable Vice in Aristotle",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Book VII and Book IX.4 offer two incompatible descriptions of the same kind of fully vicious agent, not descriptions of two different kinds of vice.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Solis redefines 'vice' as covering two distinct sub-kinds so there is no single referent to be inconsistently described, which dissolves the presupposition behind Roochnik's inconsistency reading (SRC-030, CON-030).",
+    "mechanismDraft": "different_definition",
+    "split": "train"
+  },
+  {
+    "id": "hum_019",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle's sixfold moral typology places brutishness in a category entirely outside vice, structurally paired against superhuman virtue.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII.1",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The fully unregretful, harmonious vicious person of Book VII risks sliding toward the very brutish, monstrous category that the typology treats as distinct from ordinary vice.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik does not deny the formal typological boundary; he interprets the psychological stability of that boundary differently, arguing it is felt as unstable by the ethical reader even though the categories remain formally distinct (pp.216-217).",
+    "mechanismDraft": "interprets_differently",
+    "split": "test"
+  },
+  {
+    "id": "hum_020",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Book IX.4's conflicted, regretful portrait of vice may reflect an earlier stage of composition, locally influenced by the Platonic Lysis, not yet fully integrated with Book VII's psychology.",
+      "paper_title": "Annas, Plato and Aristotle on Friendship and Altruism",
+      "section": "interpretive",
+      "confidence": "medium"
+    },
+    "claim_b": {
+      "text": "The two portraits do not fit together, but the mismatch should not be treated as a mere compositional accident; holding both descriptions in view serves a genuine philosophical purpose.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Roochnik partially agrees with Annas's diagnosis of a mismatch but declines her chronological explanation, offering a philosophical-functional explanation instead; the two differ on what KIND of explanation the mismatch calls for, not on whether a mismatch exists.",
+    "mechanismDraft": "different_definition",
+    "split": "train"
+  },
+  {
+    "id": "hum_021",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The virtuous person is a friend to himself (philautos) in the good sense, since his rational and non-rational parts agree and he wishes himself well.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.4 and IX.8",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Aristotle also recognizes a blameworthy sense of self-love, the sense the many assign themselves through selfish pursuit of gain, pleasure, and honor rather than genuine self-friendship.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.8",
+      "section": "textual",
+      "confidence": "medium"
+    },
+    "label": "nuance",
+    "category": "definitional",
+    "provisional": true,
+    "rationale": "'Philautia' is equivocal in Aristotle between a proper, virtuous sense and a popular, blameworthy sense; the apparent tension dissolves once the two senses of the same term are distinguished (baseline CON-020).",
+    "mechanismDraft": "different_definition",
+    "split": "train"
+  },
+  {
+    "id": "hum_022",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Irwin explains vice as arising when practical reason continues operating but is subordinated to the pursuit of the expedient (sumpheron) rather than the fine (kalon), which properly governs the virtuous agent's choices.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Irwin cautions that this fine/expedient account fits vices such as cowardice, intemperance, and sloth more naturally than vices such as greed, vindictiveness, or the desire for power and domination, where the model is harder to apply.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "limitations",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Irwin himself states the scope caveat as a self-imposed narrowing of his own mechanism's range, not a retraction of it (per the fixture's arg-scope-caveat, section 11).",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "test"
+  },
+  {
+    "id": "hum_023",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Irwin's instrumental-reason account explains why the vicious person still deliberates and forms plans despite pursuing bad ends, preserving a recognizably rational structure in vicious action.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Irwin explicitly acknowledges that in supplying this account of vice he develops Aristotle's own remarks well beyond anything Aristotle himself explicitly says.",
+      "paper_title": "Irwin, Vice and Reason",
+      "section": "methods",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "The epistemic hedge (fixture arg-self-admission, section 8 opening) qualifies the evidentiary status of the instrumental-reason mechanism without negating the mechanism itself.",
+    "split": "train"
+  },
+  {
+    "id": "hum_024",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Because the akratic person regrets his wrongdoing once his judgment reasserts itself, his failure shows he retains genuine concern for the good, unlike the settled vicious person.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Despite this retained concern for the good, Aristotle treats the akratic person's wrongful actions as voluntary and blameworthy, not as an excusable lapse.",
+      "paper_title": "Aristotle, Nicomachean Ethics III",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "The baseline material flags exactly this as a common beginner error -- inferring that regret erases blame -- which Roochnik's own reading (p.207) does not license (ARG-002).",
+    "split": "train"
+  },
+  {
+    "id": "hum_025",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Giving in to anger is more pardonable, on Aristotle's account, than giving in to appetite for pleasure, because anger is closer to reason and 'listens' to it in a way appetite does not.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Even so, yielding to anger still counts as a form of akrasia -- a failure to act on one's own correct judgment -- and is not thereby moved outside the category of self-mastery failure.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "definitional",
+    "provisional": true,
+    "rationale": "The pardon Aristotle extends for anger-driven wrongdoing is a matter of degree within akrasia, not an exemption from it (PAS-025 through PAS-030).",
+    "split": "test"
+  },
+  {
+    "id": "hum_026",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle's sixfold moral typology treats continence and incontinence (akrasia) as a pair distinct from virtue and vice, implying akrasia is not itself a form of vice.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII.1",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Elsewhere Aristotle says akrasia is 'in some way' vice, and that one can perform unjust acts through akrasia without thereby being an unjust person.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "The 'in some way' qualifier at 1151a6-15 marks a partial, qualified sense of vice-likeness that does not collapse the formal sixfold distinction drawn at 1145a16-19.",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "train"
+  },
+  {
+    "id": "hum_027",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle warns that ethical inquiry should seek only the precision its subject matter allows, not the exactness proper to mathematics.",
+      "paper_title": "Aristotle, Nicomachean Ethics I.3",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Roochnik nonetheless treats the question of whether Books VII and IX.4 are logically consistent as a determinate textual and philosophical question with a real answer, not one dissolved by an appeal to inexactness.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "The inexactness principle bears on the precision of substantive ethical judgments about action, not on whether a determinate answer exists to a question of logical consistency in Aristotle's own exposition.",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "train"
+  },
+  {
+    "id": "hum_028",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "In Odyssey XI, the shades of the ordinary dead are insubstantial, force-less, dream-like images (eidola) without real embodiment.",
+      "paper_title": "Homer, Odyssey XI",
+      "section": "narrative",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The same book of the Odyssey shows Tityos, Tantalus, and Sisyphus undergoing vivid, ongoing bodily punishment in the underworld.",
+      "paper_title": "Homer, Odyssey XI",
+      "section": "narrative",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "historical",
+    "provisional": true,
+    "rationale": "Homer applies 'nearly nothing' to the ordinary dead's presence, while the punished sinners are a marked exception whose animate suffering is precisely what makes deserved punishment intelligible (PAS-044 through PAS-048).",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "test"
+  },
+  {
+    "id": "hum_029",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Roochnik's central conclusion is that Aristotle's inconsistent portraits of vice are forgivable, because together they capture something true about how radical vice appears to an ethical reader.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Roochnik explicitly denies that his argument licenses treating philosophical inconsistency as generally harmless or acceptable; the forgivable verdict is narrowly scoped to this specific case.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "interpretive",
+    "provisional": true,
+    "rationale": "Part Four (pp.217-218) states the forgivability verdict is scoped to this one philosophical case, not generalized into a license for contradiction.",
+    "mechanismDraft": "different_scope_conditions",
+    "split": "train"
+  },
+  {
+    "id": "hum_030",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Aristotle treats the akratic person's wrongdoing as voluntary, since he retains correct judgment and chooses to act despite it.",
+      "paper_title": "Aristotle, Nicomachean Ethics III",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Aristotle nonetheless allows a qualified pardon (syngnome) for akratic wrongdoing that follows a natural impulse like anger, distinguishing it from wrongdoing that follows appetite for excess.",
+      "paper_title": "Aristotle, Nicomachean Ethics VII",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "nuance",
+    "category": "textual",
+    "provisional": true,
+    "rationale": "Voluntariness and blameworthiness (1111a25-b4) are compatible with a degree of pardon scoped to the source of the impulse -- anger versus appetite -- not to voluntariness itself (1149b4, CON-014, CON-015).",
+    "split": "train"
+  },
+  {
+    "id": "hum_031",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Roochnik translates the Nicomachean Ethics himself, using Ingram Bywater's 1962 Oxford reprint of the Greek text as his base edition.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "methods",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "The virtuous person is a friend to himself because his rational and non-rational parts are in agreement, wishing himself well and enjoying his own company.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.4",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "An edition-choice/translation detail (n.3) and a substantive self-friendship claim (1166a10-13) have no logical relationship to each other.",
+    "split": "test"
+  },
+  {
+    "id": "hum_032",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The Perseus Digital Library provides an aligned Greek/English reading interface used to check Bekker-referenced Nicomachean Ethics passages against a critical edition.",
+      "paper_title": "Perseus Digital Library, Nicomachean Ethics text tool",
+      "section": "methods",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Homer's Odyssey XI presents an inconsistent underworld where nearly insubstantial shades nonetheless fear and suffer deserved punishment.",
+      "paper_title": "Homer, Odyssey XI",
+      "section": "narrative",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "A digital-tooling/verification detail and a substantive Homeric interpretive claim are unrelated -- one is infrastructure, the other content.",
+    "split": "train"
+  },
+  {
+    "id": "hum_033",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Roochnik credits an extended conversation with Anna Lannstrom for originating the idea behind his paper, and Steve Esposito for Homeric background information.",
+      "paper_title": "Roochnik, Aristotle's Account of the Vicious",
+      "section": "acknowledgements",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Vice is best understood as a settled commitment to a false, corrupted conception of the good arrived at through mistaken practical reasoning.",
+      "paper_title": "Nielsen, Vice in the Nicomachean Ethics",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "A provenance/acknowledgements note about one paper's origins and a different scholar's substantive thesis about vice bear no logical relationship.",
+    "split": "train"
+  },
+  {
+    "id": "hum_034",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "The Liddell-Scott-Jones Greek-English Lexicon's ninth edition, revised with Roderick McKenzie, was published by Oxford's Clarendon Press in 1940.",
+      "paper_title": "Liddell, Scott, Jones and McKenzie, A Greek-English Lexicon (9th ed.)",
+      "section": "methods",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "A vicious person can be internally harmonious at one time and later conflicted once growing appetite defeats a plan for maximal pleasure.",
+      "paper_title": "Brickhouse, Does Aristotle Have a Consistent Account of Vice?",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "A lexicon's publication-history detail and Brickhouse's substantive reconciliation claim have no logical bearing on one another.",
+    "split": "test"
+  },
+  {
+    "id": "hum_035",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "PhilPapers' indexed record for Roochnik's paper lists nine citing works as of the 2026 research check, including Muller (2015), Nielsen (2017), Barney (2020), and Solis (2025).",
+      "paper_title": "PhilPapers record for Roochnik (2007)",
+      "section": "reception metadata",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "In Book IX.4, Aristotle describes the vicious person's soul as torn between two parts, one pained and one pleased by the same recollected act.",
+      "paper_title": "Aristotle, Nicomachean Ethics IX.4",
+      "section": "textual",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "A citation-count metadata fact and a substantive textual claim about the vicious person's psychology are unrelated in content.",
+    "split": "train"
+  },
+  {
+    "id": "hum_036",
+    "domain": "ancient_philosophy",
+    "claim_a": {
+      "text": "Roochnik credits Richmond Lattimore's 1991 translation of the Odyssey for the Homeric passages he quotes.",
+      "paper_title": "Lattimore (trans.), The Odyssey of Homer",
+      "section": "methods",
+      "confidence": "high"
+    },
+    "claim_b": {
+      "text": "Vice arises through habituation, a reason-corrupting process of becoming bad that is distinct from a single akratic lapse.",
+      "paper_title": "Barney, Becoming Bad: Aristotle on Vice and Moral Habituation",
+      "section": "interpretive",
+      "confidence": "high"
+    },
+    "label": "unrelated",
+    "category": "methodological",
+    "provisional": true,
+    "rationale": "A translation-credit detail and Barney's substantive habituation thesis have no logical relationship to each other.",
+    "split": "train"
+  }
+]
