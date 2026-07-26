@@ -75,6 +75,8 @@ export interface DebateClusterDetail {
   edgeCount: number;
   counts: unknown;
   verificationStatus: string;
+  /** The Phase 29.2 review workflow's hide/restore state. */
+  hidden: boolean;
   createdAt: Date;
   members: DebateClusterMemberClaimRow[];
   latestChamberId: string | null;
@@ -97,6 +99,7 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
       edgeCount: debateClusters.edgeCount,
       counts: debateClusters.counts,
       verificationStatus: debateClusters.verificationStatus,
+      hidden: debateClusters.hidden,
       createdAt: debateClusters.createdAt,
     })
     .from(debateClusters)
