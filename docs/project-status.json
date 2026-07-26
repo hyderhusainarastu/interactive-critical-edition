@@ -10,9 +10,9 @@
   "updated": "2026-07-26",
   "current": {
     "phase": 27,
-    "headline": "Phase 27 (Synthesis: Evidence Chambers, Hypotheses, Humanities Gate) is IN PROGRESS as of 2026-07-26: 27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) shipped after a 3-run canary failure root-caused and fixed (token ceiling + title-matching contract); final canary passed 2 positions/$0.071 with repeat-run $0. 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) shipped with 5 hypotheses canary at $0.082 repeat $0; the reconciled research_revision CHECK closing D-25-7 was applied to production before the code merge (D-23-34 rule). 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md). Phase 28 (Research Surfaces) is mostly complete: 28.1/28.2/28.3/28.4/28.6 all shipped; 28.5 (Writer evidence lane) is in_progress. Phase 29.3 (reverse-direction improvements lane) complete: Writer exports + hybrid RAG + citation hardenings + classifier eval retrofits + dashboard module; Phase 29.1/29.2 in_progress.",
-    "summary": "Phase 27/28/29 triple merge wave (2026-07-26, Haiku 4.5): Evidence Chambers and Hypotheses shipped end-to-end with zero new product defects found; Phase 28 Research Surfaces mostly complete (six sub-phases shipped, Writer evidence lane running). Register adds 6 new P2/P3 findings (D-25-1 through D-25-7, all resolved: 5 fixed in situ, 1 open measurement-only, 1 fixed via production DDL reconciliation). Updated defects: 148 total findings (133 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 12 open). d Phases 25–26 complete (tags phase-25-complete, phase-26-complete); Phases 27/28/29 in active development.",
-    "nextAction": "Phase 27 complete 27.1/27.2 pending 27.3 owner ratification gate; Phase 28 near-complete (28.5 Writer evidence lane active); Phase 29 partial (29.1/29.2 lanes active); continue development across all three phases per the ultrcode orchestration directive."
+    "headline": "Phase 27 (Synthesis: Evidence Chambers, Hypotheses, Humanities Gate) is IN PROGRESS as of 2026-07-26: 27.1 (Evidence Chamber, migration 0042, production-applied ledger 43) shipped after a 3-run canary failure root-caused and fixed (token ceiling + title-matching contract); final canary passed 2 positions/$0.071 with repeat-run $0. 27.2 (hypotheses/gaps, migration 0043, production-applied ledger 44) shipped with 5 hypotheses canary at $0.082 repeat $0; the reconciled research_revision CHECK closing D-25-7 was applied to production before the code merge (D-23-34 rule). 27.3 (humanities judge gate, deferred migration 0046) awaits owner ratification of the humanities gold sets (RATIFICATION.md). Phase 28 (Research Surfaces) is complete: 28.1-28.6 all shipped, including 28.5 (Writer evidence insertion, merge 2dac37e). Phase 29.3 (reverse-direction improvements lane) complete: Writer exports + hybrid RAG + citation hardenings + classifier eval retrofits + dashboard module; Phase 29.1/29.2 in_progress.",
+    "summary": "Phase 27/28/29 triple merge wave (2026-07-26, Haiku 4.5): Evidence Chambers and Hypotheses shipped end-to-end with zero new product defects found; Phase 28 Research Surfaces complete (all six sub-phases shipped, including Writer evidence insertion). Register adds 9 new P2/P3 findings across the wave (D-25-1 through D-25-9): 6 fixed (D-25-1/2/3/5/7/9) and 3 open (D-25-4/6/8), including the Phase 28.5 merge's own D-25-8 (open, documented editor-architecture limit) and D-25-9 (fixed, schema-widening data-loss risk caught pre-merge). Updated defects: 150 total findings (134 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 13 open). d Phases 25–26 complete (tags phase-25-complete, phase-26-complete); Phases 27/28/29 in active development.",
+    "nextAction": "Phase 27 complete 27.1/27.2 pending 27.3 owner ratification gate; Phase 28 complete (all sub-phases 28.1-28.6 shipped); Phase 29 partial (29.1/29.2 lanes active); continue development across all three phases per the ultrcode orchestration directive."
   },
   "program": {
     "name": "Phases 19-24 completion program + Phases 25-30 ScholarLens integration program",
@@ -41,20 +41,20 @@
   "defects": {
     "register": "docs/audits/phase-19-product-audit.md",
     "asOf": "2026-07-26",
-    "total": 148,
+    "total": 150,
     "bySeverity": {
       "P0": 1,
       "P1": 29,
-      "P2": 70,
-      "P3": 46
+      "P2": 71,
+      "P3": 47
     },
     "byStatus": {
-      "fixed": 133,
+      "fixed": 134,
       "partially_fixed": 3,
       "fixed_pending_cleanup": 0,
-      "open": 12
+      "open": 13
     },
-    "note": "Recounted after the Phase 27/28 triple merge wave (2026-07-26). **Phase 29.3 eval-discipline retrofit lane** added 3 P3 rows (D-25-1/D-25-2/D-25-3, all fixed) after the gold-set macro-F1/kappa measurement surfaced two real heuristic-classifier defects in `packages/ai-adapters/src/providers/heuristic.ts`: D-25-1 fixed (disagreement rule `criticiz` stem covering both -ize and -ise spellings), D-25-2 fixed (`optional_extension` now producible via conservative keyword rule), D-25-3 fixed (resolved `explicit_reference` precision dilution, 0.545 → 1.000). Counts after: 144 total (131 fixed, 3 partial, 10 open). **`classifyCitationForm` eval retrofit lane** added D-25-4 (open, P3, measurement-only, chapter-in-edited-volume classification gap). Counts after: 145 total (131 fixed, 3 partial, 11 open). **26.2b judge-stage adversarial verification** added D-25-5 (fixed, P3, token accumulation bug in `AnthropicTextJsonClient.call`). Counts after: 146 total (132 fixed, 3 partial, 11 open). **Phase 28.4 debate-layer merge** added D-25-6 (open, P3, component unit-test infrastructure gap). Counts after: 147 total (132 fixed, 3 partial, 12 open). **Phase 27.1/27.2 merge-gate reconciliation (triple merge wave)** added D-25-7 (fixed, P2, research_revision CHECK reconciliation between parallel 0042/0043 migrations, applied to production before code merge per D-23-34). Final counts: 148 total (133 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 12 open [D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6])."
+    "note": "Recounted after the Phase 27/28 triple merge wave (2026-07-26). **Phase 29.3 eval-discipline retrofit lane** added 3 P3 rows (D-25-1/D-25-2/D-25-3, all fixed) after the gold-set macro-F1/kappa measurement surfaced two real heuristic-classifier defects in `packages/ai-adapters/src/providers/heuristic.ts`: D-25-1 fixed (disagreement rule `criticiz` stem covering both -ize and -ise spellings), D-25-2 fixed (`optional_extension` now producible via conservative keyword rule), D-25-3 fixed (resolved `explicit_reference` precision dilution, 0.545 → 1.000). Counts after: 144 total (131 fixed, 3 partial, 10 open). **`classifyCitationForm` eval retrofit lane** added D-25-4 (open, P3, measurement-only, chapter-in-edited-volume classification gap). Counts after: 145 total (131 fixed, 3 partial, 11 open). **26.2b judge-stage adversarial verification** added D-25-5 (fixed, P3, token accumulation bug in `AnthropicTextJsonClient.call`). Counts after: 146 total (132 fixed, 3 partial, 11 open). **Phase 28.4 debate-layer merge** added D-25-6 (open, P3, component unit-test infrastructure gap). Counts after: 147 total (132 fixed, 3 partial, 12 open). **Phase 27.1/27.2 merge-gate reconciliation (triple merge wave)** added D-25-7 (fixed, P2, research_revision CHECK reconciliation between parallel 0042/0043 migrations, applied to production before code merge per D-23-34). Final counts: 148 total (133 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 12 open [D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6]). **Phase 28.5 merge (Writer evidence insertion)** added D-25-8 (open, P3, plain-textarea round-trip flattens structured evidence-blockquote attrs on the next autosave, a pre-existing editor architecture limit) and D-25-9 (fixed, P2, proseMirrorToPlainText's swallow-to-\"\" behavior combined with a too-narrow block schema risked silently blanking a whole draft on load; schema widened to a union before it ever shipped, caught by 28.5's own e2e verification). Final counts: 150 total (134 fixed, 3 partial [D-19-6, D-23-38, D-23-39], 13 open [D-22-7, D-20-85, D-20-88, D-22-22, D-22-24, D-23-10, D-23-13, D-23-22, D-23-37, D-23-42, D-25-4, D-25-6, D-25-8])."
   },
   "phases": [
     {
@@ -1016,16 +1016,17 @@
     {
       "number": 28,
       "title": "Research Surfaces",
-      "state": "in_progress",
-      "summary": "The user-facing workspace, behind PHASE_25_* flags (default false): /research project routes + zero-LLM insight feed (28.1); corpus import with arXiv adapter (28.2); reader Claims tab with single-point markers (28.3); graph debate layer with progressive disclosure (28.4, byte-identical flag-off verified); Ask Library research modes + migration 0044 production-applied + lifecycle-filter fix (28.6). Writer evidence insertion (28.5) in_progress.",
-      "confirmation": "28.1/28.2/28.3/28.4/28.6 complete with zero axe wcag2a/wcag2aa violations; debate layer byte-identical on flag-off; owner-scoped 404-not-403; 28.5 active.",
+      "state": "complete",
+      "summary": "The user-facing workspace, behind PHASE_25_* flags (default false): /research project routes + zero-LLM insight feed (28.1); corpus import with arXiv adapter (28.2); reader Claims tab with single-point markers (28.3); graph debate layer with progressive disclosure (28.4, byte-identical flag-off verified); Writer evidence insertion — Evidence panel + claim-backed blockquote citations (28.5); Ask Library research modes + migration 0044 production-applied + lifecycle-filter fix (28.6). All sub-phases 28.1-28.6 complete.",
+      "confirmation": "28.1/28.2/28.3/28.4/28.6 complete with zero axe wcag2a/wcag2aa violations; debate layer byte-identical on flag-off; owner-scoped 404-not-403; 28.5 complete: dual-flag gated, owner-scoped, CSL-honesty gated with no invented fallback values, typecheck/lint/build/unit/e2e all green.",
       "evidence": [
         "28.1: Research project UI + confirmation guard shipped; zero axe violations on /research routes.",
         "28.2: Corpus import + arXiv adapter shipped; provider search/import routes functional.",
         "28.3: Reader claim layer shipped; single-point markers + dashed unanchored re-matching.",
         "28.4: Graph debate layer shipped with byte-identical flag-off verification; progressive disclosure expand endpoint live.",
         "28.6: Ask Library research modes shipped; migration 0044 production-applied ledger 45; lifecycle-filter fix live; claim-citation allowlist validation verified.",
-        "28.5: Writer evidence insertion in_progress."
+        "28.5: Writer evidence insertion in_progress.",
+        "28.5: Writer evidence insertion shipped (merge 2dac37e) — Evidence panel + claim-backed blockquote insertion; writer.test.ts (tsx) + e2e/writer-evidence.spec.ts (port 3170) both green; writer.spec.ts/writer-export.spec.ts re-verified unmodified."
       ],
       "subphases": [
         {
@@ -1059,9 +1060,9 @@
         {
           "id": "28.5",
           "title": "Writer evidence insertion",
-          "state": "in_progress",
+          "state": "complete",
           "model": "sonnet",
-          "summary": "Evidence panel; blockquote nodes with researchClaimId attrs; writer_citation.research_claim_id; unanchored claims visibly marked."
+          "summary": "Evidence panel linking a Writer project to a research project (research_project_member, member_type=writer_project, owner-scoped both sides); lists non-rejected/non-hidden claims, debate clusters, and evidence chambers; Insert action appends a real ProseMirror blockquote (attrs: researchClaimId, excerpt, workTitle) plus a writer_citation row built only from the claim's own real bibliographic identity, gated behind an at-least-one-of author/year/DOI/URL honesty check with no invented fallback values. Unresolved-citation and unanchored-claim markers are visible, never silent. Gated on phase12FeatureEnabled('writer') AND phase25FeatureEnabled('writerEvidence'). Verification found and fixed D-25-9 (schema-widening data-loss risk) pre-merge and surfaced D-25-8 (documented plain-textarea round-trip limitation, open)."
         },
         {
           "id": "28.6",
@@ -1071,7 +1072,7 @@
           "summary": "Per-message mode; graph-based retrieval for counterarguments/disagreement; >=1 claim per side or not-found; rag_message_claim_citation with allowlist validation; lifecycle-filter fix; migration 0044 production-applied ledger 45."
         }
       ],
-      "nextAction": "28.1/28.2/28.3/28.4/28.6 complete; 28.5 active; conclude when 28.5 merges."
+      "nextAction": "Phase 28 complete — all sub-phases 28.1-28.6 shipped."
     },
     {
       "number": 29,
