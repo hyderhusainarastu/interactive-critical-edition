@@ -671,59 +671,94 @@ async function main() {
   await waitForServer(`${BASE_URL}/`, 30_000);
   log("Preview server ready.");
 
-  let headedUsed = true;
-  let browser: Browser;
-  try {
-    browser = await Promise.race([
-      chromium.launch({ headless: false, args: ["--force-device-scale-factor=1"] }),
-      new Promise<Browser>((_, reject) => setTimeout(() => reject(new Error("headed launch timeout")), 20_000)),
-    ]);
-  } catch (err) {
-    log(`Headed launch failed (${err instanceof Error ? err.message : String(err)}); falling back to headless 'new'.`);
-    headedUsed = false;
-    browser = await chromium.launch({ headless: true, args: ["--force-device-scale-factor=1"] });
-  }
-  log(`Browser launched. headed=${headedUsed}`);
-
-  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
-
-  // Gap fix (found live, blocked measurement entirely): tsx compiles this
-  // *.ts file with esbuild's `keepNames: true` (tsx's own fixed default,
-  // not something this file opted into — verified by reading
-  // node_modules/tsx/dist/index-CQhDiIsg.mjs's shared transform options).
-  // That wraps every named function this file defines — including the
-  // `tick`/`driveOrbitPointer` helpers declared *inside* the closures
-  // passed to `page.evaluate()` below — with a `__name(fn, "fn")` call.
-  // Playwright ships a `page.evaluate(callback)` argument to the browser by
-  // serializing the *actual compiled* `callback.toString()`, so the
-  // `__name(...)` calls are part of what gets sent — but the `__name`
-  // helper itself is a module-scope const in the Node-side compiled file,
-  // never shipped to the page. Every orbit-sampling and pointer-latency
-  // evaluate() call therefore threw `ReferenceError: __name is not
-  // defined` on first use, silently turning "the bench measures orbit FPS"
-  // into "the bench hangs/crashes before writing a single trial." Fixed by
-  // predefining a compatible one-line polyfill on `window` via
-  // `addInitScript` (reruns automatically on every navigation/reload, so
-  // every page this driver ever creates has it before any app code runs) —
-  // the minimal fix, not a build-pipeline change, since it doesn't touch
-  // what tsx/esbuild actually compile, only supplies the one global symbol
-  // their output assumes exists.
-  await page.addInitScript(() => {
-    const w = window as unknown as { __name?: (fn: unknown, name: string) => unknown };
-    if (!w.__name) {
-      w.__name = (fn: unknown, name: string) => {
-        try {
-          Object.defineProperty(fn as object, "name", { value: name, configurable: true });
-        } catch {
-          // best-effort only — matches esbuild's own helper, which never
-          // throws past this point either
-        }
-        return fn;
-      };
+  async function launchBrowserAndPage(): Promise<{ browser: Browser; page: Page; headedUsed: boolean }> {
+    let headed = true;
+    let br: Browser;
+    try {
+      br = await Promise.race([
+        chromium.launch({ headless: false, args: ["--force-device-scale-factor=1"] }),
+        new Promise<Browser>((_, reject) => setTimeout(() => reject(new Error("headed launch timeout")), 20_000)),
+      ]);
+    } catch (err) {
+      log(`Headed launch failed (${err instanceof Error ? err.message : String(err)}); falling back to headless 'new'.`);
+      headed = false;
+      br = await chromium.launch({ headless: true, args: ["--force-device-scale-factor=1"] });
     }
-  });
+    log(`Browser launched. headed=${headed}`);
 
-  const driver = new RealBenchDriver(page);
+    const pg = await br.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+    // Gap fix (found live, blocked measurement entirely): tsx compiles this
+    // *.ts file with esbuild's `keepNames: true` (tsx's own fixed default,
+    // not something this file opted into — verified by reading
+    // node_modules/tsx/dist/index-CQhDiIsg.mjs's shared transform options).
+    // That wraps every named function this file defines — including the
+    // `tick`/`driveOrbitPointer` helpers declared *inside* the closures
+    // passed to `page.evaluate()` below — with a `__name(fn, "fn")` call.
+    // Playwright ships a `page.evaluate(callback)` argument to the browser
+    // by serializing the *actual compiled* `callback.toString()`, so the
+    // `__name(...)` calls are part of what gets sent — but the `__name`
+    // helper itself is a module-scope const in the Node-side compiled
+    // file, never shipped to the page. Every orbit-sampling and
+    // pointer-latency evaluate() call therefore threw `ReferenceError:
+    // __name is not defined` on first use, silently turning "the bench
+    // measures orbit FPS" into "the bench hangs/crashes before writing a
+    // single trial." Fixed by predefining a compatible one-line polyfill
+    // on `window` via `addInitScript` (reruns automatically on every
+    // navigation/reload, so every page this driver ever creates has it
+    // before any app code runs) — the minimal fix, not a build-pipeline
+    // change, since it doesn't touch what tsx/esbuild actually compile,
+    // only supplies the one global symbol their output assumes exists.
+    await pg.addInitScript(() => {
+      const w = window as unknown as { __name?: (fn: unknown, name: string) => unknown };
+      if (!w.__name) {
+        w.__name = (fn: unknown, name: string) => {
+          try {
+            Object.defineProperty(fn as object, "name", { value: name, configurable: true });
+          } catch {
+            // best-effort only — matches esbuild's own helper, which never
+            // throws past this point either
+          }
+          return fn;
+        };
+      }
+    });
+
+    return { browser: br, page: pg, headedUsed: headed };
+  }
+
+  let { browser, page, headedUsed } = await launchBrowserAndPage();
+  let driver = new RealBenchDriver(page);
+
+  // Gap fix (found live during the real DRY_RUN, not hypothesized): the
+  // stress fixture (fixture-1000/4000, the charter's own heaviest
+  // mandatory scene) crashed the entire browser process outright on one
+  // observed run ("Target page, context or browser has been closed" from
+  // Playwright, not a script bug — no macOS crash report or jetsam/low-
+  // memory log entry was found for the browser process, so the most
+  // likely cause is a GPU-process crash-and-give-up under sustained
+  // load, not this driver mishandling anything). Losing the whole
+  // browser is already exactly what `checkStressFixture`'s own try/catch
+  // is designed to record as `crashedOrBlank: true` for the fixture that
+  // caused it — but a browser that's actually gone stays gone for every
+  // subsequent driver call too, so without recovery a single stress-
+  // fixture crash for prototype "a" was silently voiding navigation-
+  // timing and lifecycle measurement for BOTH prototypes, which is a real
+  // fairness problem (one prototype's crash denying the other prototype
+  // its own unrelated measurements). `ensureBrowserAlive()` checks
+  // `browser.isConnected()` before each major phase and relaunches a
+  // fresh browser/page/driver if it's gone, so a stress-fixture crash
+  // costs exactly what it should — that fixture's own result — and
+  // nothing downstream.
+  async function ensureBrowserAlive(context: string): Promise<void> {
+    if (browser.isConnected()) return;
+    log(`Browser disconnected (detected before ${context}) — relaunching.`);
+    const relaunched = await launchBrowserAndPage();
+    browser = relaunched.browser;
+    page = relaunched.page;
+    headedUsed = headedUsed && relaunched.headedUsed;
+    driver = new RealBenchDriver(page);
+  }
 
   const allTrials: TrialResult[] = [];
   const navResults: NavigationTrialResult[] = [];
@@ -768,6 +803,7 @@ async function main() {
 
   // ---- Stress fixture: run once per prototype, crash/blank only ----
   for (const prototypeId of prototypes) {
+    await ensureBrowserAlive(`stress fixture (${prototypeId})`);
     log(`--- Stress fixture-1000/4000: ${prototypeId} ---`);
     const stress = await checkStressFixture(driver, page, prototypeId);
     stressResults.push(stress);
@@ -776,6 +812,7 @@ async function main() {
 
   // ---- Navigation timing: 3 cold + 5 warm per prototype, fixture-120 ----
   for (const prototypeId of prototypes) {
+    await ensureBrowserAlive(`navigation timing (${prototypeId})`);
     log(`--- Navigation timing: ${prototypeId}/${NAV_FIXTURE} ---`);
     await driver.navigate(prototypeId, NAV_FIXTURE, "warm");
     await driver.waitForPayloadReceived();
@@ -788,6 +825,7 @@ async function main() {
 
   // ---- Lifecycle: 20x mount/unmount per prototype, fixture-24 ----
   for (const prototypeId of prototypes) {
+    await ensureBrowserAlive(`lifecycle benchmark (${prototypeId})`);
     log(`--- Lifecycle 20x mount/unmount: ${prototypeId}/${LIFECYCLE_FIXTURE} ---`);
     driver.currentPrototypeId = prototypeId;
     driver.currentFixtureName = LIFECYCLE_FIXTURE;
@@ -813,7 +851,9 @@ async function main() {
     log(`Lifecycle result ${prototypeId}: pass=${evalResult.pass} violations=${JSON.stringify(evalResult.violations)}`);
   }
 
-  await browser.close();
+  if (browser.isConnected()) {
+    await browser.close();
+  }
   previewProc.kill();
 
   // ---- Summary aggregation ----
