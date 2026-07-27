@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/app/CommandPalette";
 import { GlobalRagSidebar } from "@/components/app/GlobalRagSidebar";
 import { useToast } from "@/components/app/ToastProvider";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
+import { useFocusRestoration } from "@/components/primitives/useFocusRestoration";
 import { SecondaryPanelProvider, useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
 import { PageTransition } from "@/components/shared/PageTransition";
 import { ContextBar, RAG_SIDEBAR_ID } from "./ContextBar";
@@ -75,6 +76,15 @@ function AppShellLayout({
   const ragPanel = useSecondaryPanel("rag");
   const [readerLevel, setReaderLevel] = useState<ReaderLevel | null>(initialReaderLevel);
   const focusModeExitRef = useRef<HTMLButtonElement>(null);
+  // Owned here, not inside `ContextBar`: `GlobalRagSidebar` is mounted as a
+  // sibling of `ContextBar` at THIS level, so a dialog-initiated close
+  // (Escape, its own close button — anything other than re-clicking the
+  // trigger button, which `ContextBar` already restores focus for itself)
+  // needs this same ref to restore focus, or the "Library chat sidebar"
+  // trigger is silently left unfocused. Passed down into `ContextBar` so
+  // there is exactly one ref, not two independently-created ones.
+  const ragTriggerRef = useRef<HTMLButtonElement>(null);
+  const restoreRagFocus = useFocusRestoration(ragTriggerRef);
 
   const focusMode = preferences.focusMode;
   const immersive = isImmersiveRoute(pathname);
@@ -147,6 +157,7 @@ function AppShellLayout({
           onFocusModeChange={setFocusMode}
           immersive={immersive}
           focusMode={focusMode}
+          ragTriggerRef={ragTriggerRef}
         />
         {/* `PageTransition` wraps ONLY routed content, not any persistent
             chrome above/below it — see `PageTransition.tsx`'s own comment
@@ -160,7 +171,15 @@ function AppShellLayout({
       {!focusMode && <MobileBottomNav writerEnabled={writerEnabled} researchEnabled={researchEnabled} />}
       <CommandPalette items={paletteItems} />
       {ragEnabled && ragPanel.isOpen && (
-        <GlobalRagSidebar id={RAG_SIDEBAR_ID} contextWorkId={routeWorkId} onClose={ragPanel.close} enableResearchModes={askResearchModesEnabled} />
+        <GlobalRagSidebar
+          id={RAG_SIDEBAR_ID}
+          contextWorkId={routeWorkId}
+          onClose={() => {
+            ragPanel.close();
+            restoreRagFocus();
+          }}
+          enableResearchModes={askResearchModesEnabled}
+        />
       )}
     </div>
   );

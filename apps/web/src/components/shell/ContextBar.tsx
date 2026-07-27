@@ -37,6 +37,7 @@ export function ContextBar({
   onFocusModeChange,
   immersive,
   focusMode,
+  ragTriggerRef,
 }: {
   userId: string;
   email: string | null | undefined;
@@ -56,6 +57,13 @@ export function ContextBar({
    *  rather than unmounting, since `workspace-shell.spec.ts` asserts on the
    *  `banner` landmark's `inert` attribute while focus mode is active. */
   focusMode: boolean;
+  /** Owned by `AppShellRoot`, not this component — `GlobalRagSidebar` is
+   *  mounted at the `AppShellRoot` level (a shell-root sibling, not a
+   *  ContextBar child), so its own `onClose` needs the SAME ref this
+   *  component's trigger button sets in order to restore focus on a
+   *  dialog-initiated close (Escape, its own close button) — not just a
+   *  trigger-button-initiated one. See `AppShellRoot.tsx`'s own comment. */
+  ragTriggerRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const pathname = usePathname();
   const { preferences, updatePreferences } = useWorkspacePreferences();
@@ -67,7 +75,6 @@ export function ContextBar({
   const ragReopenGuard = useReopenGuard(450);
   const preferencesTriggerRef = useRef<HTMLButtonElement>(null);
   const profileTriggerRef = useRef<HTMLButtonElement>(null);
-  const ragTriggerRef = useRef<HTMLButtonElement>(null);
   const preferencesContainerRef = useRef<HTMLDivElement>(null);
   const profileContainerRef = useRef<HTMLDivElement>(null);
   const preferencesMenuId = useId();
