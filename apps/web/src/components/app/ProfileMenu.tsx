@@ -12,13 +12,17 @@ const PROFILE_LINKS = [
 ];
 
 /**
- * Structured exactly like `AppShell.tsx`'s `PreferencesMenu` (relative
- * wrapper, `aria-expanded`/`aria-controls` trigger, absolute `role="dialog"`
- * panel with `app-panel-enter`, Escape closes, focus returns to the trigger
- * via `requestAnimationFrame`) — same interaction contract, different
- * content. Replaces the header's standalone `hidden lg:block` "Log out"
- * form; `MobileDrawer`'s own logout is untouched (out of this menu's reach
- * below `md`).
+ * Structured exactly like `PreferencesMenu` (relative wrapper,
+ * `aria-expanded`/`aria-controls` trigger, absolute `role="dialog"` panel
+ * with `app-panel-enter`, Escape closes, focus returns to the trigger via
+ * `requestAnimationFrame`) — same interaction contract, different content.
+ * Rendered by `ContextBar` at every viewport (redesign-shell-spec.md §3.5) —
+ * this is a reachability fix over the pre-Stage-1 header, whose `hidden
+ * lg:block` gate meant phones/tablets had no profile-menu affordance at all.
+ *
+ * `admin` conditionally adds the Admin link (charter §6: "Put Account and
+ * conditional Admin in the profile menu" — Admin is no longer a primary-nav
+ * item).
  */
 export function ProfileMenu({
   id,
@@ -26,6 +30,7 @@ export function ProfileMenu({
   email,
   image,
   userId,
+  admin = false,
   onClose,
 }: {
   id: string;
@@ -33,6 +38,7 @@ export function ProfileMenu({
   email: string | null | undefined;
   image: string | null | undefined;
   userId: string;
+  admin?: boolean;
   onClose: () => void;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -70,6 +76,11 @@ export function ProfileMenu({
             {link.label}
           </Link>
         ))}
+        {admin && (
+          <Link href="/admin" data-sound="click" onClick={onClose} className="app-control rounded-md px-2 py-1.5 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface)]">
+            Admin
+          </Link>
+        )}
         <button
           type="button"
           className="app-control rounded-md px-2 py-1.5 text-left text-sm text-[var(--color-text)] hover:bg-[var(--color-surface)]"
