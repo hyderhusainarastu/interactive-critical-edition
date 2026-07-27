@@ -294,8 +294,15 @@ export function RagChatPanel({
     }
   }
 
-  async function ask(event: React.FormEvent) {
-    event.preventDefault();
+  /**
+   * The actual submit logic, shared by the form's `onSubmit` (the Ask
+   * button) and the textarea's Enter-to-send handler below — both paths
+   * must behave identically (same guard, same request), so this has no
+   * `FormEvent` parameter of its own; each caller handles its own event
+   * (`preventDefault`, or nothing at all for the keydown case, which never
+   * lets the default newline-insertion happen in the first place).
+   */
+  async function submitQuestion() {
     const question = draft.trim();
     if (!question || !conversationId || pending) return;
     setPending("");
@@ -393,6 +400,33 @@ export function RagChatPanel({
     } finally {
       setStreaming(false);
     }
+  }
+
+  function ask(event: React.FormEvent) {
+    event.preventDefault();
+    void submitQuestion();
+  }
+
+  /**
+   * Standard chat convention: Enter sends (same `submitQuestion` path as
+   * the Ask button), Shift+Enter inserts a newline. Only a plain,
+   * non-composing Enter is intercepted — Shift+Enter and any Enter that's
+   * part of an IME composition (`isComposing`, e.g. committing a CJK
+   * candidate) fall through untouched, so the textarea's default
+   * newline-insertion/composition behavior applies exactly as it would
+   * without this handler. The guard mirrors the Ask button's own disabled
+   * condition (`!draft.trim() || !conversationId || pending`), plus
+   * `streaming` — `pending` alone stays "" for the entire gap between send
+   * and the first streamed token (see `submitQuestion`'s own comment), so
+   * checking `streaming` too is what actually makes "Enter while a
+   * response streams does nothing" true for that whole window, not just
+   * once text starts arriving.
+   */
+  function handleQuestionKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    if (!draft.trim() || !conversationId || pending || streaming) return;
+    void submitQuestion();
   }
 
   const isDrawer = presentation === "drawer";
@@ -535,8 +569,8 @@ export function RagChatPanel({
       </div>
       <form onSubmit={ask} className="border-t border-[var(--color-border)] p-3">
         <label className="sr-only" htmlFor="rag-question">Ask a question about your Library</label>
-        <textarea ref={textareaRef} id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="app-control w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
-        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped.</span><button type="submit" data-sound="send" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="app-control rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
+        <textarea ref={textareaRef} id="rag-question" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleQuestionKeyDown} maxLength={2000} rows={3} placeholder="What does this passage mean?" className="app-control w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm" disabled={!conversationId || Boolean(pending)} />
+        <div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-[var(--color-text-muted)]">Socratic, source-linked, and owner-scoped. Enter to send, Shift+Enter for a new line.</span><button type="submit" data-sound="send" disabled={!draft.trim() || !conversationId || Boolean(pending)} className="app-control rounded-md bg-[var(--color-accent-ink)] px-3 py-1.5 text-sm text-[var(--color-background)] disabled:opacity-50">{pending ? "Thinking…" : "Ask"}</button></div>
       </form>
     </section>
   );
