@@ -563,6 +563,49 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(trigger).toBeFocused();
   });
 
+  // Immersive-mode compat coverage (redesign-shell-spec.md §4): the pure
+  // `isImmersiveRoute()` function has its own unit test
+  // (`shell/immersive.test.ts`), but nothing previously proved `AppShellRoot`
+  // actually wires that decision into the rendered chrome. The global
+  // Knowledge Map (`/graph`) is the one immersive route reachable with no
+  // seeded work data, so it's used here rather than the Reader/Writer
+  // routes (which need `seedWorkWithGraphData`/a Writer project and are
+  // Stage 4/6 scope). Asserts the two concrete effects the spec commits to:
+  // the marketing-style footer is not rendered, and the desktop rail
+  // auto-collapses once (a first-visit default, not a forced override) —
+  // while confirming a NON-immersive route keeps both the footer and an
+  // expanded rail, so this isn't just "the footer never renders."
+  test("immersive routes (Knowledge Map) hide the footer and auto-collapse the rail; ordinary routes keep both", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    // Non-immersive baseline first: /dashboard keeps the footer and an
+    // expanded rail (no prior auto-collapse write, since this session has
+    // not yet visited an immersive route).
+    await expect(page.locator("footer")).toBeVisible();
+    const rail = page.locator(".workspace-rail");
+    await expect(rail).toHaveAttribute("data-collapsed", "false");
+
+    await page.goto("/graph");
+    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    await expect(page.locator("footer")).toHaveCount(0);
+    await expect(page.locator(".app-shell[data-immersive]")).toHaveAttribute("data-immersive", "true");
+    // First-time-only auto-collapse (§4): landing on an immersive route
+    // writes a one-time localStorage default when the user never made an
+    // explicit collapse choice.
+    await expect(rail).toHaveAttribute("data-collapsed", "true");
+
+    // Leaving the immersive route does not force the rail back open — the
+    // auto-collapse write persists as an ordinary stored preference, exactly
+    // like a manual toggle would.
+    await page.goto("/dashboard");
+    await expect(page.locator("footer")).toBeVisible();
+    await expect(rail).toHaveAttribute("data-collapsed", "true");
+  });
+
   // Owner-reported live regression (2026-07-25): the account/preferences
   // menus were suspected to be painting BEHIND `<main>`'s routed content —
   // a stacking-context occlusion, distinct from the two previously-fixed
