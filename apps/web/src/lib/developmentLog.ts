@@ -14,17 +14,26 @@ export interface DevelopmentVersion {
  *
  * Keep this deliberately higher-level than the internal project log: it is a
  * record of what readers can experience, not an infrastructure changelog.
- * While v.5 is in progress, append one concise highlight only after its lane
+ * While v.6 is in progress, append one concise highlight only after its lane
  * has shipped.
  */
 export const developmentLog = [
   {
-    version: "v.5",
+    version: "v.6",
     phaseRange: "Current development",
     status: "in-progress",
+    title: "Refinement in the open",
+    summary:
+      "The new beta refines the whole workspace in response to live use — sharpening the research tools, reading surfaces, and public site as readers put them to work.",
+    highlights: [],
+  },
+  {
+    version: "v.5",
+    phaseRange: "Phases 24–30",
+    status: "released",
     title: "A more expressive scholarly workspace",
     summary:
-      "The current release is reshaping Palimnote into a more tactile, readable, and responsive place to study difficult texts.",
+      "This release reshaped Palimnote into a more tactile, readable, and responsive place to study difficult texts, and opened the Research workspace.",
     highlights: [
       "Introduced the editorial motion and interaction foundation, with reader-controlled motion and interface sound settings.",
       "Refined the public site with readable editorial motion, tactile feedback, and an accessible interactive knowledge graph.",
@@ -39,6 +48,10 @@ export const developmentLog = [
       "Fixed a glitch where the account and settings menus would close by themselves right after a page loaded.",
       "Menus now stay open even when a mouse or trackpad accidentally double-fires a click.",
       "Menus now ignore accidental repeat clicks entirely and close when you click anywhere else — matching how menus usually behave.",
+      "Opened the Research workspace: create projects across your library, extract each work's claims with verbatim source excerpts, and trace agreements, disagreements, and debates between works.",
+      "Added evidence-centred study tools — debate clusters, evidence reviews, and suggested hypotheses — each carrying confidence and a path back to the source passage.",
+      "Brought dedicated research modes to Ask Library, and let projects import outside works by DOI or reference so a debate can include literature beyond your uploads.",
+      "Added scheduled monitoring for newly relevant literature, plus a full correction trail: verify, dispute, edit, hide, or restore any generated claim with its revision history preserved.",
     ],
   },
   {

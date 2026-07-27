@@ -74,7 +74,7 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     await expect(docs).toHaveAttribute("target", "_blank");
     await expect(docs).toHaveAttribute("rel", /noopener/);
 
-    const badge = page.getByRole("link", { name: /Beta v\.5/i }).first();
+    const badge = page.getByRole("link", { name: /Beta v\.6/i }).first();
     await expect(badge).toBeVisible();
     await expect(badge).toHaveAttribute("href", "/development");
 
@@ -172,6 +172,7 @@ test.describe("Landing & policy pages (Phase 6)", () => {
     await page.goto("/development");
     await expect(page.getByRole("heading", { level: 1, name: /A reader built in layers/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /A more expressive scholarly workspace/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Refinement in the open/i })).toBeVisible();
     await expect(page.getByText("In progress", { exact: true })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Development versions" })).toBeVisible();
 

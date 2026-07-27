@@ -17,9 +17,9 @@ export function BetaBadge() {
     <Link
       href="/development"
       className="beta-badge app-press"
-      aria-label="Beta v.5 — view Palimnote development"
+      aria-label="Beta v.6 — view Palimnote development"
     >
-      Beta v.5
+      Beta v.6
     </Link>
   );
 }

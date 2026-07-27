@@ -37,11 +37,13 @@ function VersionEntry({
         </p>
       </div>
       <p className="development-summary">{entry.summary}</p>
-      <ul className="development-highlights">
-        {entry.highlights.map((highlight) => (
-          <li key={highlight}>{highlight}</li>
-        ))}
-      </ul>
+      {entry.highlights.length > 0 && (
+        <ul className="development-highlights">
+          {entry.highlights.map((highlight) => (
+            <li key={highlight}>{highlight}</li>
+          ))}
+        </ul>
+      )}
     </article>
   );
 }
