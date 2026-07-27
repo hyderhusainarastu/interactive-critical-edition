@@ -281,6 +281,23 @@ class RealBenchDriver implements BenchDriver {
         // Synthetic continuous drag across the canvas to actually invoke
         // each prototype's real OrbitControls/three-render-objects camera
         // controls during the sampling window (not just idle-render FPS).
+        //
+        // Gap fix (found live — blocked fair FPS measurement entirely):
+        // this originally dispatched `MouseEvent` mousedown/mousemove/
+        // mouseup. Both prototypes' actual camera controls are three.js
+        // `OrbitControls`-family (Prototype A via `three-render-objects`,
+        // confirmed by reading node_modules/3d-force-graph/dist directly:
+        // `this.domElement.addEventListener('pointerdown', ...)` /
+        // `ownerDocument.addEventListener('pointermove', ...)`) — modern
+        // three.js `OrbitControls` listens ONLY for `pointerdown`/
+        // `pointermove`/`pointerup`, never `mousedown`/`mousemove`/
+        // `mouseup`. A `MouseEvent` never fires a `pointerdown` listener
+        // (they are distinct DOM event types), so the scripted "orbit" was
+        // silently a no-op drag against both prototypes — the FPS sample
+        // was real, but of an idle/static scene, not the interaction load
+        // the charter's orbit-FPS floor is meant to measure. Switched to
+        // real `PointerEvent`s with `pointerId`/`pointerType`/`isPrimary`
+        // set (OrbitControls' pointer handlers key off these).
         const canvas = document.querySelector("canvas");
         const rect = canvas?.getBoundingClientRect();
         let dragT = 0;
@@ -293,9 +310,20 @@ class RealBenchDriver implements BenchDriver {
           const angle = (dragT / 90) * Math.PI * 2;
           const x = cx + Math.cos(angle) * radius;
           const y = cy + Math.sin(angle * 0.6) * radius * 0.6;
-          const opts = { clientX: x, clientY: y, bubbles: true, cancelable: true, view: window, buttons: 1, button: 0 };
-          if (dragT === 1) canvas.dispatchEvent(new MouseEvent("mousedown", opts));
-          canvas.dispatchEvent(new MouseEvent("mousemove", opts));
+          const base = {
+            clientX: x,
+            clientY: y,
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+          };
+          if (dragT === 1) {
+            canvas.dispatchEvent(new PointerEvent("pointerdown", { ...base, button: 0, buttons: 1, pressure: 0.5 }));
+          }
+          canvas.dispatchEvent(new PointerEvent("pointermove", { ...base, button: -1, buttons: 1, pressure: 0.5 }));
         }
 
         function tick(now: number) {
@@ -308,7 +336,18 @@ class RealBenchDriver implements BenchDriver {
             if (canvas) {
               const rectNow = canvas.getBoundingClientRect();
               canvas.dispatchEvent(
-                new MouseEvent("mouseup", { clientX: rectNow.left, clientY: rectNow.top, bubbles: true, cancelable: true, view: window }),
+                new PointerEvent("pointerup", {
+                  clientX: rectNow.left,
+                  clientY: rectNow.top,
+                  bubbles: true,
+                  cancelable: true,
+                  view: window,
+                  pointerId: 1,
+                  pointerType: "mouse",
+                  isPrimary: true,
+                  button: 0,
+                  buttons: 0,
+                }),
               );
             }
             resolve(intervals);
@@ -364,28 +403,86 @@ class RealBenchDriver implements BenchDriver {
               }
             }
 
+            // Gap fix (found live via a throwaway diagnostic script after
+            // the real DRY_RUN stalled ~4.5s/attempt * up to 300 attempts
+            // with zero confirmed selections): this originally dispatched
+            // `MouseEvent` mousedown/mouseup/click. Neither prototype's
+            // real picking path is driven by those event types the way
+            // this assumed:
+            //  - Prototype A (`3d-force-graph`/`three-render-objects`,
+            //    read directly from node_modules): its container listens
+            //    ONLY for `pointermove`/`pointerdown`/`pointerup` — never
+            //    `mousedown`/`mouseup`/`click` at all — and selection
+            //    reads `state.hoverObj`, which is populated by a
+            //    *throttled* (`pointerRaycasterThrottleMs`, default 50ms)
+            //    raycast tied to `state.pointerPos`, itself only updated
+            //    on a real `pointermove`/`pointerdown` event. A `click`-
+            //    only dispatch with no prior `pointermove` never sets
+            //    `hoverObj` to the target node at all, so the click
+            //    "confirms" nothing.
+            //  - Prototype B (`GraphSceneB.tsx`, this repo): `handleClick`
+            //    does re-raycast fresh from the click's own coordinates
+            //    independent of hover, so a plain synthetic `click` would
+            //    have worked for B alone — but `pointerdown`/`pointerup`
+            //    are still what a real user's browser fires before a
+            //    `click`, so sending the same realistic sequence to both
+            //    prototypes (rather than a prototype-specific branch) is
+            //    both the fairer thing to measure and the simpler fix.
+            // Fixed sequence, all real `PointerEvent`s (not `MouseEvent`):
+            // (1) `pointermove` at the target, so Prototype A's hover
+            // raycast has a pointerPos to work from; (2) a real wait (not
+            // just a `requestAnimationFrame` or two — `setTimeout` is used
+            // deliberately here since the elapsed *wall*-clock time must
+            // exceed the raycaster's 50ms throttle, not merely "some
+            // frames") past that throttle so `hoverObj` actually updates
+            // before the click; (3) `pointerdown` — `dispatchedAtMs` is
+            // timestamped exactly here, matching a real user's perceived
+            // "I clicked" moment, not the earlier priming move; (4)
+            // `pointerup`; (5) a `click` `MouseEvent`, for Prototype B's
+            // listener (Prototype A doesn't listen for `click` at all, so
+            // this is a harmless no-op there).
             function dispatchAndMeasure() {
               const rect = canvas!.getBoundingClientRect();
               const clientX = rect.left + pos!.x;
               const clientY = rect.top + pos!.y;
-              const opts = { clientX, clientY, bubbles: true, cancelable: true, view: window, button: 0 };
-              const dispatchedAtMs = performance.now();
-              canvas!.dispatchEvent(new MouseEvent("mousedown", opts));
-              canvas!.dispatchEvent(new MouseEvent("mouseup", opts));
-              canvas!.dispatchEvent(new MouseEvent("click", opts));
+              const pointerBase = {
+                clientX,
+                clientY,
+                bubbles: true,
+                cancelable: true,
+                view: window,
+                pointerId: 1,
+                pointerType: "mouse",
+                isPrimary: true,
+              };
 
-              let confirmAttempts = 0;
-              function poll() {
-                confirmAttempts++;
-                if (bridge.isHighlightConfirmed(nodeId)) {
-                  resolve({ dispatchedAtMs, confirmedAtMs: performance.now() });
-                } else if (confirmAttempts > 240) {
-                  resolve(null); // timeout — not counted as a sample
-                } else {
-                  requestAnimationFrame(poll);
+              canvas!.dispatchEvent(
+                new PointerEvent("pointermove", { ...pointerBase, button: -1, buttons: 0, pressure: 0 }),
+              );
+
+              setTimeout(() => {
+                const dispatchedAtMs = performance.now();
+                canvas!.dispatchEvent(
+                  new PointerEvent("pointerdown", { ...pointerBase, button: 0, buttons: 1, pressure: 0.5 }),
+                );
+                canvas!.dispatchEvent(
+                  new PointerEvent("pointerup", { ...pointerBase, button: 0, buttons: 0, pressure: 0 }),
+                );
+                canvas!.dispatchEvent(new MouseEvent("click", { ...pointerBase, button: 0 }));
+
+                let confirmAttempts = 0;
+                function poll() {
+                  confirmAttempts++;
+                  if (bridge.isHighlightConfirmed(nodeId)) {
+                    resolve({ dispatchedAtMs, confirmedAtMs: performance.now() });
+                  } else if (confirmAttempts > 240) {
+                    resolve(null); // timeout — not counted as a sample
+                  } else {
+                    requestAnimationFrame(poll);
+                  }
                 }
-              }
-              requestAnimationFrame(poll);
+                requestAnimationFrame(poll);
+              }, 120); // > pointerRaycasterThrottleMs (50ms), generous margin
             }
 
             waitForReset();
