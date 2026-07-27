@@ -8,7 +8,6 @@ import {
   suggestReaderLevelFromCompletions,
   type ReaderLevel,
   type ReaderLevelFilter,
-  type ReaderLevelMatchMode,
 } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -165,7 +164,6 @@ export function LibraryView({
   initialFocusWorkId,
   initialReaderLevel = "all",
   initialSearch = "",
-  enablePhase12Identity = false,
 }: {
   initialItems: LibraryItem[];
   initialWorks: LibraryWork[];
@@ -173,13 +171,15 @@ export function LibraryView({
   /** The reader's saved global level, or "all" if they never chose one.
    *  Selecting a different level here is a page-local view filter only — it
    *  never overwrites the saved global level (plan §35.2: bringing Library
-   *  in line with Roadmap/Curriculum's default-then-override pattern). */
+   *  in line with Roadmap/Curriculum's default-then-override pattern).
+   *  Owner directive 2026-07-26: a level shows exactly its own band plus
+   *  universal material — there is no separate "level match" mode anymore
+   *  (cumulative "selected level + foundations" was removed outright). */
   initialReaderLevel?: ReaderLevelFilter;
   /** The `?q=` deep-link search term the server already applied to
    *  `initialItems` (plan §20.1) — seeds the input so the first paint and
    *  the input's displayed value agree. */
   initialSearch?: string;
-  enablePhase12Identity?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -198,7 +198,6 @@ export function LibraryView({
   const [relationship, setRelationship] = useState<string>("");
   const [resourceType, setResourceType] = useState<string>("");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
-  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>(enablePhase12Identity ? "cumulative" : "exact");
   const [workId, setWorkId] = useState<string>(initialFocusWorkId);
   const [sort, setSort] = useState<SortKey>("relevance");
 
@@ -297,15 +296,17 @@ export function LibraryView({
 
   const focusedWork = initialWorks.find((work) => work.id === workId) ?? null;
 
-  // Per-level counts use exactly the selected matching rule, so a cumulative
-  // Undergraduate view counts universal + Beginner + Undergraduate material.
+  // Per-level counts use the same exact-band matching rule as the filter
+  // itself (owner directive 2026-07-26: mutually exclusive bands, no
+  // cumulative union), so an Undergraduate count is universal + Undergraduate
+  // material ONLY — never Beginner's material bleeding upward too.
   const levelCounts = useMemo(() => {
     const counts = {} as Record<ReaderLevelFilter, number>;
     for (const level of READER_LEVEL_FILTER_OPTIONS) {
-      counts[level] = items.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, level, levelMode))).length;
+      counts[level] = items.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, level))).length;
     }
     return counts;
-  }, [items, levelMode]);
+  }, [items]);
 
   const tabCounts = useMemo(() => {
     const counts: Record<Tab, number> = { all: items.length, to_read: 0, reading: 0, completed: 0 };
@@ -321,7 +322,7 @@ export function LibraryView({
     let filtered = items.filter((i) => matchesTab(i, tab));
     if (relationship) filtered = filtered.filter((item) => item.roles.some((role) => role.relationship === relationship));
     if (resourceType) filtered = filtered.filter((i) => i.resourceType === resourceType);
-    if (readerLevelSignal && readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel, levelMode)));
+    if (readerLevelSignal && readerLevel !== "all") filtered = filtered.filter((item) => item.roles.some((role) => matchesReaderLevel(role.readerLevel, readerLevel)));
     if (workId) filtered = filtered.filter((i) => i.focusMetrics.some((metric) => metric.workId === workId));
     const sorted = [...filtered];
     const metricFor = (item: LibraryItem) => {
@@ -342,7 +343,7 @@ export function LibraryView({
     else if (sort === "recency") sorted.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime() || stableTitle(left, right));
     else sorted.sort((left, right) => (metricFor(right)?.relevance ?? -1) - (metricFor(left)?.relevance ?? -1) || credibilityOrder(left, right) || stableTitle(left, right));
     return sorted;
-  }, [items, tab, relationship, resourceType, readerLevel, levelMode, workId, sort, readerLevelSignal]);
+  }, [items, tab, relationship, resourceType, readerLevel, workId, sort, readerLevelSignal]);
 
   function selectFocus(nextWorkId: string) {
     setWorkId(nextWorkId);
@@ -499,7 +500,7 @@ export function LibraryView({
                   Reader level
                   {readerLevel !== "all" && (
                     <span className="ml-1 text-[var(--color-text-muted)] normal-case tracking-normal">
-                      ({enablePhase12Identity && levelMode === "exact" ? "exact tags, plus universal material" : "selected level and foundations"})
+                      (exact tags, plus universal material)
                     </span>
                   )}
                 </span>
@@ -532,19 +533,6 @@ export function LibraryView({
                 </p>
               </div>
             )}
-            {enablePhase12Identity && readerLevelSignal && readerLevel !== "all" && (
-              <label className="flex flex-col gap-1">
-                <span className={FIELD_LABEL_CLASS}>Level match</span>
-                <select
-                  value={levelMode}
-                  onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-                  className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="cumulative">Selected + foundations</option>
-                  <option value="exact">Exact level</option>
-                </select>
-              </label>
-            )}
             <label className="flex flex-col gap-1">
               <span className={FIELD_LABEL_CLASS}>Sort</span>
               <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1">
@@ -565,7 +553,17 @@ export function LibraryView({
 
           {visible.length === 0 && (
             <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">
-              {search ? <>No results for &ldquo;{search}&rdquo;.</> : "No items match these filters."}
+              {search ? (
+                <>No results for &ldquo;{search}&rdquo;.</>
+              ) : readerLevelSignal && readerLevel !== "all" && levelCounts[readerLevel] === 0 && levelCounts.all > 0 ? (
+                // A plausible consequence of exact-band level filtering (owner
+                // directive 2026-07-26): this level's own tagged material can
+                // be empty even when the Library has items overall — say so
+                // rather than a bare "no items match".
+                <>Nothing is tagged for the {READER_LEVEL_FILTER_LABEL[readerLevel]} level yet — try &ldquo;Show all levels&rdquo; to see everything.</>
+              ) : (
+                "No items match these filters."
+              )}
             </p>
           )}
 

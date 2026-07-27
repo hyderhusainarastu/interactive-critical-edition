@@ -9,7 +9,7 @@ import {
   type CurriculumRoute,
   type CurriculumStageResult,
 } from "@ice/curriculum";
-import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
+import type { ReaderLevelFilter } from "@ice/roadmap";
 
 interface CurriculumResponse {
   title: string;
@@ -55,16 +55,14 @@ export function CurriculumView({
   const [error, setError] = useState<string | null>(null);
   const [route, setRoute] = useState<CurriculumRoute>(initialRoute);
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
-  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
 
   const curriculumUrl = useCallback(() => {
     const params = new URLSearchParams({ route });
     if (enablePhase12Identity) {
       params.set("readerLevel", readerLevel);
-      params.set("levelMode", levelMode);
     }
     return `/api/works/${workId}/curriculum?${params}`;
-  }, [enablePhase12Identity, levelMode, readerLevel, route, workId]);
+  }, [enablePhase12Identity, readerLevel, route, workId]);
 
   // Used to refetch after a status change so `known`/review-only reflects
   // the server's real recomputation rather than a stale local patch — same
@@ -167,19 +165,6 @@ export function CurriculumView({
                   Not available yet — every source here currently applies at every level.
                 </p>
               </div>
-            )}
-            {data.readerLevelSignal && readerLevel !== "all" && (
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-[var(--color-text-muted)]">Level match</span>
-                <select
-                  value={levelMode}
-                  onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-                  className="rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-                >
-                  <option value="cumulative">Selected + foundations</option>
-                  <option value="exact">Exact level</option>
-                </select>
-              </label>
             )}
           </>
         )}

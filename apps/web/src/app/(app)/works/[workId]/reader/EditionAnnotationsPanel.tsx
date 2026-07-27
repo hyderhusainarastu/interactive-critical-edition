@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReaderLevelFilter, ReaderLevelMatchMode } from "@ice/roadmap";
+import type { ReaderLevelFilter } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
@@ -68,12 +68,11 @@ export function EditionAnnotationsPanel({
   edition,
   activeId,
   readerLevel,
-  levelMode,
   enableLevelFilter,
+  levelFilteredEmpty = false,
   enablePhase12Reader = false,
   filters,
   onReaderLevelChange,
-  onLevelModeChange,
   onFiltersChange,
   onPreviousAnnotation,
   onNextAnnotation,
@@ -89,12 +88,17 @@ export function EditionAnnotationsPanel({
   edition: EditionWithReview;
   activeId: string | null;
   readerLevel: ReaderLevelFilter;
-  levelMode: ReaderLevelMatchMode;
   enableLevelFilter: boolean;
+  /** True when a level filter is active and produced zero annotations that
+   *  would otherwise exist at another level (owner directive 2026-07-26:
+   *  exact-band level filtering, not a cumulative union, so a level with
+   *  little or no annotations tagged specifically for it can plausibly come
+   *  up empty even though the edition has annotations overall). Drives the
+   *  "Annotations" tab's empty-state message in `AnnotationsTab` below. */
+  levelFilteredEmpty?: boolean;
   enablePhase12Reader?: boolean;
   filters: EditionReaderFilters;
   onReaderLevelChange: (level: ReaderLevelFilter) => void;
-  onLevelModeChange: (mode: ReaderLevelMatchMode) => void;
   onFiltersChange: (filters: EditionReaderFilters) => void;
   onPreviousAnnotation?: () => void;
   onNextAnnotation?: () => void;
@@ -247,19 +251,6 @@ export function EditionAnnotationsPanel({
               </p>
             </div>
           )}
-          {readerLevelSignal && readerLevel !== "all" && (
-            <label className="flex items-center justify-between gap-2">
-              <span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Level match</span>
-              <select
-                value={levelMode}
-                onChange={(event) => onLevelModeChange(event.target.value as ReaderLevelMatchMode)}
-                className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"
-              >
-                <option value="cumulative">Selected + foundations</option>
-                <option value="exact">Exact level</option>
-              </select>
-            </label>
-          )}
           {enablePhase12Reader && (
             <>
               <label className="flex items-center justify-between gap-2"><span className="text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Annotation type</span><select value={filters.annotationType} onChange={(event) => onFiltersChange({ ...filters, annotationType: event.target.value as EditionReaderFilters["annotationType"] })} className="app-control rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1"><option value="all">All types</option>{annotationTypes.map((type) => <option key={type} value={type}>{PASSAGE_TYPE_LABEL[type]}</option>)}</select></label>
@@ -273,7 +264,15 @@ export function EditionAnnotationsPanel({
 
       <div key={tab} className="reader-panel-tab-content">
         {tab === "annotations" ? (
-          <AnnotationsTab edition={edition} activeId={activeId} anchoredNotes={anchoredNotes} resourceById={resourceById} onSelectAnnotation={onSelectAnnotation} />
+          <AnnotationsTab
+            edition={edition}
+            activeId={activeId}
+            anchoredNotes={anchoredNotes}
+            resourceById={resourceById}
+            onSelectAnnotation={onSelectAnnotation}
+            levelFilteredEmpty={levelFilteredEmpty}
+            activeLevelLabel={READER_LEVEL_FILTER_LABEL[readerLevel]}
+          />
         ) : tab === "notes" ? (
           <NotesTab edition={edition} activeId={activeId} resourceById={resourceById} activeIsGeneratedNote={activeIsGeneratedNote} enableEvidenceChips={enableEvidenceChips} />
         ) : tab === "apparatus" ? (
@@ -472,12 +471,16 @@ function AnnotationsTab({
   anchoredNotes,
   resourceById,
   onSelectAnnotation,
+  levelFilteredEmpty = false,
+  activeLevelLabel,
 }: {
   edition: EditionWithReview;
   activeId: string | null;
   anchoredNotes: EditionPassageAnnotation[];
   resourceById: Map<string, EditionResource>;
   onSelectAnnotation?: (id: string) => void;
+  levelFilteredEmpty?: boolean;
+  activeLevelLabel?: string;
 }) {
   const params = useParams();
   const workId = String((params as Record<string, unknown>)?.workId ?? "");
@@ -531,6 +534,17 @@ function AnnotationsTab({
   }
 
   if (basePassages.length === 0) {
+    if (levelFilteredEmpty) {
+      // A plausible consequence of exact-band level filtering (owner
+      // directive 2026-07-26): this edition has annotations, but none are
+      // tagged for the currently selected level — say so explicitly rather
+      // than reading as "this edition has no annotations at all".
+      return (
+        <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">
+          No annotations are tagged for the {activeLevelLabel ?? "selected"} level. Try &ldquo;Show all levels&rdquo; above to see everything.
+        </p>
+      );
+    }
     return <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">No passage annotations for this edition.</p>;
   }
 

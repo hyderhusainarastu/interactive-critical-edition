@@ -226,8 +226,9 @@ const p1Fixture: GraphData = {
   links: [],
 };
 
-// --- readerLevel: cumulative matching, "all levels" always matches, missing
-//     data is never punished, uploaded anchor stays exempt ---
+// --- readerLevel: mutually exclusive exact-band matching (owner directive
+//     2026-07-26), "all levels" always matches, missing data is never
+//     punished, uploaded anchor stays exempt ---
 {
   const result = filterGraphData(p1Fixture, filters({ readerLevel: "undergraduate" }));
   const resultIds = ids(result);
@@ -235,11 +236,12 @@ const p1Fixture: GraphData = {
   assert.ok(resultIds.has("external:bib:11"), "a node whose readerLevels covers every level (a null-level role, per graph.ts) matches any selected level");
   assert.ok(resultIds.has("external:bib:12"), "a node with no readerLevels data at all is never punished — it always matches");
   assert.ok(resultIds.has("work:1"), "the uploaded anchor stays visible regardless (D-21-10)");
-  assert.ok(!resultIds.has("external:bib:14"), "a node scoped only to 'research' does not match an 'undergraduate' filter (cumulative semantics exclude higher levels)");
+  assert.ok(!resultIds.has("external:bib:14"), "a node scoped only to 'research' does not match an 'undergraduate' filter (mutually exclusive bands exclude every other level, higher or lower)");
 }
 {
   const result = filterGraphData(p1Fixture, filters({ readerLevel: "research" }));
-  assert.ok(ids(result).has("external:bib:14"), "the same 'research'-only node matches a 'research' filter (cumulative includes the exact level)");
+  assert.ok(ids(result).has("external:bib:14"), "the same 'research'-only node matches a 'research' filter (its own exact level)");
+  assert.ok(!ids(result).has("external:bib:10"), "cross-band exclusion: the undergraduate-only node does NOT match a 'research' filter (no cumulative union)");
 }
 {
   const result = filterGraphData(p1Fixture, filters({ readerLevel: "all" }));

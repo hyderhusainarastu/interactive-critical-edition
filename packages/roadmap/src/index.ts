@@ -135,31 +135,33 @@ export type RoadmapMode = "concise" | "comprehensive";
 export type ReaderLevel = "beginner" | "undergraduate" | "advanced" | "research";
 export const READER_LEVELS: ReaderLevel[] = ["beginner", "undergraduate", "advanced", "research"];
 export type ReaderLevelFilter = ReaderLevel | "all";
-/** Whether a selected reader-level view accumulates foundational material or
- * shows only material explicitly tagged for that level. */
-export type ReaderLevelMatchMode = "cumulative" | "exact";
 
 /**
- * Null represents universal material. A cumulative selection includes that
- * material, the selected level, and every earlier/foundational level. The
- * exact facet intentionally still includes universal material: it is not
- * tagged for a different level and must remain reachable in every view.
+ * Owner product directive (recorded 2026-07-26): reader levels are
+ * MUTUALLY EXCLUSIVE bands, not a cumulative "selected level + everything
+ * foundational below it" union — "what the advanced reader reads, the
+ * undergraduate doesn't need to read." Null represents universal material
+ * (`resource_role.reader_level`'s own NULLS-NOT-DISTINCT "at every level"
+ * convention) and always matches, regardless of the selected level — that is
+ * the one thing every band still shares. `"all"` is the explicit "show every
+ * level, unfiltered" override and always matches too. Anything else must
+ * match the selected level exactly; there is no `<=`/`>=` accumulation here
+ * or anywhere else in this package. (This function previously took a third
+ * `mode: "cumulative" | "exact"` parameter defaulting to cumulative — that
+ * mode and its "cumulative" branch were removed outright, not just
+ * defaulted away, per the directive's "no cumulative unions anywhere.")
  */
 export function matchesReaderLevel(
   materialLevel: ReaderLevel | null | undefined,
   selectedLevel: ReaderLevelFilter,
-  mode: ReaderLevelMatchMode = "cumulative",
 ): boolean {
   if (selectedLevel === "all" || materialLevel == null) return true;
-  if (mode === "exact") return materialLevel === selectedLevel;
-  return READER_LEVELS.indexOf(materialLevel) <= READER_LEVELS.indexOf(selectedLevel);
+  return materialLevel === selectedLevel;
 }
 
 export interface RankOptions {
   mode?: RoadmapMode;
   readerLevel?: ReaderLevelFilter;
-  /** Cumulative is the default; exact preserves a depth-only facet. */
-  readerLevelMode?: ReaderLevelMatchMode;
   /** Time budget in minutes; a greedy pass keeps the highest-priority
    *  items that fit and marks the rest as over-budget (plan §13 step 6). */
   maxMinutes?: number;
@@ -303,54 +305,31 @@ function reasonFor(category: RelationshipCategory, centrality: number, known: bo
 }
 
 /**
- * Which tiers a given reader level sees by default (plan §13 step 6, plan
- * §34.4 9.4). Each level is a strict superset of the one before it, ending
- * at `research`/`all` = every tier — level only ever narrows the DEFAULT
- * view, never what is reachable (the caller always offers "Show all
- * levels", which resolves to `"all"` here). `undergraduate`'s set is
- * unchanged from the old three-level `intermediate` it replaces, so the one
- * production user already backfilled onto it sees no behavior change.
+ * Which tiers a given reader level sees (plan §13 step 6, plan §34.4 9.4;
+ * mutually-exclusive bands per the owner's 2026-07-26 directive — see
+ * `matchesReaderLevel`'s doc comment for the full rationale). The Roadmap
+ * stores priority tiers rather than a separate role-level column, so a
+ * "band" here means: the tiers introduced specifically at that level, plus
+ * `essential` (prerequisite) material, which is treated as universal —
+ * needed before the primary text regardless of the reader's level, the same
+ * "null reader_level = shown to every level" convention `resource_role`
+ * itself uses. Every level's non-essential tier set is disjoint from every
+ * other level's — nothing here is a superset of anything else. `"all"` is
+ * the explicit "show every tier, unfiltered" override (distinct from
+ * `"research"`, which is a level choice that happens to also resolve to a
+ * disjoint high-end slice, not to everything).
+ *
+ * (This function previously accumulated: each level was a strict superset of
+ * the one before it. That cumulative version — and the `readerLevelMode`
+ * option that toggled between it and this exact-band version — were removed
+ * outright per the directive; this is now the only behavior.)
  */
 export function tiersForReaderLevel(level: ReaderLevelFilter): Set<PriorityTier> {
-  if (level === "beginner") {
-    return new Set<PriorityTier>(["essential", "high", "strongly_recommended"]);
-  }
-  if (level === "undergraduate") {
-    return new Set<PriorityTier>([
-      "essential",
-      "high",
-      "strongly_recommended",
-      "contextual",
-      "interpretive_aid",
-    ]);
-  }
-  if (level === "advanced") {
-    return new Set<PriorityTier>([
-      "essential",
-      "high",
-      "strongly_recommended",
-      "contextual",
-      "interpretive_aid",
-      "comparative",
-    ]);
-  }
-  // "research" and the explicit "all" override both resolve to every tier —
-  // see the ReaderLevelFilter doc comment for why they're kept as distinct
-  // concepts even though they agree today.
-  return new Set<PriorityTier>(TIER_ORDER);
-}
-
-/**
- * The Roadmap stores priority tiers rather than a separate role-level column.
- * Its exact facet therefore shows the tiers introduced at that depth while
- * retaining `essential` prerequisites as universal material.
- */
-export function exactTiersForReaderLevel(level: ReaderLevelFilter): Set<PriorityTier> {
   if (level === "all") return new Set<PriorityTier>(TIER_ORDER);
   if (level === "beginner") return new Set<PriorityTier>(["essential", "high", "strongly_recommended"]);
   if (level === "undergraduate") return new Set<PriorityTier>(["essential", "contextual", "interpretive_aid"]);
   if (level === "advanced") return new Set<PriorityTier>(["essential", "comparative"]);
-  return new Set<PriorityTier>(["essential", "optional"]);
+  return new Set<PriorityTier>(["essential", "optional"]); // research
 }
 
 export function rankRoadmap(
@@ -364,9 +343,7 @@ export function rankRoadmap(
   // filter, so the untouched roadmap shows everything reached (plan §13:
   // comprehensive is the natural default, concise/beginner narrow it).
   const readerLevel = options.readerLevel ?? "all";
-  const allowedTiers = options.readerLevelMode === "exact"
-    ? exactTiersForReaderLevel(readerLevel)
-    : tiersForReaderLevel(readerLevel);
+  const allowedTiers = tiersForReaderLevel(readerLevel);
 
   type Interim = RoadmapItem & { _manualPosition?: number };
   const items: Interim[] = [];

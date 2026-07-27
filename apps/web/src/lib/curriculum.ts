@@ -7,7 +7,7 @@ import {
   type CurriculumRoute,
   type ProfileEntry,
 } from "@ice/curriculum";
-import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
+import { matchesReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
 
@@ -32,7 +32,6 @@ export interface CurriculumResponse extends CurriculumResult {
 
 export interface CurriculumLevelOptions {
   readerLevel?: ReaderLevelFilter;
-  levelMode?: ReaderLevelMatchMode;
 }
 
 /**
@@ -101,7 +100,7 @@ export async function computeCurriculum(
 
   const candidates: CurriculumCandidate[] = [];
   for (const role of roles) {
-    if (!matchesReaderLevel(role.readerLevel, levelOptions.readerLevel ?? "all", levelOptions.levelMode ?? "cumulative")) continue;
+    if (!matchesReaderLevel(role.readerLevel, levelOptions.readerLevel ?? "all")) continue;
     const resource = resourceById.get(role.learningResourceId);
     if (!resource) continue;
     candidates.push({

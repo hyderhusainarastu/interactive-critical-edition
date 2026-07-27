@@ -34,8 +34,6 @@ export default async function LibraryPage({
       initialFocusWorkId={initialFocusWorkId}
       initialReaderLevel={readerLevel ?? "all"}
       initialSearch={requestedSearch ?? ""}
-      enablePhase12Identity={phase12FeatureEnabled("libraryIdentity")}
     />
   );
 }
-import { phase12FeatureEnabled } from "@ice/config";

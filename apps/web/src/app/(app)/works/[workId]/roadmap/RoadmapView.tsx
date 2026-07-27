@@ -8,7 +8,6 @@ import {
   TIER_ORDER,
   type ReaderLevel,
   type ReaderLevelFilter,
-  type ReaderLevelMatchMode,
   type ReadingStatus,
   type RoadmapItem,
   type RoadmapMode,
@@ -51,22 +50,22 @@ export function RoadmapView({
   workId,
   title,
   initialReaderLevel = "research",
-  enablePhase12Identity = false,
 }: {
   workId: string;
   title: string;
   /** The reader's saved global level, or "research" (full view) if they
    *  never chose one. Selecting a different level here is a page-local view
    *  filter only — it never overwrites the saved global level (plan §34.4:
-   *  "Browsing alone never silently changes a level"). */
+   *  "Browsing alone never silently changes a level"). Owner directive
+   *  2026-07-26: a level shows exactly its own band plus universal
+   *  material — there is no separate "level match" mode to choose anymore
+   *  (cumulative "selected level + foundations" was removed outright). */
   initialReaderLevel?: ReaderLevel;
-  enablePhase12Identity?: boolean;
 }) {
   const [data, setData] = useState<RoadmapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RoadmapMode>("comprehensive");
   const [readerLevel, setReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
-  const [levelMode, setLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
   const [maxMinutes, setMaxMinutes] = useState<string>("");
   // Manual add (D-22-3): a progressive-disclosure search box — collapsed
   // by default, revealed on request, matching the site-wide preference
@@ -84,7 +83,6 @@ export function RoadmapView({
   // below with the `.then` pattern the rule accepts.
   const load = useCallback(async () => {
     const qs = new URLSearchParams({ mode, readerLevel });
-    if (enablePhase12Identity) qs.set("levelMode", levelMode);
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     try {
       const res = await fetch(`/api/works/${workId}/roadmap?${qs}`);
@@ -94,12 +92,11 @@ export function RoadmapView({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load roadmap");
     }
-  }, [workId, mode, readerLevel, levelMode, maxMinutes, enablePhase12Identity]);
+  }, [workId, mode, readerLevel, maxMinutes]);
 
   useEffect(() => {
     let ignore = false;
     const qs = new URLSearchParams({ mode, readerLevel });
-    if (enablePhase12Identity) qs.set("levelMode", levelMode);
     if (maxMinutes && Number(maxMinutes) > 0) qs.set("maxMinutes", String(Number(maxMinutes) * 60));
     fetch(`/api/works/${workId}/roadmap?${qs}`)
       .then(async (res) => {
@@ -118,7 +115,7 @@ export function RoadmapView({
     return () => {
       ignore = true;
     };
-  }, [workId, mode, readerLevel, levelMode, maxMinutes, enablePhase12Identity]);
+  }, [workId, mode, readerLevel, maxMinutes]);
 
   const mutate = useCallback(
     async (bibId: string, patch: Record<string, unknown>) => {
@@ -208,25 +205,12 @@ export function RoadmapView({
             <option value="concise">Concise (essential + high)</option>
           </select>
         </label>
-        {enablePhase12Identity && readerLevel !== "all" && (
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Level match</span>
-            <select
-              value={levelMode}
-              onChange={(event) => setLevelMode(event.target.value as ReaderLevelMatchMode)}
-              className="app-control app-select rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1"
-            >
-              <option value="cumulative">Selected + foundations</option>
-              <option value="exact">Exact level</option>
-            </select>
-          </label>
-        )}
         <label className="flex flex-col gap-1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Level
             {readerLevel !== "all" && (
               <span className="ml-1 normal-case font-normal tracking-normal text-[var(--color-text-muted)]">
-                (never hides anything you can&rsquo;t also see — pick &ldquo;Show all levels&rdquo; anytime)
+                (this level&rsquo;s own material, plus anything universal — pick &ldquo;Show all levels&rdquo; anytime)
               </span>
             )}
           </span>
@@ -330,7 +314,17 @@ export function RoadmapView({
 
       {data && visible.length === 0 && data.analysisStatus === "complete" && (
         <p className="app-empty app-mount rounded-lg px-5 py-8 text-[var(--color-text-muted)]">
-          No connected readings were found for this work{mode === "concise" ? " at this depth" : ""}.
+          {readerLevel !== "all" && data.levelCounts[readerLevel] === 0 && data.levelCounts.all > 0 ? (
+            // A plausible consequence of exact-band level filtering (owner
+            // directive 2026-07-26): the "Level" control above shows exactly
+            // this level's own tagged material plus anything universal, so a
+            // level with little or no tagged content of its own can come up
+            // empty even though the roadmap has items overall. Say so rather
+            // than reading as "nothing here at all".
+            <>Nothing is tagged for the {READER_LEVEL_LABEL[readerLevel]} level yet — try &ldquo;Show all levels&rdquo; to see everything reached.</>
+          ) : (
+            <>No connected readings were found for this work{mode === "concise" ? " at this depth" : ""}.</>
+          )}
         </p>
       )}
 

@@ -102,9 +102,14 @@ const ROUTE_CAP: Record<CurriculumRoute, number> = {
 };
 
 /** Which stages a route shows — a route only ever narrows which stages are
- *  visible, never what a later route would also include (each route's
- *  stage set is a superset of the one before it, same "level only narrows
- *  the default" rule plan §34.4 9.4 established for reader levels). */
+ *  visible, never what a later route would also include (each route's stage
+ *  set is a superset of the one before it). This cumulative "route" axis is
+ *  deliberately distinct from `@ice/roadmap`'s reader-level bands: a route
+ *  is a pedagogical-depth choice ("how far through the five fixed stages do
+ *  I go"), not a reader-level tag, and the owner's 2026-07-26
+ *  mutually-exclusive-bands directive scopes only to reader_level filtering
+ *  (`tiersForReaderLevel`/`matchesReaderLevel`) — it does not touch this
+ *  route/stage axis, which stays intentionally cumulative. */
 export function stagesForRoute(route: CurriculumRoute): Set<CurriculumStage> {
   return new Set(ROUTE_STAGES[route]);
 }
@@ -112,8 +117,9 @@ export function stagesForRoute(route: CurriculumRoute): Set<CurriculumStage> {
 /**
  * Default route from the reader's saved global level (plan §34.3 reuses
  * `users.readerLevel`) — a starting point only. Picking a route on the page
- * is a page-local filter and never writes back to the profile, mirroring
- * `tiersForReaderLevel`'s "browsing alone never silently changes a level".
+ * is a page-local filter and never writes back to the profile, the same
+ * "browsing alone never silently changes a level" posture
+ * `suggestReaderLevelFromCompletions` documents in `@ice/roadmap`.
  */
 export function defaultRouteForReaderLevel(level: ReaderLevel | null): CurriculumRoute {
   if (level === "beginner") return "minimal";
