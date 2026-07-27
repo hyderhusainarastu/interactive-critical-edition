@@ -490,10 +490,18 @@ test.describe("Phase 23.2 accessibility completion", () => {
       if (route.request().method() !== "POST") return route.fallback();
       const now = new Date().toISOString();
       const body = [
-        `event: user\ndata: ${JSON.stringify({ id: "mock-user-1", role: "user", content: "Do I understand akrasia?", citations: [], createdAt: now, latencyMs: null })}\n\n`,
+        // `claimCitations` is always present (default `[]`) on every real
+        // message the server builds (`buildRagMessageView` in
+        // `src/lib/ragData.ts`) — `MessageCard` reads
+        // `message.claimCitations.length` unconditionally, so a mock message
+        // missing this field crashes the render with "Cannot read properties
+        // of undefined (reading 'length')" the moment this test actually
+        // renders a full turn (unlike its sibling tests in this file, which
+        // only open the panel without sending a message).
+        `event: user\ndata: ${JSON.stringify({ id: "mock-user-1", role: "user", content: "Do I understand akrasia?", citations: [], claimCitations: [], createdAt: now, latencyMs: null })}\n\n`,
         `event: delta\ndata: ${JSON.stringify({ text: "Akrasia is acting against one's own better judgment. " })}\n\n`,
         `event: competency\ndata: ${JSON.stringify(notice)}\n\n`,
-        `event: done\ndata: ${JSON.stringify({ message: { id: "mock-assistant-1", role: "assistant", content: "Akrasia is acting against one's own better judgment.", citations: [], createdAt: now, latencyMs: 12 }, notFound: false })}\n\n`,
+        `event: done\ndata: ${JSON.stringify({ message: { id: "mock-assistant-1", role: "assistant", content: "Akrasia is acting against one's own better judgment.", citations: [], claimCitations: [], createdAt: now, latencyMs: 12 }, notFound: false })}\n\n`,
       ].join("");
       await route.fulfill({ status: 200, contentType: "text/event-stream; charset=utf-8", body });
     });

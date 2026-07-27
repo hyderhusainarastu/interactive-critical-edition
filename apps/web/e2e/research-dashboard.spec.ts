@@ -139,10 +139,12 @@ test.describe("Dashboard research insight module (Phase 29.3)", () => {
     await expect(insightModule.getByText("Active debates")).toBeVisible();
     await expect(insightModule.getByText("Jobs running")).toBeVisible();
     await expect(insightModule.getByText("Jobs failed")).toBeVisible();
+    await expect(insightModule.getByText("New monitor findings")).toBeVisible();
 
-    // Every count seeded above is exactly 1.
+    // Every count seeded above is exactly 1, except "New monitor findings"
+    // (Phase 29.1), which this fixture never seeds and so is always 0.
     const values = await insightModule.locator("[data-stat-value]").allTextContents();
-    expect(values).toEqual(["1", "1", "1", "1", "1", "1"]);
+    expect(values).toEqual(["1", "1", "1", "1", "1", "1", "0"]);
 
     await expect(insightModule.getByRole("link", { name: "Open Research →" })).toHaveAttribute("href", "/research");
   });
