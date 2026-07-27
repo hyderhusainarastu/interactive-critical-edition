@@ -1,5 +1,5 @@
 import type { EmbeddingProvider } from "@ice/ai-adapters";
-import { computeIdempotencyKey } from "@ice/claims";
+import { computeConflictWatermark, computeIdempotencyKey } from "@ice/claims";
 import type { StructuredCaller } from "@ice/research";
 import {
   aiUsageLogs,
@@ -395,9 +395,13 @@ describe.skipIf(!hasDb)("generate_hypotheses (integration)", () => {
     const claimA = await seedClaim(userId, workA, "Claim A.");
     const claimB = await seedClaim(userId, workB, "Claim B.");
     const projectId = await seedProject(userId, [workA, workB]);
-    await seedRelationship(userId, projectId, claimA.id, claimB.id, { valence: "contradiction" });
+    const relId = await seedRelationship(userId, projectId, claimA.id, claimB.id, { valence: "contradiction" });
 
-    const key = computeIdempotencyKey("hypothesis_generation", hypothesisJobScope([workA, workB], null, 5), HYPOTHESIS_JOB_VERSIONS);
+    const key = computeIdempotencyKey(
+      "hypothesis_generation",
+      hypothesisJobScope([workA, workB], null, 5, computeConflictWatermark([relId])),
+      HYPOTHESIS_JOB_VERSIONS,
+    );
 
     const firstOpenai = new MockOpenAIHypothesisCaller(() => hypothesisResponse());
     const firstRequestId = await seedJobRequest(userId, projectId, key);
@@ -427,13 +431,14 @@ describe.skipIf(!hasDb)("generate_hypotheses (integration)", () => {
     const claimA = await seedClaim(userId, workA, "Claim A.");
     const claimB = await seedClaim(userId, workB, "Claim B.");
     const projectId = await seedProject(userId, [workA, workB]);
-    await seedRelationship(userId, projectId, claimA.id, claimB.id, { valence: "contradiction" });
+    const relId = await seedRelationship(userId, projectId, claimA.id, claimB.id, { valence: "contradiction" });
+    const watermark = computeConflictWatermark([relId]);
 
     const firstOpenai = new MockOpenAIHypothesisCaller(() => hypothesisResponse());
     const firstRequestId = await seedJobRequest(
       userId,
       projectId,
-      computeIdempotencyKey("hypothesis_generation", hypothesisJobScope([workA, workB], "Question A", 5), HYPOTHESIS_JOB_VERSIONS),
+      computeIdempotencyKey("hypothesis_generation", hypothesisJobScope([workA, workB], "Question A", 5, watermark), HYPOTHESIS_JOB_VERSIONS),
     );
     await run(firstRequestId, projectId, "Question A", 5, firstOpenai);
     expect(firstOpenai.calls).toBe(1);
@@ -442,11 +447,73 @@ describe.skipIf(!hasDb)("generate_hypotheses (integration)", () => {
     const secondRequestId = await seedJobRequest(
       userId,
       projectId,
-      computeIdempotencyKey("hypothesis_generation", hypothesisJobScope([workA, workB], "Question B", 5), HYPOTHESIS_JOB_VERSIONS),
+      computeIdempotencyKey("hypothesis_generation", hypothesisJobScope([workA, workB], "Question B", 5, watermark), HYPOTHESIS_JOB_VERSIONS),
     );
     const second = await run(secondRequestId, projectId, "Question B", 5, secondOpenai);
     expect(secondOpenai.calls).toBe(1);
     expect(second.hypothesesGenerated).toBe(1);
+  });
+
+  it("D-25-15: a completed zero-conflict run must NOT permanently block a later run once real conflicts exist (the owner's reproduced production sequence)", async () => {
+    const userId = await seedUser();
+    cleanupUsers.push(userId);
+    const workA = await seedWork(userId, "Work A");
+    const workB = await seedWork(userId, "Work B");
+    const claimA = await seedClaim(userId, workA, "Claim A.");
+    const claimB = await seedClaim(userId, workB, "Claim B.");
+    const projectId = await seedProject(userId, [workA, workB]);
+
+    // --- Run 1: dispatched while the project has ZERO conflicts. ---
+    const zeroConflictKey = computeIdempotencyKey(
+      "hypothesis_generation",
+      hypothesisJobScope([workA, workB], null, 5, computeConflictWatermark([])),
+      HYPOTHESIS_JOB_VERSIONS,
+    );
+    const firstOpenai = new MockOpenAIHypothesisCaller(() => hypothesisResponse());
+    const firstRequestId = await seedJobRequest(userId, projectId, zeroConflictKey);
+    const first = await run(firstRequestId, projectId, null, 5, firstOpenai);
+    expect(first.conflictsInScope).toBe(0);
+    expect(first.hypothesesGenerated).toBe(0);
+    expect(first.coverage).toBe("full");
+
+    // --- A real contradiction is judged into existence after run 1 completed. ---
+    const relId = await seedRelationship(userId, projectId, claimA.id, claimB.id, { valence: "contradiction" });
+
+    // The watermark (and therefore the idempotency key) for the IDENTICAL
+    // workIds/question/maxHypotheses scope must now differ from run 1's —
+    // this is the root fix: pre-fix, these two keys were identical because
+    // the old key formula never depended on the conflict set at all.
+    const oneConflictKey = computeIdempotencyKey(
+      "hypothesis_generation",
+      hypothesisJobScope([workA, workB], null, 5, computeConflictWatermark([relId])),
+      HYPOTHESIS_JOB_VERSIONS,
+    );
+    expect(oneConflictKey).not.toBe(zeroConflictKey);
+
+    // --- Run 2: re-dispatched with the IDENTICAL scope, now that a real
+    // conflict exists — MUST run for real and generate, not reuse run 1's
+    // stale "0 conflicts" completion. ---
+    const secondOpenai = new MockOpenAIHypothesisCaller(() => hypothesisResponse());
+    const secondRequestId = await seedJobRequest(userId, projectId, oneConflictKey);
+    const second = await run(secondRequestId, projectId, null, 5, secondOpenai);
+    expect(second.conflictsInScope).toBe(1);
+    expect(secondOpenai.calls).toBe(1);
+    expect(second.hypothesesGenerated).toBe(1);
+    expect(second.note).not.toContain("already fully processed");
+
+    // --- Run 3: re-dispatched again with the conflict set UNCHANGED since
+    // run 2 — this one legitimately reuses at $0. ---
+    const thirdOpenai = new FailingOpenAICaller(); // proves it's never called on the short-circuit path
+    const thirdRequestId = await seedJobRequest(userId, projectId, oneConflictKey);
+    const third = await run(thirdRequestId, projectId, null, 5, thirdOpenai);
+    expect(thirdOpenai.calls).toBe(0);
+    expect(third.coverage).toBe("full");
+    expect(third.note).toContain("already fully processed");
+
+    // Exactly two hypothesis rows total (run 1 generated none, run 2
+    // generated one, run 3 reused — never a third, duplicate row).
+    const rows = await db.select().from(researchHypotheses).where(eq(researchHypotheses.projectId, projectId));
+    expect(rows).toHaveLength(1);
   });
 
   it("novelty model-mismatch: embeddings stored under a different model leave the corpus empty for the active model, yielding an 'unknown' tier and no fabricated distance", async () => {

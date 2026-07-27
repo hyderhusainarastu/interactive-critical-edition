@@ -395,6 +395,95 @@ test.describe("Research workspace (Phase 28.1)", () => {
     expect(dispatched!.scope).toEqual({ projectId });
   });
 
+  // D-25-15 item 3: once a project already has SOME judged relationships
+  // (the "Detect relationships" step above is done), a prior run can still
+  // have left candidates unjudged (capped away, budget-stopped, or a failed
+  // judge call — `detectRelationshipsForProject`'s own doc comment: those
+  // are picked back up automatically on the NEXT run). The button must
+  // surface that backlog rather than silently reverting to its generic
+  // "Detect relationships" label as if nothing were outstanding.
+  test("relabels the detect button 'Continue judging (N pairs remaining)' when a prior run left candidates unjudged", async ({ page }) => {
+    const fixtureA = await seedResearchClaimsFixture(userId, "Continue-judging work A");
+    const fixtureB = await seedResearchClaimsFixture(userId, "Continue-judging work B");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Continue judging project");
+    await db.insert(researchProjectMembers).values([
+      { projectId, memberType: "work", workId: fixtureA.workId, role: "central" },
+      { projectId, memberType: "work", workId: fixtureB.workId, role: "supporting" },
+    ]);
+
+    // At least one relationship already judged (detectDone === true, so the
+    // pipeline stepper itself has moved past "Detect relationships").
+    const [loClaimId, hiClaimId] = [fixtureA.anchoredClaimId, fixtureB.anchoredClaimId].sort();
+    await db.insert(claimRelationships).values({
+      userId,
+      projectId,
+      claimLoId: loClaimId,
+      claimHiId: hiClaimId,
+      valence: "contradiction",
+      category: "theoretical",
+      judgeBranch: "empirical",
+      strongerSide: "neither",
+      explanation: "Test relationship.",
+      resolution: "Test resolution.",
+      engagement: "none_detected",
+      basisHash: "e2e-continue-judging-basis",
+      promptVersion: "test-v1",
+      provider: "test",
+      model: "test-model",
+    });
+
+    // A completed detect_relationships run whose note honestly reports 7
+    // candidate pairs still awaiting judgment (the exact `awaitingJudgment=`
+    // format `detectRelationshipsForProject` writes).
+    await db.insert(researchJobRequests).values({
+      userId,
+      jobType: "detect_relationships",
+      scope: { projectId },
+      idempotencyKey: `e2e-continue-judging-${projectId}`,
+      status: "complete",
+      coverage: "partial",
+      note: "channels: dense=4 bm25=3 locus=0 locus_section=0 | candidates: 10 found, 10 kept after cap, 10 newly persisted | judge: judged=3 alreadyJudged=0 failed=0 awaitingJudgment=7 (stopped early: cost budget)",
+      estimatedCostUsd: 0.03,
+      actualCostUsd: 0.03,
+    });
+
+    await page.goto(`/research/${projectId}`);
+    await expect(main(page).getByRole("heading", { name: "Continue judging project" })).toBeVisible();
+
+    const jobsPanel = main(page).getByRole("region", { name: "Research jobs" });
+    const continueButton = jobsPanel.getByRole("button", { name: "Continue judging (7 pairs remaining)" });
+    await expect(continueButton).toBeVisible();
+    await expect(continueButton).toBeEnabled();
+    await expect(jobsPanel.getByText("7 candidate pairs from a prior run are still awaiting judgment.")).toBeVisible();
+
+    // Clicking it dispatches the SAME "detect_relationships" action (never a
+    // distinct job type) — confirming the needs_confirmation prompt queues a
+    // second detect_relationships request for this project. The dispatch can
+    // legitimately also come back as a `conflict` instead, if this shared
+    // test account happens to have a genuinely different detect_relationships/
+    // cluster_debates job actively running elsewhere at this exact instant
+    // (an environment-timing detail this suite's own doc comment already
+    // flags as out of scope — nothing requires a worker to consume a queued
+    // job, but nothing prevents one from doing so either); either response
+    // proves the button is wired to the real dispatch route, which is this
+    // affordance's own correctness, so both are accepted here — only the
+    // needs_confirmation path additionally proves out the confirm-and-queue
+    // round trip.
+    await continueButton.click();
+    const confirmButton = jobsPanel.getByRole("button", { name: /Confirm and detect relationships/i });
+    const conflictNotice = jobsPanel.getByText("A different judge_scan job is already running.");
+    await expect(confirmButton.or(conflictNotice)).toBeVisible();
+    if (await confirmButton.isVisible()) {
+      await confirmButton.click();
+      await expect(jobsPanel.getByText("Queued").first()).toBeVisible({ timeout: 10_000 });
+
+      const rows = await db.select().from(researchJobRequests).where(eq(researchJobRequests.jobType, "detect_relationships"));
+      const projectRows = rows.filter((r) => (r.scope as { projectId?: unknown } | null)?.projectId === projectId);
+      expect(projectRows.length, "expected the original completed row plus a newly queued one").toBe(2);
+    }
+  });
+
   test("dispatches debate clustering once a relationship is judged, and disables it before that", async ({ page }) => {
     const fixture = await seedResearchClaimsFixture(userId, "Cluster work");
     await login(page);

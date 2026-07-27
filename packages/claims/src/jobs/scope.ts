@@ -133,15 +133,24 @@ export interface GenerateHypothesesScope {
   projectId: string;
   question: string | null;
   maxHypotheses?: number;
+  /** Upstream-state watermark (`computeConflictWatermark`) over the
+   *  project's undisputed contradiction/nuance `claim_relationship` set AT
+   *  DISPATCH TIME (D-25-15) — recorded here purely for traceability/audit;
+   *  the worker handler always recomputes its OWN watermark from the
+   *  current DB state before deciding whether to reuse a completed run
+   *  rather than trusting this stored value, so its absence (rows written
+   *  before this fix) is never treated as a mismatch. */
+  conflictWatermark?: string;
 }
 
 export function parseGenerateHypothesesScope(scope: unknown): GenerateHypothesesScope | null {
   if (scope === null || typeof scope !== "object" || Array.isArray(scope)) return null;
-  const s = scope as { projectId?: unknown; question?: unknown; maxHypotheses?: unknown };
+  const s = scope as { projectId?: unknown; question?: unknown; maxHypotheses?: unknown; conflictWatermark?: unknown };
   if (typeof s.projectId !== "string" || s.projectId.length === 0) return null;
   const question = typeof s.question === "string" && s.question.trim().length > 0 ? s.question.trim() : null;
   const maxHypotheses = typeof s.maxHypotheses === "number" && Number.isFinite(s.maxHypotheses) ? s.maxHypotheses : undefined;
-  return { projectId: s.projectId, question, maxHypotheses };
+  const conflictWatermark = typeof s.conflictWatermark === "string" && s.conflictWatermark.length > 0 ? s.conflictWatermark : undefined;
+  return { projectId: s.projectId, question, maxHypotheses, conflictWatermark };
 }
 
 // ---------------------------------------------------------------------------

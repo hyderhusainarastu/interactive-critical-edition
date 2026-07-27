@@ -25,6 +25,32 @@ import type { ResearchPipelineOverview } from "./pipeline";
  * exactly as before.
  */
 
+/**
+ * Parses the "N pairs still awaiting judgment" count back out of a completed
+ * `detect_relationships` job's `research_job_request.note` (D-25-15 item 3):
+ * the worker's own outcome note (`apps/worker/src/research/
+ * detectRelationships.ts`'s `detectRelationshipsForProject`) always includes
+ * a literal `awaitingJudgment=<N>` segment — the honest "judge stage not yet
+ * complete" count for candidates capped away, budget-stopped, or that failed
+ * a judge call and are left for the NEXT `detect_relationships` run to pick
+ * back up automatically (that stage's own doc comment: "operates over the
+ * project's ENTIRE persisted candidate set"). Rather than adding a second,
+ * separately-computed count on the web side that could silently drift from
+ * what the worker actually left outstanding, this parses the SAME note text
+ * the project overview already displays verbatim — the note IS the source
+ * of truth here, not a re-derivation of it. Returns 0 for a missing/
+ * unparseable note (never negative, never NaN) so a caller can treat the
+ * return value as "how many more pairs a re-run would pick up" without a
+ * separate null-check.
+ */
+export function parseAwaitingJudgmentCount(note: string | null | undefined): number {
+  if (!note) return 0;
+  const match = /awaitingJudgment=(\d+)/.exec(note);
+  if (!match) return 0;
+  const count = Number.parseInt(match[1], 10);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
 export type PipelineStepKey = "extract" | "detect" | "cluster" | "synthesize";
 
 export interface PipelineStepView {

@@ -102,6 +102,17 @@ describe("parseGenerateHypothesesScope", () => {
   it("rejects a missing projectId", () => {
     expect(parseGenerateHypothesesScope({ question: "x" })).toBeNull();
   });
+
+  it("round-trips an optional conflictWatermark (D-25-15) and defaults it to undefined when absent", () => {
+    const built = { projectId: "proj-1", question: null, maxHypotheses: 5, conflictWatermark: "abc123" };
+    expect(parseGenerateHypothesesScope(roundTrip(built))).toEqual({
+      projectId: "proj-1",
+      question: null,
+      maxHypotheses: 5,
+      conflictWatermark: "abc123",
+    });
+    expect(parseGenerateHypothesesScope(roundTrip({ projectId: "proj-1" }))?.conflictWatermark).toBeUndefined();
+  });
 });
 
 describe("parseImportCorpusScope", () => {

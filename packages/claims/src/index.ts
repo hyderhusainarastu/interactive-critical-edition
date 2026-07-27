@@ -16,6 +16,7 @@ export * from "./thresholds";
 export * from "./limits";
 export * from "./anchoring";
 export * from "./basisHash";
+export * from "./conflictWatermark";
 
 export * from "./scoring/evidenceStrength";
 export * from "./scoring/textualSupport";

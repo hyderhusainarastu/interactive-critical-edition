@@ -2,6 +2,7 @@ import {
   HYPOTHESIS_PROMPT_VERSION,
   MAX_HYPOTHESES_PER_REQUEST,
   TAXONOMY_VERSION_CLAIMS,
+  computeConflictWatermark,
   planResearchJob,
   type ExistingResearchRequest,
   type ResearchJobPlan,
@@ -19,8 +20,35 @@ import {
   researchProjectMembers,
   works,
 } from "@ice/db";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { getOwnedResearchProject } from "./projects";
+
+/**
+ * The project's current undisputed contradiction/nuance `claim_relationship`
+ * ids — the SAME predicate `apps/worker/src/research/repository.ts`'s
+ * `loadUndisputedConflictRelationshipsForProject` uses, and the population
+ * `computeConflictWatermark` (D-25-15) is keyed over. Kept intentionally
+ * narrow (ids only, no other columns) since this only feeds the
+ * idempotency-key watermark, not the actual hypothesis-generation prompt
+ * (that full read happens in the worker handler, over whatever the
+ * conflict set looks like when the job actually runs).
+ */
+async function loadUndisputedConflictIdsForProject(userId: string, projectId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: claimRelationships.id })
+    .from(claimRelationships)
+    .where(
+      and(
+        eq(claimRelationships.userId, userId),
+        eq(claimRelationships.projectId, projectId),
+        eq(claimRelationships.status, "active"),
+        eq(claimRelationships.hidden, false),
+        ne(claimRelationships.verificationStatus, "disputed"),
+        or(eq(claimRelationships.valence, "contradiction"), eq(claimRelationships.valence, "nuance")),
+      ),
+    );
+  return rows.map((r) => r.id);
+}
 
 /**
  * Owner-scoped reads + dispatch for `research_hypothesis`/`research_gap`
@@ -188,6 +216,18 @@ export type DispatchGenerateHypothesesResult =
  * `needs_confirmation` branch is still wired through `planResearchJob` for
  * consistency with every other research job type, even though the small,
  * fixed `maxHypotheses<=5` unit count means it is realistically never hit.
+ *
+ * The scope's `detail` folds in `computeConflictWatermark` (D-25-15) over
+ * this project's CURRENT undisputed contradiction/nuance conflict set —
+ * without it, the idempotency key depended only on workIds/question/
+ * maxHypotheses, so a project that started at 0 conflicts and later
+ * accumulated real ones would recompute the IDENTICAL key forever, and the
+ * worker's own job-level short-circuit (`generateHypotheses.ts`) would keep
+ * "reusing" a stale zero-conflict completion as if it still reflected
+ * reality. The worker recomputes this watermark independently from its own
+ * fresh read at run time — this dispatch-time value only has to produce the
+ * SAME key the worker will, which it does as long as nothing detects a new
+ * conflict in the (normally very short) gap between dispatch and pickup.
  */
 export async function dispatchGenerateHypothesesJob(
   userId: string,
@@ -209,7 +249,9 @@ export async function dispatchGenerateHypothesesJob(
     .filter((id): id is string => id !== null)
     .sort();
 
-  const scope = { workIds: memberWorkIds, detail: JSON.stringify({ question: normalizedQuestion, maxHypotheses }) };
+  const conflictWatermark = computeConflictWatermark(await loadUndisputedConflictIdsForProject(userId, projectId));
+
+  const scope = { workIds: memberWorkIds, detail: JSON.stringify({ question: normalizedQuestion, maxHypotheses, conflictWatermark }) };
   const versions = { taxonomyVersion: TAXONOMY_VERSION_CLAIMS, promptVersion: HYPOTHESIS_PROMPT_VERSION };
 
   const existingWithKeys = await db
@@ -244,7 +286,7 @@ export async function dispatchGenerateHypothesesJob(
     .values({
       userId,
       jobType: "generate_hypotheses",
-      scope: { projectId, question: normalizedQuestion, maxHypotheses },
+      scope: { projectId, question: normalizedQuestion, maxHypotheses, conflictWatermark },
       idempotencyKey: jobPlan.idempotencyKey,
       status: "queued",
       requiresConfirmation,

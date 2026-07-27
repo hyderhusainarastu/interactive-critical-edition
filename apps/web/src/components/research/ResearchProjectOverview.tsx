@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
 import type { ResearchPipelineOverview } from "@/lib/research/pipeline";
-import { computeResearchPipelineSteps } from "@/lib/research/pipelineSteps";
+import { computeResearchPipelineSteps, parseAwaitingJudgmentCount } from "@/lib/research/pipelineSteps";
 import { JobStageProgress } from "./JobStageProgress";
 import { LiveAnnouncer } from "./LiveAnnouncer";
 import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
@@ -156,6 +156,19 @@ export function ResearchProjectOverview({
     membersHref: "#research-members-title",
     hypothesesHref: `/research/${project.id}/hypotheses`,
   });
+
+  // D-25-15 item 3: the most recent `detect_relationships` request's note
+  // (`jobRequests` is already sorted newest-first — `listResearchJobRequestsForProject`)
+  // may report candidates a prior run left awaiting judgment
+  // (`detectRelationshipsForProject`'s judge stage caps a run at
+  // `RETRIEVAL_LIMITS.maxJudgedPairsPerRequest`, or stops early on a
+  // budget/provider failure). `parseAwaitingJudgmentCount` returns 0 for a
+  // project that has never run detection at all (no matching note yet), so
+  // no separate "has detect ever run" guard is needed here — the "Research
+  // jobs" panel's existing "Detect relationships" button below relabels
+  // itself using this count rather than gaining a second, redundant control.
+  const latestDetectJob = jobRequests.find((job) => job.jobType === "detect_relationships" && job.note);
+  const awaitingJudgmentCount = parseAwaitingJudgmentCount(latestDetectJob?.note);
 
   async function addQuestion() {
     const question = newQuestion.trim();
@@ -476,9 +489,19 @@ export function ResearchProjectOverview({
                   onClick={() => dispatchPipelineAction("detect")}
                   disabled={!detectReady || pipelineActionState("detect").dispatching}
                 >
-                  {pipelineActionState("detect").dispatching ? "Starting…" : "Detect relationships"}
+                  {pipelineActionState("detect").dispatching
+                    ? "Starting…"
+                    : awaitingJudgmentCount > 0
+                      ? `Continue judging (${awaitingJudgmentCount} pair${awaitingJudgmentCount === 1 ? "" : "s"} remaining)`
+                      : "Detect relationships"}
                 </button>
                 {!detectReady && detectStep && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{detectStep.state}</p>}
+                {detectReady && awaitingJudgmentCount > 0 && (
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    {awaitingJudgmentCount} candidate pair{awaitingJudgmentCount === 1 ? "" : "s"} from a prior run{" "}
+                    {awaitingJudgmentCount === 1 ? "is" : "are"} still awaiting judgment.
+                  </p>
+                )}
               </div>
               <div>
                 <button

@@ -8,6 +8,7 @@ import {
   assertThresholdsCalibratedFor,
   buildGapDescription,
   buildHypothesisPrompt,
+  computeConflictWatermark,
   computeHypothesisRunHash,
   computeIdempotencyKey,
   noveltyFor,
@@ -47,14 +48,32 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  *     knowable before the call.
  *  2. This job's OWN `research_job_request.idempotency_key` (job-level,
  *     `@ice/claims`'s `computeIdempotencyKey`, the same function
- *     `apps/web/src/lib/research/jobs.ts` uses at dispatch time): recomputed
- *     here from the CURRENT project scope + question + maxHypotheses, and
- *     checked against every OTHER completed `generate_hypotheses` request for
- *     this user under that exact key. A match means an identical scope was
- *     already fully processed — the whole run short-circuits BEFORE any LLM
- *     call, which is what makes "repeat run costs $0" a real, testable
- *     guarantee (the canary's own requirement) rather than just a row-level
- *     dedup that still burns tokens on every re-run.
+ *     `apps/web/src/lib/research/hypotheses.ts`'s `dispatchGenerateHypothesesJob`
+ *     uses at dispatch time): recomputed here from the CURRENT project
+ *     scope + question + maxHypotheses + conflict-set watermark (see below),
+ *     and checked against every OTHER completed `generate_hypotheses`
+ *     request for this user under that exact key. A match means an
+ *     identical scope AND an identical conflict set were already fully
+ *     processed — the whole run short-circuits BEFORE any LLM call, which
+ *     is what makes "repeat run costs $0" a real, testable guarantee (the
+ *     canary's own requirement) rather than just a row-level dedup that
+ *     still burns tokens on every re-run.
+ *
+ *     D-25-15 (fixed): this key used to be computed from workIds/question/
+ *     maxHypotheses ALONE, with no sensitivity to the project's actual
+ *     conflict set. A project with 0 conflicts at first dispatch (0
+ *     hypotheses generated, run completed) permanently short-circuited
+ *     every LATER `generate_hypotheses` run under the identical
+ *     workIds/question/maxHypotheses, even after real contradiction/nuance
+ *     relationships were subsequently judged into existence — the note
+ *     honestly said "reused, no new LLM call" while silently meaning
+ *     "reused a run that never saw today's conflicts at all". Fixed by
+ *     folding `computeConflictWatermark` (a sha256 over the sorted ids of
+ *     the project's CURRENT undisputed contradiction/nuance
+ *     `claim_relationship` rows — exactly the population
+ *     `loadUndisputedConflictRelationshipsForProject` grounds this job on)
+ *     into `hypothesisJobScope`'s `detail`, restoring ScholarLens's
+ *     original relationships-watermark design at the job layer.
  */
 
 
@@ -62,9 +81,17 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  *  and this handler build the idempotency key from — exported so both sides
  *  (and this file's own integration tests) call the ONE real implementation
  *  rather than each re-deriving the same scope shape and risking silent
- *  drift between them. */
-export function hypothesisJobScope(workIds: string[], question: string | null, maxHypotheses: number): ResearchJobScope {
-  return { workIds: [...workIds].sort(), detail: JSON.stringify({ question, maxHypotheses }) };
+ *  drift between them.
+ *
+ *  `conflictWatermark` (D-25-15, `computeConflictWatermark`) folds the
+ *  project's CURRENT undisputed contradiction/nuance conflict set into the
+ *  key: without it, "identical scope" meant only "same workIds/question/
+ *  maxHypotheses", so a completed run stayed reusable forever even after
+ *  the conflict set it was grounded on had completely changed. Both sides
+ *  compute this watermark fresh (from their own current DB read) rather
+ *  than trusting a value carried over from an earlier point in time. */
+export function hypothesisJobScope(workIds: string[], question: string | null, maxHypotheses: number, conflictWatermark: string): ResearchJobScope {
+  return { workIds: [...workIds].sort(), detail: JSON.stringify({ question, maxHypotheses, conflictWatermark }) };
 }
 export const HYPOTHESIS_JOB_VERSIONS: ResearchJobVersions = { taxonomyVersion: TAXONOMY_VERSION_CLAIMS, promptVersion: HYPOTHESIS_PROMPT_VERSION };
 
@@ -195,15 +222,27 @@ export async function generateHypothesesForProject(
   const workIds = await repo.loadProjectWorkIds(projectId);
 
   // --- Job-level idempotency short-circuit (see this file's top doc comment). ---
-  const scope = hypothesisJobScope(workIds, question, maxHypotheses);
+  // The conflict set has to be loaded BEFORE deciding whether to reuse a
+  // prior completed run — the whole point of the watermark below is that
+  // "identical scope" must also mean "identical conflict set right now",
+  // not just "identical workIds/question/maxHypotheses" (D-25-15: a
+  // completed zero-conflict run otherwise permanently blocked every future
+  // run under the same scope, even after real conflicts were later judged
+  // into existence, because nothing about the OLD idempotency key was ever
+  // sensitive to the conflict set actually changing).
+  await ctx.setStage("loading-conflicts");
+  const conflictRows = await repo.loadUndisputedConflictRelationshipsForProject(userId, projectId);
+  const conflictWatermark = computeConflictWatermark(conflictRows.map((c) => c.id));
+
+  const scope = hypothesisJobScope(workIds, question, maxHypotheses, conflictWatermark);
   const idempotencyKey = computeIdempotencyKey("hypothesis_generation", scope, HYPOTHESIS_JOB_VERSIONS);
   if (idempotencyKey === ctx.request.idempotencyKey) {
     const alreadyDone = await repo.hasCompletedResearchJobRequestWithIdempotencyKey(userId, "generate_hypotheses", idempotencyKey, ctx.request.id);
     if (alreadyDone) {
       return {
         coverage: "full",
-        note: "An identical scope (same project conflicts, question, and settings) was already fully processed by a prior generate_hypotheses run — reused, no new LLM call.",
-        conflictsInScope: 0,
+        note: `Same conflict set [watermark ${conflictWatermark.slice(0, 12)}], question, and settings already fully processed by a prior generate_hypotheses run — reused, no new LLM call.`,
+        conflictsInScope: conflictRows.length,
         hypothesesGenerated: 0,
         hypothesesDroppedNoRealSource: 0,
         fabricatedLabelsDropped: 0,
@@ -214,13 +253,13 @@ export async function generateHypothesesForProject(
     }
   } else {
     // Defensive only — the web dispatcher and this handler build the scope
-    // the same way, so this should never actually diverge; recorded rather
-    // than silently skipped if it ever does.
-    concerns.push("This request's recomputed scope signature did not match its own stored idempotency key — the repeat-run short-circuit was skipped for this run (does not affect correctness of what gets generated).");
+    // the same way (same workIds/question/maxHypotheses AND the same
+    // conflict-watermark predicate), so this should never actually diverge
+    // outside a genuinely concurrent detect_relationships run changing the
+    // conflict set between dispatch and pickup; recorded rather than
+    // silently skipped if it ever does.
+    concerns.push("This request's recomputed scope signature (including the current conflict-set watermark) did not match its own stored idempotency key — the repeat-run short-circuit was skipped for this run (does not affect correctness of what gets generated).");
   }
-
-  await ctx.setStage("loading-conflicts");
-  const conflictRows = await repo.loadUndisputedConflictRelationshipsForProject(userId, projectId);
 
   let hypothesesGenerated = 0;
   let hypothesesDroppedNoRealSource = 0;
