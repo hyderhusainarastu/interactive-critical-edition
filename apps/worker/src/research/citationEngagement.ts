@@ -131,3 +131,96 @@ export function resolveEngagement(
 
   return { engagement: "none_detected", evidence: null };
 }
+
+// ---------------------------------------------------------------------------
+// Work <-> corpus-item engagement (Phase 30 fix lane, D-25-13). A corpus item
+// was only ever imported by its ABSTRACT (`research_corpus_item.abstract`,
+// plan §Pipeline "corpus items = source_scope 'abstract'") — no reference
+// list was ever parsed for it, so a corpus item's own OUTBOUND citations are
+// never knowable. The only thing derivable at all is the reverse direction:
+// does one of the user's uploaded WORKS have a resolved citation whose
+// bibliographic_record DOI matches this corpus item's own DOI. Honest by
+// construction: no DOI on either side, or no match, is `none_detected` —
+// never a guessed/title-matched substitute the way work<->work direct
+// citation is (that channel has real full-text citation data to match
+// against; a corpus item never does).
+// ---------------------------------------------------------------------------
+
+/** DOIs (lowercased) a set of works' RESOLVED citations point to, keyed by
+ *  work id — the work-side half of the work<->corpus-item DOI join
+ *  (`loadCorpusItemDois` in `repository.ts` is the corpus-item-side half).
+ *  Reuses the exact `resolutionState = 'resolved'` / non-null `resolvedBibId`
+ *  gate `loadCitationEngagementProfiles` above applies. */
+export async function loadCitationEngagementDoisForWorks(workIds: string[]): Promise<Map<string, Set<string>>> {
+  const out = new Map<string, Set<string>>();
+  for (const id of workIds) out.set(id, new Set());
+  if (workIds.length === 0) return out;
+
+  const rows = await db
+    .select({ workId: documents.workId, doi: bibliographicRecords.doi })
+    .from(citations)
+    .innerJoin(documents, eq(documents.id, citations.documentId))
+    .innerJoin(bibliographicRecords, eq(bibliographicRecords.id, citations.resolvedBibId))
+    .where(and(inArray(documents.workId, workIds), eq(citations.resolutionState, "resolved"), isNotNull(citations.resolvedBibId), isNotNull(bibliographicRecords.doi)));
+
+  for (const row of rows) {
+    if (!row.doi) continue;
+    const set = out.get(row.workId);
+    if (!set) continue;
+    set.add(row.doi.toLowerCase());
+  }
+  return out;
+}
+
+/** The pure decision core for a work<->corpus-item pair — only `direct_citation`
+ *  (work cites the corpus item) or `none_detected` are ever possible; never
+ *  `reciprocal_citation`/`shared_citation`, which both require citation data
+ *  from BOTH sides that a corpus item never has. */
+function resolveWorkCorpusItemEngagement(
+  workId: string,
+  corpusItemId: string,
+  workCitedDois: Map<string, Set<string>>,
+  corpusItemDois: Map<string, string | null>,
+): EngagementResult {
+  const doi = corpusItemDois.get(corpusItemId);
+  if (!doi) return { engagement: "none_detected", evidence: null };
+  const cited = workCitedDois.get(workId);
+  if (cited?.has(doi)) {
+    return { engagement: "direct_citation", evidence: { direction: "work_cites_corpus_item", citingWorkId: workId, citedCorpusItemId: corpusItemId, doi } };
+  }
+  return { engagement: "none_detected", evidence: null };
+}
+
+/** A claim's source, generalized over both `research_claim` source kinds —
+ *  exactly one field is non-null (`research_claim_exactly_one_source`
+ *  CHECK). */
+export interface ClaimEngagementSource {
+  workId: string | null;
+  corpusItemId: string | null;
+}
+
+/**
+ * Engagement resolution generalized over both claim source kinds
+ * (`detectRelationships.ts`'s candidate-pair citation-engagement pre-join,
+ * D-25-13's cross-source widening). Dispatches to the existing work<->work
+ * `resolveEngagement` unchanged when both sides are works; to the DOI-only
+ * `resolveWorkCorpusItemEngagement` when exactly one side is a corpus item
+ * (regardless of which of the pair's lo/hi positions it's in); and to a flat
+ * `none_detected` for a corpus-item<->corpus-item pair, since neither side
+ * of that pair has any citation data at all to join against — the honest
+ * "nothing derivable" outcome the plan's own §Pipeline note for this lane
+ * calls for, not a guess.
+ */
+export function resolveEngagementForClaims(
+  a: ClaimEngagementSource,
+  b: ClaimEngagementSource,
+  workProfiles: Map<string, WorkCitationProfile>,
+  workNormalizedTitles: Map<string, string>,
+  workCitedDois: Map<string, Set<string>>,
+  corpusItemDois: Map<string, string | null>,
+): EngagementResult {
+  if (a.workId && b.workId) return resolveEngagement(a.workId, b.workId, workProfiles, workNormalizedTitles);
+  if (a.workId && b.corpusItemId) return resolveWorkCorpusItemEngagement(a.workId, b.corpusItemId, workCitedDois, corpusItemDois);
+  if (a.corpusItemId && b.workId) return resolveWorkCorpusItemEngagement(b.workId, a.corpusItemId, workCitedDois, corpusItemDois);
+  return { engagement: "none_detected", evidence: null };
+}

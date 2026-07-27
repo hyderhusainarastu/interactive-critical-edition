@@ -9,11 +9,16 @@ import {
   CLAIM_EXTRACTION_PROMPT_VERSION,
   CLAIM_NATURES,
   CLAIM_SCORER_VERSION,
+  MAX_CLAIMS_FOR_ABSTRACT,
   buildClaimExtractionPrompt,
+  isExtractClaimsWorkScope,
+  isLegacyWorkIdsArrayScope,
+  parseExtractClaimsScope,
   planExtractionChunks,
   rebindClaimAnchor,
   scoreBothDimensions,
   validateClaimExtraction,
+  type ExtractClaimsScope,
   type ExtractedClaim,
   type ExtractionChunk,
 } from "@ice/claims";
@@ -25,10 +30,13 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
 
 /**
  * extract_claims handler (Phase 26.1, plan §Pipeline "Map-reduce
- * extraction"). Scoped to the uploaded-work path only this lane — a
- * corpus-item's abstract-scoped extraction is a later lane (28.2's corpus
- * import), left as an honest typed-TODO failure below rather than a silent
- * no-op.
+ * extraction"; corpus-item abstract-source path added in the Phase 30 fix
+ * lane, D-25-13). Two source paths, dispatched on the canonical
+ * `@ice/claims` scope contract (`parseExtractClaimsScope`, D-25-14's fix for
+ * the web/worker scope-shape mismatch): `{workId}` runs the uploaded-work
+ * map-reduce extraction (`extractClaimsForWork`, unchanged since Phase 26.1);
+ * `{corpusItemId}` runs the single-chunk abstract extraction below
+ * (`extractClaimsForCorpusItem`).
  */
 
 // Conservative per-chunk upper bound (gpt-5.4-nano, ≤12k-char input, up to
@@ -50,15 +58,35 @@ function claimContentHash(text: string): string {
   return createHash("sha256").update(normalizeClaimText(text)).digest("hex");
 }
 
-interface ExtractClaimsScope {
-  workId: string;
-}
+/** The claim-extraction response schema, identical for both the uploaded-work
+ *  map-reduce path (`extractOneChunk`) and the corpus-item single-abstract
+ *  path (`extractFromSingleText`) — one literal, not two copies to drift. */
+const CLAIM_EXTRACTION_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    claims: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          nature: { type: "string", enum: [...CLAIM_NATURES] },
+          section: { type: "string" },
+          confidence: { type: "string", enum: ["high", "medium", "low"] },
+          supportingExcerpt: { type: "string" },
+        },
+        required: ["text", "nature", "section", "confidence", "supportingExcerpt"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["claims"],
+  additionalProperties: false,
+} as const;
 
-function parseExtractClaimsScope(scope: unknown): ExtractClaimsScope | null {
-  const s = scope as { workId?: unknown; corpusItemId?: unknown } | null;
-  if (s && typeof s.workId === "string" && s.workId.length > 0) return { workId: s.workId };
-  return null;
-}
+const CLAIM_EXTRACTION_SYSTEM_PROMPT =
+  "You are extracting claims from a scholarly work for a research pipeline. Follow the instructions and " +
+  "output schema in the user message exactly. Return ONLY the structured JSON requested — no markdown, no commentary.";
 
 /**
  * Finds the SOLE chunk block whose text contains `excerpt` verbatim, or
@@ -136,33 +164,10 @@ async function extractOneChunk(
     const result = await caller.call({
       model: input.model,
       schemaName: "claim_extraction",
-      schema: {
-        type: "object",
-        properties: {
-          claims: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                text: { type: "string" },
-                nature: { type: "string", enum: [...CLAIM_NATURES] },
-                section: { type: "string" },
-                confidence: { type: "string", enum: ["high", "medium", "low"] },
-                supportingExcerpt: { type: "string" },
-              },
-              required: ["text", "nature", "section", "confidence", "supportingExcerpt"],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ["claims"],
-        additionalProperties: false,
-      },
+      schema: CLAIM_EXTRACTION_RESPONSE_SCHEMA,
       safetyIdentifier: input.safetyIdentifier,
       maxOutputTokens: MAX_OUTPUT_TOKENS,
-      system:
-        "You are extracting claims from a scholarly work for a research pipeline. Follow the instructions and " +
-        "output schema in the user message exactly. Return ONLY the structured JSON requested — no markdown, no commentary.",
+      system: CLAIM_EXTRACTION_SYSTEM_PROMPT,
       input: buildClaimExtractionPrompt({ workTitle: input.workTitle, documentText: chunk.text }),
       validate: (parsed) => validateClaimExtraction((parsed as { claims?: unknown }).claims, blockTexts),
     });
@@ -262,6 +267,56 @@ export interface ExtractClaimsOutcome extends ResearchJobOutcome {
 }
 
 /**
+ * Batch-embeds whichever claims THIS run actually inserted (a dedup hit
+ * already has an embedding row from whichever run first inserted it) —
+ * shared between the uploaded-work and corpus-item extraction paths so the
+ * dimension/cost/failure handling can't drift between the two. Mutates
+ * nothing by return value; concerns are pushed onto the caller's own array.
+ */
+async function embedNewlyInsertedClaims(
+  embedder: EmbeddingProvider,
+  ctx: ResearchJobRunContext,
+  newlyInsertedClaims: { id: string; text: string }[],
+  concerns: string[],
+): Promise<void> {
+  if (newlyInsertedClaims.length === 0 || !embedder.available) return;
+  if (embedder.dim !== 1536) {
+    concerns.push(`Embedding provider dimension ${embedder.dim} does not match the fixed vector(1536) column — skipped embedding this run.`);
+    return;
+  }
+  const texts = newlyInsertedClaims.map((c) => normalizeClaimText(c.text));
+  const projectedTokens = texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0);
+  const projectedCost = embedder.estimateCostUsd(projectedTokens);
+  if (!canAfford(ctx.budget, projectedCost)) {
+    concerns.push(`Embedding batch skipped: projected cost would exceed the hard cap.`);
+    return;
+  }
+  try {
+    const result = await embedder.embedBatch(texts);
+    await ctx.logUsage({
+      task: "claim_embedding",
+      stage: "embedding-claims",
+      provider: embedder.id,
+      model: result.model,
+      promptTokens: result.inputTokens,
+      completionTokens: 0,
+      costOverride: embedder.estimateCostUsd(result.inputTokens),
+    });
+    const rows: repo.NewClaimEmbedding[] = newlyInsertedClaims.map((claim, index) => ({
+      claimId: claim.id,
+      model: result.model,
+      inputHash: claimContentHash(claim.text),
+      embedding: result.vectors[index],
+      dim: result.vectors[index]?.length ?? embedder.dim,
+    }));
+    await repo.insertClaimEmbeddings(rows);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    concerns.push(`Embedding batch failed; ${newlyInsertedClaims.length} claim(s) were inserted with no embedding row (${message.slice(0, 200)}).`);
+  }
+}
+
+/**
  * The testable extraction core: DI'd `caller` (an `OpenAIResponsesClient`
  * in production, a mock in tests) and `embedder` (`resolveEmbeddingProvider()`
  * in production) — the `processForeignText(repository, adapter, options)`
@@ -344,44 +399,7 @@ export async function extractClaimsForWork(
     concerns.push(`Extraction stopped after chunk ${stoppedEarlyAtChunk}/${plan.chunks.length}: soft cost cap reached.`);
   }
 
-  // Batch-embed only the claims THIS run actually inserted — a dedup hit
-  // already has an embedding row from whichever run first inserted it.
-  if (newlyInsertedClaims.length > 0 && embedder.available) {
-    if (embedder.dim !== 1536) {
-      concerns.push(`Embedding provider dimension ${embedder.dim} does not match the fixed vector(1536) column — skipped embedding this run.`);
-    } else {
-      const texts = newlyInsertedClaims.map((c) => normalizeClaimText(c.text));
-      const projectedTokens = texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0);
-      const projectedCost = embedder.estimateCostUsd(projectedTokens);
-      if (canAfford(ctx.budget, projectedCost)) {
-        try {
-          const result = await embedder.embedBatch(texts);
-          await ctx.logUsage({
-            task: "claim_embedding",
-            stage: "embedding-claims",
-            provider: embedder.id,
-            model: result.model,
-            promptTokens: result.inputTokens,
-            completionTokens: 0,
-            costOverride: embedder.estimateCostUsd(result.inputTokens),
-          });
-          const rows: repo.NewClaimEmbedding[] = newlyInsertedClaims.map((claim, index) => ({
-            claimId: claim.id,
-            model: result.model,
-            inputHash: claimContentHash(claim.text),
-            embedding: result.vectors[index],
-            dim: result.vectors[index]?.length ?? embedder.dim,
-          }));
-          await repo.insertClaimEmbeddings(rows);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          concerns.push(`Embedding batch failed; ${newlyInsertedClaims.length} claim(s) were inserted with no embedding row (${message.slice(0, 200)}).`);
-        }
-      } else {
-        concerns.push(`Embedding batch skipped: projected cost would exceed the hard cap.`);
-      }
-    }
-  }
+  await embedNewlyInsertedClaims(embedder, ctx, newlyInsertedClaims, concerns);
 
   const coverage = stoppedEarlyAtChunk !== null ? "partial" : plan.coverage;
   const note =
@@ -395,17 +413,177 @@ export async function extractClaimsForWork(
   return { coverage, note, claimsExtracted: newlyInsertedClaims.length, concerns };
 }
 
-/** Real-provider wrapper wired into the worker's queue handler. */
+/**
+ * The corpus-item (abstract-source) extraction core — the sibling of
+ * `extractClaimsForWork` above for a project's imported-not-uploaded
+ * members (Phase 28.2/30 fix lane, D-25-13). An abstract is a few hundred
+ * words at most, so it is always ONE chunk (no `planExtractionChunks`
+ * map-reduce needed — that helper exists to split a whole work's body text
+ * across multiple model calls, which an abstract never needs). No abstract
+ * at all is an honest FAILED request (a thrown error, matching
+ * `extractClaimsForWork`'s own "no document with a published run" failure
+ * mode above), never a silently-empty success — the caller asked to extract
+ * claims from a source that has nothing to extract from, and that's worth
+ * surfacing as a request-level failure, not a 0-claims "success."
+ */
+export async function extractClaimsForCorpusItem(
+  caller: StructuredCaller,
+  embedder: EmbeddingProvider,
+  ctx: ResearchJobRunContext,
+  corpusItemId: string,
+): Promise<ExtractClaimsOutcome> {
+  const concerns: string[] = [];
+  const item = await repo.loadCorpusItemForExtraction(corpusItemId);
+  if (!item) throw new Error(`Corpus item ${corpusItemId} does not exist.`);
+  if (item.userId !== ctx.request.userId) throw new Error(`Corpus item ${corpusItemId} does not belong to the requesting user.`);
+
+  const abstract = item.abstract?.trim();
+  if (!abstract) {
+    throw new Error(`Corpus item ${corpusItemId} has no abstract to extract from.`);
+  }
+
+  const model = TASK_ROUTES.claim_extraction.preferred.model;
+  const safetyIdentifier = safetyIdentifierFor(ctx.request.userId);
+
+  const newlyInsertedClaims: { id: string; text: string }[] = [];
+
+  if (overSoftCap(ctx.budget) || !canAfford(ctx.budget, CHUNK_COST_ESTIMATE_USD)) {
+    // Budget already exhausted before this single call could even be
+    // attempted — the honest "partial" outcome (nothing extracted this run,
+    // picked back up by a future retry), never a silent 0-claims "full".
+    return { coverage: "partial", note: "Extraction did not start: cost budget reached.", claimsExtracted: 0, concerns: ["Extraction did not start: cost budget reached."] };
+  }
+
+  await ctx.setStage("extracting-claims", { index: 1, total: 1 });
+
+  let extracted: ExtractedClaim[];
+  try {
+    const result = await caller.call({
+      model,
+      schemaName: "claim_extraction",
+      schema: CLAIM_EXTRACTION_RESPONSE_SCHEMA,
+      safetyIdentifier,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      system: CLAIM_EXTRACTION_SYSTEM_PROMPT,
+      input: buildClaimExtractionPrompt({ workTitle: item.title, documentText: abstract }),
+      validate: (parsed) => validateClaimExtraction((parsed as { claims?: unknown }).claims, [abstract]),
+    });
+    await ctx.logUsage({
+      task: "claim_extraction",
+      stage: "extracting-claims",
+      provider: "openai",
+      model: result.model,
+      promptTokens: result.promptTokens,
+      completionTokens: result.completionTokens,
+    });
+    extracted = result.data;
+  } catch (err) {
+    // Same zero-tolerance-grounding posture as `extractOneChunk` above:
+    // exhausted retries on a fabricated/invalid response means the WHOLE
+    // abstract's extraction is untrustworthy — drop it entirely, never
+    // repair or guess.
+    const message = err instanceof Error ? err.message : String(err);
+    const concern = `Abstract extraction dropped: extraction failed validation after retries (${message.slice(0, 200)}).`;
+    return { coverage: "full", note: concern, claimsExtracted: 0, concerns: [concern] };
+  }
+
+  const capped = extracted.slice(0, MAX_CLAIMS_FOR_ABSTRACT);
+  if (extracted.length > capped.length) {
+    concerns.push(`Extraction returned ${extracted.length} claim(s); capped at ${MAX_CLAIMS_FOR_ABSTRACT} for a single-abstract source.`);
+  }
+
+  let droppedForExcerptReverification = 0;
+  for (const claim of capped) {
+    // Recompute the literal-substring check directly against the abstract
+    // text — the same "second, independent verification right before
+    // insert" discipline as `extractOneChunk`'s `locateExcerptBlock`/
+    // `buildAnchor` pair, simplified here since there is only one possible
+    // "block" (the whole abstract) rather than several to disambiguate
+    // between.
+    if (!abstract.includes(claim.supportingExcerpt)) {
+      droppedForExcerptReverification += 1;
+      continue;
+    }
+
+    const claimId = await repo.insertResearchClaimForCorpusItem({
+      userId: item.userId,
+      corpusItemId: item.corpusItemId,
+      claimText: claim.text,
+      claimNature: claim.nature,
+      confidence: claim.confidence,
+      section: claim.section,
+      supportingExcerpt: claim.supportingExcerpt,
+      contentHash: claimContentHash(claim.text),
+      promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION,
+    });
+    // Dedup hit (claimId null) — this exact claim already exists from a
+    // prior run of this same job; scoring/loci/embedding already exist for
+    // it too, matching `extractClaimsForWork`'s own dedup-skip discipline.
+    if (!claimId) continue;
+
+    const scores = scoreBothDimensions(claim.text);
+    if (scores.length > 0) {
+      await repo.insertClaimScores(
+        scores.map((s) => ({ claimId, dimension: s.dimension, score: s.score, label: s.label, tier: s.tier, signals: s.signals, scorerVersion: CLAIM_SCORER_VERSION })),
+      );
+    }
+
+    // Locus harvest reuses `harvestLoci` verbatim via a synthetic BlockMeta
+    // standing in for "the whole abstract" — there is no real text_block to
+    // harvest footnote/citation context from (a corpus item has neither),
+    // so only the "excerpt" and "block" origins can ever fire here.
+    const loci = harvestLoci({
+      excerpt: claim.supportingExcerpt,
+      block: { id: `corpus-abstract:${item.corpusItemId}`, pageId: `corpus-abstract:${item.corpusItemId}`, kind: "abstract", text: abstract },
+      footnoteTextsByPage: new Map(),
+      citationTextsByBlock: new Map(),
+    });
+    if (loci.length > 0) {
+      await repo.insertClaimLoci(loci.map((l) => ({ ...l, claimId })));
+    }
+
+    newlyInsertedClaims.push({ id: claimId, text: claim.text });
+  }
+  if (droppedForExcerptReverification > 0) {
+    concerns.push(`${droppedForExcerptReverification} claim(s) dropped — supportingExcerpt did not re-verify against the abstract text.`);
+  }
+
+  await embedNewlyInsertedClaims(embedder, ctx, newlyInsertedClaims, concerns);
+
+  // One abstract, always sent whole — coverage is honestly "full" regardless
+  // of how many claims came back (even zero, e.g. every candidate dropped
+  // for excerpt re-verification): the source text itself was covered in
+  // full, unlike `extractClaimsForWork`'s multi-chunk map-reduce where
+  // "full" specifically means "every section got a chunk."
+  const note = concerns.length > 0 ? concerns.join(" | ").slice(0, 2000) : null;
+  return { coverage: "full", note, claimsExtracted: newlyInsertedClaims.length, concerns };
+}
+
+/** Real-provider wrapper wired into the worker's queue handler. Dispatches
+ *  on the canonical `@ice/claims` scope contract (D-25-14's fix for the
+ *  web/worker scope-shape mismatch) — `{workId}` runs the uploaded-work
+ *  path, `{corpusItemId}` runs the abstract-source path above. */
 export async function extractClaims(ctx: ResearchJobRunContext): Promise<ResearchJobOutcome> {
   const scope = parseExtractClaimsScope(ctx.request.scope);
   if (!scope) {
-    // Corpus-item abstract-path extraction (28.2) and any malformed scope
-    // both land here as an honest, typed failure — never a silent no-op.
-    // TODO(Phase 28.2): implement the corpus_item abstract-scoped path.
-    throw new Error('extract_claims scope must be {"workId": string} — the corpus-item abstract-source path is not yet implemented (Phase 28.2).');
+    if (isLegacyWorkIdsArrayScope(ctx.request.scope)) {
+      // A `research_job_request` row dispatched before D-25-14's fix — the
+      // web app used to write `{workIds: [workId]}` (plural, array) here,
+      // which this parser has never accepted. Distinguished from a generic
+      // unrecognized shape so a stale queued/failed row from before the fix
+      // is explained plainly rather than misdiagnosed (this exact confusion
+      // is what surfaced D-25-14 in the first place: the old fallback
+      // message below blamed an unrelated unimplemented feature).
+      throw new Error(
+        "extract_claims scope uses an unrecognized, pre-fix dispatch shape ({workIds: [...]}) — this request predates the extract_claims scope-shape fix. Re-run extraction from the project overview or Corpus page to dispatch a valid request.",
+      );
+    }
+    throw new Error('extract_claims scope must be {"workId": string} or {"corpusItemId": string}.');
   }
   const caller = new OpenAIResponsesClient();
   const embedder = resolveEmbeddingProvider();
-  const outcome = await extractClaimsForWork(caller, embedder, ctx, scope.workId);
+  const outcome = isExtractClaimsWorkScope(scope)
+    ? await extractClaimsForWork(caller, embedder, ctx, scope.workId)
+    : await extractClaimsForCorpusItem(caller, embedder, ctx, scope.corpusItemId);
   return { coverage: outcome.coverage, note: outcome.note };
 }

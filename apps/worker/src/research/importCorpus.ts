@@ -1,3 +1,4 @@
+import { parseImportCorpusScope, type ImportCorpusItemRequest, type ImportCorpusScope } from "@ice/claims";
 import { isCorpusProvider, lookupCorpusItemById, normalizeCorpusItem, type CorpusProvider } from "@ice/research";
 import * as repo from "./repository";
 import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
@@ -10,39 +11,23 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  * here calls `ctx.logUsage()` because nothing here spends against the
  * research budget.
  *
- * Scope shape: `{ projectId?: string, items: [{ provider, externalId }] }`.
- * For each item: fetch its full metadata by id from its own provider,
- * normalize + dedup-upsert into `research_corpus_item` (never a fabricated
- * field — see `normalizeCorpusItem`'s own anti-hallucination doc comment),
- * best-effort READ-ONLY match against the shared `bibliographic_record`
- * catalog by DOI (no creation this lane), and — when `projectId` is present
- * — link the item into that project as a `corpus_item` member. Every
- * outcome (imported / already-in-corpus / not-found / failed) is recorded
- * per-item in the job's `note`, never silently dropped.
+ * Scope shape: `{ projectId?: string, items: [{ provider, externalId }] }`
+ * (`ImportCorpusScope`/`parseImportCorpusScope`, the canonical `@ice/claims`
+ * scope contract, Phase 30 fix lane D-25-14 — re-exported here so this
+ * file's own existing consumers/tests keep importing from `./importCorpus`
+ * unchanged). For each item: fetch its full metadata by id from its own
+ * provider, normalize + dedup-upsert into `research_corpus_item` (never a
+ * fabricated field — see `normalizeCorpusItem`'s own anti-hallucination doc
+ * comment), best-effort READ-ONLY match against the shared
+ * `bibliographic_record` catalog by DOI (no creation this lane), and — when
+ * `projectId` is present — link the item into that project as a
+ * `corpus_item` member. Every outcome (imported / already-in-corpus /
+ * not-found / failed) is recorded per-item in the job's `note`, never
+ * silently dropped.
  */
 
-export interface ImportCorpusItemRequest {
-  provider: string;
-  externalId: string;
-}
-
-export interface ImportCorpusScope {
-  projectId?: string;
-  items: ImportCorpusItemRequest[];
-}
-
-export function parseImportCorpusScope(scope: unknown): ImportCorpusScope | null {
-  const s = scope as { projectId?: unknown; items?: unknown } | null;
-  if (!s || !Array.isArray(s.items) || s.items.length === 0) return null;
-  const items: ImportCorpusItemRequest[] = [];
-  for (const raw of s.items) {
-    const item = raw as { provider?: unknown; externalId?: unknown } | null;
-    if (!item || typeof item.provider !== "string" || typeof item.externalId !== "string" || !item.externalId.trim()) return null;
-    items.push({ provider: item.provider, externalId: item.externalId });
-  }
-  const projectId = typeof s.projectId === "string" && s.projectId.length > 0 ? s.projectId : undefined;
-  return { projectId, items };
-}
+export { parseImportCorpusScope };
+export type { ImportCorpusItemRequest, ImportCorpusScope };
 
 export interface ImportCorpusOutcome extends ResearchJobOutcome {
   imported: number;

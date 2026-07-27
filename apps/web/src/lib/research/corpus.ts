@@ -41,6 +41,12 @@ export interface CorpusItemRow {
   url: string | null;
   venue: string | null;
   createdAt: Date;
+  /** Whether this item's provider payload included an abstract — the only
+   *  source text `extract_claims`'s corpus-item path can ever cite from
+   *  (Phase 30 fix lane, D-25-13). The Corpus page uses this to disable/hide
+   *  its "Extract claims" affordance honestly rather than let a dispatch
+   *  fail server-side on an item with nothing to extract from. */
+  hasAbstract: boolean;
 }
 
 /** Owner-scoped by BOTH the project (via `getOwnedResearchProject`) and the
@@ -63,6 +69,7 @@ export async function listCorpusItemsForProject(userId: string, projectId: strin
       doi: researchCorpusItems.doi,
       url: researchCorpusItems.url,
       venue: researchCorpusItems.venue,
+      abstract: researchCorpusItems.abstract,
       createdAt: researchProjectMembers.createdAt,
     })
     .from(researchProjectMembers)
@@ -75,7 +82,10 @@ export async function listCorpusItemsForProject(userId: string, projectId: strin
       ),
     )
     .orderBy(desc(researchProjectMembers.createdAt));
-  return rows as CorpusItemRow[];
+  // The raw abstract text itself is never returned to the client — this
+  // page never renders it, only whether extraction has something to work
+  // with (`hasAbstract`).
+  return rows.map(({ abstract, ...rest }) => ({ ...rest, hasAbstract: Boolean(abstract && abstract.trim()) })) as CorpusItemRow[];
 }
 
 export interface ImportCorpusItemInput {

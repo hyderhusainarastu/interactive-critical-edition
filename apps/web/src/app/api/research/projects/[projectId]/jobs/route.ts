@@ -3,15 +3,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { dispatchImportCorpusJob } from "@/lib/research/corpus";
 import { dispatchGenerateHypothesesJob } from "@/lib/research/hypotheses";
-import { dispatchExtractClaimsJob, dispatchSynthesizeChamberJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
+import { dispatchExtractClaimsJob, dispatchExtractClaimsJobForCorpusItem, dispatchSynthesizeChamberJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
 
 const postSchema = z.discriminatedUnion("jobType", [
-  z.object({
-    jobType: z.literal("extract_claims"),
-    workId: z.string().uuid(),
-    confirm: z.boolean().default(false),
-  }),
+  z
+    .object({
+      jobType: z.literal("extract_claims"),
+      // Exactly one of workId/corpusItemId — the same XOR the worker's
+      // `research_claim_exactly_one_source` CHECK enforces at the DB level
+      // (Phase 30 fix lane, D-25-13: the corpus-item abstract-source path).
+      workId: z.string().uuid().optional(),
+      corpusItemId: z.string().uuid().optional(),
+      confirm: z.boolean().default(false),
+    })
+    .refine((d) => Boolean(d.workId) !== Boolean(d.corpusItemId), { message: "Exactly one of workId or corpusItemId is required." }),
   z.object({
     jobType: z.literal("synthesize_chamber"),
     clusterId: z.string().uuid(),
@@ -69,7 +75,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   }
 
   if (parsed.data.jobType === "extract_claims") {
-    const result = await dispatchExtractClaimsJob(userId, projectId, parsed.data.workId, parsed.data.confirm);
+    const result = parsed.data.workId
+      ? await dispatchExtractClaimsJob(userId, projectId, parsed.data.workId, parsed.data.confirm)
+      : await dispatchExtractClaimsJobForCorpusItem(userId, projectId, parsed.data.corpusItemId!, parsed.data.confirm);
     switch (result.action) {
       case "not_found":
         return NextResponse.json({ error: "Not found" }, { status: 404 });

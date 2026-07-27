@@ -45,7 +45,12 @@ export default async function ResearchClaimPermalinkPage({ params }: { params: P
         <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">{NATURE_LABEL[claim.claimNature] ?? claim.claimNature}</span>
         <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">Confidence: {claim.confidence}</span>
         <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">{claim.section}</span>
-        {claim.workTitle && <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">{claim.workTitle}</span>}
+        {(claim.workTitle ?? claim.corpusItemTitle) && (
+          <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5">{claim.workTitle ?? claim.corpusItemTitle}</span>
+        )}
+        {claim.sourceScope === "abstract" && (
+          <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-[var(--color-text-muted)]">From abstract</span>
+        )}
       </div>
 
       {/* Excerpt — a literal, re-verified substring of the source text

@@ -11,6 +11,7 @@ import {
   computeHypothesisRunHash,
   computeIdempotencyKey,
   noveltyFor,
+  parseGenerateHypothesesScope,
   validateHypothesisResponse,
   type HypothesisConflictInput,
   type HypothesisResult,
@@ -56,19 +57,6 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  *     dedup that still burns tokens on every re-run.
  */
 
-interface GenerateHypothesesScope {
-  projectId: string;
-  question: string | null;
-  maxHypotheses?: number;
-}
-
-function parseGenerateHypothesesScope(scope: unknown): GenerateHypothesesScope | null {
-  const s = scope as { projectId?: unknown; question?: unknown; maxHypotheses?: unknown } | null;
-  if (!s || typeof s.projectId !== "string" || s.projectId.length === 0) return null;
-  const question = typeof s.question === "string" && s.question.trim().length > 0 ? s.question.trim() : null;
-  const maxHypotheses = typeof s.maxHypotheses === "number" && Number.isFinite(s.maxHypotheses) ? s.maxHypotheses : undefined;
-  return { projectId: s.projectId, question, maxHypotheses };
-}
 
 /** Same shape both the web dispatcher (`apps/web/src/lib/research/hypotheses.ts`)
  *  and this handler build the idempotency key from — exported so both sides
@@ -379,14 +367,21 @@ export async function generateHypothesesForProject(
 
           await repo.insertResearchHypothesisSources(hypothesisId, h.sourceConflictIds);
 
+          // `ClaimJudgeDetail.workId` is nullable (Phase 30 fix lane,
+          // D-25-13: a corpus-item-sourced claim has none) — only work-
+          // sourced conflicts contribute to "supporting works" here,
+          // unchanged from before that widening; a corpus-item-sourced
+          // conflict simply isn't tracked as hypothesis support yet (out of
+          // this lane's scope, not a regression — such a claim could never
+          // reach this map before either).
           const workIdsTouched = new Set<string>();
           for (const relId of h.sourceConflictIds) {
             const row = cappedConflicts.find((c) => c.id === relId);
             if (!row) continue;
             const loClaim = claimDetails.get(row.claimLoId);
             const hiClaim = claimDetails.get(row.claimHiId);
-            if (loClaim) workIdsTouched.add(loClaim.workId);
-            if (hiClaim) workIdsTouched.add(hiClaim.workId);
+            if (loClaim?.workId) workIdsTouched.add(loClaim.workId);
+            if (hiClaim?.workId) workIdsTouched.add(hiClaim.workId);
           }
           if (workIdsTouched.size > 0) {
             await repo.insertResearchHypothesisSupport(

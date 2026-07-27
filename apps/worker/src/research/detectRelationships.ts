@@ -9,6 +9,7 @@ import {
   computeRelationshipBasisHash,
   locusPairs,
   pairwiseCosineUpperTriangular,
+  parseDetectRelationshipsScope,
   sectionPairs,
   unionCandidates,
   validateJudgeResponse,
@@ -22,7 +23,7 @@ import {
 import { AnthropicTextJsonClient, OpenAIResponsesClient, TASK_ROUTES, resolveEmbeddingProvider, safetyIdentifierFor, type EmbeddingProvider } from "@ice/ai-adapters";
 import { canAfford, overSoftCap, type StructuredCaller } from "@ice/research";
 import * as repo from "./repository";
-import { loadCitationEngagementProfiles, loadWorkNormalizedTitles, resolveEngagement } from "./citationEngagement";
+import { loadCitationEngagementDoisForWorks, loadCitationEngagementProfiles, loadWorkNormalizedTitles, resolveEngagementForClaims } from "./citationEngagement";
 import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
 
 /**
@@ -54,14 +55,18 @@ import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
  * `claim_relationship_mechanism_matches_valence` CHECK outright.
  */
 
-interface DetectRelationshipsScope {
-  projectId: string;
-}
-
-function parseDetectRelationshipsScope(scope: unknown): DetectRelationshipsScope | null {
-  const s = scope as { projectId?: unknown } | null;
-  if (s && typeof s.projectId === "string" && s.projectId.length > 0) return { projectId: s.projectId };
-  return null;
+/** Opaque cross-SOURCE grouping key for one claim (Phase 30 fix lane,
+ *  D-25-13): `work:<id>` or `corpus:<id>`, exactly one of which applies per
+ *  the `research_claim_exactly_one_source` CHECK. Every retrieval channel
+ *  below that used to compare `.workId` for "is this a different source"
+ *  now compares this instead, so a corpus-item claim participates in
+ *  candidate pairing on equal footing with a work claim — cross-work pairs
+ *  behave exactly as before (this is just `work:<id>` either way), work<->
+ *  corpus-item pairs are now included, and two claims from the SAME corpus
+ *  item are excluded the same way two claims from the same work always
+ *  were. */
+export function claimSourceKey(claim: { workId: string | null; corpusItemId: string | null }): string {
+  return claim.workId ? `work:${claim.workId}` : `corpus:${claim.corpusItemId}`;
 }
 
 /** `author:work-slug:locus` → `author:work-slug` (drops the specific locus,
@@ -81,13 +86,17 @@ export function deriveSectionKey(locusKey: string): string {
  * Self-contained BM25 candidate channel over a claim population (pure,
  * exported for unit testing without a DB). One `Bm25Index` over every
  * claim's text; each claim queries the index for its own top matches
- * (`RETRIEVAL_THRESHOLDS.bm25TopK`), keeping only cross-work matches at or
- * above `bm25MinScore`. BM25 relevance is directionally asymmetric
- * (`query(A)` finding `B` can score differently than `query(B)` finding
- * `A`), so both directions are computed and the MAX of the two scores is
- * kept per unordered pair — one `ChannelPair` per pair, not two.
+ * (`RETRIEVAL_THRESHOLDS.bm25TopK`), keeping only cross-SOURCE matches at or
+ * above `bm25MinScore` — `sourceKey` (`claimSourceKey`'s output) rather than
+ * a raw `workId`, so a work claim vs. a corpus-item claim counts as
+ * cross-source too, and two claims from the SAME corpus item are excluded
+ * exactly like two claims from the same work always were (Phase 30 fix
+ * lane, D-25-13). BM25 relevance is directionally asymmetric (`query(A)`
+ * finding `B` can score differently than `query(B)` finding `A`), so both
+ * directions are computed and the MAX of the two scores is kept per
+ * unordered pair — one `ChannelPair` per pair, not two.
  */
-export function computeBm25CandidatePairs(claims: { id: string; workId: string; claimText: string }[]): ChannelPair[] {
+export function computeBm25CandidatePairs(claims: { id: string; sourceKey: string; claimText: string }[]): ChannelPair[] {
   if (claims.length < 2) return [];
   const index = new Bm25Index(claims.map((c) => c.claimText));
   const bestByPair = new Map<string, number>();
@@ -98,7 +107,7 @@ export function computeBm25CandidatePairs(claims: { id: string; workId: string; 
       if (match.docIndex === i) continue; // a claim always matches its own text most strongly — exclude self
       if (match.score < RETRIEVAL_THRESHOLDS.bm25MinScore) continue;
       const other = claims[match.docIndex];
-      if (other.workId === claims[i].workId) continue; // cross-work only
+      if (other.sourceKey === claims[i].sourceKey) continue; // cross-source only
 
       const [loId, hiId] = [claims[i].id, other.id].sort();
       const key = `${loId} ${hiId}`;
@@ -185,12 +194,20 @@ export interface JudgeAnthropicCaller {
  * engagement context is only safe "when engagement exists" (a citation, not
  * merely a shared reference), so these two omit it entirely rather than
  * render an inaccurate claim.
+ *
+ * `loWorkId`/`hiWorkId` are nullable (Phase 30 fix lane, D-25-13): a
+ * corpus-item-sourced claim has no `workId` at all. The comparison below
+ * still resolves correctly without special-casing that — `citingWorkId` is
+ * always a real work id (only a work can be the citer;
+ * `resolveWorkCorpusItemEngagement` in `citationEngagement.ts` never
+ * derives the reverse direction), so it can only ever equal whichever side
+ * actually has a non-null `workId`, and never equals `null`.
  */
 export function buildJudgeEngagementContext(
   engagement: string,
   engagementEvidence: Record<string, unknown> | null,
-  loWorkId: string,
-  hiWorkId: string,
+  loWorkId: string | null,
+  hiWorkId: string | null,
 ): { context?: EngagementContext; swapToHiFirst: boolean } {
   if (engagement === "direct_citation") {
     const citingWorkId = typeof engagementEvidence?.citingWorkId === "string" ? (engagementEvidence.citingWorkId as string) : null;
@@ -512,18 +529,21 @@ export async function detectRelationshipsForProject(
   const project = await repo.loadResearchProjectForUser(projectId, ctx.request.userId);
   if (!project) throw new Error(`Research project ${projectId} does not belong to the requesting user, or does not exist.`);
 
-  const workIds = await repo.loadProjectWorkIds(projectId);
-  // TODO(Phase 28.2+): fold corpus-item members' claims into scope once
-  // corpus-item-sourced extraction exists (extractClaims.ts's own typed
-  // TODO) — research_claim has no corpus_item_id rows to load yet.
+  // Phase 30 fix lane (D-25-13): scope now folds in BOTH work AND
+  // corpus-item project members — `loadScopedClaimsForRelationshipDetection`
+  // returns the owner-scoped union of claims sourced from either.
+  const [workIds, corpusItemIds] = await Promise.all([repo.loadProjectWorkIds(projectId), repo.loadProjectCorpusItemIds(projectId)]);
 
   await ctx.setStage("loading-claims");
-  const claims = await repo.loadScopedClaimsForRelationshipDetection(ctx.request.userId, workIds);
+  const claims = await repo.loadScopedClaimsForRelationshipDetection(ctx.request.userId, workIds, corpusItemIds);
+  // Every retrieval channel below excludes same-SOURCE pairs (never same-work
+  // AND never same-corpus-item) via this opaque key, computed once here.
+  const claimsWithSource = claims.map((c) => ({ ...c, sourceKey: claimSourceKey(c) }));
 
   let candidatesFound = 0;
   let candidatesPersisted = 0;
   let channelCounts = { dense: 0, bm25: 0, locus: 0, locusSection: 0 };
-  let stage1Note = `Only ${claims.length} claim(s) in scope across ${workIds.length} work(s) — nothing new to compare.`;
+  let stage1Note = `Only ${claims.length} claim(s) in scope across ${workIds.length} work(s) and ${corpusItemIds.length} corpus item(s) — nothing new to compare.`;
 
   // Stage 1 (dense/bm25/locus retrieval + candidate persistence) needs at
   // least two claims to find a pair at all — but the JUDGE stage below
@@ -543,19 +563,19 @@ export async function detectRelationshipsForProject(
     // pairs against a meaningless cutoff, which is exactly what this
     // assertion exists to prevent.
     assertThresholdsCalibratedFor(embedder.model, RETRIEVAL_THRESHOLDS);
-    const embeddingsByClaim = await repo.loadClaimEmbeddingsForModel(claims.map((c) => c.id), embedder.model);
-    const embedded = claims.filter((c) => embeddingsByClaim.has(c.id));
+    const embeddingsByClaim = await repo.loadClaimEmbeddingsForModel(claimsWithSource.map((c) => c.id), embedder.model);
+    const embedded = claimsWithSource.filter((c) => embeddingsByClaim.has(c.id));
     if (embedded.length >= 2) {
       const vectors = embedded.map((c) => embeddingsByClaim.get(c.id)!);
       const cosinePairs = pairwiseCosineUpperTriangular(vectors, RETRIEVAL_THRESHOLDS.denseMin);
       densePairs = cosinePairs
-        .filter((p) => embedded[p.i].workId !== embedded[p.j].workId)
+        .filter((p) => embedded[p.i].sourceKey !== embedded[p.j].sourceKey)
         .map((p) => {
           const [loId, hiId] = [embedded[p.i].id, embedded[p.j].id].sort();
           return { loId, hiId, channel: "dense", score: p.similarity };
         });
     } else {
-      concerns.push(`Dense retrieval skipped: only ${embedded.length} of ${claims.length} claim(s) have an embedding under the active model "${embedder.model}".`);
+      concerns.push(`Dense retrieval skipped: only ${embedded.length} of ${claimsWithSource.length} claim(s) have an embedding under the active model "${embedder.model}".`);
     }
   } else {
     concerns.push("No embedding provider configured — dense retrieval skipped; claims without embeddings still participate via BM25/locus.");
@@ -563,14 +583,18 @@ export async function detectRelationshipsForProject(
 
   // --- BM25 channel (self-contained, no calibration needed) ---
   await ctx.setStage("bm25-retrieval");
-  const bm25Pairs = computeBm25CandidatePairs(claims);
+  const bm25Pairs = computeBm25CandidatePairs(claimsWithSource);
 
-  // --- Locus channels (exact locus + same-work section, both $0/deterministic) ---
+  // --- Locus channels (exact locus + same-SOURCE section, both $0/deterministic) ---
   await ctx.setStage("locus-retrieval");
-  const workIdByClaim = new Map(claims.map((c) => [c.id, c.workId]));
+  const sourceKeyByClaim = new Map(claimsWithSource.map((c) => [c.id, c.sourceKey]));
   const lociRows = await repo.loadDistinctClaimLoci(claims.map((c) => c.id));
-  const localityEntries: ClaimLocus[] = lociRows.map((r) => ({ claimId: r.claimId, workId: workIdByClaim.get(r.claimId)!, locusKey: r.locusKey }));
-  const sectionEntries: ClaimLocus[] = lociRows.map((r) => ({ claimId: r.claimId, workId: workIdByClaim.get(r.claimId)!, sectionKey: deriveSectionKey(r.locusKey) }));
+  // `ClaimLocus.workId` is `@ice/claims`'s opaque cross-work grouping field
+  // (see `locus.ts`'s own doc comment) — fed `sourceKey` here rather than a
+  // real `work.id`, which is exactly what makes the exclusion cross-SOURCE
+  // instead of cross-work without needing any change to that pure package.
+  const localityEntries: ClaimLocus[] = lociRows.map((r) => ({ claimId: r.claimId, workId: sourceKeyByClaim.get(r.claimId)!, locusKey: r.locusKey }));
+  const sectionEntries: ClaimLocus[] = lociRows.map((r) => ({ claimId: r.claimId, workId: sourceKeyByClaim.get(r.claimId)!, sectionKey: deriveSectionKey(r.locusKey) }));
   const localityPairs = locusPairs(localityEntries);
   const sectionPairsResult = sectionPairs(sectionEntries);
 
@@ -584,15 +608,17 @@ export async function detectRelationshipsForProject(
   // --- Citation-graph engagement (deterministic pre-join, $0) ---
   await ctx.setStage("citation-engagement");
   const claimById = new Map(claims.map((c) => [c.id, c]));
-  const [engagementProfiles, normalizedTitles] = await Promise.all([
+  const [engagementProfiles, normalizedTitles, workCitedDois, corpusItemDois] = await Promise.all([
     loadCitationEngagementProfiles(workIds),
     loadWorkNormalizedTitles(workIds),
+    loadCitationEngagementDoisForWorks(workIds),
+    repo.loadCorpusItemDois(corpusItemIds),
   ]);
 
   const toInsert: repo.NewClaimPairCandidate[] = capped.map((pair) => {
     const loClaim = claimById.get(pair.loId)!;
     const hiClaim = claimById.get(pair.hiId)!;
-    const { engagement, evidence } = resolveEngagement(loClaim.workId, hiClaim.workId, engagementProfiles, normalizedTitles);
+    const { engagement, evidence } = resolveEngagementForClaims(loClaim, hiClaim, engagementProfiles, normalizedTitles, workCitedDois, corpusItemDois);
     return {
       claimLoId: pair.loId,
       claimHiId: pair.hiId,

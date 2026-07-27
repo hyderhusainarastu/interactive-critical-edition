@@ -74,3 +74,15 @@ export const HARD_STOP_MAX_CHUNKS = 50;
  */
 export const MAX_HYPOTHESES_PER_REQUEST = Number(process.env.CLAIMS_MAX_HYPOTHESES_PER_REQUEST ?? 5);
 export const MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT = Number(process.env.CLAIMS_MAX_CONFLICTS_FOR_HYPOTHESIS_CONTEXT ?? 30);
+
+/**
+ * `extract_claims`'s corpus-item (abstract-source) path cap (Phase 28.2/30
+ * fix lane). An abstract is a few hundred words at most — nowhere near a
+ * full work's body text — so it is always sent as ONE chunk (no
+ * `planExtractionChunks` map-reduce needed), and the claim count is capped
+ * well below the full-text prompt's own 6-10 target range rather than
+ * pushing a short abstract to yield that many claims, which would risk the
+ * model padding out claims that aren't really there (the same
+ * anti-hallucination posture as everywhere else in this pipeline).
+ */
+export const MAX_CLAIMS_FOR_ABSTRACT = Number(process.env.CLAIMS_MAX_CLAIMS_FOR_ABSTRACT ?? 6);

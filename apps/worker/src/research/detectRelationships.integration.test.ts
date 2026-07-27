@@ -862,19 +862,36 @@ describe.skipIf(!hasDb)("detect_relationships judge stage (integration)", () => 
 describe("computeBm25CandidatePairs (unit, no DB)", () => {
   it("excludes same-work pairs even at perfect BM25 similarity", () => {
     const claims = [
-      { id: "a", workId: "w1", claimText: "practical wisdom and virtue" },
-      { id: "b", workId: "w1", claimText: "practical wisdom and virtue" },
+      { id: "a", sourceKey: "work:w1", claimText: "practical wisdom and virtue" },
+      { id: "b", sourceKey: "work:w1", claimText: "practical wisdom and virtue" },
     ];
     expect(computeBm25CandidatePairs(claims)).toEqual([]);
   });
 
   it("finds a cross-work pair with real vocabulary overlap", () => {
     const claims = [
-      { id: "a", workId: "w1", claimText: "the incontinent agent acts against better judgment" },
-      { id: "b", workId: "w2", claimText: "an incontinent agent knowingly acts against their own better judgment" },
-      { id: "c", workId: "w3", claimText: "photosynthesis in green plants requires chlorophyll" },
+      { id: "a", sourceKey: "work:w1", claimText: "the incontinent agent acts against better judgment" },
+      { id: "b", sourceKey: "work:w2", claimText: "an incontinent agent knowingly acts against their own better judgment" },
+      { id: "c", sourceKey: "work:w3", claimText: "photosynthesis in green plants requires chlorophyll" },
     ];
     const pairs = computeBm25CandidatePairs(claims);
+    expect(pairs.some((p) => [p.loId, p.hiId].sort().join(" ") === ["a", "b"].sort().join(" "))).toBe(true);
+    expect(pairs.every((p) => ![p.loId, p.hiId].includes("c"))).toBe(true);
+  });
+
+  it("excludes same-corpus-item pairs, and includes a work<->corpus-item pair (D-25-13)", () => {
+    const sameItem = [
+      { id: "a", sourceKey: "corpus:c1", claimText: "practical wisdom and virtue" },
+      { id: "b", sourceKey: "corpus:c1", claimText: "practical wisdom and virtue" },
+    ];
+    expect(computeBm25CandidatePairs(sameItem)).toEqual([]);
+
+    const crossSource = [
+      { id: "a", sourceKey: "work:w1", claimText: "the incontinent agent acts against better judgment" },
+      { id: "b", sourceKey: "corpus:c1", claimText: "an incontinent agent knowingly acts against their own better judgment" },
+      { id: "c", sourceKey: "work:w3", claimText: "photosynthesis in green plants requires chlorophyll" },
+    ];
+    const pairs = computeBm25CandidatePairs(crossSource);
     expect(pairs.some((p) => [p.loId, p.hiId].sort().join(" ") === ["a", "b"].sort().join(" "))).toBe(true);
     expect(pairs.every((p) => ![p.loId, p.hiId].includes("c"))).toBe(true);
   });

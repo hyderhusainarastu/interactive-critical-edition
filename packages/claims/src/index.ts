@@ -39,6 +39,7 @@ export * from "./prompts/hypothesis";
 export * from "./prompts/researchGap";
 
 export * from "./jobs/planResearchJob";
+export * from "./jobs/scope";
 
 export * from "./eval/metrics";
 export * from "./eval/split";

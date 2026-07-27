@@ -3,6 +3,8 @@ import {
   CLAIM_EXTRACTION_PROMPT_VERSION,
   EVIDENCE_CHAMBER_PROMPT_VERSION,
   HARD_STOP_MAX_CHUNKS,
+  assertValidScope,
+  parseExtractClaimsScope,
   planExtractionChunks,
   planResearchJob,
   TAXONOMY_VERSION_CLAIMS,
@@ -18,6 +20,7 @@ import {
   enqueueSynthesizeResearch,
   pages,
   processingRuns,
+  researchCorpusItems,
   researchJobRequests,
   researchProjectMembers,
   textBlocks,
@@ -122,7 +125,18 @@ export async function dispatchExtractClaimsJob(
   const plan = planExtractionChunks(blocks);
   if (plan.chunks.length === 0) return { action: "no_extractable_text", reason: "This work's published edition has no body text to extract claims from." };
 
-  const scope = { workIds: [workId] };
+  // `planningScope` feeds ONLY `planResearchJob`'s idempotency-key hash
+  // (`@ice/claims`'s own `ResearchJobScope` shape, `{workIds, detail}`) — it
+  // is NEVER what gets written to `research_job_request.scope` itself. Those
+  // two used to be conflated (the same object, reused for both purposes),
+  // which is exactly what D-25-14 was: the worker's `extractClaims()` parses
+  // the canonical `@ice/claims` scope contract (`{workId}` singular), so a
+  // stored `{workIds: [...]}` (plural, array) silently failed to parse and
+  // fell into a misleading "corpus-item path not implemented" error for an
+  // ordinary uploaded-work extraction. `dbScope` below is the ACTUAL stored
+  // value, built and validated against that same canonical contract.
+  const planningScope = { workIds: [workId] };
+  const dbScope = assertValidScope(parseExtractClaimsScope({ workId }), "extract_claims");
   const versions = { taxonomyVersion: TAXONOMY_VERSION_CLAIMS, promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION };
 
   // `planResearchJob` compares each existing request's OWN stored
@@ -144,7 +158,7 @@ export async function dispatchExtractClaimsJob(
   const estimatedCostUsd = plan.chunks.length * CHUNK_COST_ESTIMATE_USD;
   const jobPlan: ResearchJobPlan = planResearchJob({
     jobType: "claim_extraction",
-    scope,
+    scope: planningScope,
     versions,
     existingRequests,
     estimatedUnits: plan.chunks.length,
@@ -164,7 +178,7 @@ export async function dispatchExtractClaimsJob(
     .values({
       userId,
       jobType: "extract_claims",
-      scope,
+      scope: dbScope,
       idempotencyKey: jobPlan.idempotencyKey,
       status: "queued",
       estimatedCostUsd,
@@ -198,6 +212,111 @@ export async function dispatchExtractClaimsJob(
   return { action: "queued", requestId: created.id, estimatedCostUsd };
 }
 
+/**
+ * The "Extract claims" action a project's Corpus page offers per imported
+ * corpus-item member (Phase 30 fix lane, D-25-13 — the sibling of
+ * `dispatchExtractClaimsJob` above for a corpus item instead of an uploaded
+ * work). Always exactly ONE unit (a single abstract, one model call) — the
+ * `dispatchSynthesizeChamberJob` precedent — so `needs_confirmation` is
+ * structurally unreachable here, but still routed through `planResearchJob`
+ * for the same reuse/conflict protection every other job type gets.
+ */
+export async function dispatchExtractClaimsJobForCorpusItem(
+  userId: string,
+  projectId: string,
+  corpusItemId: string,
+  confirm = false,
+): Promise<DispatchExtractClaimsResult> {
+  const project = await getOwnedResearchProject(userId, projectId, true);
+  if (!project) return { action: "not_found" };
+
+  const [member] = await db
+    .select({ role: researchProjectMembers.role })
+    .from(researchProjectMembers)
+    .where(and(eq(researchProjectMembers.projectId, projectId), eq(researchProjectMembers.corpusItemId, corpusItemId), eq(researchProjectMembers.memberType, "corpus_item")))
+    .limit(1);
+  if (!member) return { action: "not_member", reason: "That corpus item is not a member of this project." };
+  if (member.role === "background") {
+    return { action: "not_member", reason: "Claim extraction runs on central or supporting members, not background context." };
+  }
+
+  const [item] = await db
+    .select({ id: researchCorpusItems.id, abstract: researchCorpusItems.abstract })
+    .from(researchCorpusItems)
+    .where(and(eq(researchCorpusItems.id, corpusItemId), eq(researchCorpusItems.userId, userId)))
+    .limit(1);
+  if (!item) return { action: "not_found" };
+  if (!item.abstract || !item.abstract.trim()) {
+    return { action: "no_extractable_text", reason: "This corpus item has no abstract to extract claims from." };
+  }
+
+  const planningScope = { workIds: [], detail: corpusItemId };
+  const dbScope = assertValidScope(parseExtractClaimsScope({ corpusItemId }), "extract_claims");
+  const versions = { taxonomyVersion: TAXONOMY_VERSION_CLAIMS, promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION };
+
+  const existingWithKeys = await db
+    .select({ id: researchJobRequests.id, status: researchJobRequests.status, idempotencyKey: researchJobRequests.idempotencyKey, createdAt: researchJobRequests.createdAt })
+    .from(researchJobRequests)
+    .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.jobType, "extract_claims")));
+  const existingRequests: ExistingResearchRequest[] = existingWithKeys.map((r) => ({
+    id: r.id,
+    jobType: "claim_extraction",
+    idempotencyKey: r.idempotencyKey,
+    status: mapStatusForPlanner(r.status),
+    requestedAt: r.createdAt,
+  }));
+
+  const estimatedCostUsd = CHUNK_COST_ESTIMATE_USD;
+  const jobPlan: ResearchJobPlan = planResearchJob({
+    jobType: "claim_extraction",
+    scope: planningScope,
+    versions,
+    existingRequests,
+    estimatedUnits: 1,
+    autoApproveMaxUnits: AUTO_APPROVE_MAX_CHUNKS,
+    hardStopMaxUnits: HARD_STOP_MAX_CHUNKS,
+  });
+
+  if (jobPlan.action === "reuse") return { action: "reused", requestId: jobPlan.reusedRequestId };
+  if (jobPlan.action === "conflict") return { action: "conflict", reason: jobPlan.reason };
+  if (jobPlan.action === "needs_confirmation" && !confirm) {
+    return { action: "needs_confirmation", reason: jobPlan.reason, estimatedCostUsd, estimatedUnits: 1 };
+  }
+
+  const requiresConfirmation = jobPlan.action === "needs_confirmation";
+  const [created] = await db
+    .insert(researchJobRequests)
+    .values({
+      userId,
+      jobType: "extract_claims",
+      scope: dbScope,
+      idempotencyKey: jobPlan.idempotencyKey,
+      status: "queued",
+      estimatedCostUsd,
+      requiresConfirmation,
+      confirmedAt: requiresConfirmation ? new Date() : null,
+    })
+    .onConflictDoNothing({
+      target: [researchJobRequests.userId, researchJobRequests.idempotencyKey],
+      where: sql`${researchJobRequests.status} in ('planned', 'queued', 'running')`,
+    })
+    .returning({ id: researchJobRequests.id });
+
+  if (!created) {
+    const [existing] = await db
+      .select({ id: researchJobRequests.id })
+      .from(researchJobRequests)
+      .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.idempotencyKey, jobPlan.idempotencyKey)))
+      .orderBy(desc(researchJobRequests.createdAt))
+      .limit(1);
+    if (existing) return { action: "reused", requestId: existing.id };
+    return { action: "conflict", reason: "Could not create the extraction request; please try again." };
+  }
+
+  await enqueueExtractResearchClaims(created.id);
+  return { action: "queued", requestId: created.id, estimatedCostUsd };
+}
+
 export interface ResearchJobRequestListRow {
   id: string;
   jobType: string;
@@ -216,26 +335,35 @@ export interface ResearchJobRequestListRow {
 
 /**
  * Lists a project's research job requests. `research_job_request` carries no
- * `project_id` column (it's scoped by `scope.workIds` — plan §Schema), so
- * this filters in application code against the project's own member work
- * ids rather than a jsonb containment query — deliberately, per
- * `docs/PROJECT-LOG.md`'s documented drizzle raw-`sql` array pitfall
- * (`ANY($1,$2)` vs `IN`): a single-user-scale row count here makes an
- * in-memory filter both simpler and safer than a jsonb operator this
- * codebase has already been bitten by once. No monetary figures are
- * returned here (Workstream F precedent) — `estimatedCostUsd`/
+ * `project_id` column (plan §Schema), so this filters in application code
+ * against the project's own member work/corpus-item ids rather than a jsonb
+ * containment query — deliberately, per `docs/PROJECT-LOG.md`'s documented
+ * drizzle raw-`sql` array pitfall (`ANY($1,$2)` vs `IN`): a single-user-scale
+ * row count here makes an in-memory filter both simpler and safer than a
+ * jsonb operator this codebase has already been bitten by once. No monetary
+ * figures are returned here (Workstream F precedent) — `estimatedCostUsd`/
  * `actualCostUsd` deliberately are NOT selected; the UI shows stage/
  * progress/coverage only.
+ *
+ * Scope-shape matching (Phase 30 fix lane, D-25-13/D-25-14): `extract_claims`
+ * scopes by the canonical `{workId}`/`{corpusItemId}` singular keys;
+ * `synthesize_chamber`/`generate_hypotheses` scope by `{projectId, ...}`
+ * directly. A THIRD, legacy `{workIds: [...]}` (plural, array) match is kept
+ * here too — not because any *current* dispatcher writes it (D-25-14 fixed
+ * that), but so a `research_job_request` row created before the fix still
+ * shows up in this listing instead of silently vanishing from the project's
+ * job history.
  */
 export async function listResearchJobRequestsForProject(userId: string, projectId: string): Promise<ResearchJobRequestListRow[]> {
   const project = await getOwnedResearchProject(userId, projectId, true);
   if (!project) return [];
-  const memberWorkIds = new Set(
-    (await db.select({ workId: researchProjectMembers.workId }).from(researchProjectMembers).where(eq(researchProjectMembers.projectId, projectId)))
-      .map((r) => r.workId)
-      .filter((id): id is string => id != null),
-  );
-  if (memberWorkIds.size === 0) return [];
+  const memberRows = await db
+    .select({ workId: researchProjectMembers.workId, corpusItemId: researchProjectMembers.corpusItemId })
+    .from(researchProjectMembers)
+    .where(eq(researchProjectMembers.projectId, projectId));
+  const memberWorkIds = new Set(memberRows.map((r) => r.workId).filter((id): id is string => id != null));
+  const memberCorpusItemIds = new Set(memberRows.map((r) => r.corpusItemId).filter((id): id is string => id != null));
+  if (memberWorkIds.size === 0 && memberCorpusItemIds.size === 0) return [];
 
   const rows = await db
     .select({
@@ -259,16 +387,13 @@ export async function listResearchJobRequestsForProject(userId: string, projectI
     .limit(200);
 
   return rows.filter((row) => {
-    const scope = row.scope as { workIds?: unknown; projectId?: unknown } | null;
-    // `extract_claims`/`detect_relationships`/`cluster_debates` scope by
-    // `workIds` (matched against the project's own members below);
-    // `synthesize_chamber` (Phase 27.1) scopes by `{projectId, clusterId}`
-    // directly — a cluster has no `workIds` of its own to match against, so
-    // this OR's a direct `scope.projectId` match rather than forcing every
-    // future job type onto the same `workIds` shape.
+    const scope = row.scope as { workId?: unknown; corpusItemId?: unknown; workIds?: unknown; projectId?: unknown } | null;
     if (scope?.projectId === projectId) return true;
-    const workIds = Array.isArray(scope?.workIds) ? (scope.workIds as unknown[]) : [];
-    return workIds.some((id) => typeof id === "string" && memberWorkIds.has(id));
+    if (typeof scope?.workId === "string" && memberWorkIds.has(scope.workId)) return true;
+    if (typeof scope?.corpusItemId === "string" && memberCorpusItemIds.has(scope.corpusItemId)) return true;
+    // Legacy pre-D-25-14 shape — see this function's own doc comment.
+    const legacyWorkIds = Array.isArray(scope?.workIds) ? (scope.workIds as unknown[]) : [];
+    return legacyWorkIds.some((id) => typeof id === "string" && memberWorkIds.has(id));
   });
 }
 

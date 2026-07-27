@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
-import { db, researchCorpusItems, researchJobRequests, researchProjectMembers, users } from "@ice/db";
+import { db, researchClaims, researchCorpusItems, researchJobRequests, researchProjectMembers, users } from "@ice/db";
 import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
@@ -88,7 +89,11 @@ async function createProjectViaApi(page: Page, title: string): Promise<string> {
 
 /** Seeds an already-imported `research_corpus_item` linked into a project as
  *  a `corpus_item` member — the shape `listCorpusItemsForProject` reads. */
-async function seedCorpusItem(ownerId: string, projectId: string, overrides: { title?: string; externalId?: string } = {}) {
+async function seedCorpusItem(
+  ownerId: string,
+  projectId: string,
+  overrides: { title?: string; externalId?: string; abstract?: string | null; role?: "central" | "supporting" | "background" } = {},
+) {
   const [item] = await db
     .insert(researchCorpusItems)
     .values({
@@ -101,13 +106,34 @@ async function seedCorpusItem(ownerId: string, projectId: string, overrides: { t
       year: 2019,
       doi: null,
       url: "https://example.com/seeded-item",
-      abstract: "A seeded abstract.",
+      abstract: overrides.abstract === undefined ? "A seeded abstract." : overrides.abstract,
       venue: "Journal of Seeded Testing",
       raw: {},
     })
     .returning({ id: researchCorpusItems.id });
-  await db.insert(researchProjectMembers).values({ projectId, memberType: "corpus_item", corpusItemId: item.id, role: "supporting" });
+  await db.insert(researchProjectMembers).values({ projectId, memberType: "corpus_item", corpusItemId: item.id, role: overrides.role ?? "supporting" });
   return item.id;
+}
+
+/** A corpus-item-sourced `research_claim` row (Phase 30 fix lane, D-25-13) —
+ *  seeded directly rather than via a real extraction run (no worker/LLM
+ *  runs in this E2E context, matching the `import_corpus` dispatch test's
+ *  own "verify the queued DB row, don't run the worker" precedent). */
+async function seedCorpusClaim(ownerId: string, corpusItemId: string, claimText: string) {
+  await db.insert(researchClaims).values({
+    userId: ownerId,
+    corpusItemId,
+    anchorState: "unanchored",
+    claimText,
+    claimNature: "interpretive",
+    confidence: "medium",
+    section: "Abstract",
+    sourceScope: "abstract",
+    supportingExcerpt: claimText.slice(0, 20),
+    excerptVerified: true,
+    contentHash: createHash("sha256").update(claimText.toLowerCase()).digest("hex"),
+    promptVersion: "e2e-seed-v1",
+  });
 }
 
 function mockSearchRoute(page: Page) {
@@ -299,8 +325,66 @@ test.describe("Research corpus (Phase 30 fix lane)", () => {
     }
   });
 
-  // Every `research_corpus_item`/`research_project_member`/`research_job_request`
-  // row this file inserts directly cascades from `deleteTestUser(EMAIL)` in
-  // `afterAll` via its own `user_id` FK chain — the `research-monitors.spec.ts`/
-  // `research-corrections.spec.ts` precedent, applies unchanged here.
+  // ---------------------------------------------------------------------------
+  // Corpus-item claim extraction (Phase 30 fix lane, D-25-13/D-25-14) — the
+  // "Extract claims" affordance this page gained alongside the abstract-
+  // source extraction path itself, dispatched for real against
+  // `/api/research/projects/[projectId]/jobs` and verified by reading the
+  // resulting `research_job_request` row back (the same "don't run the
+  // worker, verify the queued DB row" precedent the Import dispatch test
+  // above already uses) — including that the row's `scope` is the CANONICAL
+  // `{corpusItemId}` shape `@ice/claims`'s `parseExtractClaimsScope` accepts,
+  // not the pre-fix `{workIds: [...]}` shape D-25-14 fixed.
+  // ---------------------------------------------------------------------------
+
+  test("Extract claims dispatches a real job with the canonical {corpusItemId} scope", async ({ page }) => {
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Corpus extraction project");
+    await seedCorpusItem(userId, projectId, { title: "An Abstract-Bearing Corpus Item", role: "central" });
+
+    await page.goto(`/research/${projectId}/corpus`);
+    await expect(main(page).getByText("An Abstract-Bearing Corpus Item")).toBeVisible();
+    await main(page).getByRole("button", { name: "Extract claims", exact: true }).click();
+    await expect(main(page).getByText(/Extraction started/)).toBeVisible();
+
+    const [request] = await db
+      .select()
+      .from(researchJobRequests)
+      .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.jobType, "extract_claims")));
+    expect(request).toBeTruthy();
+    expect(["queued", "planned"]).toContain(request.status);
+    // The canonical shape — a bare `{corpusItemId}`, never the pre-fix
+    // `{workIds: [...]}` array shape (D-25-14).
+    expect(request.scope).toHaveProperty("corpusItemId");
+    expect(request.scope).not.toHaveProperty("workIds");
+    expect(request.scope).not.toHaveProperty("workId");
+  });
+
+  test("a corpus item with no abstract shows an honest disabled state instead of an Extract-claims button", async ({ page }) => {
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Corpus no-abstract project");
+    await seedCorpusItem(userId, projectId, { title: "No Abstract Corpus Item", abstract: null });
+
+    await page.goto(`/research/${projectId}/corpus`);
+    await expect(main(page).getByText("No Abstract Corpus Item")).toBeVisible();
+    await expect(main(page).getByText(/No abstract available to extract claims from/)).toBeVisible();
+    await expect(main(page).getByRole("button", { name: "Extract claims", exact: true })).toHaveCount(0);
+  });
+
+  test("a corpus-item-sourced claim renders a 'From abstract' chip on the project's claims table", async ({ page }) => {
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Corpus claim chip project");
+    const corpusItemId = await seedCorpusItem(userId, projectId, { title: "Chip Rendering Corpus Item" });
+    await seedCorpusClaim(userId, corpusItemId, "This corpus item argues a specific, falsifiable claim from its abstract alone.");
+
+    await page.goto(`/research/${projectId}/claims`);
+    await expect(main(page).getByText("Chip Rendering Corpus Item")).toBeVisible();
+    await expect(main(page).getByText("From abstract")).toBeVisible();
+  });
+
+  // Every `research_corpus_item`/`research_project_member`/`research_job_request`/
+  // `research_claim` row this file inserts directly cascades from
+  // `deleteTestUser(EMAIL)` in `afterAll` via its own `user_id` FK chain —
+  // the `research-monitors.spec.ts`/`research-corrections.spec.ts` precedent,
+  // applies unchanged here.
 });
