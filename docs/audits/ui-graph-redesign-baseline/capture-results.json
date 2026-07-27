@@ -1,0 +1,256 @@
+{
+  "default_desktop": [],
+  "timings_default_load": {
+    "navToDomContentLoadedMs": 64,
+    "canvasAttached": {
+      "found": true,
+      "elapsedMs": 1977
+    },
+    "performanceApi": {
+      "domContentLoaded": 62.90000003576279,
+      "loadEvent": 126.5,
+      "responseStart": 17.80000001192093
+    },
+    "note": "local approximation; single sample, not a benchmark"
+  },
+  "default_load_meta": {
+    "headingVisible": true,
+    "url": "http://localhost:3100/graph"
+  },
+  "table_visible": true,
+  "table_scroll_info": {
+    "before": {
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "scrollLeft": 0
+    },
+    "after": {
+      "scrollLeft": 0
+    }
+  },
+  "tab_sequence_first_25": [
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Fullscreen",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Export PNG",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "← Previous",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Next →",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Close",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "A",
+      "role": null,
+      "ariaLabel": null,
+      "text": "open licensed source ↗",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "SUMMARY",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Why this, here",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Physics (Second Work) · Explicit reference",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Physics (Second Work) · Explicit reference",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "SUMMARY",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Accessible node browser",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Title",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Kind",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Status",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Order▲",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Connections",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Reader level",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Credibility",
+      "dataGraphNode": null,
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Physics (-350)",
+      "dataGraphNode": "external:bib:5f5d0200-e88f-4ba7-8aa8-b1981224774d",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Metaphysics (Third Work)",
+      "dataGraphNode": "work:e0b29e41-3e00-4b1a-894d-184a84869ea6",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "A",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Open work",
+      "dataGraphNode": "work:e0b29e41-3e00-4b1a-894d-184a84869ea6",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "On the Soul (Hub Work)",
+      "dataGraphNode": "work:7dc260e2-4641-4de9-bee9-601d492e7591",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "A",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Open work",
+      "dataGraphNode": "work:7dc260e2-4641-4de9-bee9-601d492e7591",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Physics (Second Work)",
+      "dataGraphNode": "work:a6fe842e-d05b-4b67-8f82-5465bd741b77",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "A",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Open work",
+      "dataGraphNode": "work:a6fe842e-d05b-4b67-8f82-5465bd741b77",
+      "isCanvasOrSvg": false
+    },
+    {
+      "tag": "BUTTON",
+      "role": null,
+      "ariaLabel": null,
+      "text": "Vice and Reason (Fourth Work)",
+      "dataGraphNode": "work:a028e8bd-4957-4c76-9a10-baad1fe27c9a",
+      "isCanvasOrSvg": false
+    }
+  ],
+  "focus_trap_check": {
+    "before": "<button type=\"button\" class=\"font-medium text-[var(--color-text)] underline-offset-2 hover:underline",
+    "after": "<button type=\"button\" class=\"app-control app-icon-button md:hidden\" data-tooltip=\"Open navigation\" a",
+    "note": "if 'after' getting stuck on the same element repeatedly across many tabs, could indicate a trap; manual eyeballing of tab_sequence is more conclusive"
+  },
+  "mobile": [],
+  "reduced_motion": [],
+  "reduced_motion_effects_attr_on_load": "paused",
+  "no_webgl": [
+    "THREE.WebGLRenderer: A WebGL context could not be created. Reason:  disabled by enterprise policy or commandline switch",
+    "THREE.WebGLRenderer: A WebGL context could not be created. Reason:  disabled by enterprise policy or commandline switch",
+    "THREE.WebGLRenderer: THREE.WebGLRenderer: Error creating WebGL context.",
+    "Error: THREE.WebGLRenderer: Error creating WebGL context.\n    at new WebGLRenderer (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:1373:60360)\n    at g.init (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:1373:100101)\n    at _ (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:485:262751)\n    at Object.g [as renderObjs] (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:485:262716)\n    at g.init (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:1373:110593)\n    at _ (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:485:262751)\n    at g (http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:485:262716)\n    at http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:1373:120460\n    at http://localhost:3100/_next/static/chunks/25--ht3ol7tpe.js:485:11307\n    at ly (http://localhost:3100/_next/static/chunks/29-gqt_8b5zyd.js:22:145763)"
+  ],
+  "no_webgl_canvas_attached": {
+    "found": false,
+    "elapsedMs": 15002
+  },
+  "no_webgl_body_text_excerpt": "Palimnote\nBeta v.6\nDASHBOARD\nVISUALIZATION\nWORKS\nLIBRARY\nASK LIBRARY\nWRITER\nRESEARCH\nUPLOAD\n⌕\nLight\nDark\n⚙\n§\nET\n☰\nThis workspace view could not load\n\nYour work is safe. Check your connection, then try this view again.\n\nTry again\nPalimnote\n\nPalimnote is a research aid, not a substitute for reading primary sources.\n\nDevelopment\nPrivacy\nTerms\nFeedback",
+  "no_webgl_context_report": {
+    "webgl": false,
+    "webgl2": false
+  }
+}
