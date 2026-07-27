@@ -17,5 +17,5 @@
     "noFallthroughCasesInSwitch": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "e2e"]
+  "include": ["src", "e2e", "scripts"]
 }

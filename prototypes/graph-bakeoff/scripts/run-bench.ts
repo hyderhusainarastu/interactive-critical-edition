@@ -767,6 +767,34 @@ async function main() {
 
   const prototypes: PrototypeId[] = ["a", "b"];
 
+  // Cleanup safety net (found live, twice): a FATAL run before this fix
+  // left BOTH the Chromium browser AND the `vite preview` child process
+  // running indefinitely, because `browser.close()`/`previewProc.kill()`
+  // previously only sat after the very last loop below — any error
+  // thrown earlier (e.g. the stress-fixture browser crash documented at
+  // `ensureBrowserAlive` above) skipped them entirely. Confirmed
+  // concretely: the very next DRY_RUN's own `vite preview` failed to bind
+  // port 5183 ("Port 5183 is already in use") because the *previous*
+  // run's orphaned preview server was still holding it — that run's
+  // measurements were still valid (the orphaned server was serving the
+  // same build), but an orphaned browser/server pair silently competing
+  // for CPU/GPU is exactly the kind of thing that could quietly bias a
+  // *later* run's numbers if left unnoticed, and it directly corrupts
+  // that later run's own preflight machine-load check (which is exactly
+  // what the charter's own protocol asks this script to check honestly).
+  // `try/finally` here guarantees both get torn down on every exit path
+  // — success, a thrown error, or the process being interrupted mid-run —
+  // not just the success path the old placement covered.
+  try {
+    await runMeasurementProtocol();
+  } finally {
+    if (browser.isConnected()) {
+      await browser.close();
+    }
+    previewProc.kill();
+  }
+
+  async function runMeasurementProtocol(): Promise<void> {
   // DRY_RUN=1 shrinks the fixture list and trial count for a fast
   // pipeline sanity pass before committing to the full ~25-30min protocol
   // run; never used for the real reported measurements (checked via the
@@ -850,11 +878,6 @@ async function main() {
     const evalResult = evaluateLifecycle(lifecycleResult);
     log(`Lifecycle result ${prototypeId}: pass=${evalResult.pass} violations=${JSON.stringify(evalResult.violations)}`);
   }
-
-  if (browser.isConnected()) {
-    await browser.close();
-  }
-  previewProc.kill();
 
   // ---- Summary aggregation ----
   const environment = allTrials[0]?.environment;
@@ -955,9 +978,21 @@ async function main() {
   writeResult("summary.json", summary);
   log("=== Measurement run complete. summary.json written. ===");
   console.log(JSON.stringify(summary, null, 2));
+  }
 }
 
-main().catch((err) => {
-  console.error("FATAL:", err);
-  process.exitCode = 1;
-});
+// Explicit process.exit() on both paths: found live — a FATAL run (e.g.
+// the stress-fixture browser crash documented above, before the recovery
+// fix) left the node process alive indefinitely afterward (main().catch()
+// only sets process.exitCode, it never calls exit()), presumably some
+// dangling handle from the killed browser/child process kept the event
+// loop alive. A silently-orphaned process from a prior failed run then
+// competes for CPU/GPU and pollutes the next run's own preflight
+// machine-load check — confirmed directly: a fresh DRY_RUN's preflight
+// saw an inflated loadavg caused by exactly this kind of leftover.
+main()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("FATAL:", err);
+    process.exit(1);
+  });
