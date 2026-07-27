@@ -99,6 +99,55 @@ aggregate-creation time; `bands.test.ts` and `disclosure.test.ts` both cover
 this split (one proves the exclusion/throw is intentional, the other proves
 the real assignment happens correctly).
 
+## URL state (Stage 3): what's restorable, what's ephemeral, what's translated
+
+Five new files (`omission.ts`, `urlState.ts`, `urlStateCodec.ts`,
+`reconstruct.ts`, `legacyGraphUrl.ts`, plus the standalone
+`askLibraryDeepLink.ts`) implement charter §9's URL-state requirements as
+pure functions over `URLSearchParams`, with zero coupling to any router,
+history API, or React state — a caller (out of scope here, same as every
+other renderer-facing concern this package deliberately stays out of)
+reads/writes the actual address bar and calls into these functions with
+plain strings.
+
+- **Schema vs. wire format vs. reconstruction vs. legacy translation are
+  four separate files**, not one, because they are four separable
+  concerns with different failure modes: the schema (`urlState.ts`) can
+  never be "wrong," only incomplete; the codec (`urlStateCodec.ts`) can
+  fail to round-trip; reconstruction (`reconstruct.ts`) can produce a
+  state that no longer matches the live authorization/data reality; legacy
+  translation (`legacyGraphUrl.ts`) can misinterpret an old URL. Testing
+  each in isolation (see each file's own `.test.ts`) is more precise than
+  one large "URL state" module would allow.
+- **Camera is not modeled anywhere in this package.** Charter §9,
+  verbatim: "Camera coordinates remain ephemeral. Home is deterministic."
+  `GraphUrlState` has no camera field, `urlStateCodec.ts` never reads or
+  writes one, and no reconstruction path derives one — a renderer always
+  computes its own deterministic default framing for whatever context/
+  focus state it's given, never a restored prior camera pose.
+- **`OmittedReason` is a closed, shared vocabulary** (`omission.ts`), not
+  a free-text string, so both the new-URL reconstruction path and the
+  legacy-URL translation path report omissions in one consistent shape a
+  caller can render one UI for ("This item is no longer available" /
+  "You don't have access to this" / etc.) regardless of which path
+  produced it.
+- **Every array-valued piece of state (`activeLayers`, `expansionTrail`,
+  legacy's repeated `roadmapRoot`/`pinnedWork`) is carried as REPEATED
+  `URLSearchParams` entries, never comma-joined.** A display/canonical id
+  is an opaque string this package does not control the character set
+  of — joining ids with a delimiter character risks that exact character
+  appearing inside a real id. This mirrors the existing codebase's own
+  convention for `pinnedWork`/`roadmapRoot` (baseline audit §8).
+- **`translateLegacyGraphUrl` never throws**, by construction: every
+  lookup goes through `params.get`/`getAll` (never index into an array
+  that might be empty), every id transformation is a total string
+  function, and every caller-supplied validity check returns a reason
+  rather than throwing its own error. `legacyGraphUrl.test.ts`'s
+  "malformed and hostile inputs" suite exercises this directly (SQL/path-
+  traversal-shaped junk ids, a 200-entry `roadmapRoot` set, mixed legacy +
+  new-style params, non-ASCII/emoji values) rather than only asserting it
+  on well-formed compat-table inputs.
+
 ## File map
 
 | File | Charter item |
@@ -112,6 +161,12 @@ the real assignment happens correctly).
 | `families.ts` | Item 3 — the exhaustive, audited edge-family mapping; `ai_inferred` provenance overlay; "unsupported direction" validation. |
 | `disclosure.ts` | Item 4 — prioritized initial neighborhood, expansion, visible caps, deterministic aggregation. |
 | `validate.ts` | Item 5 — structural diagnostics (duplicate ids, dangling endpoints, self-links, parallel links) and canonical-input immutability helpers. |
+| `omission.ts` | Shared `OmittedReason`/`OmittedEntry`/`ValidityCheck` vocabulary — "ignore unauthorized/deleted/invalid ids, announce why" (charter §9), used by both `reconstruct.ts` and `legacyGraphUrl.ts`. |
+| `urlState.ts` | Charter §9 "Make the following URL state restorable" — the `GraphUrlState` schema (context, view, selection, layers, filters, expansion trail, focus) and its total-function type guards. Camera is deliberately absent (module doc comment). |
+| `urlStateCodec.ts` | `serializeGraphUrlState`/`parseGraphUrlState` — the `GraphUrlState` <-> `URLSearchParams` wire format, designed for exact round-trip identity (see `urlState.test.ts`'s seeded generator suite). |
+| `reconstruct.ts` | Charter §9 "Reconstruction rules" as pure functions — `rebuildContext`, `replayExpansionTrail`, `reconcileSelectedId`, `recreateAggregatesFromBasis` (never accepts a stale count — see its own doc comment), composed into `reconstructGraphUrlState`. |
+| `legacyGraphUrl.ts` | Charter §9 "Legacy graph URL compatibility" table — `translateLegacyGraphUrl`, a discriminated `redirect \| state \| chooser` union that never throws on malformed input. Two interpretive decisions the charter's own text leaves open are documented at the top of the file (what `layout=explore` means for `GraphUrlState`'s required `context`, and what a genuinely bare `/graph` resolves to). |
+| `askLibraryDeepLink.ts` | Charter §9's closing paragraph — `mode`/`claimId`/`clusterId`/`workIdB` parse/serialize helpers. Placed here rather than in a new file elsewhere because the charter states this requirement inside §9 itself, and `claimId`/`clusterId` name the same entities `GraphUrlContext`'s `"claim"`/`"debate"` context kinds already cover — see the module's own doc comment for the full reasoning. Does NOT implement the single-controller mount rule itself (out of scope for a zero-React package); only the URL state a real controller reads. |
 | `testFixtures.ts` | Shared, non-exported test fixtures — including the audited `ALL_EMITTED_EDGE_VALUES` list. |
 
 ## Usage sketch (illustrative — no real caller exists yet)

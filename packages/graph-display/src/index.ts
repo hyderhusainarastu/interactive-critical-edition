@@ -24,3 +24,4 @@ export * from "./urlState";
 export * from "./urlStateCodec";
 export * from "./reconstruct";
 export * from "./legacyGraphUrl";
+export * from "./askLibraryDeepLink";
