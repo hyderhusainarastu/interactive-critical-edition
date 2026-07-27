@@ -71,7 +71,16 @@ test.describe("Visualization graph", () => {
   // asserted just as strongly, against its new location.
   test("the primary nav is exactly Home/Read/Research/Write, and the Knowledge Map is reachable via the command palette and a context-bar icon", async ({ page }) => {
     await login(page);
-    const navLabels = await page.getByRole("navigation", { name: "Primary navigation" }).locator("a").allTextContents();
+    // Each rail/bottom-nav link renders an `aria-hidden` icon glyph ahead of
+    // its visible label (WorkspaceRailItem.tsx/MobileBottomNav.tsx) — hidden
+    // from the accessible name (correctly excluded by every `getByRole`
+    // name match elsewhere in this suite) but still part of raw
+    // `textContent`, so a plain `allTextContents()` here returned e.g.
+    // "⌂Home" rather than "Home". Stripping the leading non-word run
+    // recovers the plain label for this array-membership check without
+    // switching to a per-item `getByRole` query, which would lose the
+    // "exactly these, nothing else" completeness this test intends.
+    const navLabels = (await page.getByRole("navigation", { name: "Primary navigation" }).locator("a").allTextContents()).map((text) => text.replace(/^\W+/, ""));
     expect(navLabels).toEqual(expect.arrayContaining(["Home", "Read"]));
     expect(navLabels).not.toContain("Visualization");
     expect(navLabels).not.toContain("Works");
