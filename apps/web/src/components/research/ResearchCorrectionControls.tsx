@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export type CorrectableObjectType = "claim" | "relationship" | "cluster" | "chamber" | "hypothesis" | "gap";
@@ -191,6 +192,7 @@ export function ResearchCorrectionControls({
   compact?: boolean;
   onChanged?: (patch: { verificationStatus?: string; hidden?: boolean }) => void;
 }) {
+  const router = useRouter();
   const [verificationStatus, setVerificationStatus] = useState(initialVerificationStatus);
   const [hidden, setHidden] = useState(initialHidden);
   const [busy, setBusy] = useState(false);
@@ -198,6 +200,10 @@ export function ResearchCorrectionControls({
   const [disputing, setDisputing] = useState(false);
   const [reason, setReason] = useState("");
 
+  // Item 1(a): verify/dispute/hide/restore all route through here for every
+  // object type (claim/relationship/cluster/chamber/hypothesis/gap) — one
+  // `router.refresh()` after a successful apply covers all of them, rather
+  // than every caller having to remember to do it itself.
   async function apply(action: "verified" | "disputed" | "hidden" | "restored", withReason?: string) {
     setBusy(true);
     setError(null);
@@ -224,6 +230,7 @@ export function ResearchCorrectionControls({
       }
       setDisputing(false);
       setReason("");
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not apply this correction.");
     } finally {

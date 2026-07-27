@@ -1,7 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import { JobStageProgress } from "./JobStageProgress";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 
 type Project = { id: string; title: string };
 
@@ -25,6 +29,8 @@ interface ImportJobRow {
   jobType: string;
   status: string;
   stage: string | null;
+  progressIndex: number | null;
+  progressTotal: number | null;
   coverage: string | null;
   note: string | null;
   error: string | null;
@@ -84,9 +90,14 @@ function resultKey(item: { source: string; externalId: string }): string {
  * reporting — the `ProviderAttempt` contract) — only an explicit "Import"
  * click dispatches the (zero-AI-cost, worker-run) `import_corpus` job that
  * actually writes a `research_corpus_item` row and links it into this
- * project. Imports are async (same shape as a monitor scan): a click here
- * queues the job and shows a status message, but the newly imported item
- * itself only appears in "In this project's corpus" on the next page load.
+ * project.
+ *
+ * Live updates (Item 1(a)/(b)/3 of the Research-workspace fix lane): every
+ * mutation calls `router.refresh()`, import/extraction jobs are polled the
+ * same way the project overview's jobs panel is, and `items` is read
+ * directly off the server-fed `initialItems` prop (no local copy) so a
+ * `router.refresh()` after an import completes is what actually makes the
+ * newly imported item appear here — there is nothing else to keep in sync.
  */
 export function CorpusView({
   project,
@@ -97,8 +108,10 @@ export function CorpusView({
   initialItems: CorpusItem[];
   initialImportJobs: ImportJobRow[];
 }) {
-  const [items] = useState(initialItems);
+  const router = useRouter();
+  const items = initialItems;
   const [importJobs, setImportJobs] = useState(initialImportJobs);
+  const [announcement, setAnnouncement] = useState("");
   const [query, setQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -114,6 +127,40 @@ export function CorpusView({
   const [pendingExtractConfirm, setPendingExtractConfirm] = useState<Record<string, { reason: string; estimatedUnits: number }>>({});
 
   const importedDedupKeys = new Set(items.map((item) => `${item.source}:${item.externalId}`));
+
+  async function fetchProjectJobs(): Promise<ImportJobRow[] | null> {
+    const response = await fetch(`/api/research/projects/${project.id}/jobs`);
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (!Array.isArray(body.requests)) return null;
+    return body.requests.filter((r: ImportJobRow) => r.jobType === "import_corpus" || r.jobType === "extract_claims");
+  }
+
+  async function refreshJobs() {
+    const next = await fetchProjectJobs();
+    if (next) setImportJobs(next);
+  }
+
+  // Item 1(b): while any import/extraction job is non-terminal, poll every
+  // ~3s (paused while hidden). On completion, refresh the whole route — for
+  // an import that means the new item appears in "In this project's
+  // corpus"; for an extraction, its claims appear on the Claims page next
+  // visit, but the route's own job-history data (and anything server-fed
+  // that depends on it) is still worth refreshing here too.
+  useResearchJobPolling<ImportJobRow>({
+    rows: importJobs,
+    fetchRows: fetchProjectJobs,
+    onUpdate: setImportJobs,
+    onComplete: (justCompleted) => {
+      const importsCompleted = justCompleted.filter((j) => j.jobType === "import_corpus").length;
+      const extractionsCompleted = justCompleted.filter((j) => j.jobType === "extract_claims").length;
+      const parts: string[] = [];
+      if (importsCompleted > 0) parts.push(importsCompleted === 1 ? "An import finished." : `${importsCompleted} imports finished.`);
+      if (extractionsCompleted > 0) parts.push(extractionsCompleted === 1 ? "A claim extraction finished." : `${extractionsCompleted} claim extractions finished.`);
+      setAnnouncement(parts.join(" "));
+      router.refresh();
+    },
+  });
 
   /** Mirrors `ResearchProjectOverview.tsx`'s `extractClaims()` — the same
    *  dispatch/confirm/error flow, scoped to a corpus item instead of a work
@@ -140,8 +187,10 @@ export function CorpusView({
       });
       setExtractStatus((current) => ({
         ...current,
-        [corpusItemId]: body.reused ? "An extraction from this abstract is already in progress." : "Extraction started — results will appear on the project's Claims page, labeled “from abstract.”",
+        [corpusItemId]: body.reused ? "An extraction from this abstract is already in progress." : "Extraction started — results appear on the project's Claims page automatically once it finishes.",
       }));
+      await refreshJobs();
+      router.refresh();
     } catch (error) {
       setExtractError((current) => ({ ...current, [corpusItemId]: error instanceof Error ? error.message : "Could not start claim extraction." }));
     } finally {
@@ -189,9 +238,10 @@ export function CorpusView({
       setImportStatus(
         body.reused
           ? "An import of this item is already in progress."
-          : "Import started — it will appear in this project's corpus once it finishes.",
+          : "Import started — it appears in this project's corpus automatically once it finishes.",
       );
       await refreshJobs();
+      router.refresh();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Could not start the import.");
     } finally {
@@ -199,23 +249,14 @@ export function CorpusView({
     }
   }
 
-  async function refreshJobs() {
-    const response = await fetch(`/api/research/projects/${project.id}/jobs`);
-    const body = await response.json();
-    if (response.ok && Array.isArray(body.requests)) {
-      setImportJobs(body.requests.filter((r: ImportJobRow) => r.jobType === "import_corpus"));
-    }
-  }
-
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="corpus-title">
+      <LiveAnnouncer message={announcement} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[var(--color-accent)]">
-            <Link href={`/research/${project.id}`} className="underline">
-              {project.title}
-            </Link>
-          </p>
+          <ResearchBreadcrumb
+            items={[{ label: "Research", href: "/research" }, { label: project.title, href: `/research/${project.id}` }, { label: "Corpus" }]}
+          />
           <h1 id="corpus-title" className="font-serif text-3xl font-semibold">
             Corpus
           </h1>
@@ -326,10 +367,12 @@ export function CorpusView({
           <ul className="mt-3 space-y-2 text-xs text-[var(--color-text-muted)]" aria-label="Import job status">
             {importJobs.slice(0, 5).map((job) => (
               <li key={job.id} className="rounded border border-[var(--color-border)] p-2">
-                {job.status}
-                {job.stage ? ` — ${job.stage}` : ""}
-                {job.error ? ` — ${job.error}` : ""}
-                {job.note ? ` — ${job.note}` : ""}
+                <p>
+                  {job.jobType.replace(/_/g, " ")} — {job.status}
+                  {job.error ? ` — ${job.error}` : ""}
+                  {job.note ? ` — ${job.note}` : ""}
+                </p>
+                <JobStageProgress status={job.status} stage={job.stage} progressIndex={job.progressIndex} progressTotal={job.progressTotal} />
               </li>
             ))}
           </ul>

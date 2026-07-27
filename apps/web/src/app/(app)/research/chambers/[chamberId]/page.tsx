@@ -1,7 +1,7 @@
 import { phase25FeatureEnabled } from "@ice/config";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CREDIBILITY_DIMENSIONS, CREDIBILITY_DIMENSION_LABEL } from "@/components/graph/types";
+import { ResearchBreadcrumb } from "@/components/research/ResearchBreadcrumb";
 import { ResearchCorrectionControls } from "@/components/research/ResearchCorrectionControls";
 import { requireSession } from "@/lib/auth";
 import { getEvidenceChamberView, type ChamberPositionClaimView, type PositionSourceCredibility } from "@/lib/research/chambers";
@@ -91,11 +91,15 @@ export default async function EvidenceChamberPage({ params }: { params: Promise<
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 sm:px-6" aria-labelledby="evidence-chamber-title">
-      <p className="text-sm font-medium text-[var(--color-accent)]">
-        <Link href="/research" className="underline">Research</Link>{" "}
-        / <Link href={`/research/${chamber.projectId}`} className="underline">Project</Link>{" "}
-        / <Link href={`/research/${chamber.projectId}/debates/${chamber.clusterId}`} className="underline">{chamber.clusterName}</Link>
-      </p>
+      <ResearchBreadcrumb
+        items={[
+          { label: "Research", href: "/research" },
+          { label: chamber.projectTitle, href: `/research/${chamber.projectId}` },
+          { label: "Debates", href: `/research/${chamber.projectId}/debates` },
+          { label: chamber.clusterName, href: `/research/${chamber.projectId}/debates/${chamber.clusterId}` },
+          { label: "Evidence chamber" },
+        ]}
+      />
       <h1 id="evidence-chamber-title" className="mt-1 font-serif text-2xl font-semibold">{chamber.question}</h1>
       <p className="mt-2 text-xs uppercase tracking-wide text-[var(--color-text-muted)]">Evidence Chamber — a neutral map of this disagreement, not a ruling on it</p>
 
@@ -144,6 +148,12 @@ export default async function EvidenceChamberPage({ params }: { params: Promise<
           winner/verdict/stronger exists anywhere on this page's data). */}
       <section className="mt-8" aria-labelledby="chamber-positions-title">
         <h2 id="chamber-positions-title" className="font-serif text-xl font-semibold">Positions</h2>
+        {chamber.positions.length === 0 && (
+          <p className="app-empty app-mount mt-3 rounded-lg p-4 text-sm text-[var(--color-text-muted)]">
+            This chamber has no distinct positions on record — every claim in its debate converged on shared ground with
+            nothing to contrast.
+          </p>
+        )}
         <ol className="app-reveal-stagger mt-3 space-y-4">
           {chamber.positions.map((position) => (
             <li key={position.id} className="app-mount app-card rounded-lg border border-[var(--color-border)] p-4">

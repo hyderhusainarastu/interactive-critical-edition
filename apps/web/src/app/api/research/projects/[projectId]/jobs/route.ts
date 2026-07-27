@@ -3,7 +3,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { dispatchImportCorpusJob } from "@/lib/research/corpus";
 import { dispatchGenerateHypothesesJob } from "@/lib/research/hypotheses";
-import { dispatchExtractClaimsJob, dispatchExtractClaimsJobForCorpusItem, dispatchSynthesizeChamberJob, listResearchJobRequestsForProject } from "@/lib/research/jobs";
+import {
+  dispatchClusterDebatesJob,
+  dispatchDetectRelationshipsJob,
+  dispatchExtractClaimsJob,
+  dispatchExtractClaimsJobForCorpusItem,
+  dispatchSynthesizeChamberJob,
+  listResearchJobRequestsForProject,
+} from "@/lib/research/jobs";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
 
 const postSchema = z.discriminatedUnion("jobType", [
@@ -21,6 +28,17 @@ const postSchema = z.discriminatedUnion("jobType", [
   z.object({
     jobType: z.literal("synthesize_chamber"),
     clusterId: z.string().uuid(),
+  }),
+  // Phase 30 gap-fix lane: project-scoped, no additional fields beyond
+  // `jobType`/`confirm` — everything the dispatcher needs comes from the
+  // route's own `projectId` param.
+  z.object({
+    jobType: z.literal("detect_relationships"),
+    confirm: z.boolean().default(false),
+  }),
+  z.object({
+    jobType: z.literal("cluster_debates"),
+    confirm: z.boolean().default(false),
   }),
   z.object({
     jobType: z.literal("generate_hypotheses"),
@@ -84,6 +102,40 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       case "not_member":
       case "no_published_edition":
       case "no_extractable_text":
+      case "conflict":
+        return NextResponse.json({ error: result.reason }, { status: 409 });
+      case "needs_confirmation":
+        return NextResponse.json({ error: result.reason, needsConfirmation: true, estimatedUnits: result.estimatedUnits }, { status: 409 });
+      case "reused":
+        return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
+      case "queued":
+        return NextResponse.json({ requestId: result.requestId }, { status: 202 });
+    }
+  }
+
+  if (parsed.data.jobType === "detect_relationships") {
+    const result = await dispatchDetectRelationshipsJob(userId, projectId, parsed.data.confirm);
+    switch (result.action) {
+      case "not_found":
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      case "not_ready":
+      case "conflict":
+        return NextResponse.json({ error: result.reason }, { status: 409 });
+      case "needs_confirmation":
+        return NextResponse.json({ error: result.reason, needsConfirmation: true, estimatedUnits: result.estimatedUnits }, { status: 409 });
+      case "reused":
+        return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
+      case "queued":
+        return NextResponse.json({ requestId: result.requestId }, { status: 202 });
+    }
+  }
+
+  if (parsed.data.jobType === "cluster_debates") {
+    const result = await dispatchClusterDebatesJob(userId, projectId, parsed.data.confirm);
+    switch (result.action) {
+      case "not_found":
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      case "not_ready":
       case "conflict":
         return NextResponse.json({ error: result.reason }, { status: 409 });
       case "needs_confirmation":

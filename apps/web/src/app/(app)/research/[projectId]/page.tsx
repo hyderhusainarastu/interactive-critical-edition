@@ -4,6 +4,7 @@ import { ResearchProjectOverview } from "@/components/research/ResearchProjectOv
 import { requireSession } from "@/lib/auth";
 import { getResearchInsightFeed } from "@/lib/research/feed";
 import { listResearchJobRequestsForProject } from "@/lib/research/jobs";
+import { getResearchPipelineOverview } from "@/lib/research/pipeline";
 import { getResearchProjectDetail, listOwnedWorksForResearch } from "@/lib/research/projects";
 
 export default async function ResearchProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
@@ -12,10 +13,11 @@ export default async function ResearchProjectPage({ params }: { params: Promise<
   const { projectId } = await params;
   const detail = await getResearchProjectDetail(session.user.id, projectId);
   if (!detail) notFound();
-  const [availableWorks, feed, jobRequests] = await Promise.all([
+  const [availableWorks, feed, jobRequests, pipeline] = await Promise.all([
     listOwnedWorksForResearch(session.user.id),
     getResearchInsightFeed(session.user.id, projectId),
     listResearchJobRequestsForProject(session.user.id, projectId),
+    getResearchPipelineOverview(session.user.id, projectId),
   ]);
   return (
     <ResearchProjectOverview
@@ -25,6 +27,7 @@ export default async function ResearchProjectPage({ params }: { params: Promise<
       availableWorks={availableWorks}
       initialFeed={feed}
       initialJobRequests={jobRequests}
+      pipelineOverview={pipeline}
     />
   );
 }

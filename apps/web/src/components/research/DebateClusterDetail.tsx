@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import { JobStageProgress } from "./JobStageProgress";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 import { ResearchCorrectionControls } from "./ResearchCorrectionControls";
 
 type MemberClaim = { id: string; workId: string | null; workTitle: string | null; claimText: string; claimNature: string };
 type Cluster = {
   id: string;
   projectId: string;
+  projectTitle: string;
   name: string;
   researchQuestion: string | null;
   description: string | null;
@@ -31,64 +36,58 @@ const NATURE_LABEL: Record<string, string> = {
   methodological: "Methodological",
 };
 
-// Poll for up to a minute — a chamber synthesis is one model call
-// (`CHAMBER_COST_ESTIMATE_USD`'s own comment: a longer prompt/reply than
-// judge or naming calls), well within this window under normal latency.
-const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ATTEMPTS = 20;
-
 interface JobRequestRow {
   id: string;
-  jobType: string;
   status: string;
+  stage: string | null;
+  progressIndex: number | null;
+  progressTotal: number | null;
   note: string | null;
   error: string | null;
   scope: unknown;
 }
 
+/** Live updates (Item 1(a)/(b)/3 of the Research-workspace fix lane): a
+ *  chamber synthesis is tracked via the shared `useResearchJobPolling` hook
+ *  (visibility-aware, matching every other research page) rather than a
+ *  bespoke while-loop — same behavior, less bespoke code, and it now pauses
+ *  while the tab is hidden. */
 export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
   const router = useRouter();
   const [dispatching, setDispatching] = useState(false);
   const [error, setError] = useState("");
-  const [polling, setPolling] = useState(false);
   const [lastNote, setLastNote] = useState<string | null>(null);
-  const pollAttempts = useRef(0);
+  const [announcement, setAnnouncement] = useState("");
+  const [job, setJob] = useState<JobRequestRow | null>(null);
 
-  useEffect(() => {
-    return () => {
-      pollAttempts.current = POLL_MAX_ATTEMPTS; // stop any in-flight poll loop on unmount
-    };
-  }, []);
-
-  async function pollForCompletion() {
-    setPolling(true);
-    pollAttempts.current = 0;
-    while (pollAttempts.current < POLL_MAX_ATTEMPTS) {
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-      pollAttempts.current += 1;
-      const response = await fetch(`/api/research/projects/${cluster.projectId}/jobs`);
-      if (!response.ok) continue;
-      const body = (await response.json()) as { requests?: JobRequestRow[] };
-      const job = (body.requests ?? []).find((r) => {
-        const scope = r.scope as { clusterId?: unknown } | null;
-        return r.jobType === "synthesize_chamber" && scope?.clusterId === cluster.id;
-      });
-      if (!job) continue;
-      if (job.status === "complete") {
-        setLastNote(job.note);
-        setPolling(false);
-        router.refresh();
-        return;
-      }
-      if (job.status === "failed") {
-        setError(job.error ?? "Chamber synthesis failed.");
-        setPolling(false);
-        return;
-      }
-    }
-    setPolling(false);
-    setError("Still working — refresh this page in a moment to check again.");
+  async function fetchJob(): Promise<JobRequestRow[] | null> {
+    if (!job) return null;
+    const response = await fetch(`/api/research/projects/${cluster.projectId}/jobs`);
+    if (!response.ok) return null;
+    const body = await response.json();
+    const requests = Array.isArray(body.requests) ? (body.requests as JobRequestRow[]) : [];
+    const found = requests.find((r) => r.id === job.id);
+    return found ? [found] : null;
   }
+
+  useResearchJobPolling({
+    rows: job ? [job] : [],
+    fetchRows: fetchJob,
+    onUpdate: (rows) => {
+      const updated = rows[0];
+      if (!updated) return;
+      setJob(updated);
+      if (updated.status === "failed") setError(updated.error ?? "Chamber synthesis failed.");
+    },
+    onComplete: (justCompleted) => {
+      const finished = justCompleted[0];
+      setLastNote(finished?.note ?? null);
+      setAnnouncement("Chamber synthesis finished.");
+      router.refresh();
+    },
+  });
+
+  const polling = job ? job.status === "planned" || job.status === "queued" || job.status === "running" : false;
 
   async function synthesizeChamber() {
     setDispatching(true);
@@ -102,7 +101,8 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not start chamber synthesis.");
-      void pollForCompletion();
+      setJob({ id: body.requestId, status: "queued", stage: null, progressIndex: null, progressTotal: null, note: null, error: null, scope: { clusterId: cluster.id } });
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start chamber synthesis.");
     } finally {
@@ -112,11 +112,15 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6" aria-labelledby="debate-cluster-title">
-      <p className="text-sm font-medium text-[var(--color-accent)]">
-        <Link href="/research" className="underline">Research</Link>{" "}
-        / <Link href={`/research/${cluster.projectId}`} className="underline">Project</Link>{" "}
-        / <Link href={`/research/${cluster.projectId}/debates`} className="underline">Debates</Link>
-      </p>
+      <LiveAnnouncer message={announcement} />
+      <ResearchBreadcrumb
+        items={[
+          { label: "Research", href: "/research" },
+          { label: cluster.projectTitle, href: `/research/${cluster.projectId}` },
+          { label: "Debates", href: `/research/${cluster.projectId}/debates` },
+          { label: cluster.name },
+        ]}
+      />
       <h1 id="debate-cluster-title" className="mt-1 font-serif text-2xl font-semibold">{cluster.name}</h1>
       {cluster.researchQuestion && <p className="mt-2 text-sm text-[var(--color-text-muted)]">{cluster.researchQuestion}</p>}
       {cluster.description && <p className="mt-1 text-sm">{cluster.description}</p>}
@@ -139,6 +143,9 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
           {dispatching ? "Starting…" : polling ? "Synthesizing…" : cluster.latestChamberId ? "Re-synthesize chamber" : "Synthesize chamber"}
         </button>
       </div>
+      {job && (
+        <JobStageProgress status={job.status} stage={job.stage} progressIndex={job.progressIndex} progressTotal={job.progressTotal} />
+      )}
       {lastNote && <p className="mt-2 text-xs text-[var(--color-text-muted)]">{lastNote}</p>}
       {error && <p className="mt-2 text-xs text-[var(--color-error,#b3261e)]">{error}</p>}
 

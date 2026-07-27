@@ -1,6 +1,7 @@
 import { phase25FeatureEnabled } from "@ice/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ResearchBreadcrumb } from "@/components/research/ResearchBreadcrumb";
 import { requireSession } from "@/lib/auth";
 import { listDebateClustersForProject } from "@/lib/research/debates";
 import { getOwnedResearchProject } from "@/lib/research/projects";
@@ -15,10 +16,7 @@ export default async function ResearchDebatesPage({ params }: { params: Promise<
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6" aria-labelledby="research-debates-title">
-      <p className="text-sm font-medium text-[var(--color-accent)]">
-        <Link href="/research" className="underline">Research</Link>{" "}
-        / <Link href={`/research/${projectId}`} className="underline">{project.title}</Link>
-      </p>
+      <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title, href: `/research/${projectId}` }, { label: "Debates" }]} />
       <h1 id="research-debates-title" className="mt-1 font-serif text-2xl font-semibold">Debates</h1>
       <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">
         Clusters of connected claims — support, contradiction, and nuance relationships grouped into named debates.
