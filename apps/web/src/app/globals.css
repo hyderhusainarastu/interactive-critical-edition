@@ -714,6 +714,42 @@ body {
 .app-icon-button:hover::after, .app-icon-button:focus-visible::after { opacity: 1; transform: translateY(0); }
 @media (prefers-reduced-motion: reduce) { .app-icon-button::after { transition: none; } }
 
+/* Stage 1 shell fix (redesign-shell-spec.md §2/§4 compat verification,
+   discovered debugging a real mobile ContextBar layout defect): the plain
+   `.app-icon-button` rule above is unlayered, and an unlayered rule always
+   wins over ANY Tailwind `@layer utilities` class regardless of
+   specificity, source order, or whether the utility's own media query
+   currently matches — the same cascade pitfall already documented at
+   D-23-53 above, there hitting `background`, here hitting `display`. Every
+   viewport-conditional icon button built on `.app-icon-button` therefore
+   never actually hid/showed at its intended breakpoint: the Knowledge Map
+   context-bar icon (`hidden md:inline-flex`) and the search trigger
+   (`hidden sm:inline-flex`) both stayed rendered on mobile despite
+   `hidden`, which squeezed the ContextBar's leading flex group (the
+   mobile Read-management trigger + title) to zero allocated width and let
+   its content visually overlap the next icon — `document.elementFromPoint`
+   at the trigger's own center resolved to the Upload link instead,
+   timing out every click. The rail's collapse toggle (`hidden
+   lg:inline-flex`) and the Read-management trigger itself (`md:hidden`)
+   have the identical latent defect. Fixed narrowly for `display` only, on
+   exactly these pre-existing class combinations — deliberately NOT a
+   `@layer components` move for the whole `.app-icon-button` rule, which
+   also backs several pre-existing deliberately-smaller `h-7 w-7`/`h-8 w-8`
+   close-button size overrides elsewhere in the app (ProfileMenu,
+   PreferencesMenu, RagChatPanel, ReadManagementSheet) that this fix must
+   not touch: those overrides are equally unable to beat the unlayered
+   `width`/`height` today, which — since 44px is this app's OWN
+   touch-target floor, not just a default — means the current silent
+   44px-regardless-of-h-7/h-8 result already satisfies that floor; making
+   the size override start working for the first time would drop those
+   buttons below it, a separate, wider pre-existing issue out of this
+   task's scope. */
+.app-icon-button.hidden { display: none; }
+@media (min-width: 640px) { .app-icon-button.hidden.sm\:inline-flex { display: inline-flex; } }
+@media (min-width: 768px) { .app-icon-button.hidden.md\:inline-flex { display: inline-flex; } }
+@media (min-width: 1024px) { .app-icon-button.hidden.lg\:inline-flex { display: inline-flex; } }
+@media (min-width: 768px) { .app-icon-button.md\:hidden { display: none; } }
+
 /* Shared interaction vocabulary for the signed-in workspace: surfaces gain a
    light, warm boundary on intent; reveal is a single scroll entry and remains
    entirely off for readers who reduce motion. 3D remains graph-only. */
@@ -964,7 +1000,20 @@ tr[data-emphasis="dimmed"] * {
    direct children of `.app-shell`, in this order, so this matches without
    needing a `data-rail-collapsed` attribute lifted onto a shared ancestor. */
 .workspace-rail[data-collapsed="true"] ~ .app-shell-content-column { margin-inline-start: var(--rail-width-collapsed); }
-@media (max-width: 1023.98px) { .app-shell-content-column { margin-inline-start: var(--rail-width-collapsed) !important; } }
+/* Scoped to tablet ONLY (min-width paired with max-width): the rail is
+   force-collapsed and still rendered at 64px on tablet (768-1023.98px, see
+   the .workspace-rail media rule above), so the content column must reserve
+   that width. Below 768px the rail isn't rendered at all (`hidden` with no
+   `md:` override) — reserving space for it there was a real bug (D found
+   during Stage 1 compat verification): this rule's `!important` unconditionally
+   beat the more-specific-but-non-important mobile reset directly below
+   (max-width: 767.98px, margin-inline-start: 0) in an !important-vs-not tie
+   that !important always wins regardless of media-query narrowness, so
+   every mobile layout below carried a phantom 64px left margin/shift —
+   observed concretely as the ContextBar's leading flex group (Read
+   management trigger + title) being squeezed to zero allocated width and
+   its content visually overlapping the trailing icon group. */
+@media (min-width: 768px) and (max-width: 1023.98px) { .app-shell-content-column { margin-inline-start: var(--rail-width-collapsed) !important; } }
 @media (max-width: 767.98px) {
   .app-shell-content-column {
     margin-inline-start: 0;
