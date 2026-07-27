@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import {
   claimLoci,
+  claimRelationships,
   claimScores,
   db,
   documents,
@@ -346,6 +347,105 @@ test.describe("Research workspace (Phase 28.1)", () => {
     const dispatched = allExtractRequests.find((r) => (r.scope as { workId?: unknown } | null)?.workId === fixture.workId);
     expect(dispatched, "no extract_claims row carries the canonical {workId} scope for the dispatched work").toBeTruthy();
     expect(dispatched!.scope).not.toHaveProperty("workIds");
+  });
+
+  // Phase 30 gap-fix lane: the center of the research chain
+  // (extract → detect relationships → cluster debates → synthesize) had no
+  // web dispatcher for its middle two steps at all — this test drives the
+  // real POST /api/research/projects/:id/jobs route for `detect_relationships`,
+  // the same CI-safety reasoning as the "Extract claims" dispatch test above
+  // (pg-boss's schema accepts the enqueue; nothing requires a running worker
+  // to consume it).
+  test("dispatches relationship detection once two works have claims, confirming the cost estimate, and disables it before that", async ({ page }) => {
+    const fixtureA = await seedResearchClaimsFixture(userId, "Detect work A");
+    const fixtureB = await seedResearchClaimsFixture(userId, "Detect work B");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Detect relationships project");
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixtureA.workId, role: "central" });
+
+    await page.goto(`/research/${projectId}`);
+    await expect(main(page).getByRole("heading", { name: "Detect relationships project" })).toBeVisible();
+
+    const jobsPanel = main(page).getByRole("region", { name: "Research jobs" });
+    const detectButton = jobsPanel.getByRole("button", { name: "Detect relationships" });
+    await expect(detectButton).toBeVisible();
+    await expect(detectButton).toBeDisabled();
+    await expect(jobsPanel.getByText("Needs claims from a second work")).toBeVisible();
+
+    // Add a second work with claims — the precondition
+    // (`workCountWithClaims >= 2`) is now met and the control unlocks.
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixtureB.workId, role: "supporting" });
+    await page.reload();
+    await expect(main(page).getByRole("heading", { name: "Detect relationships project" })).toBeVisible();
+    await expect(detectButton).toBeEnabled();
+
+    // The worst-case per-run judge cost can't be known before Stage 1 runs
+    // (see `dispatchDetectRelationshipsJob`'s own doc comment), so this
+    // action always needs explicit confirmation on first dispatch — the
+    // same needs_confirmation flow "Extract claims" already exercises above.
+    await detectButton.click();
+    const confirmButton = jobsPanel.getByRole("button", { name: /Confirm and detect relationships/i });
+    await expect(confirmButton).toBeVisible();
+    await confirmButton.click();
+    await expect(jobsPanel.getByText("Queued").first()).toBeVisible({ timeout: 10_000 });
+
+    const rows = await db.select().from(researchJobRequests).where(eq(researchJobRequests.jobType, "detect_relationships"));
+    const dispatched = rows.find((r) => (r.scope as { projectId?: unknown } | null)?.projectId === projectId);
+    expect(dispatched, "no detect_relationships row carries the canonical {projectId} scope").toBeTruthy();
+    expect(dispatched!.scope).toEqual({ projectId });
+  });
+
+  test("dispatches debate clustering once a relationship is judged, and disables it before that", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Cluster work");
+    await login(page);
+    const projectId = await createProjectViaApi(page, "Cluster debates project");
+    await db.insert(researchProjectMembers).values({ projectId, memberType: "work", workId: fixture.workId, role: "central" });
+
+    await page.goto(`/research/${projectId}`);
+    await expect(main(page).getByRole("heading", { name: "Cluster debates project" })).toBeVisible();
+
+    const jobsPanel = main(page).getByRole("region", { name: "Research jobs" });
+    const clusterButton = jobsPanel.getByRole("button", { name: "Cluster debates" });
+    await expect(clusterButton).toBeVisible();
+    await expect(clusterButton).toBeDisabled();
+    await expect(jobsPanel.getByText("Waiting on relationship detection")).toBeVisible();
+
+    // Seed an already-judged relationship directly — this suite tests
+    // dispatch, not the paid judge stage itself (that's
+    // `detectRelationships.integration.test.ts`'s job, same split
+    // `clusterDebates.integration.test.ts`'s own `seedRelationship` helper
+    // makes on the worker side).
+    const [claimLoId, claimHiId] = [fixture.anchoredClaimId, fixture.unanchoredClaimId].sort();
+    await db.insert(claimRelationships).values({
+      userId,
+      projectId,
+      claimLoId,
+      claimHiId,
+      valence: "contradiction",
+      category: "findings",
+      judgeBranch: "empirical",
+      strongerSide: "neither",
+      explanation: "Test relationship.",
+      resolution: "Test resolution.",
+      engagement: "none_detected",
+      basisHash: crypto.randomUUID(),
+      promptVersion: "test-v1",
+      provider: "test",
+      model: "test-model",
+    });
+
+    await page.reload();
+    await expect(main(page).getByRole("heading", { name: "Cluster debates project" })).toBeVisible();
+    await expect(clusterButton).toBeEnabled();
+    // A single judged relationship is nowhere near the auto-approve
+    // threshold, so this dispatches immediately with no confirmation step.
+    await clusterButton.click();
+    await expect(jobsPanel.getByText("Queued").first()).toBeVisible({ timeout: 10_000 });
+
+    const rows = await db.select().from(researchJobRequests).where(eq(researchJobRequests.jobType, "cluster_debates"));
+    const dispatched = rows.find((r) => (r.scope as { projectId?: unknown } | null)?.projectId === projectId);
+    expect(dispatched, "no cluster_debates row carries the canonical {projectId} scope").toBeTruthy();
+    expect(dispatched!.scope).toEqual({ projectId });
   });
 
   test("archives and restores a project, and does not disclose another user's project", async ({ page, browser }) => {

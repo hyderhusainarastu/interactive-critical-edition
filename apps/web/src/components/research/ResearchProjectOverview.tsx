@@ -9,7 +9,7 @@ import { computeResearchPipelineSteps } from "@/lib/research/pipelineSteps";
 import { JobStageProgress } from "./JobStageProgress";
 import { LiveAnnouncer } from "./LiveAnnouncer";
 import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
-import { ResearchPipelineStepper } from "./ResearchPipelineStepper";
+import { type PipelineActionState, type PipelineDispatchableAction, ResearchPipelineStepper } from "./ResearchPipelineStepper";
 
 type Project = { id: string; title: string; summary?: string | null; archivedAt?: string | Date | null };
 type Question = { id: string; question: string; sortOrder: number };
@@ -249,6 +249,50 @@ export function ResearchProjectOverview({
     }
   }
 
+  // Phase 30 gap-fix lane: "Detect relationships" and "Cluster debates" are
+  // PROJECT-scoped (no per-work id to key on), so they reuse the exact same
+  // `pendingConfirm`/`dispatching`/`dispatchError` records `extractClaims`
+  // above already keys by workId — here keyed by the literal action name
+  // ("detect"/"cluster") instead, which can never collide with a real work
+  // id (a UUID). Mirrors `extractClaims`'s needs_confirmation flow exactly:
+  // a 409 with `needsConfirmation: true` stores the reason for a "Confirm
+  // and…" follow-up click, any other non-OK response surfaces as a
+  // dispatch error, and success clears both and refreshes.
+  const JOB_TYPE_FOR_ACTION: Record<PipelineDispatchableAction, string> = { detect: "detect_relationships", cluster: "cluster_debates" };
+
+  async function dispatchPipelineAction(action: PipelineDispatchableAction, confirm = false) {
+    setDispatching((current) => ({ ...current, [action]: true }));
+    setDispatchError((current) => ({ ...current, [action]: "" }));
+    try {
+      const response = await fetch(`/api/research/projects/${project.id}/jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobType: JOB_TYPE_FOR_ACTION[action], confirm }),
+      });
+      const body = await response.json();
+      if (response.status === 409 && body.needsConfirmation) {
+        setPendingConfirm((current) => ({ ...current, [action]: { reason: body.error, estimatedUnits: body.estimatedUnits } }));
+        return;
+      }
+      if (!response.ok) throw new Error(body.error ?? `Could not start ${JOB_TYPE_FOR_ACTION[action].replace(/_/g, " ")}.`);
+      setPendingConfirm((current) => {
+        const next = { ...current };
+        delete next[action];
+        return next;
+      });
+      await refreshJobs();
+      router.refresh();
+    } catch (error) {
+      setDispatchError((current) => ({ ...current, [action]: error instanceof Error ? error.message : `Could not start ${JOB_TYPE_FOR_ACTION[action].replace(/_/g, " ")}.` }));
+    } finally {
+      setDispatching((current) => ({ ...current, [action]: false }));
+    }
+  }
+
+  function pipelineActionState(action: PipelineDispatchableAction): PipelineActionState {
+    return { dispatching: Boolean(dispatching[action]), pendingConfirm: pendingConfirm[action] ?? null, error: dispatchError[action] ?? "" };
+  }
+
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="research-project-title">
       <LiveAnnouncer message={announcement} />
@@ -274,7 +318,11 @@ export function ResearchProjectOverview({
         </div>
       </div>
 
-      <ResearchPipelineStepper result={pipelineResult} />
+      <ResearchPipelineStepper
+        result={pipelineResult}
+        onDispatch={dispatchPipelineAction}
+        actionState={pipelineResult.nextAction?.action ? pipelineActionState(pipelineResult.nextAction.action) : undefined}
+      />
 
       {/* Insight feed — zero-LLM, pure DB reads (see lib/research/feed.ts). */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-feed-title">
@@ -403,6 +451,71 @@ export function ResearchProjectOverview({
           tracker, never rendered here). */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-jobs-title">
         <h2 id="research-jobs-title" className="font-serif text-lg font-semibold">Research jobs</h2>
+
+        {/* Action row (Phase 30 gap-fix lane): the same two dispatchable
+            steps the pipeline stepper above offers as its "next action",
+            always available here too so a user isn't forced to wait for
+            "next" to reach them — e.g. re-running detection after adding
+            more claims to an already-detected project. Preconditions are
+            enforced both here (disabled + the stepper's own explanatory
+            text, reused verbatim via `pipelineResult.steps` so the two
+            surfaces can never say something different) and again,
+            authoritatively, server-side in `dispatchDetectRelationshipsJob`/
+            `dispatchClusterDebatesJob`. */}
+        {(() => {
+          const detectStep = pipelineResult.steps.find((s) => s.key === "detect");
+          const clusterStep = pipelineResult.steps.find((s) => s.key === "cluster");
+          const detectReady = pipelineOverview.workCountWithClaims >= 2;
+          const clusterReady = pipelineOverview.relationshipCount >= 1;
+          return (
+            <div className="mt-3 flex flex-wrap items-start gap-3">
+              <div>
+                <button
+                  type="button"
+                  className="app-control app-press rounded border border-[var(--color-border)] px-3 py-2 text-sm disabled:opacity-50"
+                  onClick={() => dispatchPipelineAction("detect")}
+                  disabled={!detectReady || pipelineActionState("detect").dispatching}
+                >
+                  {pipelineActionState("detect").dispatching ? "Starting…" : "Detect relationships"}
+                </button>
+                {!detectReady && detectStep && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{detectStep.state}</p>}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  className="app-control app-press rounded border border-[var(--color-border)] px-3 py-2 text-sm disabled:opacity-50"
+                  onClick={() => dispatchPipelineAction("cluster")}
+                  disabled={!clusterReady || pipelineActionState("cluster").dispatching}
+                >
+                  {pipelineActionState("cluster").dispatching ? "Starting…" : "Cluster debates"}
+                </button>
+                {!clusterReady && clusterStep && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{clusterStep.state}</p>}
+              </div>
+            </div>
+          );
+        })()}
+        {(["detect", "cluster"] as const).map((action) => {
+          const state = pipelineActionState(action);
+          if (!state.pendingConfirm && !state.error) return null;
+          return (
+            <div key={action} className="mt-2">
+              {state.pendingConfirm && (
+                <div className="app-panel-enter rounded border border-[var(--color-accent)] p-2 text-xs">
+                  <p>{state.pendingConfirm.reason}</p>
+                  <button
+                    type="button"
+                    className="app-control app-press mt-2 rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-[var(--color-background)]"
+                    onClick={() => dispatchPipelineAction(action, true)}
+                  >
+                    Confirm and {action === "detect" ? "detect relationships" : "cluster debates"}
+                  </button>
+                </div>
+              )}
+              {state.error && <p className="mt-1 text-xs text-[var(--color-error,#b3261e)]">{state.error}</p>}
+            </div>
+          );
+        })}
+
         <ul className="app-reveal-stagger mt-3 space-y-2" aria-label="Research job requests">
           {jobRequests.map((job) => {
             const workId = jobWorkId(job.scope);

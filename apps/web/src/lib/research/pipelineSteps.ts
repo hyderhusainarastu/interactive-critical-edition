@@ -10,14 +10,19 @@ import type { ResearchPipelineOverview } from "./pipeline";
  * Drives the project overview's pipeline sequence stepper (Item 2 of the
  * Research-workspace fix lane's owner-reported scope addition): Extract
  * claims → Detect relationships → Cluster debates → Chambers / Hypotheses.
- * Deliberately does NOT invent a dispatch action for "Detect relationships"
- * or "Cluster debates" — no web dispatcher for either job type exists
- * anywhere in this codebase yet (`packages/db/src/queue.ts`'s
- * `enqueueAnalyzeClaimDebates` is exported but never called), so a fabricated
- * button here would either do nothing or need an unreviewed paid-dispatch
- * cost-estimation feature built blind. The honest middle ground: state what
- * IS blocking (including the cross-work requirement by name) without
- * pretending a working control exists where none does.
+ *
+ * Phase 30 gap-fix lane: "Detect relationships" and "Cluster debates" now
+ * DO carry a real dispatch action (`PipelineNextAction.action`) once their
+ * preconditions are met — `lib/research/jobs.ts`'s `dispatchDetectRelationshipsJob`/
+ * `dispatchClusterDebatesJob` finally exist, closing the gap this file's own
+ * prior doc comment (kept in git history) explained: no web dispatcher for
+ * either job type existed anywhere in the codebase, so a fabricated button
+ * would have either done nothing or needed an unreviewed cost-estimation
+ * feature built blind. `action` is only ever set on the SAME `nextAction`
+ * branch that already reports the step as unblocked (`workCountWithClaims >= 2`
+ * for detect, `detectDone` for cluster) — a step whose real precondition
+ * isn't met keeps reporting the honest blocking message with no `action`,
+ * exactly as before.
  */
 
 export type PipelineStepKey = "extract" | "detect" | "cluster" | "synthesize";
@@ -32,6 +37,9 @@ export interface PipelineStepView {
 export interface PipelineNextAction {
   message: string;
   href?: string;
+  /** Which research job this action can dispatch, when a real dispatch
+   *  control (not just an informational message/link) applies. */
+  action?: "detect" | "cluster";
 }
 
 export interface PipelineStepperResult {
@@ -107,9 +115,9 @@ export function computeResearchPipelineSteps(
     nextAction =
       workCountWithClaims < 2
         ? { message: "Add and extract a second work to enable relationship detection.", href: links.membersHref }
-        : { message: "Relationship detection hasn't run for this project yet." };
+        : { message: "Relationship detection hasn't run for this project yet.", action: "detect" };
   } else if (!clusterDone) {
-    nextAction = { message: "Debate clustering hasn't run for this project yet." };
+    nextAction = { message: "Debate clustering hasn't run for this project yet.", action: "cluster" };
   } else if (!synthesizeDone) {
     nextAction = { message: "Generate hypotheses, or open a debate to synthesize an evidence chamber.", href: links.hypothesesHref };
   }
