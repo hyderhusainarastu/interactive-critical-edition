@@ -230,14 +230,16 @@ export async function listResearchClaimNaturesInUse(userId: string, projectId: s
   return rows.map((r) => r.claimNature);
 }
 
-/** Used by the DB-cascading id check the claims-permalink page performs to
- *  know which work ids belong to which project (for a "back to project"
- *  link) without re-deriving it from scratch at each call site. */
-export async function listProjectIdsForWork(userId: string, workId: string): Promise<string[]> {
+/** Used by the claims-permalink page to know which project(s) a claim's
+ *  owning work belongs to (for the breadcrumb strip's "back to Claims"
+ *  crumb, Item 2 of the fix lane — this used to return bare ids only, before
+ *  the breadcrumb needed the project's title too) without re-deriving it
+ *  from scratch at each call site. */
+export async function listProjectsForWork(userId: string, workId: string): Promise<{ projectId: string; projectTitle: string }[]> {
   const rows = await db
-    .select({ projectId: researchProjectMembers.projectId })
+    .select({ projectId: researchProjectMembers.projectId, projectTitle: researchProjects.title })
     .from(researchProjectMembers)
     .innerJoin(researchProjects, eq(researchProjects.id, researchProjectMembers.projectId))
     .where(and(eq(researchProjectMembers.workId, workId), eq(researchProjects.userId, userId), inArray(researchProjectMembers.memberType, ["work"])));
-  return rows.map((r) => r.projectId);
+  return rows;
 }

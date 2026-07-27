@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import { explainZeroHypotheses } from "@/lib/research/hypothesesNote";
+import { JobStageProgress } from "./JobStageProgress";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 import { ResearchCorrectionControls } from "./ResearchCorrectionControls";
 
 type Project = { id: string; title: string };
@@ -62,15 +68,31 @@ function NoveltyChip({ hypothesis }: { hypothesis: Hypothesis }) {
   );
 }
 
+interface JobRequestRow {
+  id: string;
+  jobType: string;
+  status: string;
+  stage: string | null;
+  progressIndex: number | null;
+  progressTotal: number | null;
+  note?: string | null;
+}
+
 export function ResearchHypothesesView({
   project,
   initialHypotheses,
   initialGaps,
+  latestCompletedNote,
 }: {
   project: Project;
   initialHypotheses: Hypothesis[];
   initialGaps: Gap[];
+  /** Item 1 (owner-reported scope addition): the most recently completed
+   *  `generate_hypotheses` run's own note — the only record of why a run
+   *  produced zero hypotheses. Null when no run has ever completed. */
+  latestCompletedNote?: string | null;
 }) {
+  const router = useRouter();
   const [hypotheses, setHypotheses] = useState(initialHypotheses);
   const [gaps, setGaps] = useState(initialGaps);
   const [question, setQuestion] = useState("");
@@ -79,6 +101,9 @@ export function ResearchHypothesesView({
   const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [job, setJob] = useState<JobRequestRow | null>(null);
+  const [completedNote, setCompletedNote] = useState<string | null>(latestCompletedNote ?? null);
 
   async function refresh() {
     const response = await fetch(`/api/research/projects/${project.id}/hypotheses`);
@@ -88,6 +113,41 @@ export function ResearchHypothesesView({
       if (Array.isArray(body.gaps)) setGaps(body.gaps);
     }
   }
+
+  // Item 1(b)/3: poll the dispatched `generate_hypotheses` request the same
+  // way every other research job-dispatch surface does — while it's
+  // non-terminal, every ~3s (paused while the tab is hidden) — and refresh
+  // both this view's own data and the whole route once it completes.
+  useResearchJobPolling({
+    rows: job ? [job] : [],
+    fetchRows: async () => {
+      if (!job) return null;
+      const response = await fetch(`/api/research/projects/${project.id}/jobs`);
+      if (!response.ok) return null;
+      const body = await response.json();
+      const requests = Array.isArray(body.requests) ? (body.requests as JobRequestRow[]) : [];
+      const found = requests.find((r) => r.id === job.id);
+      return found ? [found] : null;
+    },
+    onUpdate: (rows) => {
+      const updated = rows[0];
+      if (updated) setJob(updated);
+    },
+    onComplete: (justCompleted) => {
+      setAnnouncement("Hypothesis generation finished — new hypotheses may be listed below.");
+      setStatusMessage("Hypothesis generation finished.");
+      if (typeof justCompleted[0]?.note === "string") setCompletedNote(justCompleted[0].note);
+      void refresh();
+      router.refresh();
+    },
+  });
+
+  // Item 1 (owner-reported scope addition): only ever shown in place of the
+  // generic empty state, and only when there's a real completed run to
+  // explain — `explainZeroHypotheses` returns `null` both when there's no
+  // completed run yet and when the note doesn't parse, so the fallback
+  // generic text always covers those honestly too.
+  const zeroHypothesesExplanation = hypotheses.length === 0 ? explainZeroHypotheses(completedNote) : null;
 
   async function generate(confirm = false) {
     setDispatching(true);
@@ -108,10 +168,14 @@ export function ResearchHypothesesView({
       setPendingConfirm(null);
       setStatusMessage(
         body.reused
-          ? "An identical request is already in progress or was already completed — nothing new was started."
-          : "Hypothesis generation started. This page reflects new results once you refresh."
+          ? "An identical request is already in progress or was already completed."
+          : "Hypothesis generation started — this page updates automatically once it finishes."
       );
+      if (body.requestId) {
+        setJob({ id: body.requestId, jobType: "generate_hypotheses", status: "queued", stage: null, progressIndex: null, progressTotal: null });
+      }
       await refresh();
+      router.refresh();
     } catch (error) {
       setDispatchError(error instanceof Error ? error.message : "Could not start hypothesis generation.");
     } finally {
@@ -121,11 +185,10 @@ export function ResearchHypothesesView({
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="research-hypotheses-title">
+      <LiveAnnouncer message={announcement} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[var(--color-accent)]">
-            <Link href={`/research/${project.id}`} className="underline">{project.title}</Link>
-          </p>
+          <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title, href: `/research/${project.id}` }, { label: "Hypotheses & gaps" }]} />
           <h1 id="research-hypotheses-title" className="font-serif text-3xl font-semibold">Hypotheses &amp; gaps</h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">
             Every hypothesis below is grounded in real, detected conflicts between claims in this project — never a
@@ -182,6 +245,7 @@ export function ResearchHypothesesView({
             </button>
           </div>
         )}
+        {job && <JobStageProgress status={job.status} stage={job.stage} progressIndex={job.progressIndex} progressTotal={job.progressTotal} />}
         {statusMessage && <p className="mt-2 text-sm text-[var(--color-text-muted)]">{statusMessage}</p>}
         {dispatchError && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{dispatchError}</p>}
       </section>
@@ -245,7 +309,7 @@ export function ResearchHypothesesView({
           ))}
           {!hypotheses.length && (
             <li className="app-empty app-mount rounded p-4 text-sm text-[var(--color-text-muted)]">
-              No hypotheses yet — generate some once this project has detected conflicts between claims.
+              {zeroHypothesesExplanation ?? "No hypotheses yet — generate some once this project has detected conflicts between claims."}
             </li>
           )}
         </ul>

@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import { JobStageProgress } from "./JobStageProgress";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 
 type Project = { id: string; title: string };
 
@@ -35,6 +40,19 @@ type Hit = {
   monitorType: MonitorType;
 };
 
+type MonitorJobRequest = {
+  id: string;
+  monitorId: string;
+  status: string;
+  stage: string | null;
+  progressIndex: number | null;
+  progressTotal: number | null;
+  note: string | null;
+  error: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
 const MONITOR_TYPE_LABEL: Record<MonitorType, string> = {
   topic: "Topic",
   citation_alert: "Citation alert",
@@ -64,10 +82,28 @@ function formatDate(value: string | Date | null): string {
  * confirmation-cost gate (Workstream F's "no cost figures in research UI"
  * precedent) — every action either scans real providers for free metadata
  * or performs a plain DB write.
+ *
+ * Live updates (Item 1(a)/(b) of the Research-workspace fix lane): every
+ * mutation calls `router.refresh()`, and `run_monitor` scan requests are
+ * polled the same way the project overview's jobs panel is, so a "Scan now"
+ * click surfaces its new hits without a manual refresh.
  */
-export function MonitorsView({ project, initialMonitors, initialHits }: { project?: Project; initialMonitors: Monitor[]; initialHits: Hit[] }) {
+export function MonitorsView({
+  project,
+  initialMonitors,
+  initialHits,
+  initialJobRequests,
+}: {
+  project?: Project;
+  initialMonitors: Monitor[];
+  initialHits: Hit[];
+  initialJobRequests: MonitorJobRequest[];
+}) {
+  const router = useRouter();
   const [monitors, setMonitors] = useState(initialMonitors);
   const [hits, setHits] = useState(initialHits);
+  const [jobRequests, setJobRequests] = useState(initialJobRequests);
+  const [announcement, setAnnouncement] = useState("");
   const [monitorType, setMonitorType] = useState<MonitorType>("topic");
   const [query, setQuery] = useState("");
   const [cadence, setCadence] = useState<Cadence>("daily");
@@ -79,6 +115,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
 
   const hitsQuery = project ? `?projectId=${project.id}` : "";
   const monitorsQuery = project ? `?projectId=${project.id}` : "";
+  const jobsQuery = project ? `?projectId=${project.id}` : "";
 
   async function refreshHits() {
     const response = await fetch(`/api/research/monitors/hits${hitsQuery}`);
@@ -91,6 +128,33 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
     const body = await response.json();
     if (response.ok && Array.isArray(body.monitors)) setMonitors(body.monitors);
   }
+
+  async function fetchJobRequests(): Promise<MonitorJobRequest[] | null> {
+    const response = await fetch(`/api/research/monitors/jobs${jobsQuery}`);
+    if (!response.ok) return null;
+    const body = await response.json();
+    return Array.isArray(body.requests) ? body.requests : null;
+  }
+
+  // Item 1(b): while any scan is non-terminal, poll every ~3s (paused while
+  // the tab is hidden). When one finishes, pull the new hits/monitors in and
+  // refresh the whole route so anything else server-rendered (e.g. the
+  // insight feed on a project this monitor belongs to) catches up too.
+  useResearchJobPolling({
+    rows: jobRequests,
+    fetchRows: fetchJobRequests,
+    onUpdate: setJobRequests,
+    onComplete: (justCompleted) => {
+      setAnnouncement(
+        justCompleted.length === 1 ? "A monitor scan finished — new findings may be available below." : "Monitor scans finished — new findings may be available below.",
+      );
+      void refreshHits();
+      void refreshMonitors();
+      router.refresh();
+    },
+  });
+
+  const jobByMonitorId = new Map(jobRequests.map((j) => [j.monitorId, j]));
 
   async function createMonitor(e: React.FormEvent) {
     e.preventDefault();
@@ -109,6 +173,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       setMonitors((prev) => [body.monitor, ...prev]);
       setQuery("");
       setStatusMessage(`Monitor created${cadence === "paused" ? " (paused — set a cadence to start scanning)" : ""}.`);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create monitor.");
     } finally {
@@ -128,6 +193,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not update cadence.");
       setMonitors((prev) => prev.map((m) => (m.id === monitorId ? body.monitor : m)));
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update cadence.");
     } finally {
@@ -146,8 +212,15 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       setStatusMessage(
         body.action === "reused"
           ? "A scan of this monitor is already in progress — nothing new was started."
-          : "Scan started. New hits appear here once it finishes — refresh to check.",
+          : "Scan started. New hits appear here automatically once it finishes.",
       );
+      // Optimistic row so polling starts immediately rather than waiting for
+      // the next 3s tick to discover the new request.
+      setJobRequests((current) => [
+        { id: body.requestId, monitorId, status: "queued", stage: null, progressIndex: null, progressTotal: null, note: null, error: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ...current.filter((j) => j.id !== body.requestId),
+      ]);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start scan.");
     } finally {
@@ -166,6 +239,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       }
       setMonitors((prev) => prev.filter((m) => m.id !== monitorId));
       setHits((prev) => prev.filter((h) => h.monitorId !== monitorId));
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete monitor.");
     } finally {
@@ -183,6 +257,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
         throw new Error(body.error ?? "Could not dismiss.");
       }
       setHits((prev) => prev.filter((h) => h.id !== hitId));
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not dismiss.");
     } finally {
@@ -198,6 +273,7 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Could not add to corpus.");
       setHits((prev) => prev.map((h) => (h.id === hitId ? { ...h, importedCorpusItemId: body.corpusItemId } : h)));
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add to corpus.");
     } finally {
@@ -207,13 +283,16 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="monitors-title">
+      <LiveAnnouncer message={announcement} />
+      <ResearchBreadcrumb
+        items={
+          project
+            ? [{ label: "Research", href: "/research" }, { label: project.title, href: `/research/${project.id}` }, { label: "Monitors" }]
+            : [{ label: "Research", href: "/research" }, { label: "Monitors" }]
+        }
+      />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          {project && (
-            <p className="text-sm font-medium text-[var(--color-accent)]">
-              <Link href={`/research/${project.id}`} className="underline">{project.title}</Link>
-            </p>
-          )}
           <h1 id="monitors-title" className="font-serif text-3xl font-semibold">
             {project ? "Monitors" : "Research monitors"}
           </h1>
@@ -280,48 +359,62 @@ export function MonitorsView({ project, initialMonitors, initialHits }: { projec
       <section className="mt-6" aria-labelledby="monitors-list-title">
         <h2 id="monitors-list-title" className="font-serif text-lg font-semibold">Your monitors</h2>
         <ul className="app-reveal-stagger mt-3 space-y-3" aria-label="Monitors">
-          {monitors.map((m) => (
-            <li key={m.id} className="app-mount app-card rounded-lg p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium">{m.query}</p>
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                    {MONITOR_TYPE_LABEL[m.monitorType]} · last scanned {formatDate(m.lastScannedAt)}
-                  </p>
+          {monitors.map((m) => {
+            const activeJob = jobByMonitorId.get(m.id);
+            return (
+              <li key={m.id} className="app-mount app-card rounded-lg p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-medium">{m.query}</p>
+                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                      {MONITOR_TYPE_LABEL[m.monitorType]} · last scanned {formatDate(m.lastScannedAt)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="sr-only" htmlFor={`cadence-${m.id}`}>Cadence for {m.query}</label>
+                    <select
+                      id={`cadence-${m.id}`}
+                      value={m.cadence}
+                      onChange={(e) => updateCadence(m.id, e.target.value as Cadence)}
+                      disabled={busyMonitorId === m.id}
+                      className="app-control min-h-11 rounded border border-[var(--color-border)] px-2 py-1 text-xs"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="paused">Paused</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
+                      onClick={() => scanNow(m.id)}
+                      disabled={busyMonitorId === m.id}
+                    >
+                      Scan now
+                    </button>
+                    <button
+                      type="button"
+                      className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-error,#b3261e)] disabled:opacity-50"
+                      onClick={() => deleteMonitor(m.id)}
+                      disabled={busyMonitorId === m.id}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="sr-only" htmlFor={`cadence-${m.id}`}>Cadence for {m.query}</label>
-                  <select
-                    id={`cadence-${m.id}`}
-                    value={m.cadence}
-                    onChange={(e) => updateCadence(m.id, e.target.value as Cadence)}
-                    disabled={busyMonitorId === m.id}
-                    className="app-control min-h-11 rounded border border-[var(--color-border)] px-2 py-1 text-xs"
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="paused">Paused</option>
-                  </select>
-                  <button
-                    type="button"
-                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs disabled:opacity-50"
-                    onClick={() => scanNow(m.id)}
-                    disabled={busyMonitorId === m.id}
-                  >
-                    Scan now
-                  </button>
-                  <button
-                    type="button"
-                    className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-error,#b3261e)] disabled:opacity-50"
-                    onClick={() => deleteMonitor(m.id)}
-                    disabled={busyMonitorId === m.id}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
+                {activeJob && (
+                  <JobStageProgress
+                    status={activeJob.status}
+                    stage={activeJob.stage}
+                    progressIndex={activeJob.progressIndex}
+                    progressTotal={activeJob.progressTotal}
+                  />
+                )}
+                {activeJob?.status === "failed" && activeJob.error && (
+                  <p className="mt-2 text-xs text-[var(--color-error,#b3261e)]">{activeJob.error}</p>
+                )}
+              </li>
+            );
+          })}
           {!monitors.length && (
             <li className="app-empty app-mount rounded p-4 text-sm text-[var(--color-text-muted)]">
               No monitors yet — create one above to have Palimnote watch for new work.

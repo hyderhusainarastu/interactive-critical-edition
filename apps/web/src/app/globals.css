@@ -605,6 +605,31 @@ body {
   border-radius: inherit;
   background: var(--gradient-accent);
 }
+/* Research-workspace job progress (Item 3, fix lane): the indeterminate
+   sibling of `.app-progress` above, for a `research_job_request` row whose
+   `progressTotal` isn't known yet. Static by default — a fixed partial fill,
+   matching this file's own "static fill" convention for reduced motion — and
+   only gains the sliding-bar animation inside the `no-preference` media
+   query below, so `prefers-reduced-motion: reduce` and the in-app
+   `data-motion="reduced"` blanket override (further below) both leave it
+   motionless without any extra JS. */
+.app-progress-indeterminate {
+  position: relative;
+  overflow: hidden;
+  height: .55rem;
+  border-radius: 999px;
+  background: var(--color-surface-sunken);
+}
+.app-progress-indeterminate::after {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient-accent);
+  content: "";
+}
 .app-progress-ring {
   --progress: 0;
   display: grid;
@@ -715,6 +740,8 @@ body {
   .app-empty::before { animation: app-empty-float 4.5s ease-in-out infinite; }
   .app-stage-marker[data-state="active"] { animation: app-stage-pulse 1.8s ease-in-out infinite; }
   .app-progress-ring { transition: background .35s var(--spring-gentle); }
+  .app-progress-indeterminate::after { animation: app-progress-indeterminate-slide 1.4s ease-in-out infinite; }
+  @keyframes app-progress-indeterminate-slide { 0% { left: -40%; } 100% { left: 100%; } }
   @keyframes app-shimmer { to { background-position: -200% 0; } }
   @keyframes app-selected { from { box-shadow: var(--shadow-glow); transform: translateY(-1px); } }
   @keyframes app-mount { from { opacity: 0; transform: translateY(8px); } }

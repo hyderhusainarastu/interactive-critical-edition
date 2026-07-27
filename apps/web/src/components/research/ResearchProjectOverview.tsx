@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import type { ResearchPipelineOverview } from "@/lib/research/pipeline";
+import { computeResearchPipelineSteps } from "@/lib/research/pipelineSteps";
+import { JobStageProgress } from "./JobStageProgress";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
+import { ResearchPipelineStepper } from "./ResearchPipelineStepper";
 
 type Project = { id: string; title: string; summary?: string | null; archivedAt?: string | Date | null };
 type Question = { id: string; question: string; sortOrder: number };
@@ -71,6 +79,7 @@ export function ResearchProjectOverview({
   availableWorks,
   initialFeed,
   initialJobRequests,
+  pipelineOverview,
 }: {
   project: Project;
   initialQuestions: Question[];
@@ -78,13 +87,14 @@ export function ResearchProjectOverview({
   availableWorks: AvailableWork[];
   initialFeed: InsightFeed;
   initialJobRequests: JobRequest[];
+  pipelineOverview: ResearchPipelineOverview;
 }) {
+  const router = useRouter();
   const [questions, setQuestions] = useState(initialQuestions);
   const [members, setMembers] = useState(initialMembers);
-  // Setter intentionally unused for now — see `refreshJobs()`'s doc comment
-  // on why the feed itself refreshes on next navigation rather than here.
-  const [feed] = useState(initialFeed);
+  const [feed, setFeed] = useState(initialFeed);
   const [jobRequests, setJobRequests] = useState(initialJobRequests);
+  const [announcement, setAnnouncement] = useState("");
   const [newQuestion, setNewQuestion] = useState("");
   const [addingQuestion, setAddingQuestion] = useState(false);
   const [workToAdd, setWorkToAdd] = useState("");
@@ -94,19 +104,58 @@ export function ResearchProjectOverview({
   const [dispatching, setDispatching] = useState<Record<string, boolean>>({});
   const [dispatchError, setDispatchError] = useState<Record<string, string>>({});
 
-  /** Refetches the jobs list after a dispatch so the new request shows up
-   *  immediately. The insight feed itself (unreviewed-claim/running-job
-   *  counts) is a server-rendered concern with no dedicated client route in
-   *  this lane — it catches up on the next navigation/reload, same as the
-   *  Writer project list's own archived-project refresh pattern. */
-  async function refreshJobs() {
+  // Item 1(a): `router.refresh()` re-renders this route's Server Components
+  // with fresh props, but a "use client" component's own `useState` only
+  // reads its `initial*` prop once, on mount — without this sync, the
+  // insight feed (a purely server-computed read with no dedicated client
+  // fetch of its own) would keep showing stale counts forever after the
+  // first render, refresh or not.
+  useEffect(() => {
+    setFeed(initialFeed);
+  }, [initialFeed]);
+
+  /** Refetches the jobs list — used both right after a dispatch (so the new
+   *  request shows up immediately) and as the polling hook's `fetchRows`. */
+  async function fetchJobs(): Promise<JobRequest[] | null> {
     const response = await fetch(`/api/research/projects/${project.id}/jobs`);
+    if (!response.ok) return null;
     const body = await response.json();
-    if (response.ok && body.requests) setJobRequests(body.requests);
+    return Array.isArray(body.requests) ? body.requests : null;
   }
+
+  async function refreshJobs() {
+    const next = await fetchJobs();
+    if (next) setJobRequests(next);
+  }
+
+  // Item 1(b): while any dispatched job is non-terminal, poll every ~3s
+  // (paused while the tab is hidden). When one finishes, refresh the whole
+  // route so its real output (claims, in this project's case) appears
+  // without the user doing anything.
+  useResearchJobPolling({
+    rows: jobRequests,
+    fetchRows: fetchJobs,
+    onUpdate: setJobRequests,
+    onComplete: (justCompleted) => {
+      setAnnouncement(
+        justCompleted.length === 1 ? "A research job finished." : `${justCompleted.length} research jobs finished.`,
+      );
+      router.refresh();
+    },
+  });
 
   const memberByWorkId = new Map(members.filter((m) => m.workId).map((m) => [m.workId as string, m]));
   const addableWorks = availableWorks.filter((w) => !memberByWorkId.has(w.id));
+
+  // Item 2 (owner-reported scope addition): `pipelineOverview` is read
+  // straight off the prop — not copied into `useState` — the same
+  // `CorpusView.tsx` "`items` reads the prop directly" precedent, so a
+  // `router.refresh()` after any mutation above (extracting claims, etc.)
+  // is what keeps the stepper honest without a separate sync effect.
+  const pipelineResult = computeResearchPipelineSteps(pipelineOverview, {
+    membersHref: "#research-members-title",
+    hypothesesHref: `/research/${project.id}/hypotheses`,
+  });
 
   async function addQuestion() {
     const question = newQuestion.trim();
@@ -122,6 +171,7 @@ export function ResearchProjectOverview({
       if (!response.ok) throw new Error(body.error ?? "Could not add question.");
       setQuestions((current) => [...current, body.question]);
       setNewQuestion("");
+      router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not add question.");
     } finally {
@@ -135,7 +185,10 @@ export function ResearchProjectOverview({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    if (response.ok) setQuestions((current) => current.filter((q) => q.id !== id));
+    if (response.ok) {
+      setQuestions((current) => current.filter((q) => q.id !== id));
+      router.refresh();
+    }
   }
 
   async function addMember() {
@@ -151,6 +204,7 @@ export function ResearchProjectOverview({
       if (!response.ok) throw new Error(body.error ?? "Could not add work to this project.");
       setMembers((current) => [...current.filter((m) => m.id !== body.member.id), body.member]);
       setWorkToAdd("");
+      router.refresh();
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Could not add work to this project.");
     } finally {
@@ -160,7 +214,10 @@ export function ResearchProjectOverview({
 
   async function removeMember(memberId: string) {
     const response = await fetch(`/api/research/projects/${project.id}/members?memberId=${memberId}`, { method: "DELETE" });
-    if (response.ok) setMembers((current) => current.filter((m) => m.id !== memberId));
+    if (response.ok) {
+      setMembers((current) => current.filter((m) => m.id !== memberId));
+      router.refresh();
+    }
   }
 
   async function extractClaims(workId: string, confirm = false) {
@@ -184,6 +241,7 @@ export function ResearchProjectOverview({
         return next;
       });
       await refreshJobs();
+      router.refresh();
     } catch (error) {
       setDispatchError((current) => ({ ...current, [workId]: error instanceof Error ? error.message : "Could not start claim extraction." }));
     } finally {
@@ -193,9 +251,10 @@ export function ResearchProjectOverview({
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="research-project-title">
+      <LiveAnnouncer message={announcement} />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-[var(--color-accent)]"><Link href="/research" className="underline">Research</Link></p>
+          <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title }]} />
           <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
           {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
         </div>
@@ -214,6 +273,8 @@ export function ResearchProjectOverview({
           </Link>
         </div>
       </div>
+
+      <ResearchPipelineStepper result={pipelineResult} />
 
       {/* Insight feed — zero-LLM, pure DB reads (see lib/research/feed.ts). */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-feed-title">
@@ -351,10 +412,9 @@ export function ResearchProjectOverview({
                 <p className="font-medium">{job.jobType.replace(/_/g, " ")}{workTitle ? ` — ${workTitle}` : ""}</p>
                 <p className="mt-1 text-[var(--color-text-muted)]">
                   {STATUS_LABEL[job.status] ?? job.status}
-                  {job.stage ? ` · ${job.stage}` : ""}
-                  {job.progressTotal ? ` · ${job.progressIndex ?? 0} of ${job.progressTotal}` : ""}
                   {job.coverage ? ` · coverage: ${job.coverage}` : ""}
                 </p>
+                <JobStageProgress status={job.status} stage={job.stage} progressIndex={job.progressIndex} progressTotal={job.progressTotal} />
                 {job.note && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{job.note}</p>}
                 {job.error && <p className="mt-1 text-xs text-[var(--color-error,#b3261e)]">{job.error}</p>}
               </li>

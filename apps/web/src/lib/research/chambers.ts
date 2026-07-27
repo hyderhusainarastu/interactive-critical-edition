@@ -1,4 +1,4 @@
-import { claimScores, db, debateClusters, evidenceChamberPositionClaims, evidenceChamberPositions, evidenceChambers, researchClaims, works } from "@ice/db";
+import { claimScores, db, debateClusters, evidenceChamberPositionClaims, evidenceChamberPositions, evidenceChambers, researchClaims, researchProjects, works } from "@ice/db";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 /**
@@ -160,6 +160,8 @@ export interface EvidenceChamberView {
   clusterId: string;
   clusterName: string;
   projectId: string;
+  /** For the breadcrumb strip's project-name crumb (Item 2, fix lane). */
+  projectTitle: string;
   question: string;
   sharedGround: string;
   pointOfDivergence: string;
@@ -241,8 +243,10 @@ export async function getEvidenceChamberView(userId: string, chamberId: string):
       hidden: evidenceChambers.hidden,
       createdAt: evidenceChambers.createdAt,
       clusterName: sql<string>`(select name from debate_cluster where id = ${evidenceChambers.clusterId})`,
+      projectTitle: researchProjects.title,
     })
     .from(evidenceChambers)
+    .innerJoin(researchProjects, eq(researchProjects.id, evidenceChambers.projectId))
     .where(and(eq(evidenceChambers.id, chamberId), eq(evidenceChambers.userId, userId)))
     .limit(1);
   if (!chamberRow) return null;

@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
+import { LiveAnnouncer } from "./LiveAnnouncer";
+import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 
 type Project = { id: string; title: string };
 type MemberWork = { id: string; title: string };
@@ -47,11 +50,17 @@ export function ResearchClaimsTable({
   initial,
   naturesInUse,
   memberWorks,
+  initialActiveExtractionJobs = [],
 }: {
   project: Project;
   initial: ListResult;
   naturesInUse: string[];
   memberWorks: MemberWork[];
+  /** Item 1(c): any `extract_claims` job that was still non-terminal at
+   *  render time — polled (simple approach: only while at least one is
+   *  active) so this table's own list catches up automatically once
+   *  extraction, dispatched from the overview or Corpus page, finishes. */
+  initialActiveExtractionJobs?: { id: string; status: string }[];
 }) {
   const [result, setResult] = useState(initial);
   const [loading, setLoading] = useState(false);
@@ -60,6 +69,8 @@ export function ResearchClaimsTable({
   const [anchorState, setAnchorState] = useState("");
   const [verificationStatus, setVerificationStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [activeExtractionJobs, setActiveExtractionJobs] = useState(initialActiveExtractionJobs);
+  const [announcement, setAnnouncement] = useState("");
 
   const fetchClaims = useCallback(
     async (nextPage: number) => {
@@ -101,13 +112,33 @@ export function ResearchClaimsTable({
     };
   }
 
+  // Item 1(c): while a related extraction job is active, poll it; once it
+  // completes, re-fetch this page of claims so newly extracted rows appear
+  // without a manual reload.
+  useResearchJobPolling({
+    rows: activeExtractionJobs,
+    fetchRows: async () => {
+      const response = await fetch(`/api/research/projects/${project.id}/jobs`);
+      if (!response.ok) return null;
+      const body = await response.json();
+      if (!Array.isArray(body.requests)) return null;
+      return body.requests
+        .filter((r: { jobType: string; status: string }) => r.jobType === "extract_claims")
+        .map((r: { id: string; status: string }) => ({ id: r.id, status: r.status }));
+    },
+    onUpdate: setActiveExtractionJobs,
+    onComplete: (justCompleted) => {
+      setAnnouncement(justCompleted.length === 1 ? "Claim extraction finished — new claims may be listed below." : "Claim extraction finished for multiple jobs — new claims may be listed below.");
+      void fetchClaims(page);
+    },
+  });
+
   const totalPages = Math.max(1, Math.ceil(result.total / result.pageSize));
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6" aria-labelledby="research-claims-title">
-      <p className="text-sm font-medium text-[var(--color-accent)]">
-        <Link href="/research" className="underline">Research</Link> / <Link href={`/research/${project.id}`} className="underline">{project.title}</Link>
-      </p>
+      <LiveAnnouncer message={announcement} />
+      <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title, href: `/research/${project.id}` }, { label: "Claims" }]} />
       <h1 id="research-claims-title" className="mt-1 font-serif text-3xl font-semibold">Claims</h1>
 
       <div className="app-panel-enter mt-4 flex flex-wrap items-end gap-3" role="group" aria-label="Claim filters">

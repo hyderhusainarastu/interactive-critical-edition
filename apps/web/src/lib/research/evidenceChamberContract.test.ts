@@ -152,6 +152,7 @@ const sampleChamber: EvidenceChamberView = {
   clusterId: "cluster-1",
   clusterName: "Akrasia debate",
   projectId: "project-1",
+  projectTitle: "Sample research project",
   question: "Does akrasia involve a failure of knowledge or a failure of will?",
   sharedGround: "Both agree the akratic agent acts against their better judgment.",
   pointOfDivergence: "Irwin locates the failure in incomplete practical reasoning; Davidson in weakness of will.",

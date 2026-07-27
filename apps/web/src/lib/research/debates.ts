@@ -1,4 +1,4 @@
-import { db, debateClusterMembers, debateClusters, evidenceChambers, researchClaims, works } from "@ice/db";
+import { db, debateClusterMembers, debateClusters, evidenceChambers, researchClaims, researchProjects, works } from "@ice/db";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { getOwnedResearchProject } from "./projects";
 
@@ -68,6 +68,9 @@ export interface DebateClusterMemberClaimRow {
 export interface DebateClusterDetail {
   id: string;
   projectId: string;
+  /** For the breadcrumb strip's project-name crumb (Item 2, fix lane) — no
+   *  other field on this row already carries it. */
+  projectTitle: string;
   name: string;
   researchQuestion: string | null;
   description: string | null;
@@ -92,6 +95,7 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
     .select({
       id: debateClusters.id,
       projectId: debateClusters.projectId,
+      projectTitle: researchProjects.title,
       name: debateClusters.name,
       researchQuestion: debateClusters.researchQuestion,
       description: debateClusters.description,
@@ -103,6 +107,7 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
       createdAt: debateClusters.createdAt,
     })
     .from(debateClusters)
+    .innerJoin(researchProjects, eq(researchProjects.id, debateClusters.projectId))
     .where(and(eq(debateClusters.id, clusterId), eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId)))
     .limit(1);
   if (!cluster) return null;

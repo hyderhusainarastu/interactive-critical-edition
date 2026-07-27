@@ -2,9 +2,10 @@ import { phase25FeatureEnabled } from "@ice/config";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClaimCorrectionExtras } from "@/components/research/ClaimCorrectionExtras";
+import { ResearchBreadcrumb } from "@/components/research/ResearchBreadcrumb";
 import { ResearchCorrectionControls } from "@/components/research/ResearchCorrectionControls";
 import { requireSession } from "@/lib/auth";
-import { getResearchClaimDetail, listProjectIdsForWork } from "@/lib/research/claims";
+import { getResearchClaimDetail, listProjectsForWork } from "@/lib/research/claims";
 
 const NATURE_LABEL: Record<string, string> = {
   empirical: "Empirical",
@@ -26,19 +27,19 @@ export default async function ResearchClaimPermalinkPage({ params }: { params: P
   const { claimId } = await params;
   const claim = await getResearchClaimDetail(session.user.id, claimId);
   if (!claim) notFound();
-  const projectIds = claim.workId ? await listProjectIdsForWork(session.user.id, claim.workId) : [];
-  const backProjectId = projectIds[0] ?? null;
+  const owningProjects = claim.workId ? await listProjectsForWork(session.user.id, claim.workId) : [];
+  const backProject = owningProjects[0] ?? null;
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 sm:px-6" aria-labelledby="research-claim-title">
-      <p className="text-sm font-medium text-[var(--color-accent)]">
-        <Link href="/research" className="underline">Research</Link>
-        {backProjectId ? (
-          <>
-            {" "}/ <Link href={`/research/${backProjectId}/claims`} className="underline">Claims</Link>
-          </>
-        ) : null}
-      </p>
+      <ResearchBreadcrumb
+        items={[
+          { label: "Research", href: "/research" },
+          ...(backProject ? [{ label: backProject.projectTitle, href: `/research/${backProject.projectId}` }] : []),
+          ...(backProject ? [{ label: "Claims", href: `/research/${backProject.projectId}/claims` }] : []),
+          { label: claim.claimText },
+        ]}
+      />
       <h1 id="research-claim-title" className="mt-1 font-serif text-2xl font-semibold">{claim.claimText}</h1>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">

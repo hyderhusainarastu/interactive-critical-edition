@@ -10,11 +10,12 @@ import { getOwnedResearchProject } from "@/lib/research/projects";
  *  unbuilt half of Phase 28's corpus-import surface — 28.1 built the
  *  project/claims pages and 28.2 built the worker/service side
  *  (`research_corpus_item`, `import_corpus` job handler), but no page ever
- *  read or wrote either. Import jobs (`jobType: "import_corpus"`) run
- *  async on the worker (same as monitor scans), so this page's own
- *  `initialJobRequests` is filtered to that job type purely so the view can
- *  show "import in progress" — the actual imported items only appear once
- *  the job completes and the page is next loaded. */
+ *  read or wrote either. Import jobs (`jobType: "import_corpus"`) and this
+ *  page's own "Extract claims" (`jobType: "extract_claims"`, scoped to a
+ *  corpus item) both run async on the worker, so `initialJobRequests` is
+ *  filtered to those two job types — the view polls them (Item 1(b), fix
+ *  lane) so an import or extraction's real output appears automatically
+ *  once the job completes, not only on the next full page load. */
 export default async function ResearchProjectCorpusPage({ params }: { params: Promise<{ projectId: string }> }) {
   if (!phase25FeatureEnabled("research")) notFound();
   const session = await requireSession();
@@ -30,7 +31,7 @@ export default async function ResearchProjectCorpusPage({ params }: { params: Pr
     <CorpusView
       project={project}
       initialItems={items}
-      initialImportJobs={jobRequests.filter((r) => r.jobType === "import_corpus")}
+      initialImportJobs={jobRequests.filter((r) => r.jobType === "import_corpus" || r.jobType === "extract_claims")}
     />
   );
 }

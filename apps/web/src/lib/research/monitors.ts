@@ -161,6 +161,74 @@ export async function dispatchScanMonitorJob(userId: string, monitorId: string):
   return { action: "queued", requestId: created.id };
 }
 
+export interface MonitorJobRequestRow {
+  id: string;
+  monitorId: string;
+  status: string;
+  stage: string | null;
+  progressIndex: number | null;
+  progressTotal: number | null;
+  note: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Item 1(b)/3 of the Research-workspace fix lane: lists `run_monitor` job
+ * requests for the monitors a user owns (optionally narrowed to one
+ * project's own monitors, matching `listMonitorsForUser`'s own
+ * `projectId`-optional shape), so the Monitors view can show live scan
+ * status per monitor and poll it. Mirrors `listResearchJobRequestsForProject`'s
+ * scope-matching-in-application-code discipline (`docs/PROJECT-LOG.md`'s
+ * documented drizzle raw-`sql` array-containment pitfall) — `run_monitor`'s
+ * `research_job_request.scope` is `{monitorId}` (`dispatchScanMonitorJob`
+ * above), matched here against monitors the caller actually owns rather than
+ * trusted blindly from the jsonb payload.
+ */
+export async function listResearchJobRequestsForUserMonitors(userId: string, projectId?: string): Promise<MonitorJobRequestRow[]> {
+  const monitors = await listMonitorsForUser(userId, projectId);
+  const monitorIds = new Set(monitors.map((m) => m.id));
+  if (monitorIds.size === 0) return [];
+
+  const rows = await db
+    .select({
+      id: researchJobRequests.id,
+      status: researchJobRequests.status,
+      stage: researchJobRequests.stage,
+      progressIndex: researchJobRequests.progressIndex,
+      progressTotal: researchJobRequests.progressTotal,
+      note: researchJobRequests.note,
+      error: researchJobRequests.error,
+      scope: researchJobRequests.scope,
+      createdAt: researchJobRequests.createdAt,
+      updatedAt: researchJobRequests.updatedAt,
+    })
+    .from(researchJobRequests)
+    .where(and(eq(researchJobRequests.userId, userId), eq(researchJobRequests.jobType, "run_monitor")))
+    .orderBy(desc(researchJobRequests.createdAt))
+    .limit(200);
+
+  const result: MonitorJobRequestRow[] = [];
+  for (const row of rows) {
+    const scope = row.scope as { monitorId?: unknown } | null;
+    if (typeof scope?.monitorId !== "string" || !monitorIds.has(scope.monitorId)) continue;
+    result.push({
+      id: row.id,
+      monitorId: scope.monitorId,
+      status: row.status,
+      stage: row.stage,
+      progressIndex: row.progressIndex,
+      progressTotal: row.progressTotal,
+      note: row.note,
+      error: row.error,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    });
+  }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Hits
 // ---------------------------------------------------------------------------
