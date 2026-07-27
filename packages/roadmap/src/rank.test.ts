@@ -3,12 +3,12 @@ import {
   KNOWN_THRESHOLD,
   collapseDuplicateCandidates,
   countByReaderLevel,
-  exactTiersForReaderLevel,
   matchesReaderLevel,
   mergeRoadmapsAcrossRoots,
   normalizeTitleForDedup,
   rankRoadmap,
   suggestReaderLevelFromCompletions,
+  tiersForReaderLevel,
   type OverrideEntry,
   type ProfileEntry,
   type RoadmapCandidate,
@@ -32,18 +32,32 @@ function cand(partial: Partial<RoadmapCandidate> & { bibId: string; title: strin
 const empty = () => new Map<string, ProfileEntry>();
 const noOverrides = () => new Map<string, OverrideEntry>();
 
-describe("matchesReaderLevel", () => {
-  it("includes universal, selected, and foundational material cumulatively", () => {
+describe("matchesReaderLevel (owner directive 2026-07-26: mutually exclusive bands)", () => {
+  it("universal (null) material matches every selected level", () => {
+    expect(matchesReaderLevel(null, "beginner")).toBe(true);
     expect(matchesReaderLevel(null, "undergraduate")).toBe(true);
-    expect(matchesReaderLevel("beginner", "undergraduate")).toBe(true);
-    expect(matchesReaderLevel("undergraduate", "undergraduate")).toBe(true);
-    expect(matchesReaderLevel("advanced", "undergraduate")).toBe(false);
+    expect(matchesReaderLevel(null, "advanced")).toBe(true);
+    expect(matchesReaderLevel(null, "research")).toBe(true);
+    expect(matchesReaderLevel(null, "all")).toBe(true);
   });
 
-  it("keeps universal material while offering an exact-level facet", () => {
-    expect(matchesReaderLevel(null, "advanced", "exact")).toBe(true);
-    expect(matchesReaderLevel("advanced", "advanced", "exact")).toBe(true);
-    expect(matchesReaderLevel("beginner", "advanced", "exact")).toBe(false);
+  it("'all' matches every material level, tagged or not", () => {
+    expect(matchesReaderLevel("beginner", "all")).toBe(true);
+    expect(matchesReaderLevel("advanced", "all")).toBe(true);
+  });
+
+  it("a level-tagged item matches ONLY its own exact level — no cumulative <=/>= union", () => {
+    expect(matchesReaderLevel("undergraduate", "undergraduate")).toBe(true);
+    // Foundational (lower) levels no longer bleed upward into a higher
+    // selection — this is the semantic the directive changed.
+    expect(matchesReaderLevel("beginner", "undergraduate")).toBe(false);
+    expect(matchesReaderLevel("advanced", "undergraduate")).toBe(false);
+    expect(matchesReaderLevel("research", "undergraduate")).toBe(false);
+  });
+
+  it("cross-band exclusion is symmetric: advanced content is absent from a beginner selection and vice versa", () => {
+    expect(matchesReaderLevel("advanced", "beginner")).toBe(false);
+    expect(matchesReaderLevel("beginner", "advanced")).toBe(false);
   });
 });
 
@@ -125,35 +139,54 @@ describe("rankRoadmap — modes, filters, overrides", () => {
     expect(items.map((i) => i.bibId)).toEqual(["e"]);
   });
 
-  it("beginner reader level hides the contextual/optional tail; research shows all", () => {
+  it("beginner reader level hides the contextual/optional tail (essential is universal, always shown)", () => {
     const beginner = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "beginner" });
     expect(beginner.map((i) => i.bibId)).toEqual(["e"]);
+  });
+
+  it("research reader level is its OWN exact band (essential + optional), not everything (mutually exclusive bands)", () => {
+    // Owner directive 2026-07-26: research no longer accumulates every
+    // lower tier. It sees essential (universal) plus its own "optional"
+    // tier only — "contextual" (undergraduate's own tier) is excluded, the
+    // same way undergraduate excludes "optional".
     const research = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "research" });
-    expect(research.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
+    expect(research.map((i) => i.bibId).sort()).toEqual(["e", "o"]);
   });
 
-  it("undergraduate reader level matches the old three-level intermediate exactly (no regression on backfill)", () => {
+  it("undergraduate reader level shows essential (universal) + its own tier, excluding advanced/research-only tiers", () => {
     const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "undergraduate" });
-    expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e"]); // contextual in, optional still out
+    expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e"]); // contextual in (undergrad's own tier), optional still out
   });
 
-  it("the explicit 'all' override shows everything, same as research", () => {
+  it("cross-band exclusion: undergraduate's contextual tier is absent from the advanced view, and advanced's comparative tier is absent from undergraduate's", () => {
+    const comparative = cand({ bibId: "cmp", title: "Comparative Work", categories: ["parallel_comparison"] });
+    const undergrad = rankRoadmap([essential, contextual, comparative], empty(), noOverrides(), { readerLevel: "undergraduate" });
+    expect(undergrad.map((i) => i.bibId).sort()).toEqual(["c", "e"]); // comparative (advanced's tier) excluded
+    const advanced = rankRoadmap([essential, contextual, comparative], empty(), noOverrides(), { readerLevel: "advanced" });
+    expect(advanced.map((i) => i.bibId).sort()).toEqual(["cmp", "e"]); // contextual (undergraduate's tier) excluded
+  });
+
+  it("the explicit 'all' override shows everything, unlike any single level band", () => {
     const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "all" });
     expect(items.map((i) => i.bibId).sort()).toEqual(["c", "e", "o"]);
   });
 
-  it("keeps universal prerequisites in the exact-level roadmap facet", () => {
-    expect([...exactTiersForReaderLevel("advanced")]).toEqual(["essential", "comparative"]);
-    const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), {
-      readerLevel: "research",
-      readerLevelMode: "exact",
-    });
+  it("essential (universal/prerequisite) material appears in every level's band, same as null resource_role.reader_level", () => {
+    expect([...tiersForReaderLevel("beginner")]).toContain("essential");
+    expect([...tiersForReaderLevel("undergraduate")]).toContain("essential");
+    expect([...tiersForReaderLevel("advanced")]).toEqual(["essential", "comparative"]);
+    expect([...tiersForReaderLevel("research")]).toEqual(["essential", "optional"]);
+    const items = rankRoadmap([essential, contextual, optional], empty(), noOverrides(), { readerLevel: "research" });
     expect(items.map((item) => item.bibId)).toEqual(["e", "o"]);
   });
 
-  it("hidden override excludes an item entirely", () => {
+  it("hidden override excludes an item entirely, checked before the level band even applies", () => {
     const ov = new Map<string, OverrideEntry>([["c", { hidden: true }]]);
-    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "research" });
+    // "all" so the assertion isolates the hidden-override behavior from the
+    // exact-band tier filter (contextual isn't in research's own exact band —
+    // see the cross-band-exclusion tests above — which would otherwise leave
+    // this test unable to tell which mechanism excluded "c").
+    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "all" });
     expect(items.map((i) => i.bibId)).toEqual(["e"]);
   });
 
@@ -168,7 +201,10 @@ describe("rankRoadmap — modes, filters, overrides", () => {
 
   it("manual position pins an item to an exact slot", () => {
     const ov = new Map<string, OverrideEntry>([["c", { manualPosition: 1 }]]);
-    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "research" });
+    // "all": a manualPosition (unlike manualTier) does not itself bypass the
+    // level-band filter, so this must not be scoped to a level whose exact
+    // band would exclude "c" for an unrelated reason.
+    const items = rankRoadmap([essential, contextual], empty(), ov, { readerLevel: "all" });
     expect(items[0].bibId).toBe("c"); // pinned first despite lower tier
   });
 
@@ -182,7 +218,11 @@ describe("rankRoadmap — modes, filters, overrides", () => {
   });
 
   it("assigns a stable 1-based sequence", () => {
-    const items = rankRoadmap([contextual, essential], empty(), noOverrides(), { readerLevel: "research" });
+    // "all": contextual isn't in research's own exact band (see the
+    // cross-band-exclusion tests above), so scoping this to "research"
+    // would leave only one item and the sequence assertion would be
+    // vacuous.
+    const items = rankRoadmap([contextual, essential], empty(), noOverrides(), { readerLevel: "all" });
     expect(items.map((i) => i.sequence)).toEqual([1, 2]);
     expect(items[0].bibId).toBe("e"); // essential first
   });
@@ -279,14 +319,14 @@ describe("countByReaderLevel", () => {
   const contextual = cand({ bibId: "c", title: "Context Work", categories: ["historical_context"] });
   const optional = cand({ bibId: "o", title: "Optional Extra", categories: ["optional_extension"] });
 
-  it("matches what selecting each level would actually show, plus 'all'", () => {
+  it("matches what selecting each level's own exact band would actually show, plus 'all' (mutually exclusive bands)", () => {
     const counts = countByReaderLevel([essential, contextual, optional], empty(), noOverrides());
     expect(counts).toEqual({
-      beginner: 1, // essential only
-      undergraduate: 2, // + contextual
-      advanced: 2, // no comparative candidate in this fixture
-      research: 3, // everything
-      all: 3,
+      beginner: 1, // essential (universal) only — no candidate tagged beginner's own tier here
+      undergraduate: 2, // essential + contextual (undergraduate's own tier)
+      advanced: 1, // essential only — no comparative candidate in this fixture
+      research: 2, // essential + optional (research's own tier)
+      all: 3, // unfiltered
     });
   });
 });

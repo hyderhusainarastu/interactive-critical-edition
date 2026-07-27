@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { matchesReaderLevel, type ReaderLevelFilter, type ReaderLevelMatchMode } from "@ice/roadmap";
+import { matchesReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
@@ -89,7 +89,6 @@ export function ReaderShell({
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
   const [editionReaderLevel, setEditionReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
-  const [editionLevelMode, setEditionLevelMode] = useState<ReaderLevelMatchMode>("cumulative");
   const [editionFilters, setEditionFilters] = useState<EditionReaderFilters>({ annotationType: "all", relationship: "all", provenance: "all", apparatusKind: "all" });
   const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
   const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(null);
@@ -406,8 +405,10 @@ export function ReaderShell({
     // `enablePhase12Reader`) while this filter silently never applies,
     // leaving a control that visibly does nothing.
     const levelFilterEnabled = enablePhase12Identity || enablePhase12Reader;
+    // Owner directive 2026-07-26: exact-band level matching (no cumulative
+    // union) — see `matchesReaderLevel`'s doc comment in `@ice/roadmap`.
     const visibleAtLevel = (annotation: EditionPayload["passageAnnotations"][number]) =>
-      !levelFilterEnabled || editionReaderLevel === "all" || matchesReaderLevel(annotation.readerLevel, editionReaderLevel, editionLevelMode);
+      !levelFilterEnabled || editionReaderLevel === "all" || matchesReaderLevel(annotation.readerLevel, editionReaderLevel);
     const visibleByReaderFilter = (annotation: EditionPayload["passageAnnotations"][number]) =>
       !enablePhase12Reader
       || ((editionFilters.annotationType === "all" || annotation.annotationType === editionFilters.annotationType)
@@ -418,7 +419,33 @@ export function ReaderShell({
       passageAnnotations: edition.passageAnnotations.filter((annotation) => visibleAtLevel(annotation) && visibleByReaderFilter(annotation)),
       wholeWorkGuidance: edition.wholeWorkGuidance.filter((annotation) => visibleAtLevel(annotation) && visibleByReaderFilter(annotation)),
     };
-  }, [edition, editionFilters, editionLevelMode, editionReaderLevel, enablePhase12Identity, enablePhase12Reader]);
+  }, [edition, editionFilters, editionReaderLevel, enablePhase12Identity, enablePhase12Reader]);
+
+  // True when the level band itself is what emptied the annotation list —
+  // i.e. applying every OTHER active filter (annotation type/relationship/
+  // provenance) still leaves annotations, but the selected level's own
+  // exact band leaves none. Isolated from those other filters (rather than
+  // just comparing the raw edition to `visibleEdition`) so this can't be
+  // misattributed to the level filter when an unrelated filter was actually
+  // what emptied the list. Graceful-empty-state input for
+  // `EditionAnnotationsPanel` (owner directive 2026-07-26: a plausible
+  // outcome of exact-band filtering, not a sign the edition has no
+  // annotations at all).
+  const editionLevelFilteredEmpty = useMemo(() => {
+    if (!edition || !visibleEdition) return false;
+    const levelFilterEnabled = enablePhase12Identity || enablePhase12Reader;
+    if (!levelFilterEnabled || editionReaderLevel === "all") return false;
+    const visibleByReaderFilter = (annotation: EditionPayload["passageAnnotations"][number]) =>
+      !enablePhase12Reader
+      || ((editionFilters.annotationType === "all" || annotation.annotationType === editionFilters.annotationType)
+        && (editionFilters.relationship === "all" || annotation.relationship === editionFilters.relationship)
+        && (editionFilters.provenance === "all" || (editionFilters.provenance === "ai" ? annotation.createdBy === "system" : annotation.createdBy !== "system")));
+    const countIgnoringLevel =
+      edition.passageAnnotations.filter(visibleByReaderFilter).length +
+      edition.wholeWorkGuidance.filter(visibleByReaderFilter).length;
+    const visibleCount = visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length;
+    return countIgnoringLevel > 0 && visibleCount === 0;
+  }, [edition, visibleEdition, editionFilters, editionReaderLevel, enablePhase12Identity, enablePhase12Reader]);
 
   // D-23-51: the same pure computation `EditionReader`'s own jump-to-block
   // navigation uses, so the persistent outline rail and the reader's
@@ -654,12 +681,11 @@ export function ReaderShell({
             edition={visibleEdition}
             activeId={activeAnnotationId}
             readerLevel={editionReaderLevel}
-            levelMode={editionLevelMode}
             enableLevelFilter={enablePhase12Identity || enablePhase12Reader}
+            levelFilteredEmpty={editionLevelFilteredEmpty}
             enablePhase12Reader={enablePhase12Reader}
             filters={editionFilters}
             onReaderLevelChange={setEditionReaderLevel}
-            onLevelModeChange={setEditionLevelMode}
             onFiltersChange={setEditionFilters}
             onPreviousAnnotation={() => moveAnnotation(-1)}
             onNextAnnotation={() => moveAnnotation(1)}

@@ -184,11 +184,12 @@ test.describe("Library (Phase 9.5)", () => {
     await deleteTestUser(scopeEmail);
   });
 
-  test("Phase 12's Library level facet includes foundations cumulatively and can switch to exact tags", async ({ page }) => {
+  test("the Library level facet is a mutually exclusive band (owner directive 2026-07-26): no cumulative foundations union", async ({ page }) => {
     test.skip(process.env.PHASE_12_LIBRARY_IDENTITY_ENABLED !== "true", "requires the Phase 12 Library release flag");
     const levelEmail = `e2e-library-level-${Date.now()}@example.com`;
     const levelUserId = await createVerifiedTestUser(levelEmail, PASSWORD);
     await seedWorkWithLibraryItem(levelUserId, { resourceTitle: "Foundational source", readerLevel: "beginner" });
+    await seedWorkWithLibraryItem(levelUserId, { resourceTitle: "Undergraduate source", readerLevel: "undergraduate" });
     await seedWorkWithLibraryItem(levelUserId, { resourceTitle: "Advanced source", readerLevel: "advanced" });
 
     await page.goto("/login");
@@ -200,12 +201,27 @@ test.describe("Library (Phase 9.5)", () => {
     await page.goto("/library");
     const libraryContent = page.locator("#main-content");
     await libraryContent.getByLabel("Focus work").selectOption("");
+    // Selecting "undergraduate" now shows ONLY its own exact band — the
+    // beginner-tagged source no longer bleeds upward (this test's own name
+    // change from "cumulatively" to "mutually exclusive" IS the regression
+    // proof for the semantic the owner's directive changed), and the
+    // advanced-tagged source (a different, non-overlapping band) is
+    // excluded too, same as before.
     await libraryContent.getByLabel("Reader level").selectOption("undergraduate");
-    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Undergraduate source" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).not.toBeVisible();
     await expect(libraryContent.getByRole("listitem").filter({ hasText: "Advanced source" })).not.toBeVisible();
 
-    await libraryContent.getByLabel("Level match").selectOption("exact");
-    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).not.toBeVisible();
+    // There is no "Level match" mode selector anymore — exact-band matching
+    // is the only behavior, not an opt-in toggle.
+    await expect(libraryContent.getByLabel("Level match")).toHaveCount(0);
+
+    // Cross-check the other direction: selecting "beginner" shows only the
+    // beginner-tagged source, excluding both undergraduate and advanced.
+    await libraryContent.getByLabel("Reader level").selectOption("beginner");
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Foundational source" })).toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Undergraduate source" })).not.toBeVisible();
+    await expect(libraryContent.getByRole("listitem").filter({ hasText: "Advanced source" })).not.toBeVisible();
 
     await deleteTestUser(levelEmail);
   });

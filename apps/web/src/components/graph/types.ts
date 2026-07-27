@@ -606,14 +606,16 @@ export function credibilityBandFor(score: number | null | undefined): Credibilit
 
 /**
  * Data contract v2 (Graph P1): does ANY of a node's `readerLevels` satisfy
- * the selected filter level, under the same cumulative semantics
- * `@ice/roadmap`'s `matchesReaderLevel` already uses everywhere else a
- * reader level is matched (Library, curriculum, the roadmap-mode server
- * request) — so this filter cannot silently invent a second definition of
- * "matches level X". A node with no `readerLevels` data at all is exempt
- * (never punish missing data), matching `matchesReaderLevel`'s own
- * null-materialLevel rule; this helper only adds the "any of several
- * levels" step that a single-level match doesn't need.
+ * the selected filter level, under the same mutually-exclusive-band
+ * semantics `@ice/roadmap`'s `matchesReaderLevel` already uses everywhere
+ * else a reader level is matched (Library, curriculum, the roadmap-mode
+ * server request) — owner directive 2026-07-26: an exact match on the
+ * selected level (or the node's own level being universal/null), never a
+ * cumulative `<=`/`>=` union — so this filter cannot silently invent a
+ * second definition of "matches level X". A node with no `readerLevels`
+ * data at all is exempt (never punish missing data), matching
+ * `matchesReaderLevel`'s own null-materialLevel rule; this helper only adds
+ * the "any of several levels" step that a single-level match doesn't need.
  */
 export function matchesAnyReaderLevel(node: Pick<GraphNode, "readerLevels">, selected: ReaderLevelFilter): boolean {
   if (selected === "all") return true;
