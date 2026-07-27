@@ -135,6 +135,23 @@
   --depth-near: 2px;
   --depth-mid: 6px;
   --depth-far: 12px;
+
+  /* Stage 1 (redesign/ui-graph-rebuild) additive shell tokens —
+     redesign-shell-spec.md §1.2. Pixel dimensions plus aliases to
+     already-audited color pairs; no new hue. Defined once here (not
+     duplicated per [data-theme]) because a custom property alias resolves
+     live against whatever the aliased token currently is, so
+     --color-rail-active-bg etc. automatically track the active theme. */
+  --rail-width: 232px;
+  --rail-width-collapsed: 64px;
+  --context-bar-height: 56px;
+  --bottom-nav-height: 56px;
+  --mobile-context-bar-height: 52px;
+  --color-rail-surface: var(--color-surface);
+  --color-rail-active-bg: var(--color-surface-strong);
+  --color-rail-active-fg: var(--color-surface-strong-fg);
+  --color-immersive-scrim: color-mix(in srgb, var(--color-background) 92%, transparent);
+
   /* Keep native UI (scrollbars, form controls) light too, so a dark-mode
      OS doesn't render dark inputs against the bone-white page. */
   color-scheme: light;
@@ -915,4 +932,103 @@ tr[data-emphasis="dimmed"] * {
   @keyframes chart-radar-grow-in {
     from { transform: scale(0); }
   }
+}
+
+/* ============================================================
+   Stage 1 (redesign/ui-graph-rebuild): workspace rail, context
+   bar, and mobile bottom nav — additive geometry per
+   docs/design/redesign-shell-spec.md §1/§2. Nothing above this
+   point is modified; every rule here is new.
+   ============================================================ */
+
+.workspace-rail {
+  width: var(--rail-width);
+  transition: width .18s var(--spring-fast);
+}
+.workspace-rail[data-collapsed="true"] { width: var(--rail-width-collapsed); }
+.workspace-rail[data-collapsed="true"] .rail-label { display: none; }
+@media (max-width: 1023.98px) {
+  /* Tablet is ALWAYS collapsed, never user-toggleable (charter §6) —
+     !important is deliberate: it must win over the `data-collapsed`
+     attribute rule above regardless of the user's stored desktop
+     preference. */
+  .workspace-rail { width: var(--rail-width-collapsed) !important; }
+  .workspace-rail .rail-label { display: none !important; }
+}
+
+.app-shell-content-column {
+  margin-inline-start: var(--rail-width);
+  transition: margin-inline-start .18s var(--spring-fast);
+}
+/* General-sibling (not adjacent-sibling) combinator: both elements are
+   direct children of `.app-shell`, in this order, so this matches without
+   needing a `data-rail-collapsed` attribute lifted onto a shared ancestor. */
+.workspace-rail[data-collapsed="true"] ~ .app-shell-content-column { margin-inline-start: var(--rail-width-collapsed); }
+@media (max-width: 1023.98px) { .app-shell-content-column { margin-inline-start: var(--rail-width-collapsed) !important; } }
+@media (max-width: 767.98px) {
+  .app-shell-content-column {
+    margin-inline-start: 0;
+    padding-bottom: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  }
+}
+/* Focus mode unmounts WorkspaceRail/MobileBottomNav entirely (rather than
+   hiding them in place the way ContextBar hides itself, sr-only+inert) — so
+   without this override the reservations above (rail-width margin, bottom-nav
+   padding) would leave a blank strip with nothing actually occupying it.
+   Higher specificity than the plain-class rules above (an attribute selector
+   on the ancestor plus the descendant), so it wins regardless of viewport. */
+.app-shell[data-focus-mode="true"] .app-shell-content-column {
+  margin-inline-start: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Collapsed-rail tooltip (§3.9): the exact same CSS-only convention as
+   `.app-icon-button::after`, applied to a non-square rail row (a plain
+   `.app-icon-button` is always a 44x44 square, which the Upload action and
+   primary rail items are not). */
+.rail-item-tooltip { position: relative; }
+.rail-item-tooltip[data-tooltip]::after {
+  position: absolute;
+  z-index: 60;
+  top: 50%;
+  left: calc(100% + .5rem);
+  transform: translateY(-50%);
+  width: max-content;
+  max-width: 14rem;
+  padding: .3rem .5rem;
+  border-radius: .25rem;
+  background: var(--color-text);
+  color: var(--color-background);
+  content: attr(data-tooltip);
+  font-size: .72rem;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.rail-item-tooltip[data-tooltip]:hover::after, .rail-item-tooltip[data-tooltip]:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .rail-item-tooltip[data-tooltip]::after { transition: none; } }
+
+.app-shell-context-bar {
+  min-height: var(--context-bar-height);
+  transition: min-height .18s var(--spring-fast), box-shadow .18s var(--spring-fast);
+}
+.app-shell-context-bar-content { min-height: var(--context-bar-height); }
+.app-shell-context-bar.header-compact { min-height: 3.1rem; }
+.app-shell-context-bar.header-compact .app-shell-context-bar-content { min-height: 3rem; }
+@media (max-width: 767.98px) {
+  .app-shell-context-bar { min-height: var(--mobile-context-bar-height); }
+  .app-shell-context-bar-content { min-height: var(--mobile-context-bar-height); }
+}
+
+/* Same underlay-sibling technique the pre-Stage-1 header used (D-25-12) —
+   see ContextBar.tsx's own comment. Uses --color-immersive-scrim on
+   immersive routes (§4) instead of the ordinary 94% formula, both are the
+   same color-mix shape so the swap is a single custom-property change. */
+.context-bar-underlay { background: color-mix(in srgb, var(--color-background) 94%, transparent); }
+.app-shell-context-bar[data-immersive="true"] .context-bar-underlay { background: var(--color-immersive-scrim); }
+
+.mobile-bottom-nav {
+  height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
 }
