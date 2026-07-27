@@ -59,21 +59,39 @@ test.describe("Visualization graph", () => {
     await expect(page.getByText(/1 references · 0 sources · 1 concepts/)).toBeVisible();
   });
 
-  test("promotes Visualization in the main nav and shows relationship-family colors", async ({ page }) => {
+  // Rewritten for the Stage 1 shell redesign (redesign-shell-spec.md §7):
+  // under the new information architecture, "Visualization"/"Works"/
+  // "Library" are no longer primary-nav items at all — the primary rail/
+  // bottom-nav landmark is exactly Home/Read/Research/Write (§3.1), and the
+  // Knowledge Map (`/graph`) deliberately "leaves primary nav" (charter §6)
+  // in favor of a command-palette entry plus a desktop/tablet context-bar
+  // icon (§3.8). This asserts the new shape directly rather than preserving
+  // the old locator's literal expectation — the underlying capability
+  // ("Visualization/Knowledge Map is promoted and reachable") is still
+  // asserted just as strongly, against its new location.
+  test("the primary nav is exactly Home/Read/Research/Write, and the Knowledge Map is reachable via the command palette and a context-bar icon", async ({ page }) => {
+    await login(page);
+    const navLabels = await page.getByRole("navigation", { name: "Primary navigation" }).locator("a").allTextContents();
+    expect(navLabels).toEqual(expect.arrayContaining(["Home", "Read"]));
+    expect(navLabels).not.toContain("Visualization");
+    expect(navLabels).not.toContain("Works");
+    expect(navLabels).not.toContain("Library");
+
+    // Desktop/tablet context-bar icon.
+    await expect(page.getByRole("link", { name: "Knowledge Map" })).toBeVisible();
+
+    // Command palette entry (charter §6: "expand it to works, Library
+    // records, ...").
+    await page.keyboard.press("Control+K");
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Knowledge Map" }).last()).toBeVisible();
+    await page.keyboard.press("Escape");
+  });
+
+  test("shows relationship-family colors on a work's Knowledge Map", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(userId);
 
     await login(page);
-    // Scoped to the primary-nav landmark (not just "header nav a") so this
-    // stays unambiguous now that AppFooter also renders a `nav`, and reads
-    // `textContent` (`allTextContents`) rather than `allInnerTexts` — the
-    // shell restyle (1223c67) added CSS `text-transform: uppercase` to nav
-    // links, which `innerText` reflects (rendering-derived) but
-    // `textContent` does not, so this keeps asserting the underlying label
-    // text rather than its visual casing.
-    const navLabels = await page.getByRole("navigation", { name: "Primary navigation" }).locator("a").allTextContents();
-    expect(navLabels).toEqual(expect.arrayContaining(["Visualization", "Works", "Library"]));
-    expect(navLabels.indexOf("Visualization")).toBeLessThan(navLabels.indexOf("Works"));
-
     await page.goto(`/works/${workId}/graph?layout=explore`);
     await expect(page.getByLabel("Edge color legend")).toContainText("Citation / reference");
     await expect(page.getByLabel("Edge color legend")).toContainText("Prerequisite");

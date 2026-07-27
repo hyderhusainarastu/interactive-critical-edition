@@ -48,7 +48,13 @@ test.describe("Phase 12 workspace foundation", () => {
     await page.getByRole("button", { name: "Workspace preferences" }).click();
     await page.getByLabel("Theme").selectOption("light");
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+    // Stage 1 shell rebuild (redesign-shell-spec.md §7): the old slide-in
+    // mobile drawer's "Open navigation" trigger no longer exists — mobile
+    // navigation is now the persistent bottom nav, reachable structurally
+    // (see "treats mobile navigation..." below), not opened via a button.
+    // Reachability-equivalent assertion at this (desktop) viewport: the
+    // primary rail landmark itself is visible with its Home/Read items.
+    await expect(page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Home" })).toBeVisible();
   });
 
   test("traps focus in the command palette and returns focus to its trigger", async ({ page }) => {
@@ -501,7 +507,15 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
   });
 
-  test("treats mobile navigation as a modal drawer and restores its trigger", async ({ page }) => {
+  // Rewritten for the Stage 1 shell redesign (redesign-shell-spec.md §7):
+  // mobile navigation is no longer a slide-in drawer opened from a header
+  // button — it's the persistent bottom nav (charter §6), so there is
+  // nothing to open/close at the primary-nav level. This test now asserts
+  // that structure directly (visible, 44px+ touch targets, safe-area-aware),
+  // then covers the one mobile surface that still behaves like a modal under
+  // the new IA: the secondary "Read management" sheet (§3.2/§3.4), which
+  // carries Trash's reachability now that Trash is no longer a plain nav row.
+  test("renders mobile navigation as a persistent bottom nav with 44px+ targets", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 844 });
     await page.goto("/login");
     await page.getByLabel("Email").fill(EMAIL);
@@ -509,16 +523,43 @@ test.describe("Phase 12 workspace foundation", () => {
     await page.getByRole("button", { name: "Log in" }).click();
     await page.waitForURL("/dashboard");
 
-    const trigger = page.getByRole("button", { name: "Open navigation" });
+    const bottomNav = page.getByRole("navigation", { name: "Primary navigation" });
+    await expect(bottomNav).toBeVisible();
+    const homeLink = bottomNav.getByRole("link", { name: "Home" });
+    const readLink = bottomNav.getByRole("link", { name: "Read" });
+    await expect(homeLink).toBeVisible();
+    await expect(readLink).toBeVisible();
+    for (const link of [homeLink, readLink]) {
+      const box = (await link.boundingBox())!;
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("treats the mobile Read-management sheet as a modal drawer and restores its trigger", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 844 });
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    // The Read-management trigger only renders on Read-family routes
+    // (§3.2) — reached here via the bottom nav's own "Read" item, not a URL
+    // literal, so this also proves the bottom nav itself is reachable and
+    // navigable on this viewport.
+    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Read" }).click();
+    await page.waitForURL("**/works");
+
+    const trigger = page.getByRole("button", { name: "Read management" });
     await trigger.focus();
     await trigger.click();
-    const drawer = page.getByRole("dialog", { name: "Mobile navigation" });
-    await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole("button", { name: "Close navigation" })).toBeFocused();
+    const sheet = page.getByRole("dialog", { name: "Read management" });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Close Read management" })).toBeFocused();
     await page.keyboard.press("Shift+Tab");
-    await expect(drawer.locator(":focus")).toHaveCount(1);
+    await expect(sheet.locator(":focus")).toHaveCount(1);
     await page.keyboard.press("Escape");
-    await expect(drawer).toBeHidden();
+    await expect(sheet).toBeHidden();
     await expect(trigger).toBeFocused();
   });
 
@@ -573,8 +614,12 @@ test.describe("Phase 12 workspace foundation", () => {
 
     // Navigate, then open the menu with no settle wait — this is the
     // window during which PageTransition's motion.div is actively
-    // animating opacity/transform on #main-content.
-    await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Library", exact: true }).click();
+    // animating opacity/transform on #main-content. Library is no longer a
+    // Primary-navigation item under the Stage 1 IA (redesign-shell-spec.md
+    // §3.1/§3.2) — it's in the rail's own Read subnav — so this navigates
+    // via that landmark instead; the paint-order defect this test guards
+    // against is unrelated to which link triggers the transition.
+    await page.getByRole("navigation", { name: "Read subnavigation" }).getByRole("link", { name: "Library", exact: true }).click();
     await page.getByRole("button", { name: "Account menu" }).click();
     const profileLink = page.getByRole("link", { name: "Profile" });
     await expect(profileLink).toBeVisible();
@@ -694,7 +739,9 @@ test.describe("Phase 12 workspace foundation", () => {
       const dialog = page.getByRole("dialog", { name: "Ask Library — global sidebar" });
       await expect(dialog).toBeVisible();
 
-      await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("link", { name: "Library", exact: true }).click();
+      // Library moved from Primary navigation into the rail's Read subnav
+      // under the Stage 1 IA (redesign-shell-spec.md §3.1/§3.2).
+      await page.getByRole("navigation", { name: "Read subnavigation" }).getByRole("link", { name: "Library", exact: true }).click();
       await page.waitForURL("**/library");
       await expect(dialog).toBeVisible();
       await expect(dialog.getByText("Scope: Entire Library")).toBeVisible();
