@@ -1,0 +1,789 @@
+/**
+ * Real, executed run of the charter §13 bench protocol for both prototypes,
+ * against a production (`vite build` + `vite preview`) build, driven by
+ * headed Chromium via Playwright.
+ *
+ * This is the Stage 2 MEASUREMENT lane's own driver — it implements the
+ * `BenchDriver` interface from `src/bench/runner.ts` for real, using the
+ * bench harness bridge (`src/bench/harnessBridge.ts`) both prototypes now
+ * populate for real (the Stage 2 lane's own App.tsx wiring fix).
+ *
+ * Production build, not `vite dev`: `vite dev` renders through React
+ * StrictMode's development-only double-invoked effects, which raced with
+ * this driver's own bridge-polling (reproduced directly: a boolean
+ * `waitForFunction` predicate followed by a separate `page.evaluate()` read
+ * intermittently observed the bridge object having been torn down and not
+ * yet re-registered). `vite build`'s bundle carries no dev-mode React
+ * markers (verified: zero "Warning: %s" strings, the tell-tale dev-build
+ * console.error format literal) and eliminates the race, while also being
+ * the fairer, more representative thing to measure (dev-mode React/Vite
+ * carry real unminified-code and instrumentation overhead the charter's
+ * floors were never meant to be measured against).
+ *
+ * Bridge-read pattern: every `waitForFunction()` used to detect
+ * payload-received/interactive returns the actual value from the resolved
+ * predicate (via `.jsonValue()`), rather than a boolean followed by a
+ * separate `page.evaluate()` call — the latter pattern was the one that
+ * exposed the CDP/console-listener-sensitive race above; this pattern
+ * never reproduced it across dozens of manual verification runs.
+ */
+import { chromium, type Browser, type CDPSession, type Page } from "@playwright/test";
+import { spawn, type ChildProcess, execSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import * as os from "node:os";
+
+import {
+  runMeasuredTrial,
+  runNavigationBenchmark,
+  runLifecycleBenchmark,
+  evaluateFloors,
+  evaluateLifecycle,
+  percentileOf,
+  type BenchDriver,
+} from "../src/bench/runner";
+import {
+  BENCH_PROTOCOL,
+  BENCH_FLOORS,
+  MANDATORY_FIXTURES,
+  DIAGNOSTIC_ONLY_FIXTURES,
+  type BenchEnvironment,
+  type CacheState,
+  type LifecycleSnapshot,
+  type NavigationTiming,
+  type PointerLatencySample,
+  type TrialResult,
+  type NavigationTrialResult,
+  type LifecycleTrialResult,
+} from "../src/bench/types";
+import type { PrototypeId } from "../src/types/prototype";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, "..");
+const RESULTS_DIR = join(ROOT, "results");
+const PORT = 5183;
+const BASE_URL = `http://localhost:${PORT}`;
+const HARNESS_BRIDGE_KEY = "__graphBakeoffHarness";
+const NAV_FIXTURE = "fixture-120"; // charter's own warm/cold nav floors name the 120-node scene explicitly
+const LIFECYCLE_FIXTURE = "fixture-24"; // lightweight, representative; not FPS-sensitive
+
+function log(msg: string): void {
+  const t = new Date().toISOString();
+  console.log(`[${t}] ${msg}`);
+}
+
+function loadFixtureNodeIds(fixtureName: string): string[] {
+  const raw = readFileSync(join(ROOT, "src", "fixtures", "data", `${fixtureName}.json`), "utf8");
+  const parsed = JSON.parse(raw) as { nodes: Array<{ id: string }> };
+  return parsed.nodes.map((n) => n.id);
+}
+
+// ---------------------------------------------------------------------
+// Preflight: machine load check (protocol instruction — wait up to 10min
+// polling every 60s if a heavy concurrent process is present, then record
+// the final state honestly regardless of outcome).
+// ---------------------------------------------------------------------
+function readLoadAvg(): number {
+  return os.loadavg()[0];
+}
+
+function heavyProcessSnapshot(): string {
+  try {
+    return execSync(
+      "ps aux | grep -iE 'next build|vite build|playwright test|webpack|tsc -b' | grep -v grep || true",
+      { encoding: "utf8" },
+    ).trim();
+  } catch {
+    return "(ps check failed)";
+  }
+}
+
+async function preflightMachineCheck(): Promise<{ waited: boolean; finalLoadAvg: number; finalProcesses: string }> {
+  const POLL_MS = 60_000;
+  const MAX_WAIT_MS = 10 * 60_000;
+  let waited = false;
+  let elapsed = 0;
+  while (elapsed < MAX_WAIT_MS) {
+    const procs = heavyProcessSnapshot();
+    const load = readLoadAvg();
+    if (procs.length === 0 && load < 4) {
+      return { waited, finalLoadAvg: load, finalProcesses: procs || "(none)" };
+    }
+    log(`Preflight: heavy process(es) detected or high load (loadavg=${load.toFixed(2)}). Waiting 60s...\n${procs}`);
+    waited = true;
+    await new Promise((r) => setTimeout(r, POLL_MS));
+    elapsed += POLL_MS;
+  }
+  return { waited, finalLoadAvg: readLoadAvg(), finalProcesses: heavyProcessSnapshot() || "(none)" };
+}
+
+// ---------------------------------------------------------------------
+// Build + serve production bundle
+// ---------------------------------------------------------------------
+function buildProductionBundle(): void {
+  log("Building production bundle (npm run build)...");
+  execSync("npm run build", { cwd: ROOT, stdio: "inherit" });
+}
+
+function startPreviewServer(): ChildProcess {
+  log(`Starting vite preview on port ${PORT}...`);
+  const proc = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], {
+    cwd: ROOT,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  proc.stdout?.on("data", (d) => process.stdout.write(`[preview] ${d}`));
+  proc.stderr?.on("data", (d) => process.stderr.write(`[preview] ${d}`));
+  return proc;
+}
+
+async function waitForServer(url: string, timeoutMs: number): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return;
+    } catch {
+      // not up yet
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  throw new Error(`Server at ${url} did not become ready within ${timeoutMs}ms`);
+}
+
+// ---------------------------------------------------------------------
+// Machine/browser environment capture
+// ---------------------------------------------------------------------
+function macModel(): string {
+  try {
+    return execSync("sysctl -n hw.model", { encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
+function macOsVersion(): string {
+  try {
+    return execSync("sw_vers -productVersion", { encoding: "utf8" }).trim();
+  } catch {
+    return os.release();
+  }
+}
+
+// ---------------------------------------------------------------------
+// Real Playwright BenchDriver implementation
+// ---------------------------------------------------------------------
+class RealBenchDriver implements BenchDriver {
+  private page: Page;
+  private cdp: CDPSession | null = null;
+  currentPrototypeId: PrototypeId | null = null;
+  currentFixtureName: string = "";
+  private lifecycleMounted = false;
+
+  constructor(page: Page) {
+    this.page = page;
+  }
+
+  async captureEnvironment() {
+    const viewport = this.page.viewportSize() ?? { width: 1440, height: 900 };
+    const browserVersion = this.page.context().browser()?.version() ?? "unknown";
+    const dpr = await this.page.evaluate(() => window.devicePixelRatio);
+    return {
+      machineModel: process.platform === "darwin" ? macModel() : `${process.platform} ${os.arch()}`,
+      os: process.platform === "darwin" ? `macOS ${macOsVersion()}` : `${process.platform} ${os.release()}`,
+      browser: "chromium",
+      browserVersion,
+      powerMode: "unknown", // no standard cross-browser power-mode API
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      devicePixelRatio: dpr,
+    };
+  }
+
+  async navigate(prototypeId: PrototypeId, fixtureName: string, _cacheState: CacheState): Promise<number> {
+    this.currentPrototypeId = prototypeId;
+    this.currentFixtureName = fixtureName;
+    await this.page.goto(`${BASE_URL}/?proto=${prototypeId}&fixture=${fixtureName}`, { waitUntil: "load" });
+    return 0; // performance.now() in the freshly-navigated page is itself 0-based at navigation start
+  }
+
+  /** Validated safe pattern: return the value straight from the resolved
+   * predicate handle, never via a separate follow-up `page.evaluate()` —
+   * see module doc comment for why. */
+  async waitForPayloadReceived(): Promise<number> {
+    const handle = await this.page.waitForFunction(
+      (key) => {
+        const b = (window as unknown as Record<string, { payloadReceivedAtMs: number | null } | undefined>)[key];
+        return b && b.payloadReceivedAtMs !== null ? b.payloadReceivedAtMs : false;
+      },
+      HARNESS_BRIDGE_KEY,
+      { timeout: 20_000 },
+    );
+    return (await handle.jsonValue()) as number;
+  }
+
+  async waitForInteractive(): Promise<number> {
+    const handle = await this.page.waitForFunction(
+      (key) => {
+        const b = (window as unknown as Record<string, { interactiveAtMs: number | null } | undefined>)[key];
+        return b && b.interactiveAtMs !== null ? b.interactiveAtMs : false;
+      },
+      HARNESS_BRIDGE_KEY,
+      { timeout: 20_000 },
+    );
+    return (await handle.jsonValue()) as number;
+  }
+
+  async runWarmupCycle(): Promise<void> {
+    if (!this.currentPrototypeId) throw new Error("runWarmupCycle called before navigate()");
+    await this.navigate(this.currentPrototypeId, this.currentFixtureName, "warm");
+    await this.waitForPayloadReceived();
+    await this.waitForInteractive();
+    // One complete scripted orbit, discarded.
+    await this.sampleOrbitFrameIntervals(2_000, 0);
+    // One selection/focus/reset cycle, discarded.
+    await this.page.evaluate((key) => {
+      const bridge = (window as unknown as Record<string, { handle: { select(id: string | null): void; focus(id: string): void; home(): void } }>)[key];
+      bridge.handle.select("n0");
+      bridge.handle.focus("n0");
+      bridge.handle.home();
+      bridge.handle.select(null);
+    }, HARNESS_BRIDGE_KEY);
+  }
+
+  async sampleOrbitFrameIntervals(durationMs: number, stabilizationMs: number): Promise<number[]> {
+    if (stabilizationMs > 0) {
+      await this.page.waitForTimeout(stabilizationMs);
+    }
+    return this.page.evaluate(({ duration, key }) => {
+      return new Promise<number[]>((resolve) => {
+        const bridgeKey = key as string;
+        const bridge = (window as unknown as Record<string, { handle: { getCameraPose(): { position: readonly [number, number, number]; target: readonly [number, number, number] } } } | undefined>)[bridgeKey];
+        // Scripted azimuth/elevation orbit around the current target, at a
+        // fixed distance/radius derived from the current camera pose, so
+        // both prototypes orbit through an equivalent path regardless of
+        // their own camera-math internals (both already expose
+        // getCameraPose() per the shared GraphPrototypeHandle contract —
+        // this loop only reads it once to derive radius/center, it does
+        // not command the camera through handle methods since neither
+        // prototype exposes a raw "setCameraPose"; instead it derives
+        // frame timing purely from requestAnimationFrame, which is the
+        // actual thing being measured (steady-state render cost), and
+        // nudges the pose via direct camera math is out of scope for a
+        // frame-interval sampler — real production orbit interaction
+        // (OrbitControls / three-render-objects controls) is driven here
+        // via synthetic pointer drag events instead, below.
+        void bridge;
+        const intervals: number[] = [];
+        let last = performance.now();
+        const end = last + duration;
+
+        // Synthetic continuous drag across the canvas to actually invoke
+        // each prototype's real OrbitControls/three-render-objects camera
+        // controls during the sampling window (not just idle-render FPS).
+        const canvas = document.querySelector("canvas");
+        const rect = canvas?.getBoundingClientRect();
+        let dragT = 0;
+        function driveOrbitPointer() {
+          if (!canvas || !rect) return;
+          dragT += 1;
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const radius = Math.min(rect.width, rect.height) * 0.28;
+          const angle = (dragT / 90) * Math.PI * 2;
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle * 0.6) * radius * 0.6;
+          const opts = { clientX: x, clientY: y, bubbles: true, cancelable: true, view: window, buttons: 1, button: 0 };
+          if (dragT === 1) canvas.dispatchEvent(new MouseEvent("mousedown", opts));
+          canvas.dispatchEvent(new MouseEvent("mousemove", opts));
+        }
+
+        function tick(now: number) {
+          intervals.push(now - last);
+          last = now;
+          driveOrbitPointer();
+          if (now < end) {
+            requestAnimationFrame(tick);
+          } else {
+            if (canvas) {
+              const rectNow = canvas.getBoundingClientRect();
+              canvas.dispatchEvent(
+                new MouseEvent("mouseup", { clientX: rectNow.left, clientY: rectNow.top, bubbles: true, cancelable: true, view: window }),
+              );
+            }
+            resolve(intervals);
+          }
+        }
+        requestAnimationFrame(tick);
+      });
+    }, { duration: durationMs, key: HARNESS_BRIDGE_KEY });
+  }
+
+  async samplePointerLatencies(count: number): Promise<PointerLatencySample[]> {
+    const nodeIds = loadFixtureNodeIds(this.currentFixtureName);
+    const samples: PointerLatencySample[] = [];
+    let attempts = 0;
+    let idx = 0;
+    const maxAttempts = count * 6;
+
+    while (samples.length < count && attempts < maxAttempts) {
+      attempts++;
+      const nodeId = nodeIds[idx % nodeIds.length];
+      idx++;
+
+      const result = await this.page.evaluate(
+        ({ key, nodeId }) => {
+          return new Promise<{ dispatchedAtMs: number; confirmedAtMs: number } | null>((resolve) => {
+            const bridge = (window as unknown as Record<
+              string,
+              {
+                getNodeScreenPosition(id: string): { x: number; y: number } | null;
+                isHighlightConfirmed(id: string): boolean;
+                handle: { select(id: string | null): void };
+              }
+            >)[key];
+            if (!bridge) return resolve(null);
+            const pos = bridge.getNodeScreenPosition(nodeId);
+            if (!pos) return resolve(null);
+            const canvas = document.querySelector("canvas");
+            if (!canvas) return resolve(null);
+
+            // Reset selection first so this dispatch measures a genuine
+            // not-confirmed -> confirmed transition, not a stale confirmed
+            // state left over from a previous sample re-targeting the same
+            // node (fixtures with < 50 nodes cycle node ids more than once
+            // to reach the mandatory 50-sample floor).
+            bridge.handle.select(null);
+            let resetAttempts = 0;
+            function waitForReset() {
+              resetAttempts++;
+              if (!bridge.isHighlightConfirmed(nodeId) || resetAttempts > 30) {
+                dispatchAndMeasure();
+              } else {
+                requestAnimationFrame(waitForReset);
+              }
+            }
+
+            function dispatchAndMeasure() {
+              const rect = canvas!.getBoundingClientRect();
+              const clientX = rect.left + pos!.x;
+              const clientY = rect.top + pos!.y;
+              const opts = { clientX, clientY, bubbles: true, cancelable: true, view: window, button: 0 };
+              const dispatchedAtMs = performance.now();
+              canvas!.dispatchEvent(new MouseEvent("mousedown", opts));
+              canvas!.dispatchEvent(new MouseEvent("mouseup", opts));
+              canvas!.dispatchEvent(new MouseEvent("click", opts));
+
+              let confirmAttempts = 0;
+              function poll() {
+                confirmAttempts++;
+                if (bridge.isHighlightConfirmed(nodeId)) {
+                  resolve({ dispatchedAtMs, confirmedAtMs: performance.now() });
+                } else if (confirmAttempts > 240) {
+                  resolve(null); // timeout — not counted as a sample
+                } else {
+                  requestAnimationFrame(poll);
+                }
+              }
+              requestAnimationFrame(poll);
+            }
+
+            waitForReset();
+          });
+        },
+        { key: HARNESS_BRIDGE_KEY, nodeId },
+      );
+
+      if (result) {
+        samples.push({
+          targetNodeId: nodeId,
+          dispatchedAtMs: result.dispatchedAtMs,
+          highlightConfirmedAtMs: result.confirmedAtMs,
+          latencyMs: result.confirmedAtMs - result.dispatchedAtMs,
+        });
+      }
+    }
+
+    if (samples.length < count) {
+      log(`WARNING: only collected ${samples.length}/${count} pointer-latency samples for ${this.currentPrototypeId}/${this.currentFixtureName} after ${attempts} attempts`);
+    }
+    return samples;
+  }
+
+  private async ensureCdp(): Promise<CDPSession> {
+    if (!this.cdp) {
+      this.cdp = await this.page.context().newCDPSession(this.page);
+    }
+    return this.cdp;
+  }
+
+  async captureNavigationTiming(kind: CacheState): Promise<NavigationTiming> {
+    const cdp = await this.ensureCdp();
+    if (kind === "cold") {
+      await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+      await cdp.send("Network.clearBrowserCache");
+    } else {
+      await cdp.send("Network.setCacheDisabled", { cacheDisabled: false });
+    }
+
+    await this.page.reload({ waitUntil: "load" });
+    await this.waitForPayloadReceived();
+    const interactiveMs = await this.waitForInteractive();
+
+    const timing = await this.page.evaluate(() => {
+      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+      const bridge = (window as unknown as Record<string, { payloadReceivedAtMs: number | null; interactiveAtMs: number | null } | undefined>)["__graphBakeoffHarness"];
+      return {
+        responseStart: nav?.responseStart ?? 0,
+        responseEnd: nav?.responseEnd ?? 0,
+        payloadReceivedAtMs: bridge?.payloadReceivedAtMs ?? 0,
+        interactiveAtMs: bridge?.interactiveAtMs ?? 0,
+      };
+    });
+
+    return {
+      kind,
+      navigationIntentMs: 0,
+      apiRequestStartMs: timing.responseStart,
+      apiRequestEndMs: timing.responseEnd,
+      payloadReceivedMs: timing.payloadReceivedAtMs,
+      // No separate "renderer initialized" marker exists in the current
+      // harness bridge (only payload-received and interactive); documented
+      // simplification, not a fabricated value — reuses the real
+      // payload-received timestamp rather than inventing an intermediate
+      // one neither prototype actually reports.
+      rendererInitMs: timing.payloadReceivedAtMs,
+      firstValidFrameMs: interactiveMs,
+      interactiveMs: interactiveMs,
+    };
+  }
+
+  async runLifecycleCycle(cycleIndex: number): Promise<LifecycleSnapshot> {
+    if (!this.lifecycleMounted) {
+      await this.navigate(this.currentPrototypeId!, this.currentFixtureName, "warm");
+      await this.waitForPayloadReceived();
+      await this.waitForInteractive();
+      this.lifecycleMounted = true;
+    }
+
+    const handle = await this.page.waitForFunction(
+      (cycle) => {
+        const control = (window as unknown as { __graphBakeoffLifecycle?: { remountCycle(c: number): Promise<LifecycleSnapshot> } }).__graphBakeoffLifecycle;
+        if (!control) return false;
+        // waitForFunction predicates must be synchronous-looking (return a
+        // truthy value once ready); kick off the async remount and stash
+        // the promise on window so a second predicate poll can read it.
+        const w = window as unknown as { __remountPromise?: Promise<LifecycleSnapshot> };
+        if (!w.__remountPromise) {
+          w.__remountPromise = control.remountCycle(cycle);
+        }
+        return true;
+      },
+      cycleIndex,
+      { timeout: 5_000 },
+    );
+    await handle.jsonValue();
+
+    const snapshot = await this.page.evaluate(async () => {
+      const w = window as unknown as { __remountPromise?: Promise<LifecycleSnapshot> };
+      const result = await w.__remountPromise!;
+      delete w.__remountPromise;
+      return result;
+    });
+
+    // Wait for the fresh mount (started inside remountCycle) to report
+    // interactive again before the next cycle begins.
+    await this.waitForInteractive();
+
+    return snapshot;
+  }
+
+  async getFixtureContentHash(fixtureName: string): Promise<string> {
+    try {
+      return await this.page.evaluate(
+        (key) => (window as unknown as Record<string, { fixtureContentHash: string } | undefined>)[key]?.fixtureContentHash ?? "unknown",
+        HARNESS_BRIDGE_KEY,
+      );
+    } catch {
+      return `unknown-${fixtureName}`;
+    }
+  }
+
+  async getRendererBuildLabel(prototypeId: PrototypeId): Promise<string> {
+    const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as { dependencies: Record<string, string> };
+    if (prototypeId === "a") {
+      return `prototype-a@react-force-graph-3d@${pkg.dependencies["react-force-graph-3d"]}`;
+    }
+    return `prototype-b@r3f@${pkg.dependencies["@react-three/fiber"]}+three@${pkg.dependencies["three"]}`;
+  }
+}
+
+// ---------------------------------------------------------------------
+// Orchestration
+// ---------------------------------------------------------------------
+function writeResult(filename: string, data: unknown): void {
+  mkdirSync(RESULTS_DIR, { recursive: true });
+  writeFileSync(join(RESULTS_DIR, filename), JSON.stringify(data, null, 2) + "\n", "utf8");
+}
+
+interface StressResult {
+  prototypeId: PrototypeId;
+  fixtureName: string;
+  crashedOrBlank: boolean;
+  detail: string;
+  trial?: TrialResult;
+}
+
+async function checkStressFixture(driver: RealBenchDriver, page: Page, prototypeId: PrototypeId): Promise<StressResult> {
+  const fixtureName = "fixture-1000";
+  let crashedOrBlank = false;
+  let detail = "ok";
+  let trial: TrialResult | undefined;
+  try {
+    await driver.navigate(prototypeId, fixtureName, "warm");
+    await driver.waitForPayloadReceived();
+    await driver.waitForInteractive();
+
+    const canvasCheck = await page.evaluate(() => {
+      const canvas = document.querySelector("canvas");
+      if (!canvas) return { present: false, width: 0, height: 0 };
+      return { present: true, width: canvas.width, height: canvas.height };
+    });
+    if (!canvasCheck.present || canvasCheck.width === 0 || canvasCheck.height === 0) {
+      crashedOrBlank = true;
+      detail = `no canvas or zero-size canvas: ${JSON.stringify(canvasCheck)}`;
+    } else {
+      trial = await runMeasuredTrial(driver, { prototypeId, fixtureName, trialIndex: 1, cacheState: "warm" });
+      writeResult(`${prototypeId}--${fixtureName}--trial1.json`, trial);
+    }
+  } catch (err) {
+    crashedOrBlank = true;
+    detail = err instanceof Error ? err.message : String(err);
+  }
+  return { prototypeId, fixtureName, crashedOrBlank, detail, trial };
+}
+
+async function main() {
+  log("=== Stage 2 graph-bakeoff measurement run starting ===");
+
+  const preflight = await preflightMachineCheck();
+  log(`Preflight complete. waited=${preflight.waited} finalLoadAvg=${preflight.finalLoadAvg.toFixed(2)}`);
+
+  buildProductionBundle();
+  const previewProc = startPreviewServer();
+  await waitForServer(`${BASE_URL}/`, 30_000);
+  log("Preview server ready.");
+
+  let headedUsed = true;
+  let browser: Browser;
+  try {
+    browser = await Promise.race([
+      chromium.launch({ headless: false, args: ["--force-device-scale-factor=1"] }),
+      new Promise<Browser>((_, reject) => setTimeout(() => reject(new Error("headed launch timeout")), 20_000)),
+    ]);
+  } catch (err) {
+    log(`Headed launch failed (${err instanceof Error ? err.message : String(err)}); falling back to headless 'new'.`);
+    headedUsed = false;
+    browser = await chromium.launch({ headless: true, args: ["--force-device-scale-factor=1"] });
+  }
+  log(`Browser launched. headed=${headedUsed}`);
+
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  const driver = new RealBenchDriver(page);
+
+  const allTrials: TrialResult[] = [];
+  const navResults: NavigationTrialResult[] = [];
+  const lifecycleResults: LifecycleTrialResult[] = [];
+  const stressResults: StressResult[] = [];
+
+  const prototypes: PrototypeId[] = ["a", "b"];
+
+  // DRY_RUN=1 shrinks the fixture list and trial count for a fast
+  // pipeline sanity pass before committing to the full ~25-30min protocol
+  // run; never used for the real reported measurements (checked via the
+  // env var, not a code path that silently changes the mandatory protocol).
+  const dryRun = process.env.DRY_RUN === "1";
+  const fixturesToRun = dryRun ? (["fixture-12"] as const) : MANDATORY_FIXTURES;
+  const trialsPerFixture = dryRun ? 1 : BENCH_PROTOCOL.MEASURED_TRIALS_PER_FIXTURE;
+  if (dryRun) log("DRY_RUN=1: shrunk protocol for pipeline sanity check only.");
+
+  // ---- Mandatory + headroom fixtures: 5 trials each, alternating A/B ----
+  for (const fixtureName of fixturesToRun) {
+    log(`--- Fixture ${fixtureName}: warmup ---`);
+    for (const prototypeId of prototypes) {
+      await driver.navigate(prototypeId, fixtureName, "warm");
+      await driver.waitForPayloadReceived();
+      await driver.waitForInteractive();
+      await driver.runWarmupCycle();
+      log(`Warmup complete: ${prototypeId}/${fixtureName}`);
+    }
+
+    for (let trialIndex = 1; trialIndex <= trialsPerFixture; trialIndex++) {
+      for (const prototypeId of prototypes) {
+        log(`Running trial ${trialIndex}/${BENCH_PROTOCOL.MEASURED_TRIALS_PER_FIXTURE}: ${prototypeId}/${fixtureName}`);
+        const result = await runMeasuredTrial(driver, { prototypeId, fixtureName, trialIndex, cacheState: "warm" });
+        writeResult(`${prototypeId}--${fixtureName}--trial${trialIndex}.json`, result);
+        allTrials.push(result);
+        log(
+          `  medianFps=${result.orbit.medianFps.toFixed(1)} p95Frame=${result.orbit.p95FrameTimeMs.toFixed(1)}ms ` +
+            `p95Pointer=${result.pointerLatency.p95LatencyMs.toFixed(1)}ms payload->interactive=${result.payloadToInteractiveMs.toFixed(0)}ms`,
+        );
+      }
+    }
+  }
+
+  // ---- Stress fixture: run once per prototype, crash/blank only ----
+  for (const prototypeId of prototypes) {
+    log(`--- Stress fixture-1000/4000: ${prototypeId} ---`);
+    const stress = await checkStressFixture(driver, page, prototypeId);
+    stressResults.push(stress);
+    log(`Stress result ${prototypeId}: crashedOrBlank=${stress.crashedOrBlank} detail=${stress.detail}`);
+  }
+
+  // ---- Navigation timing: 3 cold + 5 warm per prototype, fixture-120 ----
+  for (const prototypeId of prototypes) {
+    log(`--- Navigation timing: ${prototypeId}/${NAV_FIXTURE} ---`);
+    await driver.navigate(prototypeId, NAV_FIXTURE, "warm");
+    await driver.waitForPayloadReceived();
+    await driver.waitForInteractive();
+    const navResult = await runNavigationBenchmark(driver, { prototypeId, fixtureName: NAV_FIXTURE });
+    writeResult(`${prototypeId}--navigation--${NAV_FIXTURE}.json`, navResult);
+    navResults.push(navResult);
+    log(`Navigation timing complete: ${prototypeId}`);
+  }
+
+  // ---- Lifecycle: 20x mount/unmount per prototype, fixture-24 ----
+  for (const prototypeId of prototypes) {
+    log(`--- Lifecycle 20x mount/unmount: ${prototypeId}/${LIFECYCLE_FIXTURE} ---`);
+    driver.currentPrototypeId = prototypeId;
+    driver.currentFixtureName = LIFECYCLE_FIXTURE;
+    (driver as unknown as { lifecycleMounted: boolean }).lifecycleMounted = false;
+    const lifecycleResult = await runLifecycleBenchmark(driver, { prototypeId, fixtureName: LIFECYCLE_FIXTURE });
+    const trialResult: LifecycleTrialResult = {
+      protocolVersion: "1.0.0",
+      prototypeId,
+      fixtureName: LIFECYCLE_FIXTURE,
+      environment: {
+        ...(await driver.captureEnvironment()),
+        fixtureName: LIFECYCLE_FIXTURE,
+        fixtureContentHash: await driver.getFixtureContentHash(LIFECYCLE_FIXTURE),
+        rendererBuild: await driver.getRendererBuildLabel(prototypeId),
+        cacheState: "warm",
+      },
+      lifecycle: lifecycleResult,
+      recordedAtIso: new Date().toISOString(),
+    };
+    writeResult(`${prototypeId}--lifecycle--${LIFECYCLE_FIXTURE}.json`, trialResult);
+    lifecycleResults.push(trialResult);
+    const evalResult = evaluateLifecycle(lifecycleResult);
+    log(`Lifecycle result ${prototypeId}: pass=${evalResult.pass} violations=${JSON.stringify(evalResult.violations)}`);
+  }
+
+  await browser.close();
+  previewProc.kill();
+
+  // ---- Summary aggregation ----
+  const environment = allTrials[0]?.environment;
+  const summary = {
+    protocolVersion: "1.0.0",
+    recordedAtIso: new Date().toISOString(),
+    headedBrowserUsed: headedUsed,
+    machineState: {
+      preflightWaited: preflight.waited,
+      finalLoadAvg: preflight.finalLoadAvg,
+    },
+    environmentSample: environment,
+    floors: BENCH_FLOORS,
+    perPrototype: prototypes.map((prototypeId) => {
+      const fixtures = [...MANDATORY_FIXTURES, ...DIAGNOSTIC_ONLY_FIXTURES].map((fixtureName) => {
+        const trials = allTrials.filter((t) => t.prototypeId === prototypeId && t.fixtureName === fixtureName);
+        const stressTrial = stressResults.find((s) => s.prototypeId === prototypeId && s.fixtureName === fixtureName)?.trial;
+        const effectiveTrials = trials.length > 0 ? trials : stressTrial ? [stressTrial] : [];
+        const isMandatory = (MANDATORY_FIXTURES as readonly string[]).includes(fixtureName);
+
+        if (effectiveTrials.length === 0) {
+          const stress = stressResults.find((s) => s.prototypeId === prototypeId && s.fixtureName === fixtureName);
+          return {
+            fixtureName,
+            isMandatory,
+            trialCount: 0,
+            crashedOrBlank: stress?.crashedOrBlank ?? null,
+            detail: stress?.detail ?? "no trials recorded",
+          };
+        }
+
+        const medianFpsValues = effectiveTrials.map((t) => t.orbit.medianFps);
+        const p95FrameValues = effectiveTrials.map((t) => t.orbit.p95FrameTimeMs);
+        const p95PointerValues = effectiveTrials.map((t) => t.pointerLatency.p95LatencyMs);
+        const payloadToInteractiveValues = effectiveTrials.map((t) => t.payloadToInteractiveMs);
+
+        const medianOfMedians = percentileOf(medianFpsValues, 50);
+        const p95OfP95Frame = percentileOf(p95FrameValues, 95);
+        const p95OfP95Pointer = percentileOf(p95PointerValues, 95);
+        const p95PayloadToInteractive = percentileOf(payloadToInteractiveValues, 95);
+
+        const floorChecks = effectiveTrials.map((t) => evaluateFloors(t, isMandatory));
+        const allPass = floorChecks.every((f) => f.pass);
+        const violations = [...new Set(floorChecks.flatMap((f) => f.violations))];
+
+        return {
+          fixtureName,
+          isMandatory,
+          trialCount: effectiveTrials.length,
+          medianFps: medianOfMedians,
+          p95FrameTimeMs: p95OfP95Frame,
+          p95PointerLatencyMs: p95OfP95Pointer,
+          p95PayloadToInteractiveMs: p95PayloadToInteractive,
+          floorsPass: isMandatory ? allPass : "diagnostic-only",
+          violations,
+          crashedOrBlank: stressResults.find((s) => s.prototypeId === prototypeId && s.fixtureName === fixtureName)?.crashedOrBlank ?? false,
+        };
+      });
+
+      const nav = navResults.find((n) => n.prototypeId === prototypeId);
+      const coldNavs = nav?.navigations.filter((n) => n.kind === "cold") ?? [];
+      const warmNavs = nav?.navigations.filter((n) => n.kind === "warm") ?? [];
+      const coldInteractiveMs = coldNavs.map((n) => n.interactiveMs);
+      const warmInteractiveMs = warmNavs.map((n) => n.interactiveMs);
+      const p95Cold = percentileOf(coldInteractiveMs, 95);
+      const p95Warm = percentileOf(warmInteractiveMs, 95);
+
+      const lifecycle = lifecycleResults.find((l) => l.prototypeId === prototypeId);
+      const lifecycleEval = lifecycle ? evaluateLifecycle(lifecycle.lifecycle) : null;
+
+      return {
+        prototypeId,
+        fixtures,
+        navigation: {
+          coldTrialCount: coldNavs.length,
+          warmTrialCount: warmNavs.length,
+          p95ColdInteractiveMs: p95Cold,
+          p95WarmInteractiveMs: p95Warm,
+          coldFloorMs: BENCH_FLOORS.MAX_COLD_NAV_TO_INTERACTIVE_MS,
+          warmFloorMs: BENCH_FLOORS.MAX_WARM_NAV_TO_INTERACTIVE_MS,
+          coldPass: p95Cold <= BENCH_FLOORS.MAX_COLD_NAV_TO_INTERACTIVE_MS,
+          warmPass: p95Warm <= BENCH_FLOORS.MAX_WARM_NAV_TO_INTERACTIVE_MS,
+        },
+        lifecycle: lifecycle
+          ? {
+              withinPlateauTolerance: lifecycle.lifecycle.withinPlateauTolerance,
+              monotonicGrowthDetected: lifecycle.lifecycle.monotonicGrowthDetected,
+              pass: lifecycleEval?.pass ?? false,
+              violations: lifecycleEval?.violations ?? [],
+              baseline: lifecycle.lifecycle.baseline,
+              finalCycle: lifecycle.lifecycle.cycles[lifecycle.lifecycle.cycles.length - 1],
+            }
+          : null,
+      };
+    }),
+  };
+
+  writeResult("summary.json", summary);
+  log("=== Measurement run complete. summary.json written. ===");
+  console.log(JSON.stringify(summary, null, 2));
+}
+
+main().catch((err) => {
+  console.error("FATAL:", err);
+  process.exitCode = 1;
+});
