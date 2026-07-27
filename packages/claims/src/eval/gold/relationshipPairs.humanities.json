@@ -16,7 +16,7 @@
     },
     "label": "support",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik explicitly adopts Bostock's inconsistency diagnosis (Roochnik p.212, n.12); both scholars reach the same verdict on the VII/IX.4 mismatch.",
     "split": "train"
   },
@@ -37,7 +37,7 @@
     },
     "label": "support",
     "category": "historical",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik's Homeric excursus (pp.214-216) functions as an explicit argumentative analogy for his forgivable-inconsistency conclusion (pp.214-218), not as decorative context.",
     "split": "train"
   },
@@ -58,7 +58,7 @@
     },
     "label": "support",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Both readings converge on the same underlying point: neither reason nor desire is simply switched off in the vicious agent (Roochnik pp.209-210 on NE VII 1148a17-18/1119a1; Irwin's instrumental-reason solution, sections 5-7).",
     "split": "train"
   },
@@ -79,7 +79,7 @@
     },
     "label": "support",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Both accounts affirm vice as a settled, principled corruption of practical reason rather than an unprincipled appetite-driven failure; Barney's habituation account contextualizes the same corrupted-reason picture Nielsen defends (per baseline SRC-028 CONTEXTUALIZES CON-013).",
     "split": "test"
   },
@@ -100,7 +100,7 @@
     },
     "label": "support",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik's closing reader-position claim (pp.217-218, ARG-010) is presented as a direct consequence of NE I.4 1095b4-6's habituation requirement, not a rival claim.",
     "split": "train"
   },
@@ -121,7 +121,7 @@
     },
     "label": "support",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The sleep-metaphor passages (1147a13-1147b7) supply the mechanism behind the voluntariness claim at 1109b30-1111b4 rather than conflicting with it; both are premises in the same VII argument (PAS-006, PAS-020/021).",
     "split": "train"
   },
@@ -142,7 +142,7 @@
     },
     "label": "support",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Irwin's opening puzzle-statement and Roochnik's own reading of the Book VII intemperate agent (pp.208-210) independently converge on treating vice as choice-guided rather than a mere appetitive eruption.",
     "split": "test"
   },
@@ -163,7 +163,7 @@
     },
     "label": "support",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik reports that Irwin 'is cited as moving in a similar direction' to Brickhouse's developmental reconciliation (Part Three commentary, n.16); both scholars offer the same reconciliation strategy.",
     "split": "train"
   },
@@ -184,7 +184,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The two positions are opposed on the central question of whether Aristotle's account of vice is coherent: Bostock affirms genuine inconsistency, Brickhouse denies it via reconciliation.",
     "split": "train"
   },
@@ -205,7 +205,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Nielsen explicitly argues that Müller's unprincipled-agent account cannot accommodate Aristotle's technical choice and wish claims; the two positions are directly opposed characterizations of the vicious agent's psychology.",
     "split": "test"
   },
@@ -226,7 +226,7 @@
     },
     "label": "contradiction",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Taken at face value the two loci attribute opposite psychological states (unregretful harmony vs regretful conflict) to the same kind of agent; this raw textual tension is the datum the whole VII/IX.4 debate addresses.",
     "split": "train"
   },
@@ -247,7 +247,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik directly rejects Brickhouse's account on three stated grounds (pp.213-214), an explicit REJECTS relationship, not a milder disagreement.",
     "split": "train"
   },
@@ -268,7 +268,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Annas's chronological/local-Platonizing hypothesis and Nielsen's systematic, non-chronological account are opposed on whether the VII/IX.4 tension requires (or supports) any compositional explanation at all.",
     "split": "test"
   },
@@ -289,7 +289,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik's dehumanization worry (pp.216-217, ARG-009) and Nielsen's systematic, humanizing account of vice reach opposite verdicts on how alien or monstrous the vicious agent's psychology is.",
     "split": "train"
   },
@@ -310,7 +310,7 @@
     },
     "label": "contradiction",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Müller's account is a documented, explicit challenge to harmonizing, principled readings of vice like Irwin's instrumental-reason solution -- it denies the vicious soul is principled or harmonious at all.",
     "split": "train"
   },
@@ -331,7 +331,7 @@
     },
     "label": "nuance",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik reconciles the two loci (1148a17-18 and 1119a1) by reading 'without desire' as excluding only desire strong enough to overpower correct reason, not desire as such (pp.209-210).",
     "mechanismDraft": "different_scope_conditions",
     "split": "test"
@@ -353,7 +353,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Brickhouse relativizes the two portraits to different temporal stages of one developing character rather than treating them as simultaneous claims about one fixed type (Roochnik pp.212-214 reporting Brickhouse).",
     "mechanismDraft": "different_scope_conditions",
     "split": "train"
@@ -375,7 +375,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Solis redefines 'vice' as covering two distinct sub-kinds so there is no single referent to be inconsistently described, which dissolves the presupposition behind Roochnik's inconsistency reading (SRC-030, CON-030).",
     "mechanismDraft": "different_definition",
     "split": "train"
@@ -397,7 +397,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik does not deny the formal typological boundary; he interprets the psychological stability of that boundary differently, arguing it is felt as unstable by the ethical reader even though the categories remain formally distinct (pp.216-217).",
     "mechanismDraft": "interprets_differently",
     "split": "test"
@@ -419,7 +419,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Roochnik partially agrees with Annas's diagnosis of a mismatch but declines her chronological explanation, offering a philosophical-functional explanation instead; the two differ on what KIND of explanation the mismatch calls for, not on whether a mismatch exists.",
     "mechanismDraft": "different_definition",
     "split": "train"
@@ -441,7 +441,7 @@
     },
     "label": "nuance",
     "category": "definitional",
-    "provisional": true,
+    "provisional": false,
     "rationale": "'Philautia' is equivocal in Aristotle between a proper, virtuous sense and a popular, blameworthy sense; the apparent tension dissolves once the two senses of the same term are distinguished (baseline CON-020).",
     "mechanismDraft": "different_definition",
     "split": "train"
@@ -463,7 +463,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Irwin himself states the scope caveat as a self-imposed narrowing of his own mechanism's range, not a retraction of it (per the fixture's arg-scope-caveat, section 11).",
     "mechanismDraft": "different_scope_conditions",
     "split": "test"
@@ -485,7 +485,7 @@
     },
     "label": "nuance",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The epistemic hedge (fixture arg-self-admission, section 8 opening) qualifies the evidentiary status of the instrumental-reason mechanism without negating the mechanism itself.",
     "split": "train"
   },
@@ -506,7 +506,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The baseline material flags exactly this as a common beginner error -- inferring that regret erases blame -- which Roochnik's own reading (p.207) does not license (ARG-002).",
     "split": "train"
   },
@@ -527,7 +527,7 @@
     },
     "label": "nuance",
     "category": "definitional",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The pardon Aristotle extends for anger-driven wrongdoing is a matter of degree within akrasia, not an exemption from it (PAS-025 through PAS-030).",
     "split": "test"
   },
@@ -548,7 +548,7 @@
     },
     "label": "nuance",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The 'in some way' qualifier at 1151a6-15 marks a partial, qualified sense of vice-likeness that does not collapse the formal sixfold distinction drawn at 1145a16-19.",
     "mechanismDraft": "different_scope_conditions",
     "split": "train"
@@ -570,7 +570,7 @@
     },
     "label": "nuance",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "The inexactness principle bears on the precision of substantive ethical judgments about action, not on whether a determinate answer exists to a question of logical consistency in Aristotle's own exposition.",
     "mechanismDraft": "different_scope_conditions",
     "split": "train"
@@ -592,7 +592,7 @@
     },
     "label": "nuance",
     "category": "historical",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Homer applies 'nearly nothing' to the ordinary dead's presence, while the punished sinners are a marked exception whose animate suffering is precisely what makes deserved punishment intelligible (PAS-044 through PAS-048).",
     "mechanismDraft": "different_scope_conditions",
     "split": "test"
@@ -614,7 +614,7 @@
     },
     "label": "nuance",
     "category": "interpretive",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Part Four (pp.217-218) states the forgivability verdict is scoped to this one philosophical case, not generalized into a license for contradiction.",
     "mechanismDraft": "different_scope_conditions",
     "split": "train"
@@ -636,7 +636,7 @@
     },
     "label": "nuance",
     "category": "textual",
-    "provisional": true,
+    "provisional": false,
     "rationale": "Voluntariness and blameworthiness (1111a25-b4) are compatible with a degree of pardon scoped to the source of the impulse -- anger versus appetite -- not to voluntariness itself (1149b4, CON-014, CON-015).",
     "split": "train"
   },
@@ -657,7 +657,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "An edition-choice/translation detail (n.3) and a substantive self-friendship claim (1166a10-13) have no logical relationship to each other.",
     "split": "test"
   },
@@ -678,7 +678,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A digital-tooling/verification detail and a substantive Homeric interpretive claim are unrelated -- one is infrastructure, the other content.",
     "split": "train"
   },
@@ -699,7 +699,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A provenance/acknowledgements note about one paper's origins and a different scholar's substantive thesis about vice bear no logical relationship.",
     "split": "train"
   },
@@ -720,7 +720,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A lexicon's publication-history detail and Brickhouse's substantive reconciliation claim have no logical bearing on one another.",
     "split": "test"
   },
@@ -741,7 +741,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A citation-count metadata fact and a substantive textual claim about the vicious person's psychology are unrelated in content.",
     "split": "train"
   },
@@ -762,7 +762,7 @@
     },
     "label": "unrelated",
     "category": "methodological",
-    "provisional": true,
+    "provisional": false,
     "rationale": "A translation-credit detail and Barney's substantive habituation thesis have no logical relationship to each other.",
     "split": "train"
   }

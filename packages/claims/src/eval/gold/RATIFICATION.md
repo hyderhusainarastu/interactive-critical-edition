@@ -1,8 +1,31 @@
 # Humanities gold-set ratification (Lane L5, Phase 25)
 
-**Status: DRAFT / PROVISIONAL.** Every record in this directory carries `"provisional": true`.
-Nothing here is a ratified gold label yet. This document exists so the owner can turn these
-drafts into real gold data.
+**Status: RATIFIED.** Every record in this directory now carries `"provisional": false`.
+
+## Ratification record
+
+- **Date:** 2026-07-26
+- **Reviewer:** Project owner
+- **Packet reviewed:** `docs/eval/research-claims/humanities-ratification-packet.md` (Phase 27.3, Lane
+  L5) — a faithful, unedited reproduction of every record in `relationshipPairs.humanities.json`,
+  `retrievalNegatives.json`, and `claimNature.json`.
+- **Decision:** The owner ratified **all records as labeled** — no label, category, or
+  `mechanismDraft` corrections, and no record deletions. This includes the **11 same-work-flagged
+  pairs** (`hum_011`, `hum_016`, `hum_021`, `hum_022`, `hum_023`, `hum_025`, `hum_026`, `hum_028`,
+  `hum_029`, `hum_030`, `hum_006`) — the owner reviewed each flagged pair specifically and
+  confirmed each is an intentional internal-tension/self-consistency pair, not a mismatched
+  cross-work comparison, so no records were removed on that basis.
+- **Effect:** All 123 records across the three files (`relationshipPairs.humanities.json`: 36,
+  `retrievalNegatives.json`: 22, `claimNature.json`: 65) are now gold data. The 11 nuance records
+  carrying a `mechanismDraft` value are now gold mechanisms (no longer drafts) and are eligible to
+  gate `MECHANISM_ACCURACY_MIN` in `packages/claims/src/eval/gates.ts`. The humanities judge gate
+  (Phase 27.3) may now run against this set.
+
+---
+
+**Prior status (superseded):** DRAFT / PROVISIONAL. Every record in this directory carried
+`"provisional": true`. The section below is retained verbatim as the historical record of what was
+produced and reviewed; it predates the ratification above.
 
 ## What was produced
 

@@ -1,0 +1,1833 @@
+{
+  "generatedAt": "2026-07-26T20:25:09.329Z",
+  "goldCounts": {
+    "humanities": 36,
+    "mechanismBearing": 11,
+    "empirical": 42
+  },
+  "stageA": {
+    "label": "STAGE A — base (branch:empirical) on humanities set",
+    "branch": "empirical",
+    "valence": {
+      "n": 36,
+      "nFailed": 0,
+      "macroF1": 0.7707043913940466,
+      "kappa": 0.652733118971061,
+      "contradictionRecall": 1,
+      "perClass": [
+        {
+          "className": "contradiction",
+          "precision": 0.6363636363636364,
+          "recall": 1,
+          "f1": 0.7777777777777778,
+          "support": 7
+        },
+        {
+          "className": "support",
+          "precision": 0.8,
+          "recall": 0.5,
+          "f1": 0.6153846153846154,
+          "support": 8
+        },
+        {
+          "className": "nuance",
+          "precision": 0.7142857142857143,
+          "recall": 0.6666666666666666,
+          "f1": 0.689655172413793,
+          "support": 15
+        },
+        {
+          "className": "unrelated",
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "support": 6
+        }
+      ],
+      "classesBelowFloor": []
+    },
+    "costUsd": 0.062794,
+    "records": [
+      {
+        "id": "hum_001",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Both Bostock, Aristotle's Ethics and Roochnik, Aristotle's Account of the Vicious argue that Aristotle's characterizations of vice in NE VII and NE IX.4 are genuinely incompatible rather than reconcilable. Bostock identifies the inconsistency as two unstable character portraits, while Roochnik specifies the tension between the Book VII agent's unregretful harmony and the Book IX.4 agent's regretful conflict. Both reject harmonizing interpretations and affirm that the tension is substantive, not merely apparent.",
+          "strongerEvidence": "neither",
+          "resolution": "A textual analysis determining whether the same vicious agent type is intended in both passages, or whether Aristotle describes distinct vicious types (e.g., akratic vs. fully vicious) would resolve which characterization applies to which agent.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017989999999999998
+      },
+      {
+        "id": "hum_002",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Homer, Odyssey XI identifies an unresolved inconsistency—insubstantial shades that nonetheless experience fear and deserved punishment—treating logical incompatibility as a problem left unaddressed by the text. Roochnik, Aristotle's Account of the Vicious reframes a similar tension (two incompatible portraits of the vicious person) as deliberately unresolved because holding both views simultaneously conveys genuine moral alienness to the reader. Both identify internal tensions in their respective works, but they differ on whether unresolution signals interpretive failure or epistemic function.",
+          "strongerEvidence": "neither",
+          "resolution": "Determine whether Homer's inconsistency in the Odyssey serves a rhetorical purpose (making unresolved tension functional rather than negligent) through careful analysis of how audiences encounter the contradiction.",
+          "mechanism": null
+        },
+        "costUsd": 0.00173
+      },
+      {
+        "id": "hum_003",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious argues that the intemperate agent possesses real appetite but lacks desire *strong enough to overpower correct reason*, meaning practical reason remains present but insufficient to govern action. Irwin, Vice and Reason claims practical reason becomes subordinated to antecedent inclination and operates *strategically* rather than authoritatively—suggesting reason is redirected toward satisfying desire rather than determining ends. Both preserve reason's activity in vice, but they differ on whether reason fails due to weakness of will (Roochnik) or due to hierarchical subordination to prior inclinations (Irwin).",
+          "strongerEvidence": "neither",
+          "resolution": "A detailed analysis of Aristotle's treatment of the deliberative function (bouleusis) in the intemperate person would clarify whether practical reason is genuinely present but overpowered or whether it is actively conscripted to serve antecedent desires.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018839999999999998
+      },
+      {
+        "id": "hum_004",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Nielsen, Vice in the Nicomachean Ethics grounds vice in a corrupted conception of the good produced through mistaken practical reasoning, while Barney, Becoming Bad: Aristotle on Vice and Moral Habituation explains the mechanism by which this corruption develops—through habituation as a reason-corrupting process. Both claims converge on the same phenomenon: vice as a stable, character-level corruption distinct from isolated akratic lapses, with Nielsen identifying its structural nature and Barney specifying the developmental pathway that creates it.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual evidence from the Nicomachean Ethics showing whether Aristotle explicitly connects the habituation process to the formation of corrupted practical reasoning would strengthen either account or confirm their complementarity.",
+          "mechanism": null
+        },
+        "costUsd": 0.001673
+      },
+      {
+        "id": "hum_005",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics I.4 establishes that the ethics student must already possess decent habits as a prerequisite for study, while Roochnik, Aristotle's Account of the Vicious identifies this same habituation as the condition that makes the fully vicious agent partly unintelligible to that reader. Both works affirm that ethical habituation creates a stable interpretive stance—the reader's existing virtuous disposition both qualifies them as a proper student and simultaneously limits their comprehension of radical vice.",
+          "strongerEvidence": "neither",
+          "resolution": "Close textual analysis of Nicomachean Ethics I.4 paired with Roochnik's treatment of Book VII would clarify whether the intelligibility gap Roochnik identifies is an explicit consequence of Aristotle's audience requirement or an inference beyond the text's explicit claims.",
+          "mechanism": null
+        },
+        "costUsd": 0.00173
+      },
+      {
+        "id": "hum_006",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics III establishes that akratic actions are voluntary because the agent retains capacity to act otherwise and faces no external compulsion. Nicomachean Ethics VII refines this by explaining the mechanism—the akratic person's moral knowledge exists in a dormant state (compared to sleep, madness, or intoxication) rather than being absent entirely. Both affirm voluntary wrongdoing, but VII adds a condition about the *form* knowledge takes (inactive versus active) that explains how VII's dormant-knowledge model is consistent with III's voluntariness criterion.",
+          "strongerEvidence": "neither",
+          "resolution": "Determine whether III's 'capacity to act otherwise' presupposes the knowledge-state distinctions that VII describes, or whether they address the voluntariness question at different levels of explanation.",
+          "mechanism": null
+        },
+        "costUsd": 0.001704
+      },
+      {
+        "id": "hum_007",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason identifies a puzzle: vicious agents act on prohairesis (rational decision), yet vice is elsewhere associated with passion dominating reason. Roochnik, Aristotle's Account of the Vicious resolves this specifically for the Book VII intemperate agent by specifying that he acts through settled choice on a corrupted principle rather than being overwhelmed by passion. Both acknowledge vicious action involves rational guidance (prohairesis/settled choice), but differ on whether the apparent conflict between rational agency and passion-driven behavior is an unresolved puzzle (Irwin) or whether it dissolves when properly distinguishing the intemperate agent's corrupted deliberation from simple passion-eruption (Roochnik).",
+          "strongerEvidence": "paper_b",
+          "resolution": "Determine whether Aristotle's treatment of prohairesis in vicious agents across all virtue texts (not just Book VII) shows the corrupted-principle structure Roochnik identifies, or whether Book VII intemperance is a special case that leaves Irwin's puzzle intact elsewhere.",
+          "mechanism": null
+        },
+        "costUsd": 0.002019
+      },
+      {
+        "id": "hum_008",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Brickhouse, Does Aristotle Have a Consistent Account of Vice? proposes that Book VII harmony and Book IX.4 conflict reconcile when a vicious person's settled pleasure-plan is disrupted by growing appetite, generating conflict and regret only at that later stage. Irwin, Aristotle's Nicomachean Ethics (2nd ed. commentary) advances the same causal mechanism—regret arising once the vicious person's earlier pleasure-plan begins to fail—to explain Book IX.4's regret. Both works identify the same temporal structure: regret is not present at the vicious person's initial state of harmony but emerges when their pleasure-seeking plan encounters disruption or failure.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual analysis showing whether Aristotle explicitly describes the vicious person's regret as consequent upon plan-disruption rather than constitutive of their vice from the outset would strengthen both interpretations equally.",
+          "mechanism": null
+        },
+        "costUsd": 0.001921
+      },
+      {
+        "id": "hum_009",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Bostock, Aristotle's Ethics asserts that Aristotle's portraits of the vicious person in NE VII and NE IX.4 are genuinely inconsistent and cannot be reconciled into a single character type. Brickhouse, Does Aristotle Have a Consistent Account of Vice? directly opposes this by arguing the apparent conflict can be reconciled by reading the two passages as sequential developmental stages of one character rather than incompatible settled states. These claims make incompatible assertions about whether consistency is possible: one denies reconciliation is feasible, the other affirms it is achievable through temporal reinterpretation.",
+          "strongerEvidence": "neither",
+          "resolution": "A detailed textual analysis demonstrating whether the structural features Aristotle attributes to the vicious person in each passage logically permit or preclude the same individual undergoing the transition Brickhouse proposes would determine which interpretation is correct.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018210000000000001
+      },
+      {
+        "id": "hum_010",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Müller, Aristotle on Vice argues that vicious persons lack stable, unified rational commitment to the good—their apparent commitments are momentary and track immediate pleasure. Nielsen, Vice in the Nicomachean Ethics directly opposes this by asserting vice consists of a settled, general commitment to a false conception of the good. These positions make incompatible claims about whether Aristotelian vice involves stable rational commitment (Nielsen) or the absence thereof (Müller).",
+          "strongerEvidence": "neither",
+          "resolution": "Direct textual analysis of Aristotle's treatment of whether the vicious person has stable practical reasoning about the good, particularly in EN VII on akrasia and the vicious person's deliberative capacity.",
+          "mechanism": null
+        },
+        "costUsd": 0.0016020000000000001
+      },
+      {
+        "id": "hum_011",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics VII characterizes the fully vicious, intemperate person as incurable and pursuing excess without regret or ongoing internal struggle, establishing a settled vice state. Nicomachean Ethics IX.4 directly contradicts this by describing the vicious person's soul as internally divided—pained by one part while pleased by another regarding the same act—and explicitly states such people are full of regret. These claims make incompatible assertions about whether the vicious person experiences regret and internal conflict.",
+          "strongerEvidence": "neither",
+          "resolution": "Determine whether Aristotle distinguishes between degrees or types of vice (e.g., fully vicious vs. partially vicious persons), which would resolve the apparent contradiction by limiting each claim's scope to different vicious populations.",
+          "mechanism": null
+        },
+        "costUsd": 0.0016879999999999998
+      },
+      {
+        "id": "hum_012",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Brickhouse, Does Aristotle Have a Consistent Account of Vice? proposes that the vicious person's apparent conflict between Book VII and Book IX.4 can be resolved by reading them as successive temporal stages where appetite progressively overwhelms the agent's pleasure-plan. Roochnik, Aristotle's Account of the Vicious directly rejects this developmental model on three grounds: it lacks explicit textual support, it misreads Book IX.4's intensity of self-loathing, and it contradicts Book VII's explicit statement that the intemperate agent does not require an overpowering appetite to act viciously. These claims make incompatible assertions about whether temporal development resolves the apparent contradiction.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Textual analysis comparing whether Book VII and Book IX.4 employ consistent language about appetite's necessity and the agent's self-awareness would determine whether developmental staging or a unified account better preserves Aristotle's actual statements across both passages.",
+          "mechanism": null
+        },
+        "costUsd": 0.001966
+      },
+      {
+        "id": "hum_013",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Annas, Plato and Aristotle on Friendship and Altruism argues that Book IX.4's portrait of vice reflects compositional stratification—an earlier, Platonically-influenced layer not yet integrated with Book VII's psychology. Nielsen, Vice in the Nicomachean Ethics directly rejects this compositional-developmental conclusion, asserting instead that the evidence does not support treating the passage as unintegrated or chronologically prior. These claims make incompatible assertions about whether the textual evidence warrants a developmental or compositional explanation.",
+          "strongerEvidence": "neither",
+          "resolution": "Systematic analysis of stylometric, conceptual, and psychological consistency between Book VII and Book IX.4 against control passages would determine whether the evidence supports developmental layering or unified systematic integration.",
+          "mechanism": null
+        },
+        "costUsd": 0.001696
+      },
+      {
+        "id": "hum_014",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious argues that the fully unregretful vicious agent from Book VII risks collapsing into the brutish/monstrous category—treating this as a genuine danger within Aristotle's own framework. Nielsen, Vice in the Nicomachean Ethics insists vice is fundamentally continuous with ordinary human moral psychology and explicitly denies it constitutes a brutish or inhuman condition. The core dispute is whether vice, in its most developed form, remains distinctly human or slides toward the inhuman—opposite conclusions about the same phenomenon in Aristotle's system.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful textual analysis of whether Aristotle's descriptions of the akratic, vicious, and bestial agents in Book VII actually establish continuity or discontinuity between unregretful vice and brutishness would determine which reading of Aristotle's own typology is correct.",
+          "mechanism": null
+        },
+        "costUsd": 0.001856
+      },
+      {
+        "id": "hum_015",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason asserts that the vicious agent retains a genuine rational structure where practical reason remains active but subordinated to inclination, implying some coherent (if corrupted) rational ordering. Müller, Aristotle on Vice denies this coherence entirely, claiming the vicious person lacks any stable, unified rational conception and that commitments merely track present pleasure with no rational unity. These make incompatible claims about whether vice preserves or destroys rational structure.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual analysis of Aristotle's treatment of the vicious person's deliberative capacities—specifically whether he maintains a consistent practical reasoning process or entirely abandons rational evaluation—would determine which work's interpretation is correct.",
+          "mechanism": null
+        },
+        "costUsd": 0.001601
+      },
+      {
+        "id": "hum_016",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics VII 1148a17-18 characterizes the intemperate person as pursuing excessive pleasures without desire or with only weak desire, while the second claim asserts that Aristotle elsewhere attributes real appetite to the intemperate person, making vicious pleasure-pursuit desire-driven rather than desire-weak. These present incompatible accounts of whether intemperance involves absent/weak desire versus genuine appetite for the excessive pleasures pursued.",
+          "strongerEvidence": "neither",
+          "resolution": "A systematic review of all relevant passages in NE VII would need to determine whether Aristotle holds a single unified account of the intemperate person's desire-states or whether he shifts his characterization across different sections of the work.",
+          "mechanism": null
+        },
+        "costUsd": 0.001614
+      },
+      {
+        "id": "hum_017",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious denies that NE VII's unregretful intemperate person and NE IX.4's remorseful vicious person can describe the same character type at a single moment, treating temporal simultaneity as a constraint. Brickhouse, Does Aristotle Have a Consistent Account of Vice? permits this apparent inconsistency by introducing temporal progression—the vicious person transitions from internal harmony and lack of regret to conflict and regret as appetitive change occurs—thereby resolving the tension through diachronic rather than synchronic identity.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarification of whether Aristotle intends NE VII and NE IX.4 to describe the same individual at different life stages or fundamentally different character types would determine whether Brickhouse's temporal solution or Roochnik's categorical distinction correctly interprets Aristotle's intent.",
+          "mechanism": null
+        },
+        "costUsd": 0.001888
+      },
+      {
+        "id": "hum_018",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Solis, Curable and Incurable Vice in Aristotle asserts that Book VII's unregretful intemperate agent and Book IX.4's regretful agent represent two genuinely distinct kinds of vice (curable versus incurable), while Roochnik, Aristotle's Account of the Vicious claims these passages describe incompatible characterizations of a single type of fully vicious agent. The works cannot both be correct: either the portraits mark two different vice-kinds or they offer inconsistent descriptions of one kind.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful textual comparison determining whether Aristotle's language in Book VII and Book IX.4 consistently identifies the same vice-subject across both passages or explicitly distinguishes them as separate agents would adjudicate which interpretation is correct.",
+          "mechanism": null
+        },
+        "costUsd": 0.001738
+      },
+      {
+        "id": "hum_019",
+        "goldLabel": "nuance",
+        "goldMechanism": "interprets_differently",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII.1 asserts that brutishness is structurally distinct from vice, placed outside the sixfold typology as a separate category. Roochnik, Aristotle's Account of the Vicious argues that the fully vicious person—characterized by harmony and absence of regret in their vice—conceptually slides toward and risks collapsing into the brutish category that the same typology treats as distinct. This directly contradicts the claim that brutishness maintains structural separation from ordinary vice.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful exegesis of Aristotle VII.1 on whether the harmony of the vicious person creates conceptual instability in the brutishness/vice distinction would determine whether Roochnik identifies a genuine tension Aristotle left unresolved or whether the distinction remains stable under scrutiny.",
+          "mechanism": null
+        },
+        "costUsd": 0.00179
+      },
+      {
+        "id": "hum_020",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Annas, Plato and Aristotle on Friendship and Altruism attributes the mismatch between Book IX.4 and Book VII's portraits of vice to incomplete integration from an earlier compositional stage influenced by the Lysis, implying the tension is a flaw in the text's development. Roochnik, Aristotle's Account of the Vicious rejects this compositional accident explanation and argues instead that holding both descriptions together serves a genuine philosophical purpose, treating the apparent contradiction as intentional rather than accidental.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual and chronological analysis of the Nicomachean Ethics's composition history, combined with internal evidence of whether the two portraits can be read as complementary rather than contradictory accounts of vice, would determine whether the mismatch reflects editorial layering or deliberate philosophical strategy.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017959999999999999
+      },
+      {
+        "id": "hum_021",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics IX.4 and IX.8 establishes that virtuous self-love involves rational and non-rational parts in agreement, producing genuine self-friendship grounded in virtue. Aristotle, Nicomachean Ethics IX.8 introduces a boundary condition: this account applies only to those pursuing virtue, while the many display a blameworthy form of self-love through selfish pursuit of gain, pleasure, and honor. Both works affirm the existence of legitimate self-love in the virtuous person but differ in scope by distinguishing the virtuous person's philautos from the base self-love of those driven by external goods rather than internal harmony.",
+          "strongerEvidence": "neither",
+          "resolution": "Examining whether Aristotle treats blameworthy self-love as a perversion of the same capacity or an entirely different psychological phenomenon would clarify whether these represent distinct types or moral grades of the same self-directed affection.",
+          "mechanism": null
+        },
+        "costUsd": 0.001902
+      },
+      {
+        "id": "hum_022",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Irwin, Vice and Reason proposes that vice involves practical reason subordinated to the expedient rather than the fine as a general account of how vice operates. However, Irwin, Vice and Reason acknowledges that this same fine/expedient framework applies more naturally to appetitive vices like cowardice and intemperance than to vices of domination like greed and vindictiveness, where the model becomes harder to apply. The works agree on the mechanism but differ on its scope—the first presents it as a comprehensive account while the second identifies it as boundary-condition dependent.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Irwin would need to specify whether the fine/expedient distinction is the fundamental mechanism for all vices or whether distinct mechanisms govern appetitive versus domination-based vices.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017209999999999999
+      },
+      {
+        "id": "hum_023",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason argues that the instrumental-reason account preserves rational deliberative structure in vice by explaining how vicious agents still form plans around bad ends. Simultaneously, Irwin, Vice and Reason acknowledges this account develops Aristotle's remarks beyond explicit textual support, which reinforces rather than undermines the first claim—the theoretical construction is both explanatorily functional and philosophically ambitious in its interpretive reach.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual analysis comparing Aristotle's explicit statements on deliberation in vicious agents against the scope of Irwin's instrumental-reason reconstruction would clarify how far the development extends beyond the source material.",
+          "mechanism": null
+        },
+        "costUsd": 0.001539
+      },
+      {
+        "id": "hum_024",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious emphasizes that the akratic person's post-action regret demonstrates retained genuine concern for the good, positioning this retained concern as morally significant. Aristotle, Nicomachean Ethics III acknowledges this same retained concern but argues it does not exempt the akratic person from voluntary action and blame—the difference lies in whether retained concern mitigates moral responsibility. Both agree the akratic retains concern for the good; they differ on whether this fact bears on the voluntariness and blameworthiness of akratic action itself.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Clarify whether Aristotle's doctrine of voluntary action (as presented in NE III) permits retained concern for the good to serve as a mitigating factor, or whether voluntariness and blame attach to the action independent of the agent's post-action mental state.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018279999999999998
+      },
+      {
+        "id": "hum_025",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII establishes that anger's proximity to reason makes yielding to it more pardonable than yielding to appetite, suggesting a degree of mitigation or lesser culpability. Aristotle, Nicomachean Ethics VII concedes this comparative point but clarifies the boundary condition: despite anger's greater rationality, succumbing to it still constitutes akrasia and remains a failure of self-mastery, not an exception to it. The claims differ in scope—one addresses relative pardonability while the other preserves the absolute categorization of anger-driven failures within akrasia.",
+          "strongerEvidence": "neither",
+          "resolution": "Both claims can be simultaneously true if 'more pardonable' denotes a difference in degree of culpability while 'still counts as akrasia' denotes categorical classification; anger would be a less blameworthy but still genuine instance of akratic failure.",
+          "mechanism": null
+        },
+        "costUsd": 0.001857
+      },
+      {
+        "id": "hum_026",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII.1 treats continence and incontinence as categorically distinct from virtue and vice in a sixfold typology, suggesting akrasia occupies a separate moral category. Aristotle, Nicomachean Ethics VII qualifies this by stating akrasia is 'in some way' vice while allowing that akratic action need not make the agent characteristically vicious—a boundary condition distinguishing the akratic act from the akratic character. The apparent conflict dissolves when recognizing that akrasia can be vice-like in action without constituting vice as a stable disposition of character.",
+          "strongerEvidence": "neither",
+          "resolution": "Examining whether Aristotle explicitly addresses whether akrasia constitutes vice *in action* versus vice *in character* across both passages would clarify whether these claims describe different senses of 'vice' or represent genuine inconsistency.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018339999999999997
+      },
+      {
+        "id": "hum_027",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "methodological",
+          "explanation": "Aristotle, Nicomachean Ethics I.3 prescribes that ethical inquiry should accommodate the imprecision inherent to its subject matter, advocating against mathematical rigor as a standard. Roochnik, Aristotle's Account of the Vicious treats a specific question about textual consistency as having a determinate answer, implicitly applying determinate standards to resolve interpretive disagreement rather than deferring to inexactness. The tension lies not in whether precision applies generally to ethics, but in whether particular textual-philosophical questions should be treated as determinately answerable or bracketed under the rubric of acceptable imprecision.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarifying whether Roochnik's methodology treats determinate textual interpretation as a special case within ethical inquiry (compatible with Aristotle's principle) or as a challenge to it would resolve the apparent conflict.",
+          "mechanism": null
+        },
+        "costUsd": 0.001813
+      },
+      {
+        "id": "hum_028",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Homer, Odyssey XI describes ordinary dead as insubstantial eidola lacking embodiment and force, while Homer, Odyssey XI describes specific mythological figures (Tityos, Tantalus, Sisyphus) as undergoing vivid, ongoing bodily punishment. The claims do not contradict each other because they apply to different populations within the same underworld: the distinction marks a boundary condition between ordinary shades and mythologically significant offenders who receive special treatment.",
+          "strongerEvidence": "neither",
+          "resolution": "Both claims can be simultaneously true if Odyssey XI explicitly differentiates the ontological status or punishment conditions of ordinary dead from those of legendary sinners—a distinction that resolves apparent tension through categorical separation rather than contradiction.",
+          "mechanism": null
+        },
+        "costUsd": 0.001608
+      },
+      {
+        "id": "hum_029",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious concludes that Aristotle's inconsistent portraits of vice are forgivable because they capture something true about radical vice, establishing this as a defensible interpretive move. The same work then explicitly restricts this forgivable verdict to this specific case and denies it licenses a general permission to treat philosophical inconsistency as acceptable. The difference is not about whether the inconsistency judgment holds, but about its generalizability—one claim makes a narrow exception, the other prevents extending that exception into a broader principle.",
+          "strongerEvidence": "neither",
+          "resolution": "Examine whether Roochnik explicitly states that his reconciliation strategy applies only to Aristotle's account of vice, or whether he indicates it could apply to other cases of philosophical inconsistency.",
+          "mechanism": null
+        },
+        "costUsd": 0.001723
+      },
+      {
+        "id": "hum_030",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics III asserts that akratic wrongdoing is fully voluntary because the akratic person retains correct judgment and chooses to act despite it, while Nicomachean Ethics VII qualifies this by permitting a pardon (syngnome) specifically for akratic wrongdoing following natural impulses like anger, distinguishing it from akratic wrongdoing that pursues excessive appetite. The difference is not whether akrasia is voluntary, but whether all instances merit the same moral assessment—the same voluntary act receives different treatment depending on its source (natural impulse versus appetite for excess).",
+          "strongerEvidence": "neither",
+          "resolution": "Examining whether Aristotle's concept of syngnome functions as a mitigation of culpability despite voluntariness, or as a separate category recognizing degrees of responsibility within voluntary action, would clarify whether these represent genuine disagreement or compatible layers of ethical analysis.",
+          "mechanism": null
+        },
+        "costUsd": 0.001803
+      },
+      {
+        "id": "hum_031",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious addresses a translational and editorial practice—the choice to use Bywater's 1962 Oxford text as the base Greek edition for an English rendering. Aristotle, Nicomachean Ethics IX.4 presents a substantive claim about Aristotle's ethical theory regarding self-friendship and the unity of the virtuous person's rational and non-rational parts. These address entirely separate domains: one concerns textual apparatus and philological methodology, the other concerns the content and argument of the philosophical text itself.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims would only become comparable if one were assessing whether Roochnik's choice of base edition affects the accuracy of his translation of the specific passage in Ethics IX.4 that Aristotle discusses self-friendship.",
+          "mechanism": null
+        },
+        "costUsd": 0.001741
+      },
+      {
+        "id": "hum_032",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "The Perseus Digital Library, Nicomachean Ethics text tool addresses a digital humanities infrastructure problem—providing aligned Greek/English interfaces for textual reference checking against critical editions. Homer, Odyssey XI addresses a literary interpretation problem—the logical inconsistency between the immaterial nature of Homeric shades and their capacity to experience fear and punishment. These claims concern entirely different phenomena: one is about tool design and textual access, the other about internal narrative coherence in an ancient poem.",
+          "strongerEvidence": "neither",
+          "resolution": "A comparison would require both works to address the same phenomenon—either both examining tool utility for studying the Odyssey, or both examining textual inconsistency across multiple works.",
+          "mechanism": null
+        },
+        "costUsd": 0.001546
+      },
+      {
+        "id": "hum_033",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious makes a claim about acknowledgments and intellectual debts within a single paper, specifically crediting conversations and background research assistance. Nielsen, Vice in the Nicomachean Ethics makes a substantive philosophical claim about the nature of vice as a psychological and ethical condition rooted in corrupted practical reasoning. These address entirely different domains—one concerns authorial attribution practices, the other concerns Aristotelian moral psychology—and neither reinforces, contradicts, nor qualifies the other.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed; the claims operate at different levels of academic discourse and do not intersect.",
+          "mechanism": null
+        },
+        "costUsd": 0.001547
+      },
+      {
+        "id": "hum_034",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Liddell, Scott, Jones and McKenzie, A Greek-English Lexicon (9th ed.) makes a factual claim about the publication history of a specific lexicographic reference work (Oxford Clarendon Press, 1940, with McKenzie as reviser), while Brickhouse, Does Aristotle Have a Consistent Account of Vice? makes a theoretical claim about the internal psychological states of vicious persons in Aristotelian ethics (harmony versus conflict under appetite). These address entirely separate domains—one concerns the material production of an ancient language reference, the other concerns philosophical analysis of vice—with no logical connection or overlap.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims operate in different disciplines and make no contact; comparison adds no evaluative insight.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017069999999999998
+      },
+      {
+        "id": "hum_035",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "PhilPapers record for Roochnik (2007) documents a bibliometric fact—the quantity and identity of citing works indexed in a database as of 2026—while Aristotle, Nicomachean Ethics IX.4 presents a philosophical claim about the internal psychological conflict of the vicious person. These address entirely different domains: one is a citation count fact about a modern paper's reception, the other is a claim about Aristotelian moral psychology. Neither strengthens, weakens, nor contradicts the other.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed, as the claims operate in separate domains and do not make assertions about the same phenomenon.",
+          "mechanism": null
+        },
+        "costUsd": 0.001599
+      },
+      {
+        "id": "hum_036",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Lattimore (trans.), The Odyssey of Homer addresses a bibliographic fact about which translation Roochnik cites in his work, while Barney, Becoming Bad: Aristotle on Vice and Moral Habituation presents a philosophical argument about the mechanism by which vice develops through habituation rather than isolated moral lapses. These claims operate in entirely different domains—one concerns citation practices, the other concerns Aristotelian moral psychology—and neither provides evidence relevant to evaluating the other.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed; these claims address separate intellectual problems and their truth values are independent.",
+          "mechanism": null
+        },
+        "costUsd": 0.00151
+      }
+    ]
+  },
+  "stageB": {
+    "label": "STAGE B — humanities branch (branch:humanities) on humanities set",
+    "branch": "humanities",
+    "valence": {
+      "n": 36,
+      "nFailed": 0,
+      "macroF1": 0.8035714285714286,
+      "kappa": 0.6929637526652452,
+      "contradictionRecall": 1,
+      "perClass": [
+        {
+          "className": "contradiction",
+          "precision": 0.7777777777777778,
+          "recall": 1,
+          "f1": 0.8750000000000001,
+          "support": 7
+        },
+        {
+          "className": "support",
+          "precision": 0.625,
+          "recall": 0.625,
+          "f1": 0.625,
+          "support": 8
+        },
+        {
+          "className": "nuance",
+          "precision": 0.7692307692307693,
+          "recall": 0.6666666666666666,
+          "f1": 0.7142857142857142,
+          "support": 15
+        },
+        {
+          "className": "unrelated",
+          "precision": 1,
+          "recall": 1,
+          "f1": 1,
+          "support": 6
+        }
+      ],
+      "classesBelowFloor": []
+    },
+    "mechanism": {
+      "n": 11,
+      "correct": 4,
+      "accuracy": 0.36363636363636365,
+      "confusion": [
+        {
+          "id": "hum_016",
+          "gold": "different_scope_conditions",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_017",
+          "gold": "different_scope_conditions",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_018",
+          "gold": "different_definition",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_019",
+          "gold": "interprets_differently",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_020",
+          "gold": "different_definition",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_021",
+          "gold": "different_definition",
+          "predicted": null
+        },
+        {
+          "id": "hum_022",
+          "gold": "different_scope_conditions",
+          "predicted": "different_scope_conditions"
+        },
+        {
+          "id": "hum_026",
+          "gold": "different_scope_conditions",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_027",
+          "gold": "different_scope_conditions",
+          "predicted": "interprets_differently"
+        },
+        {
+          "id": "hum_028",
+          "gold": "different_scope_conditions",
+          "predicted": "different_scope_conditions"
+        },
+        {
+          "id": "hum_029",
+          "gold": "different_scope_conditions",
+          "predicted": "different_scope_conditions"
+        }
+      ]
+    },
+    "costUsd": 0.069925,
+    "records": [
+      {
+        "id": "hum_001",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Both Bostock, Aristotle's Ethics and Roochnik, Aristotle's Account of the Vicious identify the same tension: NE VII's unregretful, internally harmonious intemperate agent and NE IX.4's regretful, conflicted vicious agent cannot represent a single unified character type. Each work independently argues that the two portraits exhibit genuine psychological inconsistency that resists reconciliation into one stable personality.",
+          "strongerEvidence": "neither",
+          "resolution": "Determine whether Aristotle himself recognized this inconsistency as a problem to be solved or left it unresolved in his theory of vice, which would indicate whether the tension is a defect in the text or an intentional distinction between types of vice.",
+          "mechanism": null
+        },
+        "costUsd": 0.00184
+      },
+      {
+        "id": "hum_002",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Homer, Odyssey XI identifies an unresolved inconsistency in Homer's portrayal—the dead are simultaneously insubstantial yet capable of fear and deserved punishment—treating this as a logical problem left hanging. Roochnik, Aristotle's Account of the Vicious argues that Aristotle's two incompatible portraits should not be resolved but rather held together as a deliberate philosophical strategy to convey moral alienation. Both scholars recognize irreconcilable tensions in their source texts, but they differ on whether such tensions represent authorial oversight (Homer) or intentional philosophical method (Aristotle).",
+          "strongerEvidence": "neither",
+          "resolution": "Determining whether unresolved textual inconsistencies reflect authorial carelessness or deliberate rhetorical strategy would require evidence of authorial intention or explicit metacommentary in each work about the purpose of maintaining incompatible positions.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.0020109999999999998
+      },
+      {
+        "id": "hum_003",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious argues that the intemperate agent retains desire but lacks desire *strong enough to overpower correct reason*, whereas Irwin, Vice and Reason argues that practical reason remains active but becomes *subordinated to antecedent inclination*. Both claims converge on the same core insight: in vice, reason is not extinguished but rather operates in a compromised state where non-rational elements (desire or inclination) take precedence over its directive authority. The difference in terminology—one framing it as desire insufficiency, the other as reason subordination—describes the same psychological dynamics from complementary angles.",
+          "strongerEvidence": "neither",
+          "resolution": "A unified account would specify whether the vice-state is fundamentally characterized by weak desire (Roochnik's emphasis) or by reason's loss of priority (Irwin's emphasis), or show these are logically equivalent descriptions of a single condition.",
+          "mechanism": null
+        },
+        "costUsd": 0.002065
+      },
+      {
+        "id": "hum_004",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Nielsen argues that vice is a settled, general commitment to a corrupted conception of the good formed through mistaken practical reasoning, while Barney describes vice as a stable corrupted state of character produced through habituation that corrupts reason itself. Both claims converge on the same core assertion: vice is a stable, character-level condition (not a single lapse) that involves corruption at the level of practical reasoning or judgment about the good. The difference is one of emphasis—Nielsen foregrounds the mistaken reasoning that constitutes vice, while Barney foregrounds the habituation process that produces that corrupted reasoning—but both deny that vice reduces to akratic or one-off failures.",
+          "strongerEvidence": "neither",
+          "resolution": "Comparing their respective treatments of Aristotle's passages on hexis (stable state) and the role of habituation in forming moral character would clarify whether these are genuinely complementary framings of a single phenomenon or whether one theory better explains how mistaken practical reasoning becomes entrenched through habituation.",
+          "mechanism": null
+        },
+        "costUsd": 0.0021190000000000002
+      },
+      {
+        "id": "hum_005",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics I.4 establishes that decent habits are a prerequisite for studying ethics — an audience condition for how the text functions pedagogically. Roochnik, Aristotle's Account of the Vicious accepts this same precondition (the reader already cares about being good) but uses it to explain a different phenomenon: why the vicious agent remains partly unintelligible even after comparative analysis in Book VII. Both agree on the baseline requirement; they differ in scope by addressing what that requirement enables (proper study versus partial intelligibility limits).",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether Aristotle's pedagogical prerequisite (having decent habits) is sufficient for full intelligibility of the vicious agent, or whether even habit-formed readers encounter irreducible gaps in understanding—a question about degree and completeness rather than contradiction.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001996
+      },
+      {
+        "id": "hum_006",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics III emphasizes that akratic action is voluntary because the agent retains capacity and lacks external compulsion, establishing a necessary condition for responsibility. Nicomachean Ethics VII explains the mechanism by which this voluntary action coexists with moral knowledge—through the analogy of dormant understanding (sleep, intoxication, madness)—showing how knowledge can be possessed yet inefficacious without denying voluntariness. Both claims are compatible: the first establishes the voluntary status of akrasia, the second explains how this voluntariness persists despite the agent's knowledge.",
+          "strongerEvidence": "neither",
+          "resolution": "Both claims remain true if interpreted as addressing different explanatory layers: III establishes the voluntariness condition, while VII explains the epistemological paradox within that voluntary framework.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0018999999999999998
+      },
+      {
+        "id": "hum_007",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason identifies a puzzle: vicious agents act on prohairesis (rational decision), yet Aristotle associates vice with passion overwhelming reason. Roochnik, Aristotle's Account of the Vicious directly resolves this puzzle by showing the Book VII intemperate agent acts through settled choice on a corrupted principle—thus reconciling rational decision-making with vice by locating the defect in the principle itself, not in passion's override of reason. Both works converge on the same interpretive solution: vice involves rational guidance, not simple passion-driven eruption.",
+          "strongerEvidence": "neither",
+          "resolution": "Examining Aristotle's text on whether corrupted principles (Roochnik's account) adequately explain how prohairesis in the vicious resolves the tension Irwin identifies would test whether both interpretations address the same underlying puzzle or are solving different aspects of it.",
+          "mechanism": null
+        },
+        "costUsd": 0.00202
+      },
+      {
+        "id": "hum_008",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Brickhouse, Does Aristotle Have a Consistent Account of Vice? and Irwin, Aristotle's Nicomachean Ethics (2nd ed. commentary) both propose that the vicious person's regret in Book IX.4 arises when an initially stable plan for pleasure subsequently fails or becomes disrupted. Both invoke a temporal mechanism—initial harmony followed by later disruption—to explain how apparent conflict with Book VII can be reconciled without inconsistency in Aristotle's account.",
+          "strongerEvidence": "neither",
+          "resolution": "Textual analysis of Book IX.4 and Book VII passages would determine whether this shared explanation adequately resolves the tension Aristotle identifies, or whether additional factors (e.g., the vicious person's self-deception) are required.",
+          "mechanism": null
+        },
+        "costUsd": 0.001877
+      },
+      {
+        "id": "hum_009",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Bostock, Aristotle's Ethics asserts that Aristotle's portrayals of the vicious person in NE VII and NE IX.4 are genuinely inconsistent and cannot be unified into a single character type. Brickhouse, Does Aristotle Have a Consistent Account of Vice? directly opposes this by arguing that the two passages are reconcilable when read as depicting different developmental stages of one continuous character. Both address the same textual passages and the same question of whether Aristotle's account is internally coherent; they reach opposite conclusions about the possibility of reconciliation.",
+          "strongerEvidence": "neither",
+          "resolution": "A detailed textual analysis tracing the vicious person's psychological features across both passages—examining whether the differences reflect genuine inconsistency in Aristotle's theory or developmental progression within a single character—would determine which interpretation correctly captures Aristotle's intent.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001987
+      },
+      {
+        "id": "hum_010",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Müller argues that the vicious person lacks stable, unified rational conception of the good and that his commitments merely track present pleasure, denying coherence to vicious character. Nielsen contends that vice is a settled, general commitment to a false conception of the good, arrived through mistaken practical reasoning—asserting precisely the kind of principled, stable cognitive structure that Müller denies vicious persons possess. These are incompatible characterizations of whether vice involves systematic rational commitment or moment-to-moment pleasure-tracking.",
+          "strongerEvidence": "neither",
+          "resolution": "Detailed textual analysis of Aristotle's treatment of the akratic versus the vicious person (Ethics VII and III) would clarify whether Aristotle attributes unified rational conviction to the vicious or treats their character as incoherent pleasure-pursuit.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001903
+      },
+      {
+        "id": "hum_011",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics VII describes the fully vicious intemperate person as incurable and free from regret, having no internal struggle against a settled disposition. Nicomachean Ethics IX.4 depicts the vicious person as torn between conflicting reactions to the same act, experiencing pain and pleasure simultaneously alongside regret. These characterizations are incompatible: the same vicious agent cannot simultaneously lack regret and struggle while being full of regret and internally divided.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful examination of the Greek text and contextual scope—specifically whether each passage targets the same psychological type (the fully habituated vicious person vs. the vicious person capable of reflection on past acts)—would clarify whether Aristotle intends two distinct stages of vice or whether the passages genuinely conflict on the phenomenology of settled vice.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001964
+      },
+      {
+        "id": "hum_012",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Brickhouse, Does Aristotle Have a Consistent Account of Vice? proposes that apparent tensions between Book VII and Book IX.4 can be resolved by treating them as temporal stages in which a growing appetite progressively overwhelms the vicious person's pleasure-seeking plan. Roochnik, Aristotle's Account of the Vicious directly rejects this developmental model on three grounds: it lacks explicit textual support, it minimizes the intensity of self-loathing described in Book IX.4, and it contradicts Book VII's account of the intemperate agent as not requiring an overpowering appetite to act viciously. These are incompatible claims about the same passages—one asserts a temporal-developmental resolution works; the other asserts it fails both textually and conceptually.",
+          "strongerEvidence": "paper_b",
+          "resolution": "A systematic examination of whether Book VII explicitly permits or requires appetite to overpower deliberate planning in the intemperate agent, and whether Book IX.4's self-loathing is consistent with a developmental stage model where appetite has not yet fully defeated the agent's rational plan.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.002282
+      },
+      {
+        "id": "hum_013",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Annas argues that Book IX.4's regretful portrait of vice reflects an earlier compositional layer influenced by Plato's Lysis and remains unintegrated with Book VII's psychology, attributing apparent inconsistency to textual stratigraphy. Nielsen denies that evidence supports any such chronological or compositional conclusion, asserting instead that vice admits a unified, non-developmental systematic account across both books. These claims make incompatible assertions about whether the same passage represents compositional unevenness or integrated doctrine.",
+          "strongerEvidence": "neither",
+          "resolution": "Detailed stylometric, philosophical-coherence, and source-influence analysis of Book IX.4 against Book VII and the Lysis would establish whether apparent tensions reflect composition stages or defensible systematic consistency.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001882
+      },
+      {
+        "id": "hum_014",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Roochnik argues that the fully unregretful vicious agent from Book VII risks collapsing into the brutish/monstrous category, implying a sliding scale where intense vice approaches inhumanity. Nielsen argues vice is fundamentally a human, corrigible failure of practical reasoning continuous with ordinary moral psychology, explicitly rejecting brutish or inhuman characterization. These make incompatible claims about whether the vicious agent's psychological state can approach or risk becoming non-human rather than remaining distinctly human throughout.",
+          "strongerEvidence": "neither",
+          "resolution": "Examination of Aristotle's text on the unregretful agent in Book VII—specifically whether Aristotle's language permits or precludes treating extreme vice as approaching the brutish category rather than remaining safely within the human vice category—would settle which interpretive reading the source material better supports.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.0019520000000000002
+      },
+      {
+        "id": "hum_015",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason asserts that the vicious agent retains a 'genuine, if corrupted, rational structure' in which practical reason remains active though subordinated to inclination. Müller, Aristotle on Vice denies this stability, claiming the vicious person lacks 'any stable, unified rational conception of the good' and is merely reactive to present pleasure. These make incompatible claims about whether vicious agency preserves rational architecture (however corrupted) or abandons rational unity entirely.",
+          "strongerEvidence": "neither",
+          "resolution": "Close textual analysis of Aristotle's descriptions of the vicious person's deliberative capacities (EN VII.8–9) would determine whether vice preserves a subordinated but operative rational faculty or dissolves rational unity altogether.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001832
+      },
+      {
+        "id": "hum_016",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Claim A attributes to the intemperate person a pursuit of excessive pleasures performed without desire or with only weak desire (NE VII 1148a17-18), while Claim B asserts that Aristotle attributes real appetite to the intemperate person, characterizing their vice as desire-driven rather than performed without desire. These are directly incompatible characterizations of the same phenomenon: whether the intemperate person acts with or without robust desire for excessive pleasure.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful examination of the full context of NE VII 1148a17-18 and related passages on akrasia and intemperance is required to determine whether Aristotle describes the intemperate person as lacking, weakly possessing, or robustly possessing appetite for excessive pleasures.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.0018999999999999998
+      },
+      {
+        "id": "hum_017",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious argues that the unregretful intemperate person (NE VII) and remorseful vicious person (NE IX.4) cannot describe the same character type at a single moment, asserting a temporal or categorical separation. Brickhouse, Does Aristotle Have a Consistent Account of Vice? resolves this by proposing the same vicious person can exhibit both states sequentially—internally harmonious and unregretful initially, then conflicted and regretful as appetitive defeat accumulates—thus describing the same character type across different developmental stages rather than at one moment.",
+          "strongerEvidence": "neither",
+          "resolution": "Determining whether Aristotle's account requires these states to coexist in a single stable character or permits their occurrence in the same person across time would clarify whether this is genuine inconsistency in Aristotle or merely different phases of a single vicious character's trajectory.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.002104
+      },
+      {
+        "id": "hum_018",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "Solis, Curable and Incurable Vice in Aristotle asserts that Book VII's unregretful intemperate agent and Book IX.4's regretful agent represent two genuinely distinct varieties of vice (curable vs. incurable), while Roochnik, Aristotle's Account of the Vicious denies this distinction entirely, arguing instead that both passages describe the same kind of fully vicious agent using incompatible language. These claims directly contradict on whether the textual differences track ontological differences in vice types or merely represent inconsistent characterizations of a single vicious type.",
+          "strongerEvidence": "neither",
+          "resolution": "Close analysis of whether regret/lack of regret correlates systematically with curability claims in the Aristotelian corpus, and whether the two portraits share identical motivational or behavioral features that would indicate they describe the same agent type.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.0020090000000000004
+      },
+      {
+        "id": "hum_019",
+        "goldLabel": "nuance",
+        "goldMechanism": "interprets_differently",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII.1 establishes brutishness as structurally distinct from vice—a separate category outside the moral typology proper. Roochnik, Aristotle's Account of the Vicious argues that the fully harmonious vicious person occupies an unstable middle ground that risks collapsing into brutishness, thereby threatening the very distinction Aristotle draws. Both accept Aristotle's stated structural separation, but disagree on whether the logic of viciousness (unregretful harmony) necessarily erodes that boundary.",
+          "strongerEvidence": "neither",
+          "resolution": "A close textual analysis of VII.2–7 would determine whether Aristotle's account of the vicious person's psychological stability actually permits or forecloses the drift toward brutishness that Roochnik identifies as a risk.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.0019560000000000003
+      },
+      {
+        "id": "hum_020",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Annas, Plato and Aristotle on Friendship and Altruism attributes the mismatch between Book IX.4 and Book VII to a compositional accident—specifically, that IX.4 reflects an earlier, Platonically-influenced stage not yet integrated into the mature psychology of Book VII. Roochnik, Aristotle's Account of the Vicious rejects this compositional explanation and argues instead that holding both descriptions together serves a positive philosophical purpose, treating the tension as deliberate rather than accidental. Both identify the same textual mismatch but diverge on whether it stems from unfinished revision or intentional philosophical strategy.",
+          "strongerEvidence": "neither",
+          "resolution": "Detailed analysis of Aristotle's compositional history and the logical relationship between the two psychological models would determine whether the tension reflects editorial layering or unified design.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001992
+      },
+      {
+        "id": "hum_021",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_definition",
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics IX.4 and IX.8 identifies the virtuous person's praiseworthy self-love as grounded in rational-emotional harmony and benevolent self-regard. Aristotle, Nicomachean Ethics IX.8 reinforces this framework by contrasting it with blameworthy self-love—the selfish pursuit of gain, pleasure, and honor—thereby clarifying that genuine self-friendship depends on virtue-oriented motivation rather than base appetite. Both passages work together to establish the same evaluative distinction: self-love is virtuous only when directed toward one's rational, noble nature.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims support each other because Claim B's recognition of blameworthy self-love logically presupposes and validates the existence of Claim A's praiseworthy self-love as a distinct category grounded in virtue.",
+          "mechanism": null
+        },
+        "costUsd": 0.002053
+      },
+      {
+        "id": "hum_022",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Irwin, Vice and Reason presents a general account of vice as practical reason subordinated to the expedient rather than the fine. Irwin, Vice and Reason then identifies boundary conditions for this model by noting it applies more naturally to some vices (cowardice, intemperance, sloth) than others (greed, vindictiveness, desire for power), where the fine/expedient framework becomes harder to apply. Both claims accept the same theoretical framework; the second refines the scope of explanatory power.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Examining which vices actually fit the fine/expedient model and why some motivational structures resist this characterization would determine whether the model requires revision or supplementation for a complete account of vice.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0018670000000000002
+      },
+      {
+        "id": "hum_023",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Irwin, Vice and Reason develops an instrumental-reason account explaining how vicious agents maintain rational deliberative structure despite pursuing bad ends. Irwin, Vice and Reason simultaneously acknowledges this account extends Aristotle's explicit remarks substantially beyond what Aristotle himself states. The second claim supports the first by explaining Irwin's methodological stance: she is constructing a developed theoretical account, not merely reporting Aristotle's words, which justifies the explanatory power and systematic scope of the instrumental-reason framework.",
+          "strongerEvidence": "neither",
+          "resolution": "Examining whether Irwin explicitly states that the instrumental-reason account represents her own theoretical development beyond Aristotle's text would confirm these claims are mutually reinforcing rather than in tension.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018000000000000002
+      },
+      {
+        "id": "hum_024",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious argues that the akratic person's regret upon reflection demonstrates retained concern for the good, which distinguishes him from the settled vicious person. Aristotle, Nicomachean Ethics III corroborates this distinction by holding the akratic person responsible as a voluntary agent precisely because his wrongdoing stems from a temporary failure of judgment rather than from corrupted values—he possesses the rational capacity for the good that the vicious person lacks. Both works thus converge on the same underlying claim: akrasia involves a defect in execution or will, not in the person's fundamental evaluative commitments.",
+          "strongerEvidence": "neither",
+          "resolution": "Examine whether Aristotle explicitly connects akratic regret to voluntary responsibility in a single passage, or whether the connection is inferred from separate discussions of akrasia and voluntariness.",
+          "mechanism": null
+        },
+        "costUsd": 0.001994
+      },
+      {
+        "id": "hum_025",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII (Claim A) emphasizes that anger's proximity to reason makes yielding to it more pardonable than yielding to appetite, a comparative judgment about culpability. Aristotle, Nicomachean Ethics VII (Claim B) affirms that anger-yielding still constitutes akrasia and self-mastery failure, establishing anger within the category of vice rather than virtue. These claims are compatible: anger can be simultaneously more pardonable than appetite AND still constitute akrasia—the first addresses degree of blameworthiness, the second addresses ontological status.",
+          "strongerEvidence": "neither",
+          "resolution": "Both claims accurately reflect Aristotle's position when read as addressing different evaluative dimensions: Claim A answers 'how culpable is the person?', Claim B answers 'is this action a failure of self-mastery?', and Aristotle holds that comparative pardonability and categorical vice-status can both be true of the same act.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.002148
+      },
+      {
+        "id": "hum_026",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Aristotle, Nicomachean Ethics VII.1 presents akrasia as structurally distinct from vice within a sixfold typology, whereas Aristotle, Nicomachean Ethics VII qualifies this by asserting akrasia is vice 'in some way' while preserving the distinction that an akratic person need not be characterized as an unjust person. Both passages address the same phenomenon but differ in scope: the first emphasizes categorical distinction in the moral framework, while the second clarifies the qualified sense in which akrasia shares characteristics with vice without conferring the same dispositional status on the agent.",
+          "strongerEvidence": "neither",
+          "resolution": "A careful reading of the full context of VII.1 alongside VII's qualifications would show whether Aristotle intends 'distinct from vice' to mean categorically separate or merely distinct in terms of character formation and agency attribution.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.00201
+      },
+      {
+        "id": "hum_027",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "methodological",
+          "explanation": "Aristotle, Nicomachean Ethics I.3 establishes that ethical inquiry should accept the inexactness appropriate to its subject matter rather than demand mathematical precision. Roochnik, Aristotle's Account of the Vicious treats the logical consistency question between Books VII and IX.4 as a determinate problem requiring resolution, rather than dismissing it as indeterminate due to inexactness. The difference is not contradictory: Aristotle permits inexactness in method, while Roochnik applies this methodological flexibility to argue that specific textual problems still admit of answers—one work prescribes the standard, the other applies it to defend substantive philosophical answerability.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarifying whether Roochnik invokes Aristotle's doctrine of appropriate precision to defend the determinacy of the consistency question, or instead brackets that doctrine when treating logical coherence as a distinct philosophical standard.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.002064
+      },
+      {
+        "id": "hum_028",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Both claims describe the same book (Odyssey XI) but address different populations of the dead. The first claim characterizes ordinary shades as insubstantial eidola, while the second describes Tityos, Tantalus, and Sisyphus as undergoing vivid bodily punishment. These are not contradictory—they identify a boundary condition: the epic differentiates between common dead (dream-like, bodiless) and mythologically exceptional sinners (embodied, suffering).",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether Odyssey XI treats the exceptional sinners' embodiment as the same or different in kind from ordinary shades, or whether their vivid punishment reflects a distinct ontological status reserved for the famous damned.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001839
+      },
+      {
+        "id": "hum_029",
+        "goldLabel": "nuance",
+        "goldMechanism": "different_scope_conditions",
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious reaches a central conclusion that Aristotle's inconsistent portraits of vice are forgivable because together they capture something true about radical vice as it appears to ethical readers. The same work explicitly restricts the implications of this verdict: the forgivability judgment applies narrowly to this specific case and does not license treating philosophical inconsistency as generally harmless or acceptable. These claims are compatible—the author affirms forgiveness in this instance while denying the generalizability of that move.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether Roochnik articulates explicit conditions or features of Aristotle's case that warrant the narrow scoping (e.g., the particular type of inconsistency, the ethical content at stake, or the reader-response framework) to determine whether the limitation is principled or merely protective.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0020039999999999997
+      },
+      {
+        "id": "hum_030",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "theoretical",
+          "explanation": "Nicomachean Ethics III asserts that akratic wrongdoing is voluntary because the akratic person retains correct judgment and chooses to act despite it, establishing the akratic act's voluntary status as a foundational claim. Nicomachean Ethics VII preserves this voluntariness but adds a qualified moral distinction: akratic wrongdoing arising from natural impulses like anger warrants partial pardon (syngnome), whereas akratic wrongdoing driven by appetite for excess does not. Both texts agree the akratic act is voluntary; they differ in scope regarding whether voluntariness precludes or permits graduated moral excuse.",
+          "strongerEvidence": "neither",
+          "resolution": "A complete reading must integrate both passages: voluntariness (III) is necessary but not sufficient for full moral culpability; the nature of the impulse triggering akrasia (VII) determines whether the voluntary agent qualifies for pardon.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0019990000000000003
+      },
+      {
+        "id": "hum_031",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious makes a claim about textual methodology—specifically that the author uses Ingram Bywater's 1962 Oxford reprint as his base Greek edition for translation. Aristotle, Nicomachean Ethics IX.4 presents a substantive philosophical claim about self-friendship grounded in rational-nonrational harmony within the soul. These address completely different domains: one concerns editorial apparatus and translation practice, the other concerns normative ethical psychology and the structure of virtue.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims occupy separate analytical spaces and require no reconciliation—one is about how a secondary work was constructed, the other about Aristotle's ethical doctrine itself.",
+          "mechanism": null
+        },
+        "costUsd": 0.001777
+      },
+      {
+        "id": "hum_032",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "The Perseus Digital Library, Nicomachean Ethics text tool addresses a methodological resource for accessing and cross-referencing Aristotelian philosophical texts through aligned Greek/English interfaces and critical apparatus. Homer, Odyssey XI addresses substantive literary interpretation—the logical coherence of Homer's depiction of afterlife ontology, specifically whether shades presented as quasi-corporeal can simultaneously experience punishment. These claims operate at entirely different levels: one concerns textual access infrastructure, the other concerns thematic consistency within a narrative.",
+          "strongerEvidence": "neither",
+          "resolution": "These works do not compete on any shared claim and would need to address the same phenomenon (e.g., both analyzing how Odyssey XI is edited or both evaluating digital tools for reading Homer) to warrant comparison.",
+          "mechanism": null
+        },
+        "costUsd": 0.001742
+      },
+      {
+        "id": "hum_033",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Roochnik, Aristotle's Account of the Vicious addresses acknowledgments and sources for a paper's genesis (crediting Lannstrom for the core idea and Esposito for Homeric background), while Nielsen, Vice in the Nicomachean Ethics presents a substantive claim about the nature of vice as a settled commitment to a corrupted conception of the good. These operate at entirely different levels—one is biographical/attribution information about scholarly production, the other is a philosophical thesis about Aristotelian ethics.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims cannot be compared as they address different domains: the first concerns the intellectual history of a paper's composition, the second concerns the content of Aristotelian moral philosophy.",
+          "mechanism": null
+        },
+        "costUsd": 0.001773
+      },
+      {
+        "id": "hum_034",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Liddell, Scott, Jones and McKenzie, A Greek-English Lexicon (9th ed.) makes a factual claim about the publication history of a reference work—specifically its edition number, editors, publisher, and year (1940). Brickhouse, Does Aristotle Have a Consistent Account of Vice? makes a theoretical claim about Aristotelian ethics—specifically whether a vicious person's internal psychological state can transition from harmony to conflict. These address entirely different domains: one concerns bibliographic metadata, the other concerns ancient philosophical psychology.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed; the claims operate in separate disciplinary spaces and comparison yields no insight into either claim's validity.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017829999999999999
+      },
+      {
+        "id": "hum_035",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "PhilPapers record for Roochnik (2007) documents citation metadata—counting nine citing works (Muller 2015, Nielsen 2017, Barney 2020, Solis 2025) as of 2026. Aristotle, Nicomachean Ethics IX.4 presents a substantive philosophical claim about the vicious person's internal psychological conflict in a single ancient text. These address entirely different domains: one is a bibliometric fact about a modern secondary source's reception; the other is an interpretation of Aristotle's moral psychology.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed; these claims operate at different levels (citation history vs. ancient philosophical doctrine) and do not engage the same phenomenon.",
+          "mechanism": null
+        },
+        "costUsd": 0.001825
+      },
+      {
+        "id": "hum_036",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Lattimore (trans.), The Odyssey of Homer addresses a bibliographic fact about which translation Roochnik cites in his work, a question of scholarly attribution. Barney, Becoming Bad: Aristotle on Vice and Moral Habituation addresses Aristotelian moral psychology—specifically the mechanism by which habituation corrupts practical reason and distinguishes vice from akratic lapses. These claims operate on entirely different levels: one concerns source documentation, the other concerns the nature of moral corruption.",
+          "strongerEvidence": "neither",
+          "resolution": "These works address separate intellectual domains (translation attribution versus moral philosophy) and comparison between them yields no evaluative insight.",
+          "mechanism": null
+        },
+        "costUsd": 0.001656
+      }
+    ]
+  },
+  "stageC": {
+    "label": "STAGE C — humanities branch (branch:humanities) on empirical set (regression check)",
+    "branch": "humanities",
+    "valence": {
+      "n": 42,
+      "nFailed": 0,
+      "macroF1": 0.7199516170104406,
+      "kappa": 0.6190476190476191,
+      "contradictionRecall": 1,
+      "perClass": [
+        {
+          "className": "contradiction",
+          "precision": 0.6923076923076923,
+          "recall": 1,
+          "f1": 0.8181818181818181,
+          "support": 9
+        },
+        {
+          "className": "support",
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "f1": 0.6666666666666666,
+          "support": 12
+        },
+        {
+          "className": "nuance",
+          "precision": 0.6666666666666666,
+          "recall": 0.5,
+          "f1": 0.5714285714285715,
+          "support": 12
+        },
+        {
+          "className": "unrelated",
+          "precision": 0.875,
+          "recall": 0.7777777777777778,
+          "f1": 0.823529411764706,
+          "support": 9
+        }
+      ],
+      "classesBelowFloor": []
+    },
+    "costUsd": 0.07908699999999999,
+    "records": [
+      {
+        "id": "eval_001",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Both claims converge on the same empirical finding: zero-shot GPT-4 feedback produced no significant improvement in negotiation performance compared to control conditions. The first work quantifies this null result (implicitly, by contrasting it with ACE's significant improvement at p=0.003), while the second work states it explicitly as a non-significant difference from no-feedback control. They describe the same experimental outcome from complementary angles.",
+          "strongerEvidence": "neither",
+          "resolution": "The claims are fully compatible and reinforce each other; no resolution needed—they represent consistent reporting of the same null result for zero-shot GPT-4 feedback.",
+          "mechanism": null
+        },
+        "costUsd": 0.0016849999999999999
+      },
+      {
+        "id": "eval_002",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? claims AI coaching is most effective for psychological preparation (fear reduction, willingness to initiate) rather than tactical skill improvement, implying limited objective negotiation outcome gains. ACE: A LLM-based Negotiation Coaching System directly contradicts this by demonstrating significant objective improvement in deal outcomes (lower prices achieved) with transfer to novel scenarios, asserting that LLM-based coaching does produce measurable tactical skill gains. These claims make incompatible assertions about whether AI coaching transfers tactical negotiation skills to improved real outcomes.",
+          "strongerEvidence": "paper_b",
+          "resolution": "Head-to-head comparison of the same coaching system (or comparable LLM approaches) measuring both psychological outcomes and objective deal metrics in identical or controlled transfer scenarios would clarify whether the divergence reflects genuinely different system capabilities, different evaluation metrics, or population/training differences.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.002003
+      },
+      {
+        "id": "eval_003",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated conflict practice produces substantial behavioral improvements—67% reduction in competitive strategies and doubling of cooperative strategies in real unaided conflict. However, the same work (Rehearsal: Simulating Conflict to Teach Conflict Resolution) claims simulated conflict practice does not significantly improve strategy recognition or recall compared to lecture control. These assertions are incompatible: if training produces measurable shifts in actual conflict behavior, it should produce detectable improvements in strategy recognition or recall, the cognitive mechanisms underlying that behavioral change.",
+          "strongerEvidence": "neither",
+          "resolution": "The works must clarify whether the behavioral improvements (67% reduction, doubled cooperation) were measured in the same participant population and timeframe as the strategy recognition/recall null result, or whether the outcomes reflect genuinely different experimental conditions (e.g., different control groups, different delay between training and assessment, or different participant subsamples).",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.00205
+      },
+      {
+        "id": "eval_004",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution identifies that standard instruction-following LLMs produce responses that are 'too agreeable and quickly capitulate,' while ACE: A LLM-based Negotiation Coaching System observes that LLM negotiation agents are 'overly agreeable' and respond 'passively' rather than driving negotiation. Both works identify the same behavioral failure mode in LLMs—excessive agreeableness and lack of assertiveness—as a limitation for their respective training contexts (conflict resolution practice and negotiation coaching).",
+          "strongerEvidence": "neither",
+          "resolution": "Comparative testing where both systems evaluate the same set of LLM responses on a shared agreeableness/passivity scale would quantify whether this is a consistent property across models or context-dependent.",
+          "mechanism": null
+        },
+        "costUsd": 0.001878
+      },
+      {
+        "id": "eval_005",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System describes a dataset construction method (50 MBA students, Whisper transcription with manual editing), while Does AI Coaching Prepare us for Workplace Negotiations? reports an outcome finding (theory-driven AI coach's effectiveness in reducing negotiation-related fear). The first claim is about data collection infrastructure; the second is about intervention efficacy. They address different stages of research and do not make assertions about the same phenomenon.",
+          "strongerEvidence": "neither",
+          "resolution": "To create a relationship between these claims, one would need to show whether the ACE dataset was used in the fear-reduction study, or whether the fear-reduction finding was tested on data similar to ACE's collection protocol.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017620000000000001
+      },
+      {
+        "id": "eval_006",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations tests frontline humanitarian negotiators using process-oriented tools (options and risks surfacing) in a real-world professional context, while ACE: A LLM-based Negotiation Coaching System tests both LLM agents and human negotiators in simulated bargaining with zero-shot GPT-4 feedback. The population, context (humanitarian vs. generic bargaining), and tool design (process-oriented vs. coaching feedback) differ fundamentally, making their results about AI effectiveness in negotiation support non-contradictory but specific to their respective conditions.",
+          "strongerEvidence": "neither",
+          "resolution": "Testing the same AI intervention (coaching feedback vs. process surfacing) on the same population (either both human professionals or both simulated agents) in the same negotiation domain would clarify whether the divergence reflects genuine ineffectiveness of feedback for humans or merely different task structures and agent types.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.002158
+      },
+      {
+        "id": "eval_007",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Both claims from ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations address LLM hallucination risk but at different population levels. The first claim establishes that experienced negotiators can tolerate and manage hallucinations through domain expertise, while the second claim identifies the inverse risk: novices lack this expertise and therefore face greater vulnerability to the same hallucination problem. Together they map a competency-dependent gradient in hallucination harm rather than contradicting each other.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical comparison of error-correction rates and decision quality between novice and experienced negotiators when exposed to identical LLM hallucinations would quantify the magnitude of differential risk.",
+          "mechanism": null
+        },
+        "costUsd": 0.001922
+      },
+      {
+        "id": "eval_008",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills empirically demonstrates that high initial offers correlate with better earnings (r=0.47, p<0.001), while ACE: A LLM-based Negotiation Coaching System operationalizes this same finding as a coaching directive—instructing users to state their opening price first to anchor negotiations favorably. The first work provides the statistical evidence; the second applies that evidence as a pedagogical principle.",
+          "strongerEvidence": "paper_a",
+          "resolution": "A randomized controlled trial comparing negotiation outcomes for students who received ACE's anchoring coaching versus a control group would validate whether the empirical correlation from Towards An Autonomous Agent translates into causal improvement when deployed as coaching advice.",
+          "mechanism": null
+        },
+        "costUsd": 0.001821
+      },
+      {
+        "id": "eval_009",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that Trucey's responses are 168% less verbose and achieve higher readability scores (Flesch-Kincaid 80.00 vs 68.46), describing an objective property of output style across the AI systems. Does AI Coaching Prepare us for Workplace Negotiations? reports that participants under preparation stress rejected incremental conversational delivery as cognitively overloading, preferring comprehensive immediate content—a finding about user preference and cognitive experience under specific conditions (preparation stress). Both findings are compatible: brevity and readability (Claim A) do not necessarily reduce cognitive load when content is delivered incrementally rather than comprehensively (Claim B), revealing that output style and delivery mechanism are distinct factors.",
+          "strongerEvidence": "neither",
+          "resolution": "Testing whether Trucey's brevity and readability advantage persist when its content is delivered incrementally versus comprehensively under preparation stress would determine whether the verbosity difference itself mitigates or exacerbates the cognitive load rejection observed in participants.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0021799999999999996
+      },
+      {
+        "id": "eval_010",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution addresses the technical architecture of an automated feedback system, specifically how the IRP framework taxonomizes conflict resolution utterances for classification scoring. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills reports a correlational finding about negotiation strategy (initial offer magnitude) and economic outcomes (earnings). These claims operate at different explanatory levels: one describes a system component, the other reports a behavioral-outcome relationship. They address distinct phenomena with no logical entailment between them.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims would only become comparable if one work explicitly evaluated whether the IRP taxonomy's classifications predict the earnings correlation reported in the second work.",
+          "mechanism": null
+        },
+        "costUsd": 0.001779
+      },
+      {
+        "id": "eval_011",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Both works compare Trucey (theory-driven AI coach) against control conditions in the same study, but measure different outcomes with opposite directional findings. Does AI Coaching Prepare us for Workplace Negotiations? reports Trucey produced the largest reduction in negotiation-related fear (d=-0.27 vs. ChatGPT), while Does AI Coaching Prepare us for Workplace Negotiations? reports the static handbook significantly outperformed Trucey on psychological empowerment (d=-0.40, p<0.05). These results are not contradictory because they address different dependent variables (fear reduction vs. empowerment) — Trucey may excel at reducing one construct while the handbook excels at another.",
+          "strongerEvidence": "neither",
+          "resolution": "Examine whether fear reduction and psychological empowerment are independent constructs in this study design, or whether one mediates the other, to determine if Trucey's effectiveness generalizes across all relevant outcomes or is specific to emotional regulation.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.002129
+      },
+      {
+        "id": "eval_012",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "The first work reports that theory-driven AI coaching produced significantly higher willingness to initiate negotiations compared to generic AI (beta=12.65, p<0.05) using regression analysis. The second work reports that all three coaching interventions produced equivalent improvements with no significant differences on the Kruskal-Wallis test. These claims make directly incompatible assertions about whether differential effects exist among coaching conditions on the same outcome measure.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether the studies examined different intervention groups (e.g., whether 'generic AI' in the first study was one of the three conditions tested in the second), and whether both used the same sample and outcome operationalization for willingness to initiate negotiations.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0018280000000000002
+      },
+      {
+        "id": "eval_013",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated conflict practice reduced participants' conflict self-efficacy post-training, interpreting this as evidence of realistic learning. Does AI Coaching Prepare us for Workplace Negotiations? reports that AI coaching achieved the largest reduction in negotiation-related fear, framing this as a beneficial outcome that reduces psychological barriers. Both measure reductions in psychological readiness metrics (self-efficacy vs. fear), but attribute opposite valence to similar outcome patterns: one treats reduction as unintended but informative, the other as a success indicator.",
+          "strongerEvidence": "neither",
+          "resolution": "Distinguish whether reduced self-efficacy and reduced fear measure the same underlying construct (confidence/readiness) or genuinely different ones, and whether either reduction correlates with actual conflict resolution or negotiation performance in post-training follow-up.",
+          "mechanism": "interprets_differently"
+        },
+        "costUsd": 0.001966
+      },
+      {
+        "id": "eval_014",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution demonstrates that theory-grounded LLM prompting (IRP) outperforms standard instruction-following for conflict simulation generation. Does AI Coaching Prepare us for Workplace Negotiations? shows that a theory-driven AI coach built on Brett and Thompson's negotiation framework outperforms generic ChatGPT on the same underlying model. Both findings establish that embedding theoretical frameworks into LLM systems produces superior performance compared to unstructured baselines, even when the underlying model capacity is equivalent.",
+          "strongerEvidence": "neither",
+          "resolution": "Direct empirical comparison using identical base models, theoretical frameworks, and outcome metrics (e.g., conflict realism + fear reduction) across both simulation and coaching domains would establish whether theory-grounding is the common causal mechanism or whether domain-specific factors explain the parallel improvements.",
+          "mechanism": null
+        },
+        "costUsd": 0.001963
+      },
+      {
+        "id": "eval_015",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System evaluates its own error detection performance on predefined error categories (0.90+ accuracy, F1=0.54 for strategic closing), while Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills measures correlations between automatically derived dialogue metrics and real negotiation outcomes (r=0.47 to r=0.59). The first addresses system classification accuracy; the second addresses predictive validity of outcome measures. These assess different properties of automated negotiation systems and do not directly engage each other.",
+          "strongerEvidence": "neither",
+          "resolution": "A comparison would require both works to measure the same dependent variable—either both must predict outcomes from system metrics, or both must report classification accuracy—but they address fundamentally different evaluation questions about negotiation AI systems.",
+          "mechanism": null
+        },
+        "costUsd": 0.001917
+      },
+      {
+        "id": "eval_016",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports a specific methodological detail about participant recruitment and assignment (267 participants via Prolific in a 2:1:1 randomized design). Rehearsal: Simulating Conflict to Teach Conflict Resolution makes a theoretical claim about LLM properties (standard instruction-following models lack sufficient disagreement capacity for conflict practice). These address entirely different levels of analysis—one describes experimental logistics, the other addresses model capability requirements—with no shared phenomenon to evaluate.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims become comparable only if one work explicitly discusses whether the Trucey experiment's design choices (recruitment method, sample size, randomization ratio) were influenced by or dependent on LLM agreeableness as a constraint.",
+          "mechanism": null
+        },
+        "costUsd": 0.001814
+      },
+      {
+        "id": "eval_017",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System asserts that structured feedback and instruction are necessary for negotiation improvement beyond raw experience, implying experience alone is insufficient. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills directly contradicts this by claiming autonomous agent systems improve negotiation ability even without feedback. These represent incompatible predictions about whether unguided or minimally-guided learning produces measurable skill gains.",
+          "strongerEvidence": "neither",
+          "resolution": "A controlled experiment comparing negotiation improvement in three matched groups (experience only, experience plus structured feedback, experience plus autonomous agent interaction) would determine whether improvement occurs without explicit feedback and whether autonomous agents constitute a form of implicit guidance.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0018149999999999998
+      },
+      {
+        "id": "eval_018",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations identifies a gap in AI tool design generally—that current systems prioritize outcomes over process support—without making claims about cultural applicability. ACE: A LLM-based Negotiation Coaching System acknowledges a specific implementation constraint: its particular annotation scheme and feedback mechanisms are built on American negotiation conventions and may not generalize cross-culturally. Both identify design limitations in AI negotiation systems, but at different levels: one targets the strategic orientation of the field, the other identifies a boundary condition of a specific system's training data and cultural assumptions.",
+          "strongerEvidence": "neither",
+          "resolution": "A comparison would require testing whether process-oriented AI tools (the ChatGPT work's prescription) maintain their effectiveness when adapted to non-American negotiation contexts (the ACE work's concern).",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0020410000000000003
+      },
+      {
+        "id": "eval_019",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System makes a claim about model selection (GPT-4 vs GPT-4o) based on speed evaluation for a specific technical component (chat agent vs feedback generation). Rehearsal: Simulating Conflict to Teach Conflict Resolution makes an empirical claim about training transfer—whether participants improve in unaided real conflict after simulation training. These address entirely different questions: one concerns implementation choices for an LLM system, the other concerns effectiveness of conflict resolution training.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution is needed; these claims operate in different domains and cannot be meaningfully compared.",
+          "mechanism": null
+        },
+        "costUsd": 0.001684
+      },
+      {
+        "id": "eval_020",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System claims interactive AI feedback significantly improved outcomes over non-interactive baselines, establishing interactive AI as superior. Does AI Coaching Prepare us for Workplace Negotiations? directly contradicts this by reporting participants preferred the static handbook and that it outperformed both AI conditions on usability and psychological empowerment metrics. These are incompatible assertions about the same phenomenon: whether interactive AI coaching outperforms static alternatives.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct head-to-head comparison of the same interactive AI system, static handbook, and participant population under identical measurement protocols would determine which outcome generalizes.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001731
+      },
+      {
+        "id": "eval_021",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Both claims converge on the same empirical finding: active simulated practice (Rehearsal) builds conflict resolution skills more effectively than passive learning methods. Claim A demonstrates this by showing Rehearsal significantly outperforms lecture-only control on cooperative strategy use, while Claim B asserts that passive reading/watching builds orthogonal skills—implying that active simulation targets the core skill domain that passive methods miss. Together they support the superiority of simulation-based training.",
+          "strongerEvidence": "paper_a",
+          "resolution": "A direct comparison experiment where the same population receives lecture-only, passive video, and active Rehearsal conditions, with measurement of both cooperative strategy use and any orthogonal skills, would definitively establish whether passive methods truly build different competencies or simply build the same competencies more weakly.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018160000000000001
+      },
+      {
+        "id": "eval_022",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that a static handbook outperformed AI coaching on usability (UMUX) and psychological empowerment metrics in the Trucey study. ACE: A LLM-based Negotiation Coaching System claims that interactive LLM coaching significantly outperformed no-feedback and alternative-feedback conditions on objective negotiation outcomes. These make incompatible claims about whether AI coaching beats traditional alternatives: the first identifies conditions where it underperforms non-AI guidance, while the second asserts AI coaching superiority on the primary dependent variable (negotiation outcomes).",
+          "strongerEvidence": "neither",
+          "resolution": "A direct within-study comparison of static handbook vs. interactive LLM coaching on both usability/empowerment and objective negotiation outcomes would clarify whether the systems solve different problems (subjective experience vs. deal quality) or whether one approach genuinely dominates across both metric types.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0020399999999999997
+      },
+      {
+        "id": "eval_023",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that hallucinations were mitigated but persisted and created scripted-feeling interactions, treating this as a limitation of the IRP theory grounding approach. ChatGPT, Don't Tell Me What to Do: Designing AI for Context Analysis in Humanitarian Frontline Negotiations reports that frontline negotiators actively tolerated hallucinations by applying expert triangulation and verification, treating the same phenomenon as manageable under real-world conditions. Both observe hallucinations in LLM outputs, but differ in whether the user response (scripted feeling vs. expert mitigation) reflects a system failure or a viable human-AI interaction pattern.",
+          "strongerEvidence": "neither",
+          "resolution": "A comparative study measuring whether scripted simulation environments and time-pressured field negotiations produce different user tolerance thresholds and verification behaviors for the same hallucination frequency would clarify whether the difference is environmental or reflects genuine disagreement about LLM reliability.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.002145
+      },
+      {
+        "id": "eval_024",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution evaluates a simulation-based training intervention where 40 participants practice conflict resolution with a confederate in a between-subjects design. ACE: A LLM-based Negotiation Coaching System reports effect sizes (d=0.38) for coaching improvements on deal prices in what appears to be a negotiation task. The two works target different conflict domains (interpersonal conflict resolution vs. negotiation outcome optimization) and measure different outcomes (training transfer via behavioral assessment vs. deal price performance), making comparison uninformative.",
+          "strongerEvidence": "neither",
+          "resolution": "Determine whether both studies actually address the same underlying skill (conflict/negotiation resolution) and whether deal prices and conflict resolution success are theoretically related outcomes in a shared population before attempting comparison.",
+          "mechanism": null
+        },
+        "costUsd": 0.001851
+      },
+      {
+        "id": "eval_025",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Rehearsal: Simulating Conflict to Teach Conflict Resolution asserts that simulated AI practice transfers to real behavior, evidenced by participants improving conflict performance in actual unaided conflict after training. Does AI Coaching Prepare us for Workplace Negotiations? reports that many frontline negotiators rejected AI-mediated rehearsal as fundamentally inadequate because simulation cannot reproduce unpredictability and embodied pressure of real negotiations. These make incompatible claims about whether AI simulation training produces real-world behavioral improvement: one demonstrates transfer occurred, the other documents participant rejection based on perceived non-transferability.",
+          "strongerEvidence": "neither",
+          "resolution": "A direct comparison study measuring whether the same AI rehearsal system produces measurable conflict performance gains in the population of 'frontline negotiators' who rejected it would determine whether transfer occurs despite perceived inadequacy, or whether rejection predicts null effects.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001971
+      },
+      {
+        "id": "eval_026",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? empirically demonstrates that cultural background moderates AI coaching effectiveness across participant backgrounds through experimental measurement. ACE: A LLM-based Negotiation Coaching System identifies the mechanism behind this moderation effect—its coaching scheme is explicitly grounded in American-style negotiation conventions, which mechanistically explains why effectiveness would vary across cultural contexts. The second work provides the theoretical explanation for the empirical pattern observed in the first.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Cross-cultural validation of ACE's coaching outputs on non-American negotiation styles would confirm whether the American-convention design is the causal mechanism producing the moderation effect observed in Does AI Coaching Prepare us for Workplace Negotiations?",
+          "mechanism": null
+        },
+        "costUsd": 0.001763
+      },
+      {
+        "id": "eval_027",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "theoretical",
+          "explanation": "Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills asserts that post-negotiation feedback is crucial for learning because it connects performance to fundamental principles. Rehearsal: Simulating Conflict to Teach Conflict Resolution supports this by distinguishing that simulated practice builds application skills (the transfer of principles to performance) while passive review builds recognition and recall skills (the cognitive foundation principles require). Both claims converge on feedback and practice as mechanisms for principle-to-performance translation, with the second work clarifying the specific cognitive pathways the first assumes.",
+          "strongerEvidence": "neither",
+          "resolution": "An empirical study comparing post-negotiation feedback timing (immediate vs. delayed) and modality (simulated dialogue review vs. principle-framing) against transfer measures would test whether feedback works primarily through application skill-building (supporting the second work's mechanism) or recognition-recall reinforcement (supporting the first work's assumption).",
+          "mechanism": null
+        },
+        "costUsd": 0.002049
+      },
+      {
+        "id": "eval_028",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System focuses on a specific technical mechanism (dynamic prompting with adjustable subjective limits) that enables the agent to avoid concession patterns and generate robust counteroffers. Does AI Coaching Prepare us for Workplace Negotiations? examines whether AI coaching is effective across different participant groups, finding that cultural background moderates this effectiveness. The first claim addresses a feature of agent design; the second addresses heterogeneous human response to coaching. Neither negates the other—robust counteroffers could coexist with differential coaching uptake across cultural groups.",
+          "strongerEvidence": "neither",
+          "resolution": "A study combining ACE's technical approach with Does AI Coaching Prepare us for Workplace Negotiations?'s cultural stratification would reveal whether dynamic prompting effectiveness itself varies by cultural background or remains stable while overall coaching impact varies.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001945
+      },
+      {
+        "id": "eval_029",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "theoretical",
+          "explanation": "ACE: A LLM-based Negotiation Coaching System asserts that structured feedback is necessary for negotiation improvement, claiming people do not improve from bargaining experience alone without instruction. Towards An Autonomous Agent that Provides Automated Feedback on Students' Negotiation Skills directly contradicts this by claiming autonomous agent systems improve negotiation ability even without any feedback provided to the learner. These are incompatible claims about whether feedback is a necessary condition for improvement from experience.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical comparison testing whether the same learners improve more with autonomous agent systems that provide no feedback versus with no intervention at all would determine whether agent presence alone (independent of feedback) drives improvement.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001791
+      },
+      {
+        "id": "eval_030",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Does AI Coaching Prepare us for Workplace Negotiations? reports that Trucey coaching produced negligible improvement in organizational self-efficacy (delta=+0.05), suggesting minimal change in confidence. Rehearsal: Simulating Conflict to Teach Conflict Resolution reports that simulated conflict practice actually reduced participants' self-efficacy after training, a directional decline rather than stasis. Both address self-efficacy outcomes from practice-based interventions, but predict opposite trajectories: one shows near-zero change, the other shows measured decline.",
+          "strongerEvidence": "neither",
+          "resolution": "Clarify whether the interventions differ in intensity, realism, or feedback type, or whether self-efficacy was measured at different timepoints (immediately post-training vs. after real-world confrontation), which could explain why one shows stagnation and the other shows decline.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001965
+      },
+      {
+        "id": "ir_001",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Hybrid Sparse-Dense Retrieval for Open-Domain QA reports a specific quantitative improvement (Recall@100 from 0.71 to 0.88) when combining BM25 with dense retrieval. When Dense Retrieval Misses: A Lexical Safety Net describes the same mechanism—adding lexical BM25 to dense retrievers—and reports qualitatively similar recovery of passages that embedding models ranked poorly, particularly for out-of-vocabulary queries. Both works confirm that hybrid sparse-dense combinations improve recall over dense-only baselines, with the second work identifying a specific failure mode (OOV queries) that the hybrid approach addresses.",
+          "strongerEvidence": "paper_a",
+          "resolution": "Direct comparison would test whether the OOV query subset identified in When Dense Retrieval Misses represents the primary source of the 0.17 Recall@100 gain reported in Hybrid Sparse-Dense Retrieval, or whether other query types also benefit substantially.",
+          "mechanism": null
+        },
+        "costUsd": 0.002133
+      },
+      {
+        "id": "ir_002",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Scaling Embedding Dimensions for Retrieval reports monotonic improvement up to 1536 dimensions across all tested corpora, while Diminishing Returns in High-Dimensional Embeddings reports plateauing accuracy beyond 768 dimensions with degradation at very high dimensions due to noise. These directly contradict each other regarding whether additional dimensions consistently improve performance or produce diminishing returns and eventual harm.",
+          "strongerEvidence": "neither",
+          "resolution": "The claims could be reconciled by examining whether the works tested different corpora types, embedding methods, or retrieval tasks — one corpus set may genuinely benefit from high dimensionality while another exhibits noise capture, or the embedding construction methods differ in their capacity to utilize high-dimensional space meaningfully.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001781
+      },
+      {
+        "id": "ir_003",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Reranking for Precision in Two-Stage Retrieval reports that cross-encoder reranking of top-100 candidates substantially improves Precision@10, a ranking quality metric. The Latency Cost of Neural Reranking identifies that the same cross-encoder reranking operation incurs 400-600ms latency overhead per query. These claims are compatible: reranking does improve ranking quality (as the first work shows) but at a latency cost that may be unacceptable for interactive search (as the second work argues). The disagreement is not about whether reranking works, but about whether its quality gains justify its computational cost under real-time constraints.",
+          "strongerEvidence": "neither",
+          "resolution": "An experimental study measuring both Precision@10 gains and end-to-end latency with and without aggressive candidate pruning would show under what conditions (e.g., candidate set size, hardware) the trade-off favors reranking for interactive applications.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.00209
+      },
+      {
+        "id": "ir_004",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "methodological",
+          "explanation": "Scaling Embedding Dimensions for Retrieval addresses corpus preprocessing via MinHash LSH deduplication at a specific Jaccard threshold (0.8) before indexing. Reranking for Precision in Two-Stage Retrieval addresses post-retrieval ranking via cross-encoder models applied to first-stage results, measured by Precision@10. These claims concern entirely different stages of the retrieval pipeline—one upstream (data cleaning), one downstream (result refinement)—with no logical dependency or conflict between them.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims can coexist in the same system: deduplication at 0.8 threshold could be applied before indexing, and cross-encoder reranking could then improve precision on the resulting deduplicated index.",
+          "mechanism": null
+        },
+        "costUsd": 0.0018000000000000002
+      },
+      {
+        "id": "ir_005",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Generative Query Expansion for Sparse Queries reports a 6-point Recall@20 improvement for short, underspecified queries using generated paraphrases. Revisiting Pseudo-Relevance Feedback identifies that pseudo-relevance feedback raises recall most on short queries lacking sufficient matching terms. Both claims agree that recall improves on the same population (short, sparse queries) through methods that add or leverage additional term matching signals, making them mutually reinforcing observations about the same phenomenon.",
+          "strongerEvidence": "neither",
+          "resolution": "Direct comparison on the same short-query benchmark using both methods would clarify whether the approaches are complementary or whether one dominates the other in this setting.",
+          "mechanism": null
+        },
+        "costUsd": 0.0017460000000000002
+      },
+      {
+        "id": "ir_006",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Closing the Bi-Encoder Gap with In-Domain Training claims that in-domain fine-tuned bi-encoders matched cross-encoder relevance performance while achieving order-of-magnitude speed gains. Why Cross-Encoders Still Win on Relevance asserts that cross-encoders consistently outperformed bi-encoders on relevance regardless of fine-tuning, attributing this to joint query-document attention. These are directly incompatible: one claims parity after fine-tuning, the other claims persistent cross-encoder superiority under the same conditions.",
+          "strongerEvidence": "neither",
+          "resolution": "A controlled comparison using identical relevance benchmarks, fine-tuning procedures, and evaluation metrics on the same datasets would determine whether in-domain fine-tuning closes the relevance gap or whether cross-encoder architectural advantages remain insurmountable.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0019450000000000001
+      },
+      {
+        "id": "llm_001",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Chain-of-Thought Prompting Elicits Reasoning reports large accuracy improvements on multi-step arithmetic and symbolic reasoning tasks, while When Chain-of-Thought Does Not Help documents negligible or negative effects on single-step tasks. Both findings are compatible: chain-of-thought prompting's effectiveness depends on task complexity and the number of reasoning steps required, making this a boundary condition rather than a contradiction.",
+          "strongerEvidence": "neither",
+          "resolution": "A systematic evaluation testing chain-of-thought prompting across a gradient of task complexity (single-step to multi-step) on the same model would establish the precise complexity threshold at which the benefit emerges or disappears.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.0017369999999999998
+      },
+      {
+        "id": "llm_002",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "unrelated",
+          "category": "scope",
+          "explanation": "Claim A describes a training data composition detail (1.5M examples from 12 task families used for instruction-tuning), while Claim B reports an empirical finding about the effectiveness of chain-of-thought prompting on a specific task type (multi-step arithmetic). The first is a methodological input to model development; the second is an output performance measurement. They address different levels of analysis—training setup versus downstream evaluation results.",
+          "strongerEvidence": "neither",
+          "resolution": "These claims would be comparable only if one explicitly used the other's training data or methods and reported whether that choice affected arithmetic reasoning performance.",
+          "mechanism": null
+        },
+        "costUsd": 0.001611
+      },
+      {
+        "id": "llm_003",
+        "goldLabel": "contradiction",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "contradiction",
+          "category": "findings",
+          "explanation": "Scale and Calibration in Language Models claims that larger models hallucinate less due to improved calibration enabling abstention on uncertain queries, predicting a negative relationship between scale and hallucination rate. Confident Hallucination at Scale claims larger models hallucinate more confidently with increased fluency and detectability difficulty, predicting that scale increases hallucination severity and user susceptibility. These predict opposite outcomes: one says scale reduces hallucinations, the other says scale increases their impact and confidence.",
+          "strongerEvidence": "neither",
+          "resolution": "Empirical measurement of hallucination rates and confidence calibration across identical model sizes and task domains would determine whether scale primarily improves abstention capability or primarily increases confident false outputs.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001735
+      },
+      {
+        "id": "llm_004",
+        "goldLabel": "support",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "Self-Consistency Improves Chain-of-Thought demonstrates that sampling multiple reasoning chains and taking the majority answer improves accuracy over greedy decoding on benchmarks. Sampling-and-Voting for Reasoning reports the same methodological approach—majority voting over independently sampled reasoning paths—yielding accuracy gains on arithmetic and commonsense benchmarks. Both works validate the identical core mechanism: aggregating multiple independent samples via voting outperforms single-pass decoding.",
+          "strongerEvidence": "neither",
+          "resolution": "Direct comparison of reported accuracy improvements on overlapping benchmarks (e.g., GSM8K or SVAMP) would quantify which implementation achieves larger gains under identical conditions.",
+          "mechanism": null
+        },
+        "costUsd": 0.001677
+      },
+      {
+        "id": "llm_005",
+        "goldLabel": "nuance",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "nuance",
+          "category": "scope",
+          "explanation": "Retrieval-Augmented Generation for Knowledge Tasks reports that RAG reduces factual hallucination on knowledge-intensive queries by grounding in retrieved passages—a success condition. When Retrieval Hurts: Context Distraction in RAG documents a failure mode where irrelevant retrieved context causes the model to defer to misleading passages over parametric knowledge. Both claims are compatible: RAG improves performance when retrieval is relevant but degrades it when retrieval quality is poor, defining boundary conditions rather than contradictory outcomes.",
+          "strongerEvidence": "neither",
+          "resolution": "Controlled comparison measuring RAG performance across a spectrum of retrieval quality (high relevance to irrelevant passages) would quantify the threshold at which benefits reverse to harms.",
+          "mechanism": "different_scope_conditions"
+        },
+        "costUsd": 0.001826
+      },
+      {
+        "id": "llm_006",
+        "goldLabel": "unrelated",
+        "goldMechanism": null,
+        "predicted": {
+          "relationship": "support",
+          "category": "findings",
+          "explanation": "The first claim describes the experimental setup (5-shot prompting at temperature 0 with fixed prompt template), while the second claim reports the key finding enabled by that setup (self-consistency sampling outperformed greedy decoding in reasoning accuracy). Both assertions are from the same work and are mutually reinforcing: the controlled methodology in Claim A provides the conditions under which the improvement in Claim B was measured.",
+          "strongerEvidence": "neither",
+          "resolution": "No resolution needed; these claims describe complementary aspects of the same experiment—method and result—rather than competing assertions.",
+          "mechanism": null
+        },
+        "costUsd": 0.001544
+      }
+    ]
+  },
+  "gate": {
+    "delta": 0.03286703717738204,
+    "deltaPass": false,
+    "mechanismAccuracy": 0.36363636363636365,
+    "mechanismPass": false,
+    "empiricalRegression": 0.032048382989559365,
+    "regressionPass": false,
+    "classesBelowFloorAnywhere": [],
+    "classFloorPass": true,
+    "outrightPass": false
+  },
+  "certifiedEmpiricalMacroF1": 0.752,
+  "cost": {
+    "totalUsd": 0.21180599999999983,
+    "ledger": [
+      {
+        "stage": "STAGE A — base (branch:empirical) on humanities set",
+        "costUsd": 0.062794,
+        "calls": 36
+      },
+      {
+        "stage": "STAGE B — humanities branch (branch:humanities) on humanities set",
+        "costUsd": 0.069925,
+        "calls": 36
+      },
+      {
+        "stage": "STAGE C — humanities branch (branch:humanities) on empirical set (regression check)",
+        "costUsd": 0.07908699999999999,
+        "calls": 42
+      }
+    ]
+  }
+}
