@@ -589,6 +589,43 @@ async function main() {
   log(`Browser launched. headed=${headedUsed}`);
 
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+
+  // Gap fix (found live, blocked measurement entirely): tsx compiles this
+  // *.ts file with esbuild's `keepNames: true` (tsx's own fixed default,
+  // not something this file opted into — verified by reading
+  // node_modules/tsx/dist/index-CQhDiIsg.mjs's shared transform options).
+  // That wraps every named function this file defines — including the
+  // `tick`/`driveOrbitPointer` helpers declared *inside* the closures
+  // passed to `page.evaluate()` below — with a `__name(fn, "fn")` call.
+  // Playwright ships a `page.evaluate(callback)` argument to the browser by
+  // serializing the *actual compiled* `callback.toString()`, so the
+  // `__name(...)` calls are part of what gets sent — but the `__name`
+  // helper itself is a module-scope const in the Node-side compiled file,
+  // never shipped to the page. Every orbit-sampling and pointer-latency
+  // evaluate() call therefore threw `ReferenceError: __name is not
+  // defined` on first use, silently turning "the bench measures orbit FPS"
+  // into "the bench hangs/crashes before writing a single trial." Fixed by
+  // predefining a compatible one-line polyfill on `window` via
+  // `addInitScript` (reruns automatically on every navigation/reload, so
+  // every page this driver ever creates has it before any app code runs) —
+  // the minimal fix, not a build-pipeline change, since it doesn't touch
+  // what tsx/esbuild actually compile, only supplies the one global symbol
+  // their output assumes exists.
+  await page.addInitScript(() => {
+    const w = window as unknown as { __name?: (fn: unknown, name: string) => unknown };
+    if (!w.__name) {
+      w.__name = (fn: unknown, name: string) => {
+        try {
+          Object.defineProperty(fn as object, "name", { value: name, configurable: true });
+        } catch {
+          // best-effort only — matches esbuild's own helper, which never
+          // throws past this point either
+        }
+        return fn;
+      };
+    }
+  });
+
   const driver = new RealBenchDriver(page);
 
   const allTrials: TrialResult[] = [];

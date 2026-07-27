@@ -11,8 +11,18 @@ const BASE = "http://localhost:5183";
 async function checkPrototype(browser, proto) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   await page.goto(`${BASE}/?proto=${proto}&fixture=fixture-24`);
+  // NB: must check `b &&` explicitly, not just optional-chain — `window[key]
+  // ?.interactiveAtMs !== null` is TRUE the instant the bridge itself is
+  // still undefined (undefined !== null), so a naive optional-chain
+  // predicate resolves before the bridge is ever registered. Found live:
+  // this exact bug let checkPrototype("b") race ahead of App.tsx's
+  // registerHarnessBridge() call and crash on the very next evaluate().
+  // scripts/run-bench.ts's real driver already uses the correct form.
   await page.waitForFunction(
-    (key) => Boolean(window[key]?.interactiveAtMs !== null),
+    (key) => {
+      const b = window[key];
+      return b && b.interactiveAtMs !== null;
+    },
     "__graphBakeoffHarness",
     { timeout: 15000 },
   );
@@ -38,7 +48,10 @@ async function checkPrototype(browser, proto) {
   const handleBefore = await page.evaluate(() => !!window.__graphBakeoffHarness.handle);
   const preUnmountSnapshot = await page.evaluate(() => window.__graphBakeoffLifecycle.remountCycle(1));
   await page.waitForFunction(
-    (key) => Boolean(window[key]?.interactiveAtMs !== null),
+    (key) => {
+      const b = window[key];
+      return b && b.interactiveAtMs !== null;
+    },
     "__graphBakeoffHarness",
     { timeout: 15000 },
   );
