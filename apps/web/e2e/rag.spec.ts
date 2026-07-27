@@ -188,6 +188,131 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await expect(historyTrigger).not.toBeFocused();
   });
 
+  // Owner-requested UX change: standard chat Enter-to-send on the question
+  // textarea, matching the Ask button's own submit path exactly.
+  test.describe("Enter-to-send on the question textarea", () => {
+    test("Enter sends the question, same as clicking Ask", async ({ page }) => {
+      await page.getByRole("button", { name: "Ask Library" }).click();
+      const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+      await expect(chat).toBeVisible();
+
+      const input = chat.getByLabel("Ask a question about your Library");
+      await input.fill("Does virtue also involve decision, on this account?");
+      await input.press("Enter");
+
+      await expect(chat.getByText("Library companion").last()).toBeVisible();
+      await expect(input).toHaveValue("");
+    });
+
+    test("Shift+Enter inserts a newline instead of sending", async ({ page }) => {
+      await page.getByRole("button", { name: "Ask Library" }).click();
+      const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+      await expect(chat).toBeVisible();
+
+      const input = chat.getByLabel("Ask a question about your Library");
+      await input.fill("First line");
+      await input.press("Shift+Enter");
+      await input.pressSequentially("second line");
+
+      await expect(input).toHaveValue("First line\nsecond line");
+      // Nothing was sent — the greeting card (client-only, disappears the
+      // moment a real turn exists) is still showing.
+      await expect(chat.getByText("Reading companion")).toBeVisible();
+    });
+
+    test("Enter on an empty textarea does nothing", async ({ page }) => {
+      await page.getByRole("button", { name: "Ask Library" }).click();
+      const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+      await expect(chat).toBeVisible();
+
+      const input = chat.getByLabel("Ask a question about your Library");
+      // The textarea starts disabled until the mount-time conversation
+      // fetch resolves (`disabled={!conversationId || ...}`); `.focus()`
+      // silently no-ops on a disabled element (unlike `.fill()`, it carries
+      // no actionability wait), which would otherwise leave focus sitting
+      // on the panel's own Close button — and Enter activates a focused
+      // button natively, closing the panel and making this test fail for a
+      // reason that has nothing to do with the textarea's own Enter
+      // handling. Waiting for enabled first is what every other test in
+      // this file gets for free through `.fill()`'s own actionability wait.
+      await expect(input).toBeEnabled();
+      await input.focus();
+      await page.keyboard.press("Enter");
+
+      await expect(chat.getByText("Reading companion")).toBeVisible();
+      await expect(chat.getByText("Library companion")).toHaveCount(0);
+    });
+
+    // `pending` (the streamed-answer accumulator) stays "" — and so the Ask
+    // button/textarea's own `disabled` condition stays false — for the
+    // whole gap between send and the first streamed token, so a live
+    // request's real network latency is exactly the window a fast typist
+    // could otherwise slip a second Enter through. A mocked, artificially
+    // delayed SSE response makes that gap wide and deterministic instead of
+    // racing real OpenAI latency; `handleQuestionKeyDown`'s explicit
+    // `streaming` check (not just `pending`) is what actually closes it.
+    test("Enter while a response is streaming does nothing", async ({ page }) => {
+      await page.getByRole("button", { name: "Ask Library" }).click();
+      const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+      await expect(chat).toBeVisible();
+
+      await page.route("**/api/rag/conversations/*", async (route) => {
+        if (route.request().method() !== "POST") {
+          await route.continue();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const now = new Date().toISOString();
+        const body = [
+          `event: user\ndata: ${JSON.stringify({ id: "mock-user-1", role: "user", content: "Does courage also involve a settled state of character?", citations: [], claimCitations: [], createdAt: now, latencyMs: null })}`,
+          `event: delta\ndata: ${JSON.stringify({ text: "Courage is treated as a settled disposition, not a momentary act." })}`,
+          `event: done\ndata: ${JSON.stringify({ message: { id: "mock-assistant-1", role: "assistant", content: "Courage is treated as a settled disposition, not a momentary act.", citations: [], claimCitations: [], createdAt: now, latencyMs: 5 }, notFound: true })}`,
+        ].join("\n\n") + "\n\n";
+        await route.fulfill({ status: 200, contentType: "text/event-stream", body });
+      });
+
+      const input = chat.getByLabel("Ask a question about your Library");
+      const askButton = chat.getByRole("button", { name: "Ask" });
+      await input.fill("Does courage also involve a settled state of character?");
+      await askButton.click();
+      // Act inside the pre-first-token gap, well before the mocked 1s delay
+      // elapses: the input is still enabled here (`pending` is still ""),
+      // so only the keydown handler's own `streaming` check can be
+      // stopping this from sending.
+      await input.fill("A second question typed mid-stream");
+      await page.keyboard.press("Enter");
+      // Nothing was sent — the typed text is untouched (a genuine send
+      // clears the draft), and still only the one exchange completes.
+      await expect(input).toHaveValue("A second question typed mid-stream");
+      await expect(chat.getByText("Library companion").last()).toBeVisible({ timeout: 5_000 });
+      await expect(chat.getByText("Library companion")).toHaveCount(1);
+    });
+
+    test("Enter during IME composition does not send", async ({ page }) => {
+      await page.getByRole("button", { name: "Ask Library" }).click();
+      const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+      await expect(chat).toBeVisible();
+
+      const input = chat.getByLabel("Ask a question about your Library");
+      // See the "empty textarea" test above for why this wait matters:
+      // `.focus()` no-ops on a still-disabled textarea, which would
+      // otherwise leave the composition events and the Enter dispatch
+      // below landing nowhere meaningful.
+      await expect(input).toBeEnabled();
+      await input.focus();
+      // Simulate a CJK IME composing session: the candidate-committing
+      // Enter must not be read as "send" — `isComposing` is what
+      // `handleQuestionKeyDown` checks to tell the two apart.
+      await input.dispatchEvent("compositionstart", { bubbles: true, cancelable: true });
+      await page.keyboard.insertText("日本語");
+      await input.dispatchEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true });
+      await input.dispatchEvent("compositionend", { bubbles: true, cancelable: true });
+
+      await expect(input).toHaveValue("日本語");
+      await expect(chat.getByText("Reading companion")).toBeVisible();
+    });
+  });
+
   test("keyboard Enter toggles the conversation history menu open, then closed", async ({ page }) => {
     await page.getByRole("button", { name: "Ask Library" }).click();
     const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
