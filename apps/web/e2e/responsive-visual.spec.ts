@@ -260,9 +260,10 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
           // the "Loading…" placeholder into the baseline (found regenerating
           // these baselines: reader-desktop-light kept re-capturing that
           // placeholder even after the route was already warm). Wait for
-          // its toolbar's "My notes" control, which only renders once
-          // ReaderShell's own data has loaded.
-          if (name === "reader") await expect(page.getByRole("button", { name: "My notes" })).toBeVisible();
+          // its toolbar's "Notes" control (Stage 4 read spec §4.2 merged
+          // the former separate "Analysis"/"My notes" toggles into one),
+          // which only renders once ReaderShell's own data has loaded.
+          if (name === "reader") await expect(page.getByRole("button", { name: /^(Notes|Hide notes)/ })).toBeVisible();
           // Stage 3 rebuild: the Knowledge Map's own readiness signal is its
           // toolbar (no page heading — see the `baselinePages` row comment
           // above), so this page needs its own explicit wait, same
@@ -377,7 +378,7 @@ test.describe("Phase 23.3 — large annotation count, large graph, long graph la
     await deleteTestUser(EMAIL);
   });
 
-  test("a large annotation count renders and the Analysis panel stays overflow-free at 768 and 320px", async ({ page }) => {
+  test("a large annotation count renders and the notes drawer stays overflow-free at 768 and 320px", async ({ page }) => {
     const { workId, runId, bodyBlockId } = await seedPublishedEdition(userId);
     // seedPublishedEdition already seeds 2 (1 anchored + 1 whole-work);
     // add 18 more anchored passage annotations so the sidebar's index has a
@@ -401,7 +402,9 @@ test.describe("Phase 23.3 — large annotation count, large graph, long graph la
       await page.setViewportSize({ width, height: 800 });
       await login(page, EMAIL);
       await page.goto(`/works/${workId}/reader`);
-      await page.getByRole("button", { name: /^Analysis/ }).click();
+      // Stage 4 read spec §4.2: the toggle is now "Notes" (merged
+      // Analysis + My notes drawer), not "Analysis".
+      await page.getByRole("button", { name: /^Notes/ }).click();
       await expect(page.getByRole("dialog", { name: "Edition sidebar" })).toBeVisible();
       // `getByText` substring-matches case-insensitively, and this fixture's
       // own seeded explanation text ends "...exercise a large annotation
@@ -673,19 +676,20 @@ test.describe("Phase 23.3 — D-23-15 and D-23-17 visual confirmations", () => {
     await deleteTestUser(email);
   });
 
-  test("D-23-17: opening the narrow Analysis drawer does not auto-scroll the filter row out of view", async ({ page }) => {
+  test("D-23-17: opening the narrow notes drawer does not auto-scroll the filter row out of view", async ({ page }) => {
     const email = `e2e-responsive-d23-17-${Date.now()}@example.com`;
     const userId = await createVerifiedTestUser(email, PASSWORD);
     await markOnboarded(userId);
     const { workId } = await seedPublishedEdition(userId);
     // 768px is below the reader's 1024px sticky-sidebar breakpoint
-    // (useNarrowViewport), so the Analysis panel renders as the bottom-sheet
-    // dialog the original defect was reported in.
+    // (useNarrowViewport), so the notes drawer renders as the bottom-sheet
+    // dialog the original defect was reported in. Stage 4 read spec §4.2:
+    // the toggle is "Notes" now (merged Analysis + My notes drawer).
     await page.setViewportSize({ width: 768, height: 700 });
     await login(page, email);
     await page.goto(`/works/${workId}/reader`);
 
-    await page.getByRole("button", { name: /^Analysis/ }).click();
+    await page.getByRole("button", { name: /^Notes/ }).click();
     const dialog = page.getByRole("dialog", { name: "Edition sidebar" });
     await expect(dialog).toBeVisible();
 

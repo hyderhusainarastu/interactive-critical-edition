@@ -42,16 +42,13 @@ export default async function WorkPage({
     note: processingRuns.note,
   }).from(processingRuns).where(eq(processingRuns.documentId, row.documentId)).orderBy(desc(processingRuns.version)).limit(1);
 
+  // No title/heading rendered here (Stage 4 spec §3.2/§3.5) — the work
+  // context layout one level up (`layout.tsx`) already shows the title as
+  // part of the persistent tab strip; repeating it here would put the same
+  // fact twice on the same screen, directly below the tabs.
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-12">
-      <div>
-        <p className="text-sm text-[var(--color-text-muted)]">
-          {row.originalFilename}
-        </p>
-        <h1 className="text-3xl font-semibold text-[var(--color-text)]">
-          {row.title}
-        </h1>
-      </div>
+    <div className="mx-auto flex max-w-2xl flex-col gap-6 px-6 pb-12 pt-6">
+      <p className="text-sm text-[var(--color-text-muted)]">{row.originalFilename}</p>
       <WorkStatusPanel
         workId={workId}
         initial={{ ...row, deletedAt: row.deletedAt ? row.deletedAt.toISOString() : null, processingRun: run ?? null }}

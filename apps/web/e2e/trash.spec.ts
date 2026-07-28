@@ -382,15 +382,22 @@ test.describe("Work trash (Phase 9.7 + 20.3)", () => {
     await page.goto(`/works/${workId}`);
     await expect(page.getByText("Ready", { exact: true })).toBeVisible();
 
+    // The per-destination link row (WorkStatusPanel) that these labels used
+    // to name was retired once WorkContextHeader's persistent tab strip
+    // took over the same six destinations (Stage 4 spec §3.5) — repeating
+    // them in both places would put the same destinations twice on one
+    // screen (see WorkStatusPanel's own doc comment). Fixed 2026-07-28 to
+    // navigate through that tab strip instead, with its own real labels.
+    const nav = page.getByRole("navigation", { name: /sections/ });
     const destinations = [
-      ["Reading roadmap", `/works/${workId}/roadmap`],
-      ["Concept check", `/works/${workId}/diagnostic`],
+      ["Roadmap", `/works/${workId}/roadmap`],
+      ["Concept Check", `/works/${workId}/diagnostic`],
       ["Curriculum", `/works/${workId}/curriculum`],
-      [`Visualization for Ready-work controls`, `/works/${workId}/graph`],
-      ["Open reader", `/works/${workId}/reader`],
+      ["Knowledge Map", `/works/${workId}/graph`],
+      ["Reader", `/works/${workId}/reader`],
     ] as const;
     for (const [label, href] of destinations) {
-      await page.getByRole("link", { name: label }).click();
+      await nav.getByRole("link", { name: label }).click();
       await expect(page).toHaveURL(new RegExp(`${href}$`));
       await page.goBack();
       await expect(page).toHaveURL(new RegExp(`/works/${workId}$`));

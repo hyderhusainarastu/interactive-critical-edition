@@ -340,43 +340,17 @@ export function WorkStatusPanel({
         {error && <p className="mt-1 text-sm text-[var(--color-accent-burgundy)]">{error}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
+        {/* Reading roadmap / Concept check / Curriculum / Visualization /
+            Open reader used to live here as a link row (Stage 4 spec §3.5)
+            — they're now the persistent tab strip one level up
+            (`WorkContextHeader`), so repeating them here would put the
+            same six destinations in two places on the same screen. */}
         <span className="flex flex-col items-start">
           <button type="button" onClick={handleReprocess} disabled={reprocessing} className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] disabled:opacity-60">
             {reprocessing ? "Reprocessing…" : "Reprocess edition"}
           </button>
           <span className="mt-0.5 text-xs text-[var(--color-text-muted)]">Deep reprocessing takes several minutes and re-runs the full analysis.</span>
         </span>
-        <Link
-          href={`/works/${workId}/roadmap`}
-          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
-        >
-          Reading roadmap
-        </Link>
-        <Link
-          href={`/works/${workId}/diagnostic`}
-          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
-        >
-          Concept check
-        </Link>
-        <Link
-          href={`/works/${workId}/curriculum`}
-          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
-        >
-          Curriculum
-        </Link>
-        <Link
-          href={`/works/${workId}/graph`}
-          aria-label={`Visualization for ${data.title}`}
-          className="rounded-md border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)]"
-        >
-          Visualization
-        </Link>
-        <Link
-          href={`/works/${workId}/reader`}
-          className="rounded-md bg-[var(--color-accent-ink)] px-4 py-2 text-sm text-[var(--color-background)]"
-        >
-          Open reader
-        </Link>
         {confirmingTrash ? (
           <span className="flex items-center gap-2 text-sm">
             <span className="text-[var(--color-text-muted)]">Move to trash? Restorable for 30 days.</span>

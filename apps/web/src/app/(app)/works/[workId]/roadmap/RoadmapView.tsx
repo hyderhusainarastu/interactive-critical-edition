@@ -6,14 +6,13 @@ import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
   TIER_LABEL,
   TIER_ORDER,
-  type ReaderLevel,
   type ReaderLevelFilter,
   type ReadingStatus,
   type RoadmapItem,
   type RoadmapMode,
 } from "@ice/roadmap";
 import { TIER_COLOR, TierDot } from "@/components/shared/roadmapPrimitives";
-import { RoadmapConstellation } from "./RoadmapConstellation";
+import { RoadmapStageColumns } from "@/components/roadmap2d/RoadmapStageColumns";
 
 interface RoadmapResponse {
   title: string;
@@ -49,18 +48,28 @@ const READING_STATUSES: ReadingStatus[] = ["planned", "reading", "completed", "a
 export function RoadmapView({
   workId,
   title,
-  initialReaderLevel = "research",
+  initialReaderLevel = "all",
 }: {
   workId: string;
   title: string;
-  /** The reader's saved global level, or "research" (full view) if they
-   *  never chose one. Selecting a different level here is a page-local view
-   *  filter only — it never overwrites the saved global level (plan §34.4:
-   *  "Browsing alone never silently changes a level"). Owner directive
-   *  2026-07-26: a level shows exactly its own band plus universal
-   *  material — there is no separate "level match" mode to choose anymore
-   *  (cumulative "selected level + foundations" was removed outright). */
-  initialReaderLevel?: ReaderLevel;
+  /** The reader's saved global level, or "all" (full view, unfiltered) if
+   *  they never chose one. Selecting a different level here is a
+   *  page-local view filter only — it never overwrites the saved global
+   *  level (plan §34.4: "Browsing alone never silently changes a level").
+   *  Owner directive 2026-07-26: a level shows exactly its own band plus
+   *  universal material — there is no separate "level match" mode to
+   *  choose anymore (cumulative "selected level + foundations" was
+   *  removed outright), and `@ice/roadmap`'s own `tiersForReaderLevel` doc
+   *  comment is explicit that "research" is now "a disjoint high-end
+   *  slice, not... everything" — only `"all"` is the real full view. This
+   *  prop used to default to `"research"` on that stale assumption, which
+   *  meant a reader who never chose a level (every new account, since
+   *  `user.readerLevel` is nullable and unset until onboarding) saw a
+   *  roadmap silently missing every `explicit_reference`/
+   *  `secondary_scholarly_recommendation`-tier item — the most common
+   *  category — with no error or empty-state explaining why. Fixed 2026-07-28
+   *  (Stage 4 verification round) by defaulting to the actual full view. */
+  initialReaderLevel?: ReaderLevelFilter;
 }) {
   const [data, setData] = useState<RoadmapResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -328,11 +337,13 @@ export function RoadmapView({
         </p>
       )}
 
-      {/* The one functional addition (feature spec §4): a small, restrained
-          companion map of the SAME items the tier list below already
-          renders — never a second data source. The tier list stays the
+      {/* Stage 4 read spec §6: a flat 2D stage-column companion map of the
+          SAME items the tier list below already renders — never a second
+          data source, and never a rotatable pseudo-3D view (that was
+          `RoadmapConstellation`'s defect against the charter, not a style
+          choice — see the spec's own §6.1). The tier list stays the
           always-visible, never-collapsed accessible default. */}
-      {data && visible.length > 0 && <RoadmapConstellation rootTitle={title} items={visible} />}
+      {data && visible.length > 0 && <RoadmapStageColumns rootTitle={title} items={visible} onMutate={mutate} />}
 
       {byTier.map(({ tier, items }) => (
         <section key={tier} className="app-reveal mb-6">

@@ -15,7 +15,6 @@ import {
 import { AnnotationsPanel } from "./AnnotationsPanel";
 import { PdfReader } from "./PdfReader";
 import { OriginalTextReader } from "./OriginalTextReader";
-import { NotesSidebar } from "./NotesSidebar";
 import { WorkPicker } from "./WorkPicker";
 import { EditionReader, computeOutline, type EditionPayload } from "./EditionReader";
 import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
@@ -78,13 +77,19 @@ export function ReaderShell({
   // on first load, so the initial value is seeded from the real viewport
   // width at mount rather than hardcoded `true` for every screen size.
   const narrow = useNarrowViewport();
-  // D-23-51 follow-up (Phase 23 Lane D): the user-notes rail defaults
-  // collapsed at every viewport width, not just narrow ones — it's a
-  // reader-authored aside (highlights/notes/bookmarks), not primary reading
-  // apparatus, so it shouldn't claim screen space unrequested the way
-  // showAnalysis/showOutline (still `!narrow`-seeded) do.
-  const [showNotes, setShowNotes] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(() => !narrow);
+  // Stage 4 read spec §4.2: `showAnalysis`/`showNotes` collapse into one
+  // drawer-open boolean — Analysis, Critical notes, Apparatus, Terms,
+  // Sources, Claims, and (newly) My notes are all tabs of the ONE right
+  // drawer (`EditionAnnotationsPanel`), never two independently-toggleable
+  // side columns. `pendingDrawerTab` is the tab a specific action wants the
+  // drawer to open ON — read only as the drawer's initial tab at the
+  // moment it (re)mounts (it's conditionally rendered, so a fresh mount
+  // happens every time it opens); not reset back to "annotations" after a
+  // forced switch, which in practice approximates "remembers the last
+  // requested tab" without needing to lift `EditionAnnotationsPanel`'s own
+  // tab state up into this component.
+  const [showDrawer, setShowDrawer] = useState(() => !narrow);
+  const [pendingDrawerTab, setPendingDrawerTab] = useState<"annotations" | "my-notes">("annotations");
   const [showOutline, setShowOutline] = useState(() => !narrow);
   const [activeAnnotationId, setActiveAnnotationId] = useState<string | null>(null);
   const [splitWorkId, setSplitWorkId] = useState<string | null>(null);
@@ -115,8 +120,7 @@ export function ReaderShell({
   // viewports these are always-open sticky columns with no close control to
   // restore focus to.
   const outlineTriggerRef = useRef<HTMLButtonElement>(null);
-  const analysisTriggerRef = useRef<HTMLButtonElement>(null);
-  const notesTriggerRef = useRef<HTMLButtonElement>(null);
+  const drawerTriggerRef = useRef<HTMLButtonElement>(null);
   const toolbarRevealRef = useScrollReveal<HTMLDivElement>();
   const loadingRevealRef = useScrollReveal<HTMLParagraphElement>();
 
@@ -170,11 +174,43 @@ export function ReaderShell({
   useEffect(() => {
     if (narrow && !wasNarrowRef.current) {
       setShowOutline(false);
-      setShowAnalysis(false);
-      setShowNotes(false);
+      setShowDrawer(false);
     }
     wasNarrowRef.current = narrow;
   }, [narrow]);
+
+  // Stage 4 read spec §4.2: opening the drawer closes Ask Library first
+  // (and vice versa, see `toggleRagChat` below) — "exactly one mounted
+  // assistant/conversation controller at a time" for the reader-local half
+  // of that requirement. `tab` is optional: `openAnnotation` and other
+  // callers that don't care which specific tab shows just want the drawer
+  // open, not to override whatever tab was last requested.
+  const openDrawer = useCallback((tab?: "annotations" | "my-notes") => {
+    if (tab) setPendingDrawerTab(tab);
+    setShowDrawer(true);
+    setShowRagChat(false);
+  }, []);
+
+  const toggleDrawer = useCallback(() => {
+    setShowDrawer((current) => {
+      const next = !current;
+      if (next) setShowRagChat(false);
+      return next;
+    });
+  }, []);
+
+  const toggleRagChat = useCallback(() => {
+    setShowRagChat((current) => {
+      const next = !current;
+      if (next) setShowDrawer(false);
+      return next;
+    });
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setShowDrawer(false);
+    window.requestAnimationFrame(() => drawerTriggerRef.current?.focus());
+  }, []);
 
   const savePosition = useCallback(
     (position: Position) => {
@@ -260,9 +296,9 @@ export function ReaderShell({
         },
       );
       setData((d) => (d ? { ...d, bookmarks: [created, ...d.bookmarks] } : d));
-      setShowNotes(true);
+      openDrawer("my-notes");
     },
-    [workId],
+    [workId, openDrawer],
   );
 
   const selectBookmark = useCallback((bookmark: BookmarkRecord) => {
@@ -308,9 +344,9 @@ export function ReaderShell({
 
   const reanalyze = useCallback(async () => {
     setData((d) => (d ? { ...d, analysisStatus: "analyzing", analysisError: null } : d));
-    setShowAnalysis(true);
+    openDrawer("annotations");
     await fetch(`/api/works/${workId}/analyze`, { method: "POST" });
-  }, [workId]);
+  }, [workId, openDrawer]);
 
   // Poll while analysis is in a non-terminal state so results stream in
   // without a manual refresh. "not_started" is included because there's a
@@ -325,7 +361,7 @@ export function ReaderShell({
   }, [data?.analysisStatus, refreshAnnotations]);
 
   const openAnnotation = useCallback((id: string) => {
-    setShowAnalysis(true);
+    openDrawer();
     setActiveAnnotationId(id);
     // Passage annotations, generated notes, and (Phase 28.3) research claims
     // multiplex onto this one activation id — their id-spaces never collide
@@ -338,15 +374,15 @@ export function ReaderShell({
       ?? claims.find((claim) => claim.id === id)?.textBlockId
       ?? null;
     if (blockId) setActiveReaderBlockId(blockId);
-  }, [edition, claims]);
+  }, [edition, claims, openDrawer]);
 
   const createLinkedNote = useCallback(async (anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
     const highlightId = await createHighlight({ kind: "processed", ...anchor });
     if (highlightId) {
       setPendingNoteHighlightIds([highlightId]);
-      setShowNotes(true);
+      openDrawer("my-notes");
     }
-  }, [createHighlight]);
+  }, [createHighlight, openDrawer]);
 
   const linkExistingNote = useCallback(async (noteId: string, anchor: Omit<Extract<HighlightRecordAnchorInput, { kind: "processed" }>, "kind">) => {
     const highlightId = await createHighlight({ kind: "processed", ...anchor });
@@ -375,16 +411,6 @@ export function ReaderShell({
   const closeOutline = useCallback(() => {
     setShowOutline(false);
     window.requestAnimationFrame(() => outlineTriggerRef.current?.focus());
-  }, []);
-
-  const closeAnalysisPanel = useCallback(() => {
-    setShowAnalysis(false);
-    window.requestAnimationFrame(() => analysisTriggerRef.current?.focus());
-  }, []);
-
-  const closeNotesPanel = useCallback(() => {
-    setShowNotes(false);
-    window.requestAnimationFrame(() => notesTriggerRef.current?.focus());
   }, []);
 
   const approveTerm = useCallback(async (termId: string) => {
@@ -584,22 +610,23 @@ export function ReaderShell({
                 {showOutline ? "Hide outline" : "Outline"}
               </button>
             )}
+            {/* Stage 4 read spec §4.2: one "Notes" toggle for the merged
+                drawer (Analysis/Critical notes/Apparatus/Terms/Sources/
+                Claims/My notes), replacing the previous separate
+                "Analysis"/"My notes" buttons. */}
             <button
-              ref={analysisTriggerRef}
+              ref={drawerTriggerRef}
               type="button"
               className={showOutlineRail ? "app-control" : "app-control ml-auto"}
-              onClick={() => setShowAnalysis((v) => !v)}
-              aria-pressed={showAnalysis}
+              onClick={toggleDrawer}
+              aria-pressed={showDrawer}
             >
-              {showAnalysis ? "Hide analysis" : "Analysis"}
+              {showDrawer ? "Hide notes" : "Notes"}
               {effectiveShowInteractive && visibleEdition
                 ? visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length > 0 &&
                   ` (${visibleEdition.passageAnnotations.length + visibleEdition.wholeWorkGuidance.length})`
                 : data.annotations.filter((a) => !a.hidden).length > 0 &&
                   ` (${data.annotations.filter((a) => !a.hidden).length})`}
-            </button>
-            <button ref={notesTriggerRef} type="button" className="app-control" onClick={() => setShowNotes((v) => !v)} aria-pressed={showNotes}>
-              {showNotes ? "Hide my notes" : "My notes"}
             </button>
             {enablePhase18Rag && !embedded && (
               <button
@@ -608,7 +635,7 @@ export function ReaderShell({
                 className="app-control"
                 aria-expanded={showRagChat}
                 aria-controls={ragPanelId}
-                onClick={() => setShowRagChat((v) => !v)}
+                onClick={toggleRagChat}
               >
                 Ask Library
               </button>
@@ -616,11 +643,46 @@ export function ReaderShell({
           </div>}
 
           <div
-            className="reader-content-container px-6 py-8"
+            className="reader-content-container py-8"
             style={{
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
           >
+            {/* KNOWN ISSUE, not fixed here (2026-07-28, discovered during the
+                Stage 4 visual sweep — see docs/audits/stage4-read-verification.md):
+                on a narrow (~375px) viewport, the mobile fixed bottom nav
+                (`MobileBottomNav`, `apps/web/src/components/shell/**`) can
+                visually overlap the last visible line of a reader whose
+                total content height lands close to one viewport — verified
+                on a natural (non-fullPage) screenshot, not just the
+                full-page capture. A `padding-bottom` added here (tried and
+                reverted) does NOT fix it: padding trailing the content only
+                extends the document's total scrollable height, it doesn't
+                move the ALREADY-rendered text off the screen real-estate
+                the fixed nav currently occupies at scroll position 0 — the
+                text's on-screen position is set by normal flow from the
+                top, unaffected by anything after it. A real fix needs the
+                page's effective layout height on mobile to already exclude
+                the nav's height (e.g. a `100dvh - nav-height` calculation
+                upstream of where `min-h-screen` gets applied), which is a
+                shell-level layout concern, not a single reader-page
+                padding tweak — left as a documented, unresolved finding
+                rather than shipping a change that doesn't actually work.
+                The horizontal padding lives on this INNER wrapper, not on
+                `.reader-content-container` itself, deliberately. That class
+                carries `container-type: inline-size` (globals.css) for the
+                `@container (min-width: 40rem)` rule that reveals wide-screen
+                marginalia — container-query size features measure the
+                container's own CONTENT box, so padding on the container
+                itself silently eats into that budget. At a 1280px viewport
+                with both rails open, the outer element's 24px×2 padding was
+                shrinking the measured width to just under 40rem, so
+                marginalia never appeared there even though the design
+                intends it to (fixed 2026-07-28, caught by
+                edition.spec.ts's "wide-reader marginalia" test). Moving the
+                padding one level in recovers the full width for the query
+                while leaving the rendered layout identical. */}
+            <div className="px-6">
             {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} pendingColor={pendingColor} onColorChange={setPendingColor} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} claims={enableReaderClaimLayer ? claims : []} /> : isPdf ? (
               data.fileUrl ? (
                 <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
@@ -660,6 +722,7 @@ export function ReaderShell({
             ) : (
               <section aria-label="Published edition — original source file"><p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · immutable original source file</p><p className="mt-4 text-sm text-[var(--color-text-muted)]">This source format is preserved without rewriting it in the browser.</p>{data.fileUrl && <a className="mt-3 inline-block underline" href={data.fileUrl} download>Open immutable source file</a>}</section>
             )}
+            </div>
           </div>
         </div>
 
@@ -675,11 +738,30 @@ export function ReaderShell({
         )}
       </div>
 
-      {effectiveShowInteractive && (showAnalysis || readerFocus) && !embedded && (
+      {/* Stage 4 read spec §4.2: ONE right drawer — Analysis, Critical
+          notes, Apparatus, Terms, Sources, Claims, and My notes are all
+          tabs of this one `EditionAnnotationsPanel` mount, not a second
+          independently-toggleable sidebar. The legacy (no-edition)
+          `AnnotationsPanel` path is unchanged (spec §4.4) — it has no
+          notes/highlights/bookmarks tab, a documented scope limit rather
+          than a silently dropped capability (see this lane's final report).
+          Deliberately NOT gated on `effectiveShowInteractive`: the
+          retired `NotesSidebar` this drawer's "My notes" tab replaces was
+          never gated on the reader-view toggle either (highlights/notes/
+          bookmarks are created and meaningful in every representation —
+          Published edition, Interactive reader, and PDF alike), and
+          spec §5 requires apparatus/terms/notes/claims/annotations/
+          sources/highlights/notes/bookmarks to survive a representation
+          switch. Gating the whole merged drawer on interactive-only would
+          have made My notes unreachable while viewing Published edition —
+          a real reachability regression the merge itself must not
+          introduce, not just a chrome rearrangement. */}
+      {(showDrawer || readerFocus) && !embedded && (
         visibleEdition ? (
           <EditionAnnotationsPanel
             edition={visibleEdition}
             activeId={activeAnnotationId}
+            initialTab={pendingDrawerTab}
             readerLevel={editionReaderLevel}
             enableLevelFilter={enablePhase12Identity || enablePhase12Reader}
             levelFilteredEmpty={editionLevelFilteredEmpty}
@@ -691,12 +773,21 @@ export function ReaderShell({
             onNextAnnotation={() => moveAnnotation(1)}
             onApproveTerm={enablePhase12Reader ? (termId) => void approveTerm(termId) : undefined}
             onSelectAnnotation={openAnnotation}
-            onClose={closeAnalysisPanel}
+            onClose={closeDrawer}
             flushTop={readerFocus}
             claims={enableReaderClaimLayer ? claims : []}
             enableReaderClaimLayer={enableReaderClaimLayer}
             enableEvidenceChips={enableEvidenceChips}
             onLocatePassage={setActiveReaderBlockId}
+            highlights={data.highlights}
+            notes={data.notes}
+            bookmarks={data.bookmarks}
+            onDeleteHighlight={deleteHighlight}
+            onAddNote={addNote}
+            onDeleteNote={deleteNote}
+            onDeleteBookmark={deleteBookmark}
+            onSelectBookmark={selectBookmark}
+            pendingNoteHighlightIds={pendingNoteHighlightIds}
           />
         ) : (
           <AnnotationsPanel
@@ -706,24 +797,9 @@ export function ReaderShell({
             activeId={activeAnnotationId}
             onUpdate={updateAnnotation}
             onReanalyze={reanalyze}
-            onClose={closeAnalysisPanel}
+            onClose={closeDrawer}
           />
         )
-      )}
-
-      {showNotes && !readerFocus && (
-        <NotesSidebar
-          highlights={data.highlights}
-          notes={data.notes}
-          bookmarks={data.bookmarks}
-          onDeleteHighlight={deleteHighlight}
-          onAddNote={addNote}
-          onDeleteNote={deleteNote}
-          onDeleteBookmark={deleteBookmark}
-          onSelectBookmark={selectBookmark}
-          pendingHighlightIds={pendingNoteHighlightIds}
-          onClose={closeNotesPanel}
-        />
       )}
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}

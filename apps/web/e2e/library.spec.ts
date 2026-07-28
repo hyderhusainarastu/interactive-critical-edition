@@ -810,7 +810,7 @@ test.describe("Library (Phase 9.5)", () => {
       await deleteTestUser(email);
     });
 
-    test("uploaded works page uses consistent 'Uploaded works' terminology (plan §20.2)", async ({ page }) => {
+    test("uploaded works page uses consistent 'Reading Queue' terminology (plan §20.2)", async ({ page }) => {
       const email = `e2e-library-terminology-${Date.now()}@example.com`;
       const userId = await createVerifiedTestUser(email, PASSWORD);
       const { workId } = await seedWorkWithLibraryItem(userId, { resourceTitle: "Terminology Test Item" });
@@ -819,9 +819,12 @@ test.describe("Library (Phase 9.5)", () => {
 
       await loginAs(page, email);
 
-      // The Works page should have "Uploaded works" as the title
+      // /works is now branded "Reading Queue" (Stage 4 read spec §2) — this
+      // assertion was stale (checking the retired "Uploaded works" heading
+      // text) until fixed 2026-07-28. Real, intentional terminology change,
+      // not a product regression.
       await page.goto("/works");
-      await expect(page.getByRole("heading")).toContainText("Uploaded works");
+      await expect(page.getByRole("heading")).toContainText("Reading Queue");
 
       // Check Library page focuses on uploaded works with consistent terminology
       await page.goto(`/library?focus=${workId}`);
