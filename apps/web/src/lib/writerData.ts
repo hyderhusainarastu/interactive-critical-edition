@@ -113,25 +113,23 @@ export async function getOwnedWriterDocument(userId: string, projectId: string, 
 
 /** Shared write body for `saveWriterDocument`/`saveWriterDocumentIfCurrent`
  *  below — takes the already-fetched `current` row (needed for the
- *  content-changed comparison) and the caller's own `updateWhere` (a plain
- *  `id` match for the unconditional path, or an `id AND updatedAt = <the
- *  value we just read>` guard for the optimistic-concurrency path) so the
- *  revision-insert/pruning logic lives in exactly one place. Returns
- *  `undefined` when `updateWhere` matched zero rows — the only way that
- *  happens is a genuine race between the caller's own `current` read and
- *  this write (someone else updated the row in between), which
- *  `saveWriterDocumentIfCurrent` turns into an honest conflict rather than a
- *  silent no-op. */
+ *  content-changed comparison) and the caller's own `updateWhere` so the
+ *  revision-insert/pruning logic lives in exactly one place. */
 async function writeWriterDocument(
   documentId: string,
   patch: { title?: string; content?: ProseMirrorDocument; sortOrder?: number },
   reason: string,
   dbClient: DbOrTx,
-  current: { content: unknown },
+  current: { content: unknown; updatedAt: Date },
   updateWhere: SQL,
 ) {
   const contentChanged = patch.content !== undefined && JSON.stringify(current.content) !== JSON.stringify(patch.content);
-  const [updated] = await dbClient.update(writerDocuments).set({ ...patch, updatedAt: new Date() }).where(updateWhere).returning();
+  // PostgreSQL's `timestamp` retains microseconds while JavaScript `Date`
+  // (and therefore the HTTP version token) only retains milliseconds. Keep
+  // every post-save token both representable by the client and strictly
+  // newer than the prior one, even when two writes land in one millisecond.
+  const updatedAt = new Date(Math.max(Date.now(), current.updatedAt.getTime() + 1));
+  const [updated] = await dbClient.update(writerDocuments).set({ ...patch, updatedAt }).where(updateWhere).returning();
   if (updated && contentChanged) {
     const [last] = await dbClient.select({ revision: writerDocumentRevisions.revision }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).limit(1);
     await dbClient.insert(writerDocumentRevisions).values({ documentId, revision: (last?.revision ?? 0) + 1, content: patch.content!, reason });
@@ -148,9 +146,14 @@ export async function saveWriterDocument(
   reason = "autosave",
   dbClient: DbOrTx = db,
 ) {
-  const [current] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
-  if (!current) return null;
-  return writeWriterDocument(documentId, patch, reason, dbClient, current, eq(writerDocuments.id, documentId));
+  // All mutations share this lock, including revision restore and evidence
+  // insertion. Without it, an unconditional mutation could land in the same
+  // millisecond as an optimistic one and reuse its client-visible token.
+  return dbClient.transaction(async (tx) => {
+    const [current] = await tx.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1).for("update");
+    if (!current) return null;
+    return writeWriterDocument(documentId, patch, reason, tx, current, eq(writerDocuments.id, documentId));
+  });
 }
 
 export type SaveWriterDocumentIfCurrentResult =
@@ -174,11 +177,11 @@ export type SaveWriterDocumentIfCurrentResult =
  * sent, including `undefined` for an older/non-conflict-aware client), this
  * behaves byte-for-byte like calling `saveWriterDocument` directly: no
  * extra query, no possibility of a `"conflict"` result. When it IS provided,
- * the actual conflict check is the atomic `updateWhere` guard inside
- * `writeWriterDocument` (`id AND updatedAt = current.updatedAt`), not the
- * earlier `SELECT` — closing the TOCTOU race between reading `current` and
- * writing, rather than only checking the timestamps in application code
- * with a window for a concurrent writer to land in between.
+ * the current row is locked in a transaction before the version comparison
+ * and write. This closes the TOCTOU window without comparing a JavaScript
+ * millisecond value to PostgreSQL's potentially-microsecond `timestamp`.
+ * The write also advances `updatedAt` monotonically at millisecond precision,
+ * so every server-visible revision has a distinct client-safe token.
  */
 export async function saveWriterDocumentIfCurrent(
   documentId: string,
@@ -187,22 +190,27 @@ export async function saveWriterDocumentIfCurrent(
   expectedUpdatedAt: string | undefined,
   dbClient: DbOrTx = db,
 ): Promise<SaveWriterDocumentIfCurrentResult> {
-  const [current] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
-  if (!current) return { status: "not_found" };
-  if (expectedUpdatedAt !== undefined && current.updatedAt.toISOString() !== expectedUpdatedAt) {
-    return { status: "conflict", latest: current };
+  if (expectedUpdatedAt === undefined) {
+    const updated = await saveWriterDocument(documentId, patch, reason, dbClient);
+    return updated ? { status: "ok", document: updated } : { status: "not_found" };
   }
-  const updateWhere = expectedUpdatedAt !== undefined
-    ? and(eq(writerDocuments.id, documentId), eq(writerDocuments.updatedAt, current.updatedAt))!
-    : eq(writerDocuments.id, documentId);
-  const updated = await writeWriterDocument(documentId, patch, reason, dbClient, current, updateWhere);
-  if (updated) return { status: "ok", document: updated };
-  // Lost the race between the `SELECT` above and this `UPDATE ... WHERE
-  // updatedAt = <the value we just read>` — someone else wrote first.
-  // Re-fetch so the caller gets the real current row, not a bare not-found
-  // for a document that in fact still exists.
-  const [latest] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
-  return latest ? { status: "conflict", latest } : { status: "not_found" };
+
+  return dbClient.transaction(async (tx) => {
+    // The lock is held through both the token comparison and UPDATE. A second
+    // writer waits here, then sees the first writer's new token and receives a
+    // genuine 409 instead of silently overwriting it.
+    const [current] = await tx.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1).for("update");
+    if (!current) return { status: "not_found" } as const;
+    if (current.updatedAt.toISOString() !== expectedUpdatedAt) {
+      return { status: "conflict", latest: current } as const;
+    }
+    const updated = await writeWriterDocument(documentId, patch, reason, tx, current, eq(writerDocuments.id, documentId));
+    // A locked row cannot disappear or miss its id-only update; retain this
+    // defensive fallback in case the database adapter reports otherwise.
+    if (updated) return { status: "ok", document: updated } as const;
+    const [latest] = await tx.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
+    return latest ? { status: "conflict", latest } as const : { status: "not_found" } as const;
+  });
 }
 
 export async function listWriterDocumentRevisions(documentId: string) {

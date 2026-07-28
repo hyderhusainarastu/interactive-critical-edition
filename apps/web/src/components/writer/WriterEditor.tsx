@@ -159,12 +159,11 @@ function WriterEditorSession({
   // State updates do not change this render's `saveNow` closure. A locally
   // queued follow-up must therefore read the server-confirmed revision from a
   // ref, rather than sending the preceding request's `expectedUpdatedAt` and
-  // mistaking its own successful save for a remote conflict.
-  // Match the established state lifecycle: the first autosave is
-  // unconditional until the active-document effect has confirmed the server
-  // timestamp. This avoids treating a timestamp that crossed the server
-  // component boundary before that effect as an optimistic-lock token.
-  const activeUpdatedAtRef = useRef<string | undefined>(undefined);
+  // mistaking its own successful save for a remote conflict. The initial
+  // token is safe too: the server serializes its row lock and comparison, so
+  // PostgreSQL's sub-millisecond timestamp precision cannot turn it into a
+  // false conflict.
+  const activeUpdatedAtRef = useRef<string | undefined>(active ? documentTimeKey(active.updatedAt) : undefined);
   // Stashed the moment either conflict variant (same-tab broadcast or
   // cross-device 409) first surfaces — the one piece of information
   // "Keep editing here" needs to make the very next save succeed instead of
@@ -358,10 +357,10 @@ function WriterEditorSession({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         // §4.3's now-implemented 409 contract: `activeUpdatedAt` is this
-        // tab's last known-good version of the row. Sending `undefined`
-        // (a document just switched to, before its own effect has run) is
-        // fine — the route treats an absent field exactly like an older
-        // client that never sends it, i.e. unconditional last-write-wins.
+        // tab's last known-good version of the row. It is initialized from
+        // the server-rendered active document and refreshed on each switch;
+        // an absent value is reserved only for an older client that cannot
+        // supply an optimistic-concurrency token.
         body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave", expectedUpdatedAt: activeUpdatedAtRef.current }),
       });
       if (response.status === 409) {

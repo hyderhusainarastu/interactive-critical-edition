@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { db, writerDocuments } from "@ice/db";
 import { createVerifiedTestUser, deleteTestUser } from "./helpers";
+import { eq, sql } from "drizzle-orm";
 
 /**
  * Stage 6 layout spec §2/§9: the focused-editor layout — collapsible
@@ -298,6 +300,33 @@ test.describe("Writer panel layout (Stage 6)", () => {
 
     await page.getByRole("button", { name: "Reload this document" }).click();
     await expect(page.getByLabel("Document title")).toHaveValue("Renamed on another device", { timeout: 10_000 });
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+  });
+
+  test("a microsecond database timestamp remains a valid optimistic-save token", async ({ page }) => {
+    // PostgreSQL keeps microseconds, while the browser and API Date values
+    // carry milliseconds. Reload after seeding a sub-millisecond value so the
+    // client and server agree on the ISO token even though the stored value
+    // is not byte-identical to that token. This must save, not emit a false
+    // 409; the adjacent tests retain the real stale-token conflict coverage.
+    await login(page);
+    const projectId = await newProject(page, "Microsecond writer revision project");
+    const documentId = await page.getByLabel("Active document").inputValue();
+    await db.update(writerDocuments)
+      .set({ updatedAt: sql`date_trunc('milliseconds', clock_timestamp()) + interval '0.456 milliseconds'` })
+      .where(eq(writerDocuments.id, documentId));
+
+    const [seeded] = await db.select({ updatedAt: writerDocuments.updatedAt }).from(writerDocuments).where(eq(writerDocuments.id, documentId));
+    const response = await page.request.patch(`/api/writer/projects/${projectId}/documents/${documentId}`, {
+      // This is exactly the lossy Date token a browser receives: the stored
+      // row still has microseconds, but a valid current token must not 409.
+      data: { title: "Saved with a microsecond source token", expectedUpdatedAt: seeded.updatedAt.toISOString() },
+    });
+    expect(response.ok()).toBe(true);
+    await page.reload();
+    await expect(page).toHaveURL(new RegExp(`/writer/${projectId}$`));
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+    await page.getByLabel("Draft").fill("This initial token came from a microsecond timestamp.");
     await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
   });
 
