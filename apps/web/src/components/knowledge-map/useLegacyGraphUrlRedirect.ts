@@ -35,15 +35,22 @@ export function shouldAttemptLegacyTranslation(params: URLSearchParams): boolean
   return !params.has("ctxKind");
 }
 
-export function useLegacyGraphUrlRedirect(validators: LegacyTranslationValidators): LegacyGraphUrlTranslation | null {
+/**
+ * `enabled` is false while the caller is still loading the owner-scoped
+ * identifiers used by its validators. Translating a saved bookmark before
+ * that data arrives can turn a deleted/foreign `roadmapRoot` into a route
+ * redirect, losing the charter-required explanatory chooser state forever.
+ */
+export function useLegacyGraphUrlRedirect(validators: LegacyTranslationValidators, enabled = true): LegacyGraphUrlTranslation | null {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const translation = useMemo<LegacyGraphUrlTranslation | null>(() => {
+    if (!enabled) return null;
     if (!shouldAttemptLegacyTranslation(searchParams)) return null;
     return translateLegacyGraphUrl(searchParams, validators);
-  }, [searchParams, validators]);
+  }, [enabled, searchParams, validators]);
 
   useEffect(() => {
     if (translation === null) return;

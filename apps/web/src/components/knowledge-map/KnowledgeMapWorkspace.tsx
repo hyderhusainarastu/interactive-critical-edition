@@ -301,7 +301,10 @@ export function KnowledgeMapWorkspace({ userId, initialContext, writerEnabled = 
     }),
     [ownedWorkIds],
   );
-  const legacy = useLegacyGraphUrlRedirect(legacyValidators);
+  // A legacy bookmark's roots must be checked against the actual
+  // owner-scoped work list before it can redirect. Until then the hook is
+  // intentionally inert rather than optimistically accepting every id.
+  const legacy = useLegacyGraphUrlRedirect(legacyValidators, ownedWorkIds !== null);
 
   const reconstructionValidators: ReconstructionValidators = useMemo(
     () => ({
@@ -323,12 +326,17 @@ export function KnowledgeMapWorkspace({ userId, initialContext, writerEnabled = 
   useEffect(() => {
     if (hasAutoOpenedRef.current) return;
     if (!initialContext) return;
+    // On a work-scoped route, do not let `initialContext` overwrite a
+    // legacy-format query while the owner-scoped validator list is loading.
+    // Once ready, the legacy hook either translates it or returns the
+    // intended chooser result below.
+    if (ownedWorkIds === null) return;
     if (urlApi.raw !== null) return;
     if (legacy && !(legacy.kind === "chooser" && legacy.chooserFor === "context" && legacy.notice === null)) return;
     hasAutoOpenedRef.current = true;
     urlApi.openContext(initialContext, {}, { push: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialContext, urlApi.raw, legacy]);
+  }, [initialContext, ownedWorkIds, urlApi.raw, legacy]);
 
   const context = urlApi.reconstructed;
 
