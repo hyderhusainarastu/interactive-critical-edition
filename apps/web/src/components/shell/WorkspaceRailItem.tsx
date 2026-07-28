@@ -29,6 +29,17 @@ export function WorkspaceRailItem({
       href={href}
       data-sound="click"
       aria-current={active ? "page" : undefined}
+      // `data-tooltip` (below) is a CSS-only `content: attr(...)` visual
+      // tooltip, not something assistive tech reliably exposes — collapsing
+      // the rail also `display:none`s the visible `.rail-label` span below
+      // via `globals.css`, so without this the link was left with NO
+      // accessible name at all once collapsed (real axe "link-name"
+      // violation found running this suite against a fresh session's
+      // first-ever visit to an immersive route, which auto-collapses the
+      // rail — see `WorkspaceRail.tsx`'s own auto-collapse effect). This
+      // component's own doc comment already promised an `aria-label` here;
+      // it was simply never added.
+      aria-label={collapsed ? label : undefined}
       data-tooltip={collapsed ? label : undefined}
       className={`rail-item-tooltip app-control flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm ${
         active
