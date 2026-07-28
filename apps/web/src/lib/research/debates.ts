@@ -184,8 +184,17 @@ export interface RecentDebateClusterRow {
   updatedAt: Date;
 }
 
-export async function listRecentDebateClusters(userId: string, limit = 20): Promise<RecentDebateClusterRow[]> {
+/** `projectId`, when supplied, additionally scopes the listing to one
+ *  project (the Knowledge Map's research-project context — see
+ *  `KnowledgeMapWorkspace.tsx`'s question-context neighborhood synthesis)
+ *  — still owner-scoped via `debateClusters.userId` either way, so a
+ *  foreign `projectId` simply yields zero rows rather than another user's
+ *  clusters. Omitted (the default), this is the existing cross-project
+ *  "recent" listing the context chooser's Debate tab already used —
+ *  unchanged, purely additive. */
+export async function listRecentDebateClusters(userId: string, limit = 20, projectId?: string): Promise<RecentDebateClusterRow[]> {
   const cappedLimit = Math.min(50, Math.max(1, limit));
+  const conditions = projectId ? and(eq(debateClusters.userId, userId), eq(debateClusters.projectId, projectId)) : eq(debateClusters.userId, userId);
   const clusters = await db
     .select({
       id: debateClusters.id,
@@ -197,7 +206,7 @@ export async function listRecentDebateClusters(userId: string, limit = 20): Prom
     })
     .from(debateClusters)
     .innerJoin(researchProjects, eq(researchProjects.id, debateClusters.projectId))
-    .where(eq(debateClusters.userId, userId))
+    .where(conditions)
     .orderBy(desc(debateClusters.updatedAt))
     .limit(cappedLimit);
   if (clusters.length === 0) return [];

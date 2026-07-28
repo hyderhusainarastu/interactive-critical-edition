@@ -283,22 +283,32 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
     await expect(main(page).getByRole("heading", { name: "Monitors", exact: true })).toBeVisible();
   });
 
-  test("Knowledge Map tab: renders the spec's honest stub, not a 404 (Finding 1 fix)", async ({ page }) => {
+  test("Knowledge Map tab: opens the project's own real Knowledge Map context, not a 404 or a stub (integration step 'focus-modes-map-tabs')", async ({ page }) => {
     await login(page);
+    const [projectRow] = await db.select({ title: researchProjects.title }).from(researchProjects).where(eq(researchProjects.id, fixture.projectId));
     const response = await page.goto(`/research/${fixture.projectId}/graph`);
-    // `app/(app)/research/[projectId]/graph/page.tsx` (spec §4/§9) now
-    // exists as a real route with an honest "not built yet" explanation and
-    // a working link to the full global Knowledge Map — no query-string
-    // scoping attempt, no partial filter, per spec §4.
+    // `app/(app)/research/[projectId]/graph/page.tsx` now mounts the SAME
+    // `KnowledgeMapWorkspace` the work-context tab uses, pre-selected to
+    // this project's own "question" context (`initialContext`) — no more
+    // "planned for a later integration stage" stub linking out to the bare
+    // global `/graph`.
     expect(response?.status()).toBe(200);
-    await expect(main(page).getByRole("heading", { name: "Knowledge Map", level: 1 })).toBeVisible();
-    await expect(main(page).getByText(/planned for a later integration stage/i)).toBeVisible();
-    const link = main(page).getByRole("link", { name: /Open the full Knowledge Map/i });
-    await expect(link).toHaveAttribute("href", "/graph");
-    // The nav's own "Knowledge Map" tab is now `aria-current` on this route,
-    // same as every other real project tab (§2.2) — no special-case needed.
+    // A real, screen-reader-visible page heading exists (matching every
+    // other project tab's own convention) even though it's visually hidden
+    // — see that page's own doc comment for why (`.knowledge-map-workspace`
+    // sizes itself to fill the viewport below only the global context bar).
+    await expect(page.getByRole("heading", { name: `${projectRow.title} — Knowledge Map`, level: 1 })).toBeAttached();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
+    // The context label shows this project's own title, not a generic
+    // chooser or an unrelated context — proving the pre-selection actually
+    // took effect, not just that SOME Knowledge Map rendered.
+    await expect(page.getByTestId("knowledge-map-toolbar")).toContainText(projectRow.title);
+    // The nav's own "Knowledge Map" tab is `aria-current` on this route,
+    // same as every other real project tab (§2.2) — preserved return
+    // navigation: every other project tab stays one click away.
     const nav = page.getByRole("navigation", { name: "Research project sections" });
     await expect(nav.getByRole("link", { name: "Knowledge Map" })).toHaveAttribute("aria-current", "page");
+    await expect(nav.getByRole("link", { name: "Claims" })).toBeVisible();
   });
 
   test("axe: zero wcag2a/wcag2aa violations on the fixture's key pages, light and dark", async ({ page }) => {

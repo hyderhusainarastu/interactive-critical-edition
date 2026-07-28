@@ -1,18 +1,33 @@
 import { phase25FeatureEnabled } from "@ice/config";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ResearchBreadcrumb } from "@/components/research/ResearchBreadcrumb";
+import { KnowledgeMapWorkspace } from "@/components/knowledge-map";
 import { requireSession } from "@/lib/auth";
 import { getOwnedResearchProject } from "@/lib/research/projects";
 
 /**
- * Knowledge Map stub for a research project (stage5-research-spec.md §4). An
- * honest "not built yet" stub, not a functional contextual graph: a project-
- * scoped Knowledge Map (filtered to this project's own claims and works) is
- * deferred to a later integration stage. This route exists so the persistent
- * nav's "Knowledge Map" tab is a real route with real content rather than a
- * dead link, and links out to the existing, unmodified global `/graph` route
- * (`graph/**`, outside this lane's ownership).
+ * The research project's own Knowledge Map tab (integration step
+ * "focus-modes-map-tabs" (b)) — real, not the Stage 5 stub this route used
+ * to be ("A Knowledge Map scoped to this project's own claims and works is
+ * planned for a later integration stage. Open the full Knowledge Map
+ * below," linking out to the bare global `/graph` with no project scope at
+ * all). Mounts the SAME `KnowledgeMapWorkspace` the work-context tab uses
+ * (`/works/[workId]/graph/page.tsx`), pre-selected to this project's own
+ * "question" context via `initialContext` — `KnowledgeMapWorkspace`'s
+ * `loadQuestionContext` then synthesizes a real, bounded neighborhood of
+ * this project's own claims and debate clusters (see that function's doc
+ * comment for the honest scope this does and does not cover).
+ *
+ * Return navigation is preserved automatically, not by anything this page
+ * does: `research/[projectId]/layout.tsx` already renders the persistent
+ * `ResearchProjectNav` subnav above `{children}` for every route under
+ * `/research/[projectId]/*`, so switching to this tab keeps every other
+ * project tab (Overview/Corpus/Claims/Debates/...) one click away — the
+ * exact same pattern `WorkContextHeader`'s tab strip already provides for
+ * the work-context Knowledge Map tab. No extra breadcrumb/heading is added
+ * here on top of that subnav, matching charter §10's "minimize global
+ * chrome in Reader, Knowledge Map, and Writer" and the work-context route's
+ * own precedent (which also renders `KnowledgeMapWorkspace` bare beneath
+ * its own persistent tab strip, no second header).
  */
 export default async function ResearchProjectGraphPage({ params }: { params: Promise<{ projectId: string }> }) {
   if (!phase25FeatureEnabled("research")) notFound();
@@ -22,22 +37,19 @@ export default async function ResearchProjectGraphPage({ params }: { params: Pro
   if (!project) notFound();
 
   return (
-    <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6" aria-labelledby="research-graph-title">
-      <ResearchBreadcrumb
-        items={[
-          { label: "Research", href: "/research" },
-          { label: project.title, href: `/research/${projectId}` },
-          { label: "Knowledge Map" },
-        ]}
-      />
-      <h1 id="research-graph-title" className="mt-1 font-serif text-2xl font-semibold">Knowledge Map</h1>
-      <p className="app-empty app-mount mt-6 max-w-2xl rounded p-3 text-sm text-[var(--color-text-muted)]">
-        A Knowledge Map scoped to this project&apos;s own claims and works is planned for a later integration
-        stage. Open the full Knowledge Map below.
-      </p>
-      <Link href="/graph" className="app-control app-press mt-4 inline-block min-h-11 rounded border border-[var(--color-border)] px-3 py-2 text-sm font-medium underline">
-        Open the full Knowledge Map
-      </Link>
-    </section>
+    <>
+      {/* A real, screen-reader-visible page heading (matching every other
+          project tab's own "<h1>" per `research/[projectId]/layout.tsx`'s
+          doc comment) — but visually hidden (`sr-only`, zero height), since
+          `.knowledge-map-workspace`'s own CSS (`globals.css`) sizes itself
+          to fill the viewport BELOW the global context bar only; a visible
+          heading here would add height nothing in that calc accounts for
+          and get the canvas clipped. The persistent `ResearchProjectNav`'s
+          `aria-current="page"` on this tab, plus the Knowledge Map
+          toolbar's own live context label, already give a sighted user the
+          "where am I" orientation a visible heading would otherwise add. */}
+      <h1 className="sr-only">{project.title} — Knowledge Map</h1>
+      <KnowledgeMapWorkspace userId={session.user.id} initialContext={{ kind: "question", id: projectId }} />
+    </>
   );
 }

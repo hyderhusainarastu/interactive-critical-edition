@@ -95,4 +95,36 @@ test.describe("Work context header (Stage 4 read spec §3)", () => {
     await expect(page.locator("p").filter({ hasText: "Unavailable — processing failed." })).toBeVisible();
     await expect(page.getByRole("link", { name: "View work details" })).toBeVisible();
   });
+
+  test("the Knowledge Map tab opens in this work's own context, and every other tab stays reachable for return navigation (integration step 'focus-modes-map-tabs')", async ({ page }) => {
+    const { workId } = await seedWorkWithGraphData(userId, { title: `Return-nav fixture ${Date.now()}` });
+
+    await login(page);
+    await page.goto(`/works/${workId}`);
+    const nav = page.getByRole("navigation", { name: /sections/ });
+
+    await nav.getByRole("link", { name: "Knowledge Map", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/works/${workId}/graph$`));
+
+    // The tab strip survives the navigation (it's the parent layout's own
+    // persistent chrome, not something this route re-renders) and marks
+    // Knowledge Map current, same convention the Roadmap test above proves
+    // for a different tab.
+    const graphNav = page.getByRole("navigation", { name: /sections/ });
+    await expect(graphNav.getByRole("link", { name: "Knowledge Map", exact: true })).toHaveAttribute("aria-current", "page");
+
+    // The Knowledge Map itself really opened, pre-scoped to this work (the
+    // `initialContext` prop `KnowledgeMapWorkspace` receives from this
+    // route) — not a bare context chooser.
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
+
+    // Return navigation: every other tab is still one click away — pick
+    // Sources (a tab this test hasn't visited yet) to prove it's not just
+    // Details/Roadmap that survive.
+    await graphNav.getByRole("link", { name: "Sources", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/works/${workId}/sources$`));
+    const sourcesNav = page.getByRole("navigation", { name: /sections/ });
+    await expect(sourcesNav.getByRole("link", { name: "Sources", exact: true })).toHaveAttribute("aria-current", "page");
+    await expect(sourcesNav.getByRole("link", { name: "Knowledge Map", exact: true })).not.toHaveAttribute("aria-current", "page");
+  });
 });

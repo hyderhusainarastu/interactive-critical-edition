@@ -13,6 +13,14 @@ import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
  * `?id=<clusterId>` resolves a single cluster by id instead (URL-state
  * reconstruction / deep-link resolution, for an id that may be older than
  * the "recent" window this route's default listing caps at).
+ *
+ * `?projectId=<id>` (additive, integration step "focus-modes-map-tabs")
+ * additionally scopes the listing to one project — backs the research
+ * project's own Knowledge Map tab (`/research/[projectId]/graph`), which
+ * needs "this project's debate clusters," not a cross-project recency feed.
+ * Still owner-scoped via `listRecentDebateClusters`'s own `userId` filter
+ * either way (see that function's doc comment) — no new ownership check
+ * needed here, matching every other query-param branch on this route.
  */
 export async function GET(request: Request) {
   const userId = await requireResearchApiUser();
@@ -27,6 +35,7 @@ export async function GET(request: Request) {
 
   const limitParam = url.searchParams.get("limit");
   const limit = limitParam ? Math.min(50, Math.max(1, Number.parseInt(limitParam, 10) || 20)) : 20;
-  const debates = await listRecentDebateClusters(userId, limit);
+  const projectId = url.searchParams.get("projectId") ?? undefined;
+  const debates = await listRecentDebateClusters(userId, limit, projectId);
   return NextResponse.json({ debates });
 }
