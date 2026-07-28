@@ -378,8 +378,14 @@ test.describe("Research corpus (Phase 30 fix lane)", () => {
     await seedCorpusClaim(userId, corpusItemId, "This corpus item argues a specific, falsifiable claim from its abstract alone.");
 
     await page.goto(`/research/${projectId}/claims`);
-    await expect(main(page).getByText("Chip Rendering Corpus Item")).toBeVisible();
-    await expect(main(page).getByText("From abstract")).toBeVisible();
+    // Stage 5 §7: the claims list now dual-renders (a `md:block` table plus
+    // an `md:hidden` card list carrying the same claim text/chips) — scoped
+    // to the table itself, the one of the pair actually visible at this
+    // (desktop-default) viewport, so a bare `main(page).getByText(...)`
+    // no longer resolves ambiguously to both.
+    const table = main(page).getByRole("table");
+    await expect(table.getByText("Chip Rendering Corpus Item")).toBeVisible();
+    await expect(table.getByText("From abstract")).toBeVisible();
   });
 
   // Every `research_corpus_item`/`research_project_member`/`research_job_request`/
