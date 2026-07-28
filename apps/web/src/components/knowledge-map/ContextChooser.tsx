@@ -116,6 +116,15 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
   // itself).
   const inFlightRef = useRef<Set<GraphContextKind>>(new Set());
 
+  // Legacy URL translation resolves only after the owner-scoped work list
+  // arrives. The chooser therefore mounts first with no candidates and then
+  // receives an ambiguous roadmap-root set; move to Work at that point so
+  // the user can actually see the candidate roots instead of remaining on
+  // the unrelated Recent tab.
+  useEffect(() => {
+    if (candidateWorkIds && candidateWorkIds.length > 0) setActiveTab("work");
+  }, [candidateWorkIds]);
+
   useEffect(() => {
     if (activeTab === "recent") return;
     const kind = activeTab;
