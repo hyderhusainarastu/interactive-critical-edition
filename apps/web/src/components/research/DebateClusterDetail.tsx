@@ -138,6 +138,17 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
             View chamber
           </Link>
         ) : null}
+        {/* Debate → contextual Knowledge Map continuity (charter §8/§16
+            journey 5): the Map's "debate" context already resolves this
+            exact cluster id via `GET /api/research/debates?id=`
+            (`KnowledgeMapWorkspace.tsx`'s `loadSingleRootContext`) — this is
+            the missing link INTO it. */}
+        <Link
+          href={`/graph?ctxKind=debate&ctxId=${cluster.id}`}
+          className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium"
+        >
+          View in Knowledge Map
+        </Link>
         <button
           type="button"
           className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium disabled:opacity-50"

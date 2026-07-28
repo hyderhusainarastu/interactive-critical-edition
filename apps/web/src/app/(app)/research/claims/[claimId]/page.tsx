@@ -62,11 +62,35 @@ export default async function ResearchClaimPermalinkPage({ params }: { params: P
           {claim.excerptVerified && <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">Passage verified</span>}
         </div>
         <blockquote className="mt-2 border-l-2 border-[var(--color-accent)] pl-3 text-sm italic">{claim.supportingExcerpt}</blockquote>
-        {claim.workId && claim.hasReaderAnchor && (
-          <Link href={`/works/${claim.workId}/reader`} className="app-control app-press mt-3 inline-block rounded border border-[var(--color-border)] px-3 py-1.5 text-sm">
-            Open in reader
+        <div className="mt-3 flex flex-wrap gap-2">
+          {/* Passage-to-claim/evidence/map continuity (charter §16 journey
+              5): the exact anchor fragment `EditionReader` already renders
+              (`id="block-<id>"`, the same one the Ask Library citation
+              links already use) — reversible navigation back to the real
+              passage this claim came from, not just the work's Reader in
+              general. Only rendered when a real, currently-live
+              `text_block_id` anchor exists (`hasReaderAnchor`), same gate
+              this link already had. */}
+          {claim.workId && claim.hasReaderAnchor && claim.textBlockId && (
+            <Link
+              href={`/works/${claim.workId}/reader#block-${claim.textBlockId}`}
+              className="app-control app-press inline-block rounded border border-[var(--color-border)] px-3 py-1.5 text-sm"
+            >
+              Open in reader
+            </Link>
+          )}
+          {/* Claim → contextual Knowledge Map (charter §8/§16 journey 5): the
+              Map's own "claim" context kind already resolves this exact
+              claim id via `GET /api/research/claims/:id`
+              (`KnowledgeMapWorkspace.tsx`'s `loadSingleRootContext`) — this
+              is the missing link INTO it, not new Map machinery. */}
+          <Link
+            href={`/graph?ctxKind=claim&ctxId=${claim.id}`}
+            className="app-control app-press inline-block rounded border border-[var(--color-border)] px-3 py-1.5 text-sm"
+          >
+            View in Knowledge Map
           </Link>
-        )}
+        </div>
         <p className="mt-2 text-xs text-[var(--color-text-muted)]">
           {claim.sourceScope === "abstract" ? "Drawn from an imported record's abstract — no full text was available." : ANCHOR_LABEL[claim.anchorState] ?? claim.anchorState}
         </p>

@@ -171,6 +171,9 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
     // cluster, not only the cluster itself — reachable independent of
     // whether any hypothesis happens to cite the relationship.)
     await page.goto(`/research/${fixture.projectId}/debates/${fixture.clusterId}`);
+    // Debate → contextual Knowledge Map continuity (charter §8/§16 journey
+    // 5): resolves via the Map's own "debate" context, by cluster id alone.
+    await expect(main(page).getByRole("link", { name: "View in Knowledge Map" })).toHaveAttribute("href", `/graph?ctxKind=debate&ctxId=${fixture.clusterId}`);
     const clusterControls = main(page).locator('[data-research-correction-controls="cluster"]');
     await clusterControls.getByRole("button", { name: "Hide" }).click();
     await expect(clusterControls.locator("[data-verification-chip]")).toBeVisible();

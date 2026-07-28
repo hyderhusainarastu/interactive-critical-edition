@@ -616,11 +616,35 @@ test.describe("Research workspace (Phase 28.1)", () => {
     await expect(main(page).getByText(/Textual support: strong/)).toBeVisible();
     await expect(main(page).getByRole("heading", { name: "Loci" })).toBeVisible();
     await expect(main(page).getByText("1150b19-22")).toBeVisible();
-    await expect(main(page).getByRole("link", { name: "Open in reader" })).toHaveAttribute("href", `/works/${fixture.workId}/reader`);
+    // Passage-to-claim/evidence/map continuity (charter §16 journey 5): the
+    // "Open in reader" link carries the exact `#block-<id>` anchor fragment
+    // `EditionReader` renders on that block, not just the work's Reader in
+    // general — reversible navigation back to the real passage.
+    await expect(main(page).getByRole("link", { name: "Open in reader" })).toHaveAttribute("href", `/works/${fixture.workId}/reader#block-${fixture.bodyBlockId}`);
+    // Claim → contextual Knowledge Map continuity (same journey): always
+    // present regardless of anchor state, since the Map's "claim" context
+    // resolves by claim id alone.
+    await expect(main(page).getByRole("link", { name: "View in Knowledge Map" })).toHaveAttribute("href", `/graph?ctxKind=claim&ctxId=${fixture.anchoredClaimId}`);
 
     await page.goto(`/research/claims/${fixture.unanchoredClaimId}`);
     await expect(main(page).getByRole("heading", { name: "A claim whose original passage no longer matches after reprocessing." })).toBeVisible();
     await expect(main(page).getByRole("link", { name: "Open in reader" })).toHaveCount(0);
+    await expect(main(page).getByRole("link", { name: "View in Knowledge Map" })).toHaveAttribute("href", `/graph?ctxKind=claim&ctxId=${fixture.unanchoredClaimId}`);
+  });
+
+  // Passage-to-claim/evidence/map continuity (charter §16 journey 5),
+  // reversible-navigation half: following the claim permalink's "Open in
+  // reader" link must land in a working Reader with the exact block
+  // present in the DOM, not just a URL that merely resolves.
+  test("the claim permalink's 'Open in reader' link lands on the exact anchored passage", async ({ page }) => {
+    const fixture = await seedResearchClaimsFixture(userId, "Reversible-nav work");
+    await login(page);
+
+    await page.goto(`/research/claims/${fixture.anchoredClaimId}`);
+    await main(page).getByRole("link", { name: "Open in reader" }).click();
+    await expect(page).toHaveURL(`/works/${fixture.workId}/reader#block-${fixture.bodyBlockId}`);
+    await expect(page.locator(`#block-${fixture.bodyBlockId}`)).toBeVisible();
+    await expect(page.locator(`#block-${fixture.bodyBlockId}`)).toContainText("Vicious people act on decision, yet live according to passion");
   });
 
   test("axe: zero wcag2a/wcag2aa violations across the new research pages, light and dark", async ({ page }) => {
