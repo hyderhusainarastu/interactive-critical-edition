@@ -197,7 +197,10 @@ test.describe("Journey 1 — upload lifecycle", () => {
     await expect(page.getByRole("link", { name: /Owner's Private Work/ })).not.toBeVisible();
 
     await page.goto("/works/trash");
-    const trashRow = page.locator(`[data-trash-item="${trashWorkId}"]`);
+    // Scope dynamic rows to the live application tree: a transient Next
+    // streaming holder can otherwise preserve an inert duplicate of the
+    // same route markup after navigation.
+    const trashRow = main(page).locator(`[data-trash-item="${trashWorkId}"]`);
     await expect(trashRow).toBeVisible();
     await expect(trashRow).toContainText("Permanently deleted in 30 days");
 
@@ -226,7 +229,7 @@ test.describe("Journey 1 — upload lifecycle", () => {
     await db.update(works).set({ deletedAt: new Date() }).where(eq(works.id, guardedWork.id));
 
     await page.goto("/works/trash");
-    const guardedRow = page.locator(`[data-trash-item="${guardedWork.id}"]`);
+    const guardedRow = main(page).locator(`[data-trash-item="${guardedWork.id}"]`);
     await expect(guardedRow).toBeVisible();
     await guardedRow.getByRole("button", { name: "Delete permanently now" }).click();
     const dialog = page.getByRole("dialog", { name: /Permanently delete/ });
