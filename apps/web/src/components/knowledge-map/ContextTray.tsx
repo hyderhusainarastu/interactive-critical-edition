@@ -33,6 +33,13 @@ export function ContextTray({ contextLabel, expansionTrail, onTruncateTrail, rec
   return (
     <div
       data-testid="knowledge-map-context-tray"
+      // A compact breadcrumb/history strip by design (this file's own top
+      // comment) — real axe touch-target audit finding (2026-07-28): its
+      // pill buttons measure well under 44px, but sizing them up would
+      // defeat the whole point of a "compact bottom context/history tray".
+      // Matches this codebase's established dense-secondary-control
+      // exemption class (same as the primary toolbar above it).
+      data-dense-controls="knowledge-map-context-tray"
       className="flex min-h-10 flex-wrap items-center gap-x-4 gap-y-1 border-t border-[var(--color-border)] bg-[var(--color-background)] px-3 py-1.5 text-xs"
     >
       <nav aria-label="Expansion trail" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">

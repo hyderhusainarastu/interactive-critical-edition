@@ -70,8 +70,8 @@ export function FilterRail({
 }: FilterRailProps) {
   if (collapsed) {
     return (
-      <div className="flex w-10 flex-col items-center border-r border-[var(--color-border)] bg-[var(--color-background)] py-2">
-        <button type="button" onClick={onToggleCollapsed} className="app-control rounded p-1 text-xs" aria-label="Expand filter rail">
+      <div className="flex w-11 flex-col items-center border-r border-[var(--color-border)] bg-[var(--color-background)] py-2">
+        <button type="button" onClick={onToggleCollapsed} className="app-control app-icon-button" aria-label="Expand filter rail">
           ›
         </button>
       </div>
@@ -85,7 +85,11 @@ export function FilterRail({
     >
       <div className="flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Filters</h2>
-        <button type="button" onClick={onToggleCollapsed} className="app-control rounded p-1 text-xs" aria-label="Collapse filter rail">
+        {/* `.app-icon-button` (fixed 44x44) rather than the bare `p-1`
+            styling this collapse toggle used before — real axe touch-target
+            audit finding (2026-07-28): a 24x12 control genuinely fails the
+            self-imposed 44x44 floor, not a naming-only issue. */}
+        <button type="button" onClick={onToggleCollapsed} className="app-control app-icon-button" aria-label="Collapse filter rail">
           ‹
         </button>
       </div>

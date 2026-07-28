@@ -137,6 +137,17 @@ export function KnowledgeMapToolbar({
       role="toolbar"
       aria-label="Knowledge Map"
       data-testid="knowledge-map-toolbar"
+      // This 52px-tall primary toolbar is deliberately dense on desktop by
+      // design (this file's own top comment: "directly replaces the
+      // baseline's >13-flat-control toolbar defect") — its buttons revert
+      // their 44px mobile touch-target floor via `md:min-h-0` on purpose.
+      // Matches this codebase's established "dense, secondary-action
+      // toolbar" exemption class (`auditTouchTargets`'s own
+      // `ACCEPTED_DENSE_REGION_SELECTOR`, already used for the reader
+      // toolbar and the legacy graph toolbar this one replaces) rather than
+      // forcing every control to a 44px floor on desktop, which the mobile
+      // bottom nav / `More…` menu already provide a full-size path to.
+      data-dense-controls="knowledge-map-toolbar"
       className="flex h-[52px] min-h-[52px] items-center gap-2 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-background)] px-2 text-sm sm:gap-3 sm:px-3"
     >
       <button
@@ -172,7 +183,19 @@ export function KnowledgeMapToolbar({
             type="button"
             onClick={() => onViewChange(mode)}
             aria-pressed={view === mode}
-            className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs font-medium md:min-h-0 md:min-w-0 ${view === mode ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : "text-[var(--color-text-muted)]"}`}
+            // `bg-[var(--color-highlight)] text-[var(--color-accent-ink)]`
+            // (this control's original styling) measures only 3.7:1 —
+            // `--color-highlight` is documented as tuned for decorative/
+            // translucent uses, never literal text-on-fill contrast (see
+            // its own doc comment in globals.css). `[data-toolbar-selected]`
+            // is the existing, already-verified (11.66:1 light/5.27:1 dark)
+            // "selected toolbar pill" token pair D-23-53 built for exactly
+            // this shape of control — its only prior consumer was the
+            // legacy `GraphView.tsx` toolbar the Stage 3 rebuild deleted,
+            // so this rebuild's own toolbar had reintroduced the same
+            // contrast defect from scratch instead of reusing it.
+            data-toolbar-selected={view === mode ? "" : undefined}
+            className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs font-medium md:min-h-0 md:min-w-0 ${view === mode ? "" : "text-[var(--color-text-muted)]"}`}
           >
             {VIEW_LABEL[mode]}
           </button>
@@ -218,7 +241,11 @@ export function KnowledgeMapToolbar({
         type="button"
         onClick={onToggleFilters}
         aria-pressed={filtersOpen}
-        className={`app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs md:min-h-0 ${filtersOpen ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : ""}`}
+        // See the View-mode buttons' own comment above: reuses the existing
+        // `[data-toolbar-selected]` token pair instead of the same
+        // under-contrast `--color-highlight`/`--color-accent-ink` pairing.
+        data-toolbar-selected={filtersOpen ? "" : undefined}
+        className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs md:min-h-0"
       >
         Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
       </button>
