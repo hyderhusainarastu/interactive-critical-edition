@@ -1,0 +1,238 @@
+{
+  "protocolVersion": "1.0.0",
+  "prototypeId": "b",
+  "fixtureName": "fixture-24",
+  "environment": {
+    "machineModel": "Mac15,12",
+    "os": "macOS 26.6",
+    "browser": "chromium",
+    "browserVersion": "151.0.7922.34",
+    "powerMode": "unknown",
+    "viewportWidth": 1440,
+    "viewportHeight": 900,
+    "devicePixelRatio": 1,
+    "fixtureName": "fixture-24",
+    "fixtureContentHash": "39dd86c9cd845374f9b8ca724e3efb5391e1e528f51de25887d1a11e23bb738f",
+    "rendererBuild": "prototype-b@r3f@^9.1.2+three@^0.185.1",
+    "cacheState": "warm"
+  },
+  "lifecycle": {
+    "warmupCycles": 2,
+    "measuredCycles": 20,
+    "baseline": {
+      "cycle": 0,
+      "geometries": 8,
+      "textures": 1,
+      "programs": 3,
+      "activeWorkers": 0,
+      "activeObservers": 0,
+      "activeTimers": 0,
+      "registeredListeners": 2
+    },
+    "cycles": [
+      {
+        "cycle": 1,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 2,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 3,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 4,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 5,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 6,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 7,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 8,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 9,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 10,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 11,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 12,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 13,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 14,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 15,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 16,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 17,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 18,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 19,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      },
+      {
+        "cycle": 20,
+        "geometries": 8,
+        "textures": 1,
+        "programs": 3,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 2
+      }
+    ],
+    "withinPlateauTolerance": true,
+    "monotonicGrowthDetected": false
+  },
+  "recordedAtIso": "2026-07-28T02:03:21.204Z"
+}

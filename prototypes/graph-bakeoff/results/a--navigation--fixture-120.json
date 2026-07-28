@@ -1,0 +1,102 @@
+{
+  "protocolVersion": "1.0.0",
+  "prototypeId": "a",
+  "fixtureName": "fixture-120",
+  "environment": {
+    "machineModel": "Mac15,12",
+    "os": "macOS 26.6",
+    "browser": "chromium",
+    "browserVersion": "151.0.7922.34",
+    "powerMode": "unknown",
+    "viewportWidth": 1440,
+    "viewportHeight": 900,
+    "devicePixelRatio": 1,
+    "fixtureName": "fixture-120",
+    "fixtureContentHash": "eb452a501241a0520f8c06e4f66e04bf7f6e81c47643fea98b415ae59c5ba6f6",
+    "rendererBuild": "prototype-a@react-force-graph-3d@1.29.1",
+    "cacheState": "cold"
+  },
+  "navigations": [
+    {
+      "kind": "cold",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1.2999999523162842,
+      "apiRequestEndMs": 1.399999976158142,
+      "payloadReceivedMs": 115.89999997615814,
+      "rendererInitMs": 115.89999997615814,
+      "firstValidFrameMs": 115.89999997615814,
+      "interactiveMs": 115.89999997615814
+    },
+    {
+      "kind": "cold",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 0.8999999761581421,
+      "apiRequestEndMs": 1.0999999642372131,
+      "payloadReceivedMs": 115.19999998807907,
+      "rendererInitMs": 115.19999998807907,
+      "firstValidFrameMs": 115.19999998807907,
+      "interactiveMs": 115.19999998807907
+    },
+    {
+      "kind": "cold",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1.100000023841858,
+      "apiRequestEndMs": 1.199999988079071,
+      "payloadReceivedMs": 111.19999998807907,
+      "rendererInitMs": 111.19999998807907,
+      "firstValidFrameMs": 111.19999998807907,
+      "interactiveMs": 111.19999998807907
+    },
+    {
+      "kind": "warm",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1,
+      "apiRequestEndMs": 1.0999999642372131,
+      "payloadReceivedMs": 77.19999998807907,
+      "rendererInitMs": 77.19999998807907,
+      "firstValidFrameMs": 77.09999996423721,
+      "interactiveMs": 77.09999996423721
+    },
+    {
+      "kind": "warm",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1.5999999642372131,
+      "apiRequestEndMs": 1.699999988079071,
+      "payloadReceivedMs": 88.39999997615814,
+      "rendererInitMs": 88.39999997615814,
+      "firstValidFrameMs": 88.39999997615814,
+      "interactiveMs": 88.39999997615814
+    },
+    {
+      "kind": "warm",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1,
+      "apiRequestEndMs": 1,
+      "payloadReceivedMs": 69.30000001192093,
+      "rendererInitMs": 69.30000001192093,
+      "firstValidFrameMs": 69.30000001192093,
+      "interactiveMs": 69.30000001192093
+    },
+    {
+      "kind": "warm",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1,
+      "apiRequestEndMs": 1.100000023841858,
+      "payloadReceivedMs": 59.60000002384186,
+      "rendererInitMs": 59.60000002384186,
+      "firstValidFrameMs": 59.60000002384186,
+      "interactiveMs": 59.60000002384186
+    },
+    {
+      "kind": "warm",
+      "navigationIntentMs": 0,
+      "apiRequestStartMs": 1.600000023841858,
+      "apiRequestEndMs": 1.800000011920929,
+      "payloadReceivedMs": 89.40000003576279,
+      "rendererInitMs": 89.40000003576279,
+      "firstValidFrameMs": 89.40000003576279,
+      "interactiveMs": 89.40000003576279
+    }
+  ],
+  "recordedAtIso": "2026-07-28T02:03:15.978Z"
+}
