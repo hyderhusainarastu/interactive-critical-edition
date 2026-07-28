@@ -28,6 +28,42 @@ import { computeBandGap, deterministicJitter, zForLayer, type Layer } from "@ice
 
 const GOLDEN_ANGLE_RAD = Math.PI * (3 - Math.sqrt(5));
 
+/**
+ * Product decision (stage3-kmap-verification.md §3, option b — the
+ * click/tap-occlusion flake's own root cause, not fixed by the click-retry
+ * mechanism itself): very small layouts get proportionally MORE initial
+ * spacing than `INITIAL_SPACING` alone would give them.
+ *
+ * Node render radius (`nodeVisuals.ts`'s `BASE_RADIUS`) is a FIXED world-unit
+ * constant, independent of how spread out the layout is — it never scales
+ * with `spacing`. The Home camera, by contrast, fits its distance to frame
+ * whatever the nodes' actual spread is, so increasing spacing pushes the
+ * camera back proportionally. The net effect: a bigger `spacing` shrinks
+ * every node's APPARENT (angular, on-screen) size relative to the angular
+ * gap between nodes, without needing any change to the camera math itself —
+ * exactly what's needed so the hub's own larger, closer-scaled disc
+ * (`sizing.ts`'s `ROOT_SCALE`) can no longer fully occlude a direct
+ * satellite from the fixed Home viewing angle. A 3-4 node star fixture (the
+ * shape stage3's diagnostic actually reproduced the occlusion on) is
+ * exactly the case this floor targets; graphs above the ceiling are already
+ * spread widely enough by their own node count (more indices around the
+ * golden-angle spiral means more angular separation to begin with) that this
+ * extra floor would only dilute the layout the bakeoff's own performance
+ * numbers were measured against, for no occlusion benefit.
+ */
+export const SMALL_FIXTURE_NODE_CEILING = 6;
+export const SMALL_FIXTURE_SPACING_MULTIPLIER = 1.75;
+
+/** The effective initial spacing to seed a layout of `nodeCount` nodes with
+ * — `baseSpacing` unchanged above the small-fixture ceiling, boosted below
+ * it. Pure and total: any non-negative `nodeCount` (including 0) is safe. */
+export function initialSpacingForNodeCount(nodeCount: number, baseSpacing: number): number {
+  if (nodeCount > 0 && nodeCount <= SMALL_FIXTURE_NODE_CEILING) {
+    return baseSpacing * SMALL_FIXTURE_SPACING_MULTIPLIER;
+  }
+  return baseSpacing;
+}
+
 /** Deterministic (index, seed)-only initial XY position, using a
  * golden-angle spiral (inherently deterministic on `index`) plus a bounded
  * seeded jitter so different graphs don't all look identically spiral. */

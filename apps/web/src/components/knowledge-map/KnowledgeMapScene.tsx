@@ -59,7 +59,7 @@ import * as THREE from "three";
 import { distanceToTarget, zForLayer, type Layer, type Vec3 } from "@ice/graph-display";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
 import { EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
-import { computeBandGap, computeFixedZ, medianXYLinkDistance, seededInitialPosition } from "./layout";
+import { computeBandGap, computeFixedZ, initialSpacingForNodeCount, medianXYLinkDistance, seededInitialPosition } from "./layout";
 import { computeNodeScale, computeVisibleDegrees } from "./sizing";
 import { NodeVisualFactory, type CredibilityRingInput, type NodeVisual } from "./nodeVisuals";
 import {
@@ -365,8 +365,9 @@ export function KnowledgeMapScene({
   // place instead of rebuilding this array. ---
   const graphData = useMemo(() => {
     const augmentedLinks: AugmentedLink[] = links.map((l) => ({ ...l, isSelfLink: l.source === l.target }));
+    const spacing = initialSpacingForNodeCount(nodes.length, INITIAL_SPACING);
     const gNodes: GNode[] = nodes.map((n, i) => {
-      const initial = seededInitialPosition(i, LAYOUT_SEED, INITIAL_SPACING);
+      const initial = seededInitialPosition(i, LAYOUT_SEED, spacing);
       return { ...n, x: initial.x, y: initial.y, z: 0 } as GNode;
     });
     const gLinks: GLink[] = augmentedLinks.map((l) => ({ ...l }) as GLink);

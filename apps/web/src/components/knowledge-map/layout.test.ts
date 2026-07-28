@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { LAYER_BAND_INDEX, LAYER_ORDER, maxJitter } from "@ice/graph-display";
-import { computeBandGap, computeFixedZ, medianXYLinkDistance, seededInitialPosition } from "./layout";
+import {
+  computeBandGap,
+  computeFixedZ,
+  initialSpacingForNodeCount,
+  medianXYLinkDistance,
+  seededInitialPosition,
+  SMALL_FIXTURE_NODE_CEILING,
+  SMALL_FIXTURE_SPACING_MULTIPLIER,
+} from "./layout";
 
 /**
  * No `layout.test.ts` exists in the bakeoff for this module (spec §1.1's
@@ -25,6 +33,47 @@ import { computeBandGap, computeFixedZ, medianXYLinkDistance, seededInitialPosit
   assert.ok(Number.isFinite(origin.x) && Number.isFinite(origin.y), "index 0 must be a safe, finite position");
 }
 console.log("seededInitialPosition: OK");
+
+// --- initialSpacingForNodeCount: minimum node-separation floor for very
+// small layouts (stage3-kmap-verification.md §3 option b) ---
+{
+  const base = 26;
+
+  // At and below the ceiling: boosted by exactly the documented multiplier.
+  for (const count of [1, 2, 3, 4, SMALL_FIXTURE_NODE_CEILING]) {
+    assert.equal(
+      initialSpacingForNodeCount(count, base),
+      base * SMALL_FIXTURE_SPACING_MULTIPLIER,
+      `a ${count}-node fixture must get the boosted small-fixture spacing`,
+    );
+  }
+
+  // Just above the ceiling, and comfortably above it (e.g. the 120-node perf
+  // fixture): unchanged from `baseSpacing` — larger graphs are already
+  // spread by their own node count and this floor must not dilute the
+  // layout the bakeoff's own performance numbers were measured against.
+  for (const count of [SMALL_FIXTURE_NODE_CEILING + 1, 20, 120]) {
+    assert.equal(initialSpacingForNodeCount(count, base), base, `a ${count}-node graph must be unaffected`);
+  }
+
+  // Boosted spacing must actually increase the real distance-from-origin a
+  // small fixture's satellites get seeded at, not just the raw parameter —
+  // this is the property that actually shrinks each node's apparent
+  // (angular) size relative to a fixed-radius sphere, per this file's own
+  // top comment.
+  const smallSpacing = initialSpacingForNodeCount(4, base);
+  const boostedSatellite = seededInitialPosition(1, 42, smallSpacing);
+  const baseSatellite = seededInitialPosition(1, 42, base);
+  const originDistance = (p: { x: number; y: number }) => Math.hypot(p.x, p.y);
+  assert.ok(
+    originDistance(boostedSatellite) > originDistance(baseSatellite),
+    "a small fixture's boosted spacing must seed satellites strictly farther from the root than the base spacing would",
+  );
+
+  // Total function: zero nodes is a safe no-op, never NaN/throw.
+  assert.equal(initialSpacingForNodeCount(0, base), base);
+}
+console.log("initialSpacingForNodeCount: OK");
 
 // --- medianXYLinkDistance ---
 {
