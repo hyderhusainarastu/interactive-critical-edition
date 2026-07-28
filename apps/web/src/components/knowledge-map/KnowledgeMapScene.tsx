@@ -906,6 +906,51 @@ export function KnowledgeMapScene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSize]);
 
+  // --- Resize self-heal (Stage 3 verification round 1 §7/§8: "resizing to
+  // a narrow viewport blanks the 3D scene entirely and it does NOT
+  // self-heal on further resizes"). The one-time scene setup effect above
+  // only computes Home once, at the FIRST `hasSize` transition — a later
+  // resize keeps `<ForceGraph3D>`'s own renderer width/height correct (fed
+  // straight from `dimensions` below) but never re-runs any camera math, so
+  // an aspect-ratio change extreme enough to push every currently-visible
+  // node outside the frustum leaves the camera frozen there indefinitely,
+  // confirmed NOT to recover on further resizes (including one that returns
+  // to the exact original size) — only an actual remount does.
+  //
+  // This effect detects exactly that degenerate case — at least one node is
+  // currently visible, but NONE of them still project inside the canvas —
+  // and recovers with `camera.fit()`, which reframes from the CURRENT
+  // camera direction (see `resolveFitPose`) rather than resetting to the
+  // canonical Home pose, so it does not discard a user's own orbit/zoom on
+  // an ORDINARY resize that still frames the scene fine. A resize that
+  // still has any visible node on-screen is left completely alone.
+  const previousDimensionsRef = useRef<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const previous = previousDimensionsRef.current;
+    previousDimensionsRef.current = hasSize ? { width: dimensions.width, height: dimensions.height } : null;
+    // The first hasSize transition is already framed by the mount-time
+    // effect above (`camera.home(false)`) — only later resizes reach here.
+    if (!hasSize || !previous) return;
+    const fg = fgRef.current;
+    if (!fg) return;
+
+    const visibleNodes = graphData.nodes.filter((n) => isNodeVisible(n));
+    if (visibleNodes.length === 0) return; // nothing to frame — a deliberate empty filter, not the bug
+
+    const anyInFrustum = visibleNodes.some((n) => {
+      const coords = fg.graph2ScreenCoords(n.x ?? 0, n.y ?? 0, n.z ?? 0);
+      return (
+        Number.isFinite(coords.x) &&
+        Number.isFinite(coords.y) &&
+        coords.x >= 0 &&
+        coords.x <= dimensions.width &&
+        coords.y >= 0 &&
+        coords.y <= dimensions.height
+      );
+    });
+    if (!anyInFrustum) camera.fit();
+  }, [dimensions.width, dimensions.height, hasSize, graphData, isNodeVisible, camera]);
+
   // Reactive visibility toggle — flipping `showLayerGuide` never rebuilds
   // the planes (built once above), only shows/hides the already-resident
   // group, matching the grid's own "cheap to keep resident" cost profile.
