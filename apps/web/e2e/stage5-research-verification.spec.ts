@@ -165,14 +165,11 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
   test("journey 6: every correction action round-trips with provenance across all six object types", async ({ page }) => {
     await login(page);
 
-    // cluster — lives on the debate cluster detail page. NOTE (finding,
-    // recorded in the audit doc): `DebateClusterDetail.tsx` renders ONLY
-    // `objectType="cluster"` correction controls — the relationship itself
-    // is shown as a link with no correction affordance on this page at all,
-    // confirmed by direct read (no `data-research-correction-controls=
-    // "relationship"` anywhere in that file). Relationship correction is
-    // only reachable indirectly, from a hypothesis's "Cited conflicts"
-    // section — exercised below where it actually lives.
+    // cluster + relationship — both live on the debate cluster detail page.
+    // (Finding 2 fix: `DebateClusterDetail.tsx` now renders its own
+    // `objectType="relationship"` controls for every judged edge in the
+    // cluster, not only the cluster itself — reachable independent of
+    // whether any hypothesis happens to cite the relationship.)
     await page.goto(`/research/${fixture.projectId}/debates/${fixture.clusterId}`);
     const clusterControls = main(page).locator('[data-research-correction-controls="cluster"]');
     await clusterControls.getByRole("button", { name: "Hide" }).click();
@@ -181,19 +178,24 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
     await clusterControls.getByRole("button", { name: "Restore" }).click();
     await expect(clusterControls.getByText("Hidden")).toHaveCount(0);
 
+    const clusterPageRelControls = main(page).locator('[data-research-correction-controls="relationship"]');
+    await expect(clusterPageRelControls).toBeVisible();
+    await clusterPageRelControls.getByRole("button", { name: "Verify" }).click();
+    await expect(clusterPageRelControls.locator("[data-verification-chip]")).toHaveText("Verified");
+
     // chamber — its own permalink.
     await page.goto(`/research/chambers/${fixture.chamberId}`);
     const chamberControls = main(page).locator('[data-research-correction-controls="chamber"]');
     await chamberControls.getByRole("button", { name: "Verify" }).click();
     await expect(chamberControls.locator("[data-verification-chip]")).toHaveText("Verified");
 
-    // relationship + hypothesis + gap — all live on the hypotheses page.
-    // Relationship correction is reachable ONLY here (under the hypothesis's
-    // "Cited conflicts" section, since the fixture's one hypothesis cites
-    // this exact relationship) — the finding recorded above.
+    // relationship (re-confirmed reachable a second way) + hypothesis + gap
+    // — all live on the hypotheses page. The relationship was already
+    // verified above on the cluster page; this re-confirms the "Cited
+    // conflicts" path on the hypotheses page still shows that same,
+    // already-verified state (both doors lead to the same object).
     await page.goto(`/research/${fixture.projectId}/hypotheses`);
     const relControls = main(page).locator('[data-research-correction-controls="relationship"]');
-    await relControls.getByRole("button", { name: "Verify" }).click();
     await expect(relControls.locator("[data-verification-chip]")).toHaveText("Verified");
 
     const hypothesisControls = main(page).locator('[data-research-correction-controls="hypothesis"]');
@@ -281,15 +283,22 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
     await expect(main(page).getByRole("heading", { name: "Monitors", exact: true })).toBeVisible();
   });
 
-  test("Knowledge Map tab: the spec's own honest stub is NOT present — a real 404, recorded as a finding", async ({ page }) => {
+  test("Knowledge Map tab: renders the spec's honest stub, not a 404 (Finding 1 fix)", async ({ page }) => {
     await login(page);
     const response = await page.goto(`/research/${fixture.projectId}/graph`);
-    // `app/(app)/research/[projectId]/graph/page.tsx` (spec §4/§9) was never
-    // created — this is not a soft "not built yet" message, it is Next's
-    // generic not-found page. Recorded here (not swallowed) so the audit
-    // doc's failure list matches what the suite actually observed.
-    expect(response?.status(), "expected 404 from the missing graph/page.tsx stub").toBe(404);
-    await expect(page.getByText(/This page could not be found|404/i)).toBeVisible();
+    // `app/(app)/research/[projectId]/graph/page.tsx` (spec §4/§9) now
+    // exists as a real route with an honest "not built yet" explanation and
+    // a working link to the full global Knowledge Map — no query-string
+    // scoping attempt, no partial filter, per spec §4.
+    expect(response?.status()).toBe(200);
+    await expect(main(page).getByRole("heading", { name: "Knowledge Map", level: 1 })).toBeVisible();
+    await expect(main(page).getByText(/planned for a later integration stage/i)).toBeVisible();
+    const link = main(page).getByRole("link", { name: /Open the full Knowledge Map/i });
+    await expect(link).toHaveAttribute("href", "/graph");
+    // The nav's own "Knowledge Map" tab is now `aria-current` on this route,
+    // same as every other real project tab (§2.2) — no special-case needed.
+    const nav = page.getByRole("navigation", { name: "Research project sections" });
+    await expect(nav.getByRole("link", { name: "Knowledge Map" })).toHaveAttribute("aria-current", "page");
   });
 
   test("axe: zero wcag2a/wcag2aa violations on the fixture's key pages, light and dark", async ({ page }) => {
@@ -303,6 +312,7 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
         `/research/${fixture.projectId}/chambers`,
         `/research/${fixture.projectId}/hypotheses`,
         `/research/${fixture.projectId}/monitors`,
+        `/research/${fixture.projectId}/graph`,
       ]) {
         await page.goto(path);
         await expect(main(page).getByRole("heading", { level: 1 })).toBeVisible();

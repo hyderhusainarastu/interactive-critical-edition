@@ -134,6 +134,33 @@ The spec (§4, §9's file plan) calls for a **new file**, `app/(app)/research/[p
 - **A fix for Finding 1** (implementing the missing stub page) — round 1 is verification-scoped; the finding is reported, not silently patched.
 - **CI wiring** — these specs remain in the existing "manually run, CI-safe in spirit" category, matching every other research e2e file's own documented status; this round did not change that.
 
+## Fix round (post round-1)
+
+Two of round 1's three findings were fixed in a follow-up Stage 5 FIX lane pass on this same branch:
+
+- **Finding 1 (P2) — fixed.** `app/(app)/research/[projectId]/graph/page.tsx` now exists: the honest stub spec §4
+  describes (heading "Knowledge Map", the "planned for a later integration stage" explanation, a working link to
+  the existing global `/graph` route), reusing `ResearchBreadcrumb` and the `getOwnedResearchProject` ownership
+  guard exactly like every sibling `[projectId]/*` page. Confirmed present in the `next build` route manifest
+  and returning 200 with the correct heading/link/`aria-current` state via a rewritten Playwright test (previously
+  asserting the 404, now asserting the honest stub renders); added to the axe sweep's page list.
+- **Finding 2 (P3) — fixed.** `getDebateClusterDetail` (`lib/research/debates.ts`) now also selects the cluster's
+  own judged edges via the existing `debate_cluster_relationship` join table (no migration — the table already
+  existed, unused by any query until now), and `DebateClusterDetail.tsx` renders a new "Relationships in this
+  debate" section with `ResearchCorrectionControls` (`objectType="relationship"`, `compact`) for each one — the
+  same component/props `ResearchHypothesesView.tsx`'s "Cited conflicts" section already uses. A relationship no
+  hypothesis cites now has a real correction UI path. `journey 6`'s test was extended (not weakened) to verify
+  and check the relationship directly on the cluster page, then re-visit the hypotheses page to confirm the same
+  object shows the same, already-verified state via its second reachability path.
+- **Finding 3 (P3) — not fixed, confirmed still out-of-lane.** `components/shell/WorkspaceRail.tsx` remains
+  outside this lane's file ownership (`shell/**`); the touch-target defect is unchanged and still flagged for
+  whichever lane owns `shell/**`.
+
+Verification for the fix round: `pnpm -r typecheck` clean, `pnpm -r lint` clean, `pnpm --filter web build` clean
+with `/research/[projectId]/graph` now present in the route manifest, all 13 `stage5-research-verification.spec.ts`
+tests green (including the two rewritten ones) and `research.spec.ts` 9/9 green, run against a fresh
+`palimnote-s5-pg` Postgres container (port 5435) torn down after the run.
+
 ## Cleanup
 
 - The verification's own test user (`e2e-stage5-verify-*@example.com`) and every row `seedStage5Fixture` wrote were deleted via `deleteTestUser()` in `afterAll` (cascades verified against `packages/db/src/schema.ts` before relying on it — see the helper file's own comment).

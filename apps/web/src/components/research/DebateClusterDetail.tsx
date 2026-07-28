@@ -10,6 +10,7 @@ import { ResearchBreadcrumb } from "./ResearchBreadcrumb";
 import { ResearchCorrectionControls } from "./ResearchCorrectionControls";
 
 type MemberClaim = { id: string; workId: string | null; workTitle: string | null; claimText: string; claimNature: string };
+type ClusterRelationship = { id: string; valence: string; category: string; verificationStatus: string; hidden: boolean };
 type Cluster = {
   id: string;
   projectId: string;
@@ -22,6 +23,7 @@ type Cluster = {
   verificationStatus: string;
   hidden: boolean;
   members: MemberClaim[];
+  relationships: ClusterRelationship[];
   latestChamberId: string | null;
 };
 
@@ -35,6 +37,8 @@ const NATURE_LABEL: Record<string, string> = {
   definitional: "Definitional",
   methodological: "Methodological",
 };
+
+const VALENCE_LABEL: Record<string, string> = { contradiction: "Contradiction", nuance: "Nuance", support: "Support", unrelated: "Unrelated" };
 
 interface JobRequestRow {
   id: string;
@@ -156,6 +160,34 @@ export function DebateClusterDetail({ cluster }: { cluster: Cluster }) {
         <div className="mt-2">
           <ResearchCorrectionControls objectType="cluster" objectId={cluster.id} verificationStatus={cluster.verificationStatus} hidden={cluster.hidden} />
         </div>
+      </section>
+
+      {/* Stage 5 verification Finding 2 fix: relationship correction was
+          previously reachable only indirectly, via a hypothesis's "Cited
+          conflicts" section — a relationship with no hypothesis citing it
+          had no correction UI anywhere. This page is the one that actually
+          shows the relationship, so its own controls live here directly. */}
+      <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="debate-cluster-relationships-title">
+        <h2 id="debate-cluster-relationships-title" className="font-serif text-lg font-semibold">Relationships in this debate</h2>
+        <ul className="app-reveal-stagger mt-3 space-y-3">
+          {cluster.relationships.map((relationship) => (
+            <li key={relationship.id} className="app-mount rounded border border-[var(--color-border)] p-3 text-sm">
+              <p className="font-medium">{VALENCE_LABEL[relationship.valence] ?? relationship.valence} · {relationship.category}</p>
+              <div className="mt-2">
+                <ResearchCorrectionControls
+                  objectType="relationship"
+                  objectId={relationship.id}
+                  verificationStatus={relationship.verificationStatus}
+                  hidden={relationship.hidden}
+                  compact
+                />
+              </div>
+            </li>
+          ))}
+          {!cluster.relationships.length && (
+            <li className="app-empty app-mount rounded p-3 text-sm text-[var(--color-text-muted)]">No relationships recorded for this cluster.</li>
+          )}
+        </ul>
       </section>
 
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="debate-cluster-members-title">
