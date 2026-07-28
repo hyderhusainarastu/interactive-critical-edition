@@ -478,7 +478,15 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
   );
 
   // --- Transient UI (filters rail / help / secondary Arrange state) ---
-  const [filtersOpen, setFiltersOpen] = useState(true);
+  // Defaults OPEN on desktop (unchanged prior behavior) but starts
+  // COLLAPSED on a mobile-width viewport — charter §10 Mobile bullet
+  // "Fullscreen context-limited graph" is about disclosure, not chrome, but
+  // a 256px rail opened by default on a 375px screen would still cover most
+  // of that "fullscreen" canvas before the user has done anything. Reuses
+  // `viewport.device` (already resolved above, same SSR-safe
+  // desktop-until-measured default `useViewport()` provides) rather than a
+  // second, independent window read.
+  const [filtersOpen, setFiltersOpen] = useState(() => viewport.device === "desktop");
   const [helpOpen, setHelpOpen] = useState(false);
   const [arrangeMode, setArrangeMode] = useState(false);
   const [showLayerGuide, setShowLayerGuide] = useState(false);
