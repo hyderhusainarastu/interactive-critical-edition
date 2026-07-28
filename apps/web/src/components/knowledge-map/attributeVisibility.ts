@@ -21,7 +21,7 @@
  * `matchesAnyReaderLevel`/D-21-10 already use elsewhere in this app.
  */
 import { credibilityBandFor, type GraphFilters, type GraphNode } from "../graph/types";
-import type { Layer } from "@ice/graph-display";
+import { LAYER_ORDER, type Layer } from "@ice/graph-display";
 import type { KnowledgeMapDisplayNode } from "./adapter";
 
 export function computeVisibleNodeIds(
@@ -55,4 +55,36 @@ export function computeVisibleNodeIds(
   }
 
   return visible;
+}
+
+/**
+ * Toggles one layer's membership in the FilterRail's checkbox set (spec
+ * §1.1's `FilterRail.tsx` row). `activeLayers` uses `computeVisibleNodeIds`
+ * above's own convention: an EMPTY array means "no restriction — every
+ * layer is implicitly checked/shown," matching each checkbox's own
+ * `checked={activeLayers.length === 0 || activeLayers.includes(layer)}`
+ * formula.
+ *
+ * The naive `activeLayers.includes(layer) ? remove : add` toggle a caller
+ * might otherwise reach for is a real bug against that convention:
+ * unchecking a layer from the empty ("all shown") starting state doesn't
+ * hide just that one layer — since the array doesn't already contain it,
+ * the naive toggle ADDS it, and the moment `activeLayers` is non-empty
+ * `computeVisibleNodeIds` treats it as an INCLUSION list, so the very
+ * first uncheck flips to "show ONLY this layer," hiding every other layer
+ * instead of just this one — the opposite of what an unchecked checkbox
+ * means. This function resolves the checkbox's actual LOGICAL checked-set
+ * first (the empty-means-all shortcut expanded to the real full list when
+ * needed) before toggling membership, so an uncheck always means "hide
+ * exactly this layer, leave every other currently-shown layer alone,"
+ * regardless of whether the starting state was the implicit "all" or an
+ * already-explicit subset. Re-checking the last hidden layer collapses
+ * the result back to `[]` (the canonical "no filter" representation, same
+ * one `onClearFilters` already writes), rather than leaving a same-
+ * meaning-but-differently-spelled full explicit list sitting in the URL.
+ */
+export function toggleLayer(activeLayers: readonly Layer[], layer: Layer): Layer[] {
+  const logicalChecked = activeLayers.length === 0 ? LAYER_ORDER : activeLayers;
+  const next = logicalChecked.includes(layer) ? logicalChecked.filter((l) => l !== layer) : [...logicalChecked, layer];
+  return next.length === LAYER_ORDER.length ? [] : next;
 }

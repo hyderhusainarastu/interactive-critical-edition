@@ -30,7 +30,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { toDisplayNodeId, type DeviceClass, type GraphUrlContext, type ReconstructionValidators } from "@ice/graph-display";
 import { adaptGraphPayload, type KnowledgeMapDisplayLink, type KnowledgeMapDisplayNode } from "./adapter";
 import { computeDisclosure } from "./disclosurePipeline";
-import { computeVisibleNodeIds } from "./attributeVisibility";
+import { computeVisibleNodeIds, toggleLayer } from "./attributeVisibility";
 import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphFiltersUrlAdapter";
 import { PERMISSIVE_RECONSTRUCTION_VALIDATORS, useGraphUrlState } from "./useGraphUrlState";
 import { useLegacyGraphUrlRedirect } from "./useLegacyGraphUrlRedirect";
@@ -316,12 +316,32 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
   }, [context, effectiveContextData]);
 
   // --- Disclosure (topology) ---
+  // Keyed on the expansion trail's CONTENT (a joined string of its own
+  // ids), not the `context` object itself. `context` (`urlApi.reconstructed`)
+  // is a BRAND NEW object every time ANY URL-state field changes —
+  // including `selectedId`, `view`, or a filter — since it derives from
+  // `useSearchParams()`, which Next.js hands back as a new value on every
+  // navigation regardless of which param actually changed. Depending on
+  // the whole object here (as an earlier version of this file did) meant
+  // an ordinary node SELECTION silently recomputed the entire disclosed
+  // topology, producing a fresh `topologyNodes` array reference on every
+  // click — which in turn forced `KnowledgeMapScene`'s own `graphData`
+  // `useMemo` (keyed on `[nodes, links]` identity) to treat an ordinary
+  // selection as a genuine topology change: reseeding every node's
+  // position AND resetting the already-settled band-Z pinning back to 0,
+  // directly violating this component's own file-level contract ("no
+  // renderer remount for selection... changes; preserve coordinates
+  // across selection and filter changes") and reproducibly breaking real
+  // pointer-click hit-testing for any node whose on-screen position was
+  // computed before that silent reseed. `expansionTrailKey` is the only
+  // piece of `context` this computation actually reads.
+  const expansionTrailKey = context?.expansionTrail.map(String).join(",") ?? "";
   const disclosure = useMemo(() => {
     if (!effectiveContextData) return null;
     const root = effectiveContextData.nodes.find((n) => String(n.id) === effectiveContextData.rootId) ?? effectiveContextData.nodes[0] ?? null;
     if (!root) return null;
-    return computeDisclosure(root, effectiveContextData.nodes, effectiveContextData.links, context?.expansionTrail.map(String) ?? [], viewport.device);
-  }, [effectiveContextData, context, viewport.device]);
+    return computeDisclosure(root, effectiveContextData.nodes, effectiveContextData.links, expansionTrailKey ? expansionTrailKey.split(",") : [], viewport.device);
+  }, [effectiveContextData, expansionTrailKey, viewport.device]);
 
   const topologyNodes = useMemo(() => {
     if (!effectiveContextData || !disclosure) return [];
@@ -668,10 +688,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
           collapsed={!filtersOpen}
           onToggleCollapsed={() => setFiltersOpen((v) => !v)}
           activeLayers={activeLayers}
-          onToggleLayer={(layer) => {
-            const next = activeLayers.includes(layer) ? activeLayers.filter((l) => l !== layer) : [...activeLayers, layer];
-            urlApi.setState({ activeLayers: next });
-          }}
+          onToggleLayer={(layer) => urlApi.setState({ activeLayers: toggleLayer(activeLayers, layer) })}
           filters={filters}
           onFilterChange={(patch) => urlApi.setState({ filters: urlFiltersFromGraphFilters({ ...filters, ...patch }) })}
           onClearFilters={() => urlApi.setState({ filters: {}, activeLayers: [] })}

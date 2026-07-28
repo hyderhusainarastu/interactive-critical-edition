@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { toDisplayNodeId } from "@ice/graph-display";
-import { computeVisibleNodeIds } from "./attributeVisibility";
+import { LAYER_ORDER, toDisplayNodeId } from "@ice/graph-display";
+import { computeVisibleNodeIds, toggleLayer } from "./attributeVisibility";
 import { DEFAULT_GRAPH_FILTERS, type GraphNode } from "../graph/types";
 import type { KnowledgeMapDisplayNode } from "./adapter";
 
@@ -101,5 +101,35 @@ console.log("missing canonical data exemption: OK");
   assert.deepEqual([...visible].sort(), ["a", "b", "root"], "an empty activeLayers array means no layer filtering at all");
 }
 console.log("layer filter: OK");
+
+// --- toggleLayer: unchecking a layer from the implicit "all" (empty
+// array) state must hide EXACTLY that layer, not flip to "show only this
+// layer" (the bug a naive `includes ? remove : add` toggle produces) ---
+{
+  const afterUncheck = toggleLayer([], "intellectual");
+  assert.deepEqual(
+    afterUncheck.sort(),
+    LAYER_ORDER.filter((l) => l !== "intellectual").sort(),
+    "unchecking one layer from the all-shown state must hide only that layer, not invert to showing only it",
+  );
+}
+{
+  // Re-checking the one hidden layer collapses back to the canonical `[]`
+  // ("no filter") representation, not a same-meaning full explicit list.
+  const allButOne = LAYER_ORDER.filter((l) => l !== "claim");
+  assert.deepEqual(toggleLayer(allButOne, "claim"), []);
+}
+{
+  // Toggling a layer OFF from an already-explicit subset behaves like a
+  // plain removal.
+  assert.deepEqual(toggleLayer(["claim", "debate"], "claim").sort(), ["debate"]);
+}
+{
+  // Toggling a layer ON when it's the only one currently excluded from an
+  // explicit subset adds it back (same case as the "collapses to []" one
+  // above, covered again here for a non-full-minus-one starting set).
+  assert.deepEqual(toggleLayer(["claim"], "debate").sort(), ["claim", "debate"]);
+}
+console.log("toggleLayer: OK");
 
 console.log("attributeVisibility.test.ts: all assertions passed");
