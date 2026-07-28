@@ -133,14 +133,21 @@ test.describe("Roadmap & knowledge graph (Phase 5)", () => {
       await db.delete(bibliographicRecords).where(eq(bibliographicRecords.id, manualRecord.id));
     }
 
-    // --- Visualization: accessible table (default) ---
+    // --- Knowledge Map: accessible table (default) ---
     // Phase 11.8 renamed this surface from "Knowledge graph" to
-    // "Visualization" everywhere (found stale during the Phase 19
-    // accessibility sweep, D-19-8 — this assertion had never actually run
-    // because the test failed earlier for the unrelated D-19-6 timing
-    // reason every time).
+    // "Visualization" everywhere; the Stage 3 rebuild (redesign/ui-graph-
+    // rebuild) later renamed it again to "Knowledge Map" and, unlike the
+    // old `GraphView.tsx`, the new `KnowledgeMapWorkspace` has no page-level
+    // heading at all (its readiness signal is the toolbar itself — same
+    // successor pattern `responsive-visual.spec.ts` and `performance.spec.ts`
+    // already use). List is the default view only at narrow/mobile
+    // viewports; this suite runs at the default desktop viewport, whose
+    // default view is 3D — switch to List explicitly for the accessible
+    // table this step actually wants to assert on.
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
     // The root work appears as its own node row in the table (exact, to
     // avoid matching the "← cites from On the Question…" connection cells).
     await expect(page.getByRole("cell", { name: "On the Question of Being", exact: true })).toBeVisible({

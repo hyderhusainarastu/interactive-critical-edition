@@ -49,8 +49,8 @@ import {
  * All work/library/graph data is SEEDED directly (no worker, no live API
  * calls) — same CI-safety precedent as curriculum.spec.ts/library.spec.ts/
  * accessibility-sweep.spec.ts. Visual-regression baselines cover every major
- * page (dashboard, Library, Uploaded works, work detail, Upload, Reader,
- * Roadmap, Visualization) in light+dark and desktop+mobile. The one
+ * page (dashboard, Library, Reading Queue, work detail, Upload, Reader,
+ * Roadmap, Knowledge Map) in light+dark and desktop+mobile. The one
  * exception is the 3D graph's own `<canvas>` (`[data-graph-canvas]`), whose
  * WebGL projection varies with device pixel ratio and container size — not
  * a stable screenshot subject, matching landing-contract.spec.ts's own
@@ -222,7 +222,7 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
   const baselinePages: Array<{ name: string; path: () => string; heading: RegExp | string | null; mask?: boolean }> = [
     { name: "dashboard", path: () => "/dashboard", heading: /Welcome back/ },
     { name: "library", path: () => "/library", heading: "Library" },
-    { name: "works", path: () => "/works", heading: "Uploaded works" },
+    { name: "works", path: () => "/works", heading: "Reading Queue" },
     { name: "work-detail", path: () => `/works/${editionWorkId}`, heading: "Vice and Reason" },
     { name: "upload", path: () => "/upload", heading: "Upload works" },
     { name: "reader", path: () => `/works/${editionWorkId}/reader`, heading: null },
@@ -322,7 +322,7 @@ test.describe("Phase 23.3 — long titles, long authors, and RTL/original-script
     await login(page, EMAIL);
 
     await page.goto("/works");
-    await expect(page.getByRole("heading", { name: "Uploaded works" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading Queue" })).toBeVisible();
     await expect(page.getByText(LONG_TITLE)).toBeVisible();
     await assertNoHorizontalOverflow(page);
 
@@ -416,7 +416,7 @@ test.describe("Phase 23.3 — large annotation count, large graph, long graph la
     }
   });
 
-  test("a long concept label and a larger graph render without overflow in Visualization", async ({ page }) => {
+  test("a long concept label and a larger graph render without overflow in the Knowledge Map", async ({ page }) => {
     const [longConcept] = await db
       .insert(concepts)
       .values({
@@ -441,11 +441,21 @@ test.describe("Phase 23.3 — large annotation count, large graph, long graph la
     await page.setViewportSize({ width: 375, height: 900 });
     await login(page, EMAIL);
     await page.goto("/graph");
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    // Stage 3 Knowledge Map rebuild: a bare /graph intentionally opens the
+    // context chooser rather than an implicit whole-corpus render (no page
+    // heading exists anymore either way — see this file's own `graph` row
+    // in `baselinePages` above) — choose one of the seeded works.
+    await expect(page.getByTestId("knowledge-map-context-chooser")).toBeVisible();
+    await page.getByRole("tab", { name: "Work" }).click();
+    await page.getByRole("button", { name: /Large Graph Fixture Work 0/ }).click();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     await assertNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.reload();
+    // Reload keeps the same `ctxId=` deep link, so the toolbar (not the
+    // chooser) should be what comes back.
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     await assertNoHorizontalOverflow(page);
 
     // `concept` is a global shared catalog table (no user FK — same design
@@ -513,7 +523,7 @@ test.describe("Phase 23.3 — empty/large Library, one/many works", () => {
     for (const width of [320, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/works");
-      await expect(page.getByRole("heading", { name: "Uploaded works" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Reading Queue" })).toBeVisible();
       await assertNoHorizontalOverflow(page);
     }
     await deleteTestUser(email);
@@ -532,7 +542,11 @@ test.describe("Phase 23.3 — processing failure, offline/slow network, expired 
     await page.setViewportSize({ width: 375, height: 812 });
     await login(page, email);
     await page.goto(`/works/${workId}`);
-    await expect(page.getByText("Processing failed")).toBeVisible();
+    // `exact: true`: a substring match now also collides with the Library's
+    // own "Unavailable — processing failed." recommendation-source status
+    // labels elsewhere on this page (pre-existing staleness, unrelated to
+    // this fixture) — scope to the work-status heading itself.
+    await expect(page.getByText("Processing failed", { exact: true })).toBeVisible();
     await assertNoHorizontalOverflow(page);
     await expect(page).toHaveScreenshot("work-processing-failed-mobile-light.png", {
       fullPage: true,

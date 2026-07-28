@@ -116,7 +116,10 @@ test.describe("Accessibility sweep (Phase 19.8)", () => {
     expect((await scan(page)).violations).toEqual([]);
 
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    // The Stage 3 Knowledge Map rebuild has no page-level heading (its
+    // readiness signal is the toolbar itself — the successor pattern used
+    // across every stale "Visualization" heading locator in this suite).
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     expect((await scan(page)).violations).toEqual([]);
   });
 
@@ -138,11 +141,21 @@ test.describe("Accessibility sweep (Phase 19.8)", () => {
     expect((await scan(page)).violations).toEqual([]);
   });
 
-  test("global Visualization", async ({ page }) => {
+  test("global Knowledge Map", async ({ page }) => {
     await seedWorkWithGraphData(userId, { title: "Global Graph Sweep Work" });
     await login(page);
     await page.goto("/graph");
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    // A bare `/graph` intentionally opens the context chooser rather than an
+    // implicit whole-corpus render (Stage 3 rebuild, `app/(app)/graph/page.tsx`'s
+    // own doc comment) — a genuinely new page state the pre-Stage-3
+    // "Visualization" heading assertion never scanned at all. Scan it, then
+    // choose a context and scan the resulting workspace too.
+    await expect(page.getByTestId("knowledge-map-context-chooser")).toBeVisible();
+    expect((await scan(page)).violations).toEqual([]);
+
+    await page.getByRole("tab", { name: "Work" }).click();
+    await page.getByRole("button", { name: /Global Graph Sweep Work/ }).click();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     expect((await scan(page)).violations).toEqual([]);
   });
 
@@ -161,19 +174,20 @@ test.describe("Accessibility sweep (Phase 19.8)", () => {
   });
 
   /**
-   * Phase 22.6 gate axe extension: the pre-existing "roadmap and per-work
-   * graph" test above already loads `/works/[workId]/graph` in its default
-   * layout (Phase 22.8: roadmap is the default view, absent from the URL —
-   * see `GraphView.tsx`'s `layoutModeFromParams`), but only in its
-   * collapsed/closed state — the "Roadmap for" popover, the accessible
-   * node-browser table, and the inspector's "Why this, here" disclosure are
-   * all closed by default and were never scanned open. This test drives the
-   * SAME roadmap layout into its expanded states (progress strip visible,
-   * popover open, a roadmap-annotated node selected with its disclosure
-   * expanded) so axe actually exercises those new Phase 22.7/22.8 surfaces,
-   * not just their closed shell.
+   * Phase 22.6 gate axe extension, retargeted for the Stage 3 Knowledge Map
+   * rebuild (stage3-kmap-verification.md §2.1 deleted `GraphView.tsx` and
+   * its "Roadmap for" root-work popover / progress strip / "Why this, here"
+   * roadmap disclosure entirely — that reasoning now lives only on the
+   * dedicated `/works/[workId]/roadmap` page, confirmed by grep to have no
+   * replacement anywhere in `components/knowledge-map/`, so there is
+   * nothing left to retarget those three specific controls to). The
+   * pre-existing "roadmap and per-work graph"/"global Knowledge Map" tests
+   * above only scan the Knowledge Map in its closed-shell default state;
+   * this test drives it into its real EXPANDED states instead — the
+   * "More…" secondary menu and a selected node's Inspector drawer — so axe
+   * actually exercises those open surfaces too, not just their closed shell.
    */
-  test("Visualization roadmap layout — expanded controls (Roadmap-for popover, progress strip, why-this-here disclosure)", async ({ page }) => {
+  test("Knowledge Map — expanded controls (More menu, selected-node inspector)", async ({ page }) => {
     // Two independent seeded works (own bib/concept pairs, no edge between
     // them) on the GLOBAL /graph, so selecting one leaves the other's node(s)
     // provably unconnected and therefore dimmed by the default "Focus
@@ -184,32 +198,26 @@ test.describe("Accessibility sweep (Phase 19.8)", () => {
     await seedWorkWithGraphData(userId, { title: "Roadmap Layout Axe Sweep Work B" });
     await login(page);
     await page.goto("/graph");
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    // A bare /graph opens the context chooser first (Stage 3 rebuild, see
+    // the "global Knowledge Map" test above) — choose Work A.
+    await expect(page.getByTestId("knowledge-map-context-chooser")).toBeVisible();
+    await page.getByRole("tab", { name: "Work" }).click();
+    await page.getByRole("button", { name: /Roadmap Layout Axe Sweep Work A/ }).click();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
 
-    // Roadmap is the default layout mode; wait for the progress strip (only
-    // rendered once at least one roadmap-annotated node is present).
-    await expect(page.locator("[data-graph-roadmap-progress]")).toBeVisible();
+    // Open the "More…" secondary menu (Arrange mode, orientation presets,
+    // diagnostics) and leave it open for the scan.
+    const moreButton = page.getByRole("button", { name: "More…" });
+    await moreButton.click();
+    await expect(page.getByRole("menu", { name: "Arrange, orientation, and diagnostics" })).toBeVisible();
 
-    // Open the "Roadmap for" root-work popover, then close it again — it's an
-    // absolutely-positioned overlay that would otherwise intercept clicks
-    // meant for the controls beneath it (e.g. the progress strip's own
-    // "Next up: Physics" button, whose accessible name also matches "Physics").
-    const roadmapForButton = page.getByRole("button", { name: /^Roadmap for/ });
-    await roadmapForButton.click();
-    await expect(page.locator("#roadmap-for-popover")).toBeVisible();
-    await roadmapForButton.click();
-    await expect(page.locator("#roadmap-for-popover")).toHaveCount(0);
-
-    // Open the accessible node browser and select the cited "Physics" node
-    // (scoped to its table row, not the progress strip's "Next up: Physics"
-    // button, which shares the same accessible-name substring) to populate
-    // the inspector, then expand its roadmap disclosure.
-    await page.getByText("Accessible node browser").click();
-    await page.locator("[data-graph-node]").filter({ hasText: "Physics" }).getByRole("button").first().click();
-    const disclosure = page.locator("[data-graph-roadmap-disclosure] summary");
-    await expect(disclosure).toBeVisible();
-    await disclosure.click();
-    await expect(page.locator("[data-graph-roadmap-disclosure]")).toContainText("Why this, here");
+    // Select the cited "Physics" node via the List view (the accessible node
+    // browser's modern successor) to populate the Inspector drawer, leaving
+    // both the menu and the inspector open together for the scan.
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+    await page.locator("[data-graph-node]").filter({ hasText: "Physics" }).click();
+    await expect(page.getByTestId("knowledge-map-inspector")).toBeVisible();
 
     expect((await scan(page)).violations).toEqual([]);
   });
@@ -287,16 +295,17 @@ test.describe("Phase 23.2 accessibility completion", () => {
     await assertNoHiddenHorizontalOverflow(page);
   });
 
-  test("Visualization roadmap layout reflows at 200% zoom without horizontal overflow or lost controls", async ({ page }) => {
+  test("Knowledge Map reflows at 200% zoom without horizontal overflow or lost controls", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(zoomUserId, { title: "Zoom Sweep Roadmap Work" });
     await zoomLogin(page);
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
-    await expect(page.locator("[data-graph-roadmap-progress]")).toBeVisible();
+    // Stage 3 Knowledge Map rebuild: no page-level heading or roadmap
+    // progress strip (both retired — see the "expanded controls" test
+    // above) — the toolbar itself is the readiness signal.
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     await page.setViewportSize({ width: 640, height: 400 });
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
-    await expect(page.locator("[data-graph-roadmap-progress]")).toBeVisible();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     await assertNoHiddenHorizontalOverflow(page);
   });
 
@@ -397,12 +406,11 @@ test.describe("Phase 23.2 accessibility completion", () => {
     expect(await auditTouchTargets(page)).toEqual([]);
   });
 
-  test("Visualization roadmap layout controls meet the 44x44 touch-target minimum", async ({ page }) => {
+  test("Knowledge Map controls meet the 44x44 touch-target minimum", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(zoomUserId, { title: "Touch Target Roadmap Work" });
     await zoomLogin(page);
     await page.goto(`/works/${workId}/graph`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
-    await expect(page.locator("[data-graph-roadmap-progress]")).toBeVisible();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     expect(await auditTouchTargets(page)).toEqual([]);
   });
 
@@ -438,16 +446,24 @@ test.describe("Phase 23.2 accessibility completion", () => {
   // the visible-disclosure convention (aria-expanded/aria-controls) but,
   // unlike every other reader-shell/graph disclosure this codebase brought
   // to the D-19-18/19/20 standard, had no Escape-to-close and no
-  // trigger-focus restoration at all.
-  test("Visualization 'Roadmap for' popover supports Escape-to-close and trigger-focus restoration", async ({ page }) => {
+  // trigger-focus restoration at all. The Stage 3 Knowledge Map rebuild
+  // deleted that popover entirely with no replacement (see the "expanded
+  // controls" test above) — retargeted here to the toolbar's own real
+  // "More…" secondary menu, the same disclosure shape, which DOES wire
+  // `useDialogEscape` with a focus-restore callback (`KnowledgeMapToolbar.tsx`).
+  test("Knowledge Map 'More…' menu supports Escape-to-close and trigger-focus restoration", async ({ page }) => {
     await seedWorkWithGraphData(zoomUserId, { title: "Roadmap Popover Focus Sweep Work" });
     await zoomLogin(page);
     await page.goto("/graph");
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
-    const trigger = page.getByRole("button", { name: /^Roadmap for/ });
+    await expect(page.getByTestId("knowledge-map-context-chooser")).toBeVisible();
+    await page.getByRole("tab", { name: "Work" }).click();
+    await page.getByRole("button", { name: /Roadmap Popover Focus Sweep Work/ }).click();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
+
+    const trigger = page.getByRole("button", { name: "More…" });
     await trigger.focus();
     await trigger.click();
-    const popover = page.locator("#roadmap-for-popover");
+    const popover = page.getByRole("menu", { name: "Arrange, orientation, and diagnostics" });
     await expect(popover).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
 

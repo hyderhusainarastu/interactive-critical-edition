@@ -590,7 +590,13 @@ test.describe("Phase 12 workspace foundation", () => {
     await expect(rail).toHaveAttribute("data-collapsed", "false");
 
     await page.goto("/graph");
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    // A bare `/graph` (no work-scoped context) intentionally opens the
+    // Knowledge Map's context chooser rather than a toolbar+scene — the
+    // Stage 3 rebuild's own deliberate "never an implicit whole-corpus
+    // render" behavior (`app/(app)/graph/page.tsx`'s doc comment). This is
+    // still the correct readiness signal for a page-loaded assertion; it
+    // replaces the old, now-nonexistent "Visualization" heading.
+    await expect(page.getByTestId("knowledge-map-context-chooser")).toBeVisible();
     await expect(page.locator("footer")).toHaveCount(0);
     await expect(page.locator(".app-shell[data-immersive]")).toHaveAttribute("data-immersive", "true");
     // First-time-only auto-collapse (§4): landing on an immersive route

@@ -197,7 +197,17 @@ test.describe("Performance budgets (Phase 23.6)", () => {
     expect(elapsed).toBeLessThan(BUDGET_MS);
   });
 
-  test("Visualization builds, renders, filters, and re-focuses within budget", async ({ page }) => {
+  // Retargeted for the Stage 3 Knowledge Map rebuild (the "Visualization"
+  // page's old heading, "Kind" select, and "Focus mode" button group were
+  // all part of the legacy `GraphView.tsx` UI the rebuild deleted —
+  // stage3-kmap-verification.md §6/§2.1). The page has no heading of its
+  // own now (readiness signal is the toolbar itself, same successor pattern
+  // `responsive-visual.spec.ts` already uses); the filter select is now
+  // labeled "Node type", not "Kind"; and the old button-group focus toggle
+  // is now `FilterRail`'s "Focus neighborhood" `<select>`, with `"all"`
+  // ("All (no dimming)") as the successor to the old "Full graph" state.
+  // `?layout=explore` is a legacy query param the new route ignores.
+  test("Knowledge Map builds, renders, filters, and re-focuses within budget", async ({ page }) => {
     const BUILD_BUDGET_MS = 5000; // WebGL/three.js is the heaviest client bundle in the app
     const FILTER_BUDGET_MS = 2000;
     const FOCUS_BUDGET_MS = 2000;
@@ -205,41 +215,45 @@ test.describe("Performance budgets (Phase 23.6)", () => {
 
     await login(page);
     const buildStart = Date.now();
-    await page.goto(`/works/${workId}/graph?layout=explore`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
+    await page.goto(`/works/${workId}/graph`);
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
     const buildElapsed = Date.now() - buildStart;
-    record("Visualization build/render", buildElapsed, BUILD_BUDGET_MS);
+    record("Knowledge Map build/render", buildElapsed, BUILD_BUDGET_MS);
     expect(buildElapsed).toBeLessThan(BUILD_BUDGET_MS);
 
     const filterStart = Date.now();
-    await page.getByLabel("Kind").selectOption("concept");
-    await expect(page.getByLabel("Kind")).toHaveValue("concept");
+    await page.getByLabel("Node type").selectOption("concept");
+    await expect(page.getByLabel("Node type")).toHaveValue("concept");
     const filterElapsed = Date.now() - filterStart;
-    record("Visualization filter", filterElapsed, FILTER_BUDGET_MS);
+    record("Knowledge Map filter", filterElapsed, FILTER_BUDGET_MS);
     expect(filterElapsed).toBeLessThan(FILTER_BUDGET_MS);
 
-    await page.getByLabel("Kind").selectOption("all");
-    const focusGroup = page.getByRole("group", { name: "Focus mode" });
+    await page.getByLabel("Node type").selectOption("all");
+    const focusSelect = page.getByLabel("Focus neighborhood");
     const focusStart = Date.now();
-    await focusGroup.getByRole("button", { name: "Full graph" }).click();
-    await expect(focusGroup.getByRole("button", { name: "Full graph" })).toHaveAttribute("aria-pressed", "true");
+    await focusSelect.selectOption("neighborhood");
+    await expect(focusSelect).toHaveValue("neighborhood");
     const focusElapsed = Date.now() - focusStart;
-    record("Visualization focus mode change", focusElapsed, FOCUS_BUDGET_MS);
+    record("Knowledge Map focus mode change", focusElapsed, FOCUS_BUDGET_MS);
     expect(focusElapsed).toBeLessThan(FOCUS_BUDGET_MS);
   });
 
-  test("Visualization stays within budget with 40 seeded nodes (large-graph test)", async ({ page }) => {
+  test("Knowledge Map stays within budget with 40 seeded nodes (large-graph test)", async ({ page }) => {
     const BUDGET_MS = 6000;
     const { workId } = await seedWorkWithGraphData(userId, { title: "Perf Large Graph Work" });
     await seedManyGraphNodes(workId, 40);
 
     await login(page);
     const start = Date.now();
-    await page.goto(`/works/${workId}/graph?layout=explore`);
-    await expect(page.getByRole("heading", { name: "Visualization" })).toBeVisible();
-    await expect(page.getByText(/\d+ of \d+ shown/)).toBeVisible();
+    await page.goto(`/works/${workId}/graph`);
+    await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
+    // Switch to List (the accessible node browser) for a real, textual
+    // node-count assertion — the 3D view's default state has no equivalent
+    // "N of M shown" text (that lived on the deleted legacy toolbar).
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByText(/\d+ nodes? shown/)).toBeVisible();
     const elapsed = Date.now() - start;
-    record("Visualization render (40+ nodes)", elapsed, BUDGET_MS);
+    record("Knowledge Map render (40+ nodes)", elapsed, BUDGET_MS);
     expect(elapsed).toBeLessThan(BUDGET_MS);
   });
 
