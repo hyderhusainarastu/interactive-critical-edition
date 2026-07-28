@@ -22,6 +22,34 @@ export const metadata: Metadata = {
 };
 
 /**
+ * `suppressHydrationWarning` on `<html>` (D-a11y-s7-4): `PreferenceBootstrap`'s
+ * inline `<script>` runs in `<head>`, before React hydrates, and writes
+ * `data-theme`/`data-theme-preference`/`data-font-size`/`data-reading-width`/
+ * `data-focus-mode`/`data-script-display`/`data-motion` directly onto
+ * `document.documentElement` — the very `<html>` node the App Router
+ * treats as part of the React tree (unlike the old Pages Router, where
+ * `<html>`/`<body>` lived outside client hydration entirely). The server
+ * renders `<html>` with none of those attributes, so by the time React
+ * hydrates that node its live attributes have already diverged — a
+ * deterministic, every-single-load hydration mismatch (dev: "A tree
+ * hydrated but some attributes ... didn't match"; production, minified:
+ * React error #418), reproduced 4x per cross-browser smoke run in BOTH
+ * Firefox and WebKit (`stage7-prep/crossbrowser-smoke.md`), independent of
+ * the browser engine because the real cause is this app's own markup, not
+ * a browser quirk.
+ *
+ * This is the same intentional divergence `next-themes` and React's own
+ * hydration docs (https://react.dev/link/hydration-mismatch) name
+ * `suppressHydrationWarning` for: a pre-hydration script that deliberately
+ * sets attributes to avoid a flash of the wrong theme/typography before
+ * React can render its own preference-aware markup. `suppressHydrationWarning`
+ * only suppresses the mismatch warning for this one element's own
+ * attributes (React's own docs: "works one level deep") — it does not hide
+ * mismatches anywhere else in the tree, so it isn't a blanket escape hatch,
+ * just the correct scope for this one already-intentional case.
+ */
+
+/**
  * `PageTransition` deliberately does NOT wrap `{children}` here anymore.
  * It used to (cross-fading every route change), but for `(app)` routes
  * `{children}` resolves to `AppShell` — header, account/preferences menus,
@@ -50,6 +78,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <head><PreferenceBootstrap /></head>
       <body className="min-h-full flex flex-col"><InteractionSoundRoot>{children}</InteractionSoundRoot></body>

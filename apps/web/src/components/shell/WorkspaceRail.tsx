@@ -93,6 +93,20 @@ export function WorkspaceRail({
   return (
     <div
       data-collapsed={collapsed}
+      // D-a11y-s7-4 (a11y-proxy/cross-browser finding #4, React hydration
+      // error #418): this component's own doc comment above already says
+      // "SSR always renders expanded; the client corrects itself before
+      // paint via this lazy initializer" — an intentional FOUC-avoidance
+      // divergence, same shape as `PreferenceBootstrap`'s `<html>` script
+      // (`layout.tsx`). React's hydration diff doesn't know that
+      // divergence is deliberate, so once a session has ever visited an
+      // immersive route (localStorage's collapse preference now `true`)
+      // and then does a fresh full navigation elsewhere, this div's very
+      // first client render legitimately disagrees with the server's
+      // always-`false` default — reproduced directly via a fresh
+      // `layout.tsx`+`hydration-smoke.spec.ts` walk. `suppressHydrationWarning`
+      // is the same, correct, one-level-deep fix as `<html>`'s.
+      suppressHydrationWarning
       className="workspace-rail hidden shrink-0 flex-col border-e border-[var(--color-border)] bg-[var(--color-rail-surface)] md:fixed md:inset-y-0 md:start-0 md:z-20 md:flex"
     >
       <div className="flex min-h-14 items-center gap-2 px-3">
@@ -117,7 +131,6 @@ export function WorkspaceRail({
             label={item.label}
             icon={ICONS[item.key]}
             active={item.key === "read" ? isReadSectionActive(pathname) : isNavItemActive(pathname, item.href)}
-            collapsed={collapsed}
           />
         ))}
         {hasReadItem && (
@@ -157,6 +170,13 @@ export function WorkspaceRail({
           className="rail-item-tooltip app-control app-icon-button hidden lg:inline-flex"
           data-tooltip={collapsed ? "Expand navigation" : "Collapse navigation"}
           aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          // D-a11y-s7-4: same real, reproduced SSR-vs-first-client-render
+          // divergence as `<html>`/the outer rail `<div>`/`UploadAction` —
+          // `collapsed` itself is intentionally SSR-`false`-then-corrected
+          // from `localStorage`, so this button's label/tooltip/glyph text
+          // legitimately differ on a session that already has a stored
+          // `true` preference.
+          suppressHydrationWarning
           onClick={toggleCollapsed}
         >
           {collapsed ? "»" : "«"}

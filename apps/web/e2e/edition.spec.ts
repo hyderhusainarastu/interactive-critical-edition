@@ -729,3 +729,56 @@ test("the default-open notes drawer, its My notes tab, and the open selection po
     await expect(selectionToolbar).toHaveCount(0);
   }
 });
+
+/**
+ * A11y-proxy pass finding (stage7-prep/a11y-proxy.md #2, WCAG AA
+ * color-contrast, serious, measured down to 1.07:1): reported against the
+ * Critical-notes tab once a generated note's evidence AND a nested claim's
+ * own evidence are both revealed. Investigated directly (not guess-fixed):
+ * `CriticalNoteCard`'s reveal panel is `.app-panel-enter` (a real, one-shot
+ * `.18s` mount animation, gated off entirely under reduced motion), and a
+ * scan taken before that animation finishes genuinely measures a
+ * still-fading, near-transparent frame — not the resting state a reader
+ * (or a real screen reader, which never runs mid-animation) ever sees.
+ * Confirmed empirically: this exact drill-down path scores ZERO
+ * `color-contrast` violations once actually settled, in both themes — no
+ * token was misused here. `expect.poll`, not a fixed timeout, is used to
+ * wait for the reveal panel's own `opacity` to actually reach `1`, since a
+ * plain `waitForTimeout` was empirically NOT reliable for this specific
+ * animated panel in this environment (a fixed 400ms wait still sometimes
+ * caught it holding at a fractional, sub-1 opacity here) — see D-a11y-s7-4
+ * below and the KnowledgeMapToolbar test file for the one real, unrelated
+ * contrast defect this same pass also found.
+ */
+test("Critical-notes evidence reveal (note + nested claim) has zero axe contrast violations once settled, in both themes", async ({ page }) => {
+  for (const themeButton of ["Light", "Dark"] as const) {
+    await page.getByRole("button", { name: themeButton, exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", themeButton.toLowerCase());
+    await page.waitForTimeout(300);
+
+    const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+    await sidebar.getByRole("button", { name: /Critical notes/ }).click();
+    await expect(sidebar.getByRole("heading", { name: "Generated critical notes" })).toBeVisible();
+    // Both toggles below are stateful across theme-loop iterations (the
+    // note/card stays expanded once opened) — only click each one while it
+    // is still in its collapsed label, so the second (dark) iteration
+    // doesn't wait forever for a button whose label already flipped during
+    // the first (light) iteration.
+    const noteEvidenceToggle = sidebar.getByRole("button", { name: /^Evidence and claims$|^Hide evidence$/ }).first();
+    if ((await noteEvidenceToggle.textContent()) === "Evidence and claims") await noteEvidenceToggle.click();
+    const claimEvidenceToggle = sidebar.getByRole("button", { name: /^Evidence \(\d\)$|^Hide evidence$/ }).last();
+    if (/^Evidence \(\d\)$/.test((await claimEvidenceToggle.textContent()) ?? "")) await claimEvidenceToggle.click();
+    await expect(sidebar.getByText("Supporting")).toBeVisible();
+
+    // Wait for the real resting state — see doc comment above.
+    await expect
+      .poll(() => page.evaluate(() => {
+        const panel = document.querySelector("[aria-label='Edition sidebar'] .app-panel-enter") as HTMLElement | null;
+        return panel ? getComputedStyle(panel).opacity : null;
+      }))
+      .toBe("1");
+
+    const results = await new AxeBuilder({ page }).include("#main-content").withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations.filter((v) => v.id === "color-contrast"), `${themeButton} theme, evidence reveal`).toEqual([]);
+  }
+});

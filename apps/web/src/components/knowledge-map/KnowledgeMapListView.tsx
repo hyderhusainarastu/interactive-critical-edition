@@ -21,6 +21,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { LiveRegion } from "@/components/primitives/LiveRegion";
 import { STATE_META, type GraphNode, type NodeState } from "../graph/types";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
 import { buildListRows, LAYER_LABEL, LIST_PAGE_SIZE, paginateListRows, sortListRows, type ListSortKey } from "./listLayout";
@@ -72,6 +73,19 @@ export function KnowledgeMapListView({
   const [sortKey, setSortKey] = useState<ListSortKey>("distance");
   const [ascending, setAscending] = useState(true);
   const [page, setPage] = useState(1);
+  // A11y-proxy pass finding (stage7-prep/a11y-proxy.md #4): selecting a
+  // node produced zero screen-reader announcement — the one
+  // `aria-live="polite"` region on this view was the pager's "Page X of Y"
+  // text, which never changes on selection. Announced here, tied directly
+  // to the actual user action (the row/button click that calls `onSelect`),
+  // rather than derived from a `selectedId`-change effect — that would
+  // also fire on an initial deep-link/mount selection, which isn't a "just
+  // selected this" event a screen-reader user needs announced.
+  const [announcement, setAnnouncement] = useState("");
+  function handleSelect(id: string, label: string) {
+    onSelect(id);
+    setAnnouncement(`Selected ${label}`);
+  }
 
   const visibleNodes = useMemo(() => (visibleNodeIds ? nodes.filter((n) => visibleNodeIds.has(String(n.id))) : nodes), [nodes, visibleNodeIds]);
   const visibleIdSet = useMemo(() => new Set(visibleNodes.map((n) => String(n.id))), [visibleNodes]);
@@ -100,7 +114,12 @@ export function KnowledgeMapListView({
   return (
     <div data-testid="knowledge-map-list-view" className="flex h-full flex-col overflow-hidden">
       <div className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] px-3 py-2 text-xs">
-        <span className="text-[var(--color-text-muted)]">
+        {/* A11y-proxy pass finding #4: this result count is real, visible
+            text that also needs to be a live region — filtering/searching
+            changes it without any other cue a screen-reader user would
+            otherwise get. `aria-atomic` re-reads the whole sentence on any
+            change, not just the changed digit. */}
+        <span className="text-[var(--color-text-muted)]" role="status" aria-live="polite" aria-atomic="true">
           {totalRows} node{totalRows === 1 ? "" : "s"} shown
         </span>
         <div className="ml-auto flex items-center gap-1" role="group" aria-label="Sort">
@@ -108,6 +127,7 @@ export function KnowledgeMapListView({
           <SortButton label="By label" active={sortKey === "label"} ascending={ascending} onClick={() => toggleSort("label")} />
         </div>
       </div>
+      <LiveRegion message={announcement} />
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
         {totalRows === 0 ? (
@@ -130,7 +150,7 @@ export function KnowledgeMapListView({
                     isRoot={rootNodeId === id}
                     meta={meta}
                     emphasisState={emphasisStateForNode(id, selectedId, emphasis)}
-                    onSelect={() => onSelect(id)}
+                    onSelect={() => handleSelect(id, row.node.label)}
                   />
                 );
               })}

@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { createVerifiedTestUser, deleteTestUser, seedDebateCluster, seedWorkWithGraphData } from "./helpers";
 
@@ -120,5 +121,55 @@ test.describe("Writer insertion from Reader and Knowledge Map (integration step 
     const draft = page.getByLabel("Draft");
     await expect(draft).toHaveValue(/The soul is inseparable from the body it is the form of\./);
     await expect(page.getByText("Inserted from Reader.")).toBeVisible();
+  });
+
+  /**
+   * A11y-proxy pass finding (stage7-prep/a11y-proxy.md #2, WCAG AA
+   * color-contrast, serious, measured down to 1.32:1): reported against
+   * this exact dialog's body/status text. Investigated directly: the
+   * dialog `<section role="dialog">` is `.app-panel-enter` (a real,
+   * one-shot `.18s` mount animation, gated off entirely under reduced
+   * motion) — a scan taken before it settles genuinely measures a still-
+   * fading, near-transparent frame. Confirmed empirically this dialog
+   * scores ZERO `color-contrast` violations once actually settled, in both
+   * themes — no token was misused here. `expect.poll` on the section's own
+   * `opacity`, not a fixed timeout, is used to wait for the real resting
+   * state: a plain `waitForTimeout(400)` was empirically NOT reliable for
+   * this specific dialog in this environment (it was caught holding at a
+   * fractional, sub-1 opacity even after 400ms real wall-clock time).
+   */
+  test("Insert into Writer dialog has zero axe contrast violations once settled, in both themes", async ({ page }) => {
+    await login(page, EMAIL, PASSWORD);
+    for (const theme of ["light", "dark"] as const) {
+      if (theme === "dark") {
+        await page.getByRole("button", { name: "Dark", exact: true }).click();
+        await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+      }
+      await page.goto(`/graph?ctxKind=claim&ctxId=${claimAId}&view=list&focus=all`);
+      await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+      const claimRow = page.locator(`[data-graph-node="claim:${claimAId}"]`);
+      await expect(claimRow).toBeVisible();
+      await claimRow.click();
+      const inspector = page.getByTestId("knowledge-map-inspector");
+      await expect(inspector).toBeVisible();
+      await inspector.getByRole("button", { name: "Insert into Writer" }).click();
+      const dialog = page.getByRole("dialog", { name: "Insert into Writer" });
+      await expect(dialog).toBeVisible();
+
+      // Wait for the real resting state — see doc comment above.
+      await expect
+        .poll(() => page.evaluate(() => {
+          const section = document.querySelector("section[role='dialog']") as HTMLElement | null;
+          return section ? getComputedStyle(section).opacity : null;
+        }))
+        .toBe("1");
+
+      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+      expect(results.violations.filter((v) => v.id === "color-contrast"), `${theme} theme`).toEqual([]);
+
+      // Close so the next iteration reaches a clean state.
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+    }
   });
 });

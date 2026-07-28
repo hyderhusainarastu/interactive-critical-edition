@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import {
   createVerifiedTestUser,
@@ -640,6 +641,59 @@ test.describe("Knowledge Map — inspector / accessible-view parity", () => {
   });
 });
 
+// A11y-proxy pass finding (stage7-prep/a11y-proxy.md #4, KnowledgeMapListView.tsx):
+// the "N nodes shown" result count wasn't inside any `aria-live` region,
+// and selecting a node produced no announcement at all — confirmed at
+// capture time by an empty live-region text content both before and after
+// selecting a node, despite the Inspector genuinely opening with real
+// content. Both gaps are fixed in `KnowledgeMapListView.tsx`.
+test.describe("Knowledge Map — List view live-region announcements (WCAG 4.1.3)", () => {
+  test.beforeAll(async () => {
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+  });
+  test.afterAll(async () => {
+    await deleteTestUser(EMAIL);
+  });
+
+  test("the result-count text is itself a live region, and selecting a node announces the selection and its name", async ({ page }) => {
+    const { workId, conceptId } = await seedWorkWithGraphData(userId, { title: `Live region work ${Date.now()}` });
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await waitForSceneInteractive(page);
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+
+    // 1. Result count lives in a polite live region from the start.
+    const resultCount = page.locator("[role='status'][aria-live='polite']", { hasText: /nodes? shown/ });
+    await expect(resultCount).toBeVisible();
+    await expect(resultCount).toHaveAttribute("aria-atomic", "true");
+    const beforeCountText = await resultCount.textContent();
+    expect(beforeCountText).toMatch(/\d+ nodes? shown/);
+
+    // Filtering changes the announced count — search narrows the set (the
+    // root work itself always stays visible regardless of search term, so
+    // this asserts the count actually changed, not that it drops to zero).
+    const search = page.getByPlaceholder("Search…");
+    await search.fill("nonexistent-node-search-term-xyz");
+    await expect(resultCount).not.toHaveText(beforeCountText ?? "");
+    await search.fill("");
+    await expect(resultCount).toHaveText(beforeCountText ?? "");
+
+    // 2. Selecting a node announces "Selected <name>" in a distinct,
+    // sr-only polite region — not the result-count region above, and not
+    // silent the way capture-time evidence showed.
+    const row = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    await expect(row).toBeVisible();
+    const rowLabel = (await row.locator("button").first().innerText()).trim();
+    const selectionAnnouncement = page.locator(".sr-only[role='status'][aria-live='polite']");
+    await expect(selectionAnnouncement).toHaveCount(0);
+    await row.click();
+    await expect(page.getByTestId("knowledge-map-inspector")).toBeVisible();
+    await expect(selectionAnnouncement).toContainText("Selected");
+    await expect(selectionAnnouncement).toContainText(rowLabel);
+  });
+});
+
 test.describe("Knowledge Map — 3D / 2D / List switching, remount, deep links", () => {
   test.beforeAll(async () => {
     userId = await createVerifiedTestUser(EMAIL, PASSWORD);
@@ -1117,4 +1171,49 @@ test.describe("Knowledge Map — context chooser", () => {
     await expect(page).toHaveURL(new RegExp(`ctxId=${workId}`));
     await waitForSceneInteractive(page);
   });
+});
+
+// A11y-proxy pass finding (stage7-prep/a11y-proxy.md #2, WCAG AA
+// color-contrast, serious, measured 3.7:1): the toolbar's pressed view-mode
+// button ("List"/"2D"/"3D", whichever is active) and the pressed "Filters"
+// button both used to pair `--color-highlight` (a decorative/translucent-
+// tuned gold token, not meant for text-on-fill use — see its own doc
+// comment in `globals.css`) with `--color-accent-ink` text. `KnowledgeMapToolbar.tsx`
+// now uses the dedicated `--color-toolbar-selected-bg`/`-fg` pair
+// (`globals.css`, D-23-53) instead — the same tokens the Visualization
+// toolbar's other "selected" pills already use, verified 11.66:1 light /
+// 5.27:1 dark. These tests assert a real, zero-tolerance axe
+// `color-contrast` scan (not a hand-computed ratio) on the toolbar in both
+// themes, with the pressed state actually engaged.
+test.describe("Knowledge Map — toolbar pressed-state contrast (WCAG AA)", () => {
+  test.beforeAll(async () => {
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+  });
+  test.afterAll(async () => {
+    await deleteTestUser(EMAIL);
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`pressed view-toggle and Filters button meet 4.5:1 (${theme})`, async ({ page }) => {
+      const { workId } = await seedWorkWithGraphData(userId, { title: `Toolbar contrast work ${theme} ${Date.now()}` });
+      await login(page);
+      if (theme === "dark") {
+        await page.getByRole("button", { name: "Workspace preferences" }).click();
+        await page.getByLabel("Theme").selectOption("dark");
+        await page.keyboard.press("Escape");
+      }
+      await page.goto(`/works/${workId}/graph`);
+      await waitForSceneInteractive(page);
+      const toolbar = page.getByTestId("knowledge-map-toolbar");
+      // The current view button (default "3D") is already `aria-pressed`;
+      // make sure Filters is pressed too, so both flagged controls are
+      // pressed at once for one scan (it may already default open).
+      const filtersButton = toolbar.getByRole("button", { name: "Filters", exact: false });
+      if ((await filtersButton.getAttribute("aria-pressed")) !== "true") await filtersButton.click();
+      await expect(toolbar.getByRole("button", { name: "3D", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(filtersButton).toHaveAttribute("aria-pressed", "true");
+      const results = await new AxeBuilder({ page }).include("[role='toolbar'][aria-label='Knowledge Map']").withTags(["wcag2a", "wcag2aa"]).analyze();
+      expect(results.violations.filter((v) => v.id === "color-contrast")).toEqual([]);
+    });
+  }
 });

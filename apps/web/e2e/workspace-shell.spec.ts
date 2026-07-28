@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { db, users } from "@ice/db";
 import { eq } from "drizzle-orm";
@@ -610,6 +611,41 @@ test.describe("Phase 12 workspace foundation", () => {
     await page.goto("/dashboard");
     await expect(page.locator("footer")).toBeVisible();
     await expect(rail).toHaveAttribute("data-collapsed", "true");
+  });
+
+  // A11y-proxy pass finding (stage7-prep/a11y-proxy.md #1, WCAG 2A 4.1.2
+  // `link-name`, serious): the collapsed rail hides `.rail-label`'s visible
+  // text via CSS (`display: none`) and the icon glyph is `aria-hidden`, so
+  // every one of the four primary rail links had NO accessible name at all
+  // once collapsed — confirmed by axe on Reader/Research/Knowledge
+  // Map/Writer (every route where the rail actually collapses; Home/Read
+  // are always expanded by default on /dashboard and /works, so the defect
+  // never showed there). Reuses the immersive-route auto-collapse above
+  // (Knowledge Map) to reach the same collapsed state, then asserts both
+  // ways: Playwright's own accessible-name-aware `getByRole` locator (the
+  // same computation a screen reader relies on, not just visible text), and
+  // a real axe scan confirming zero `link-name` violations post-fix.
+  test("collapsed rail links keep a real accessible name (WCAG 4.1.2 link-name)", async ({ page }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill(EMAIL);
+    await page.getByLabel("Password").fill(PASSWORD);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await page.waitForURL("/dashboard");
+
+    await page.goto("/graph");
+    await expect(page.locator(".workspace-rail")).toHaveAttribute("data-collapsed", "true");
+
+    const primaryNav = page.getByRole("navigation", { name: "Primary navigation" });
+    for (const label of ["Home", "Read", "Research", "Write"]) {
+      await expect(primaryNav.getByRole("link", { name: label, exact: true })).toBeVisible();
+    }
+
+    const results = await new AxeBuilder({ page })
+      .include(".workspace-rail")
+      .withTags(["wcag2a", "wcag2aa"])
+      .analyze();
+    expect(results.violations.filter((v) => v.id === "link-name")).toEqual([]);
+    expect(results.violations).toEqual([]);
   });
 
   // Owner-reported live regression (2026-07-25): the account/preferences
