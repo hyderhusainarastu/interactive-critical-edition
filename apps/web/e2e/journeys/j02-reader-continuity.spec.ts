@@ -30,10 +30,6 @@ let documentId = "";
 let runId = "";
 let bodyBlockId = "";
 
-function main(page: Page) {
-  return page.locator("#main-content");
-}
-
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(EMAIL);
