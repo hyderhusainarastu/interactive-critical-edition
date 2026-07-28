@@ -708,8 +708,19 @@ export function ReaderShell({
           independently-toggleable sidebar. The legacy (no-edition)
           `AnnotationsPanel` path is unchanged (spec §4.4) — it has no
           notes/highlights/bookmarks tab, a documented scope limit rather
-          than a silently dropped capability (see this lane's final report). */}
-      {effectiveShowInteractive && (showDrawer || readerFocus) && !embedded && (
+          than a silently dropped capability (see this lane's final report).
+          Deliberately NOT gated on `effectiveShowInteractive`: the
+          retired `NotesSidebar` this drawer's "My notes" tab replaces was
+          never gated on the reader-view toggle either (highlights/notes/
+          bookmarks are created and meaningful in every representation —
+          Published edition, Interactive reader, and PDF alike), and
+          spec §5 requires apparatus/terms/notes/claims/annotations/
+          sources/highlights/notes/bookmarks to survive a representation
+          switch. Gating the whole merged drawer on interactive-only would
+          have made My notes unreachable while viewing Published edition —
+          a real reachability regression the merge itself must not
+          introduce, not just a chrome rearrangement. */}
+      {(showDrawer || readerFocus) && !embedded && (
         visibleEdition ? (
           <EditionAnnotationsPanel
             edition={visibleEdition}
