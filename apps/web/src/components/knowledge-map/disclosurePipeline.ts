@@ -23,7 +23,14 @@
  * for the one input `disclosure.ts`'s priority ordering actually needs,
  * not an attempt to recover a field the contract doesn't carry.
  */
-import { initialNeighborhood, type DeviceClass, type DisclosureCandidate, type PrioritizedSelection } from "@ice/graph-display";
+import {
+  buildAggregateNodes,
+  initialNeighborhood,
+  type DeviceClass,
+  type DisclosureCandidate,
+  type OmittedEntry,
+  type PrioritizedSelection,
+} from "@ice/graph-display";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
 import type { NodeType } from "../graph/types";
 
@@ -86,4 +93,88 @@ export function buildInitialDisclosure(
 ): PrioritizedSelection<NodeType> {
   const candidates = buildNeighborCandidates(nodes, links, new Set([String(root.id)]), new Set([String(root.id)]));
   return initialNeighborhood(root, candidates, device);
+}
+
+/** The single, fixed aggregation rule this workspace uses everywhere an
+ *  aggregate is (re)computed, so an aggregate node's id is deterministic
+ *  and reproducible across a fresh mount given the SAME expansion trail —
+ *  the "Recreate aggregate summaries from their current basis rather than
+ *  trusting stale counts" URL-reconstruction rule (charter §9) depends on
+ *  this being the one and only rule name ever used. */
+export const KNOWLEDGE_MAP_AGGREGATION_RULE = "knowledge-map-disclosure";
+export const KNOWLEDGE_MAP_AGGREGATION_VERSION = "1";
+
+export interface DisclosureState {
+  /** Every currently-visible display id — the root, its initial neighbors,
+   *  and everything admitted by a valid expansion-trail entry. */
+  visibleIds: Set<string>;
+  /** The current "N more <kind>" summaries over whatever remains hidden,
+   *  recomputed from the CURRENT basis (never trusted from a stale count —
+   *  see `KNOWLEDGE_MAP_AGGREGATION_RULE`'s doc comment). */
+  aggregates: KnowledgeMapDisplayNode[];
+  /** Expansion-trail entries that no longer resolve to a real aggregate
+   *  (an id that's stale, was already fully expanded, or never existed) —
+   *  charter §9's "announce the omission non-disruptively, and preserve
+   *  the rest of the state": every OTHER entry in the trail still replays
+   *  normally. */
+  omittedExpansionIds: OmittedEntry[];
+}
+
+/**
+ * Replays an ordered expansion trail (charter §9's "Replay valid expansion
+ * IDs in order") on top of the initial disclosure. Each trail entry is
+ * expected to be the id of an aggregate node this same function would have
+ * produced at that point in the replay — i.e. the id `FilterRail.tsx`'s
+ * "Expand" button passes to `KnowledgeMapWorkspace`'s `onExpandAggregate`,
+ * which appends it to the URL's `expansionTrail`. Clicking "Expand" on a
+ * currently-shown aggregate is this workspace's ONE explicit-expansion
+ * mechanic (charter §8: aggregation "require[s] narrowing or explicit
+ * expansion" — the aggregate IS the explicit-expansion affordance here);
+ * a plain node click/double-click only selects/focuses (§4.2), it never
+ * reveals new nodes on its own.
+ *
+ * Known, documented simplification: the overall `VISIBLE_CAP` (120
+ * desktop / 60 mobile) is enforced once, in the initial disclosure — after
+ * that, an already-open context can grow past the cap across several
+ * expansions in the same session without being re-aggregated back down.
+ * `enforceVisibleCap` (`@ice/graph-display/disclosure.ts`) would need a
+ * priority signal for every ALREADY-VISIBLE node (not just the hidden
+ * pool) to re-run correctly, which this workspace does not compute today;
+ * left as a real, bounded, low-severity gap for a later step rather than a
+ * partially-correct reimplementation under this step's time budget.
+ */
+export function computeDisclosure(
+  root: KnowledgeMapDisplayNode,
+  nodes: readonly KnowledgeMapDisplayNode[],
+  links: readonly KnowledgeMapDisplayLink[],
+  expansionTrail: readonly string[],
+  device: DeviceClass,
+): DisclosureState {
+  const initial = buildInitialDisclosure(root, nodes, links, device);
+  const visibleIds = new Set(initial.visible.map((n) => String(n.id)));
+  let hidden = initial.hidden;
+  const omittedExpansionIds: OmittedEntry[] = [];
+
+  for (const rawId of expansionTrail) {
+    const currentAggregates = buildAggregateNodes(hidden, {
+      rule: KNOWLEDGE_MAP_AGGREGATION_RULE,
+      version: KNOWLEDGE_MAP_AGGREGATION_VERSION,
+    }).aggregates;
+    const match = currentAggregates.find((a) => String(a.id) === rawId);
+    if (!match || match.projection === null) {
+      omittedExpansionIds.push({ value: rawId, reason: "not_found", source: "expansionTrail" });
+      continue;
+    }
+    const basisIds = new Set(match.projection.basisIds.map(String));
+    const toAdmit = hidden.filter((n) => basisIds.has(String(n.id)));
+    for (const n of toAdmit) visibleIds.add(String(n.id));
+    hidden = hidden.filter((n) => !basisIds.has(String(n.id)));
+  }
+
+  const aggregates = buildAggregateNodes(hidden, {
+    rule: KNOWLEDGE_MAP_AGGREGATION_RULE,
+    version: KNOWLEDGE_MAP_AGGREGATION_VERSION,
+  }).aggregates;
+
+  return { visibleIds, aggregates, omittedExpansionIds };
 }
