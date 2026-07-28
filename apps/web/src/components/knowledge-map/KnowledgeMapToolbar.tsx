@@ -99,7 +99,7 @@ export function KnowledgeMapToolbar({
       <button
         type="button"
         onClick={onOpenContextChooser}
-        className="app-control flex min-w-0 flex-col items-start rounded px-2 py-1 text-left hover:bg-[var(--color-surface-hover)]"
+        className="app-control flex min-w-0 flex-col items-start rounded px-2 py-1 text-left hover:bg-[var(--color-surface)]"
         aria-label={`Current context: ${contextLabel}. Open context chooser.`}
       >
         <span className="max-w-[16rem] truncate font-medium text-[var(--color-text)]">{contextLabel}</span>

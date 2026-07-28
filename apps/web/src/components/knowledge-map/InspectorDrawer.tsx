@@ -92,7 +92,7 @@ export function InspectorDrawer({ displayNode, canonicalNode, canonicalState, in
       )}
 
       {displayNode.unavailableReason && (
-        <p className="rounded border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-2 py-1 text-xs text-[var(--color-text-muted)]">{displayNode.unavailableReason}</p>
+        <p className="rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1 text-xs text-[var(--color-text-muted)]">{displayNode.unavailableReason}</p>
       )}
 
       {canonicalNode && (canonicalNode.authors || canonicalNode.year || canonicalNode.venue || canonicalNode.doi) && (

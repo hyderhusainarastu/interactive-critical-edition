@@ -156,7 +156,7 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
           library at once.
         </p>
 
-        {notice && <p className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-surface-hover)] px-3 py-2 text-sm text-[var(--color-text)]">{notice}</p>}
+        {notice && <p className="mb-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)]">{notice}</p>}
 
         <div role="tablist" aria-label="Context kind" className="mb-3 flex flex-wrap gap-1 border-b border-[var(--color-border)]">
           <button
@@ -212,7 +212,7 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
                   <button
                     type="button"
                     onClick={() => onSelect({ kind: candidate.kind, id: candidate.id })}
-                    className={`app-control flex w-full flex-col items-start rounded border px-3 py-2 text-left ${highlighted ? "border-[var(--color-highlight)] bg-[var(--color-surface-hover)]" : "border-[var(--color-border)]"}`}
+                    className={`app-control flex w-full flex-col items-start rounded border px-3 py-2 text-left ${highlighted ? "border-[var(--color-highlight)] bg-[var(--color-surface)]" : "border-[var(--color-border)]"}`}
                   >
                     <span className="font-medium text-[var(--color-text)]">{candidate.title || "Untitled"}</span>
                     {candidate.subtitle && <span className="text-xs text-[var(--color-text-muted)]">{candidate.subtitle}</span>}
