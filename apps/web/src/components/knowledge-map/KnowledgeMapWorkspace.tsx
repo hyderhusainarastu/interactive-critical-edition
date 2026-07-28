@@ -7,37 +7,28 @@
  * Toolbar + FilterRail + Scene + InspectorDrawer + ContextTray workspace
  * once one is.
  *
- * ## Scope note for this step ("workspace-chooser-url")
+ * ## Scope note for this step ("views-fallback")
  *
  * This is a real, working implementation of the URL/context/toolbar/rail/
- * inspector/tray/disclosure machinery, but it is honest about three
- * things this step does NOT cover, rather than silently pretending they
- * work:
+ * inspector/tray/disclosure machinery, plus the 2D/List views and the
+ * charter §14 WebGL-unavailable/context-loss fallback boundary. One thing
+ * remains genuinely out of this step's scope, carried over honestly from
+ * the prior step rather than silently pretended done:
  *
- * 1. Only a "work" context has real, fully-expanded graph data (via the
- *    existing `/api/works/[workId]/graph` endpoint + `./adapter.ts`).
- *    "passage"/"question"/"claim"/"debate" contexts resolve to a real,
- *    correctly-labeled ROOT node (`./resolveContextRoot.ts`) with zero
- *    synthesized neighbors — spec §2.2's full context-scoped neighborhood
- *    synthesis (a claim's judged relationships, a debate's member claims,
- *    etc.) is out of this step's scope, and the workspace says so in the
- *    empty state rather than showing a misleadingly bare canvas.
- * 2. `2d`/`list` views are not built in this step (spec §1.1's
- *    `KnowledgeMap2DView.tsx`/`KnowledgeMapListView.tsx` rows) — the
- *    toolbar's view switch is real and round-trips through the URL, but
- *    selecting `2D`/`List` shows an honest placeholder rather than an
- *    unbuilt view.
- * 3. The inspector's full §3 scholarly-action map (verify/dispute/edit/
- *    etc.) is not wired — see `InspectorDrawer.tsx`'s own scope note.
- *    The charter §14 WebGL-unavailable/context-loss fallback boundary
- *    (`KnowledgeMapFallbackBoundary.tsx`) is also not built here; a
- *    minimal React error boundary wraps the scene mount instead so a
- *    scene-mount crash doesn't take the whole workspace down with it.
+ * Only a "work" context has real, fully-expanded graph data (via the
+ * existing `/api/works/[workId]/graph` endpoint + `./adapter.ts`).
+ * "passage"/"question"/"claim"/"debate" contexts resolve to a real,
+ * correctly-labeled ROOT node (`./resolveContextRoot.ts`) with zero
+ * synthesized neighbors — spec §2.2's full context-scoped neighborhood
+ * synthesis (a claim's judged relationships, a debate's member claims,
+ * etc.) is out of this step's scope, and the workspace says so in the
+ * empty state rather than showing a misleadingly bare canvas.
  */
-import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { toDisplayNodeId, type DeviceClass, type GraphUrlContext, type ReconstructionValidators } from "@ice/graph-display";
-import { adaptGraphPayload, type KnowledgeMapDisplayNode } from "./adapter";
+import { adaptGraphPayload, type KnowledgeMapDisplayLink, type KnowledgeMapDisplayNode } from "./adapter";
 import { computeDisclosure } from "./disclosurePipeline";
 import { computeVisibleNodeIds } from "./attributeVisibility";
 import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphFiltersUrlAdapter";
@@ -53,9 +44,27 @@ import { FilterRail } from "./FilterRail";
 import { InspectorDrawer } from "./InspectorDrawer";
 import { ContextTray } from "./ContextTray";
 import { ContextChooser } from "./ContextChooser";
-import { KnowledgeMapScene, type KnowledgeMapSceneApi } from "./KnowledgeMapScene";
+import type { KnowledgeMapSceneApi, KnowledgeMapSceneProps } from "./KnowledgeMapScene";
+import { KnowledgeMapFallbackBoundary, type FallbackState } from "./KnowledgeMapFallbackBoundary";
+import { KnowledgeMapListView } from "./KnowledgeMapListView";
+import { KnowledgeMap2DView } from "./KnowledgeMap2DView";
 import type { CredibilityRingInput } from "./nodeVisuals";
 import { CREDIBILITY_DIMENSIONS, type CredibilityDimension, type GraphNode, type GraphPayload } from "../graph/types";
+
+// `react-force-graph-3d`/`three` read `window` at MODULE-EVALUATION time
+// (not just render time), so importing `KnowledgeMapScene` as a plain
+// static import — even one this file never actually renders on the server
+// (e.g. because `KnowledgeMapFallbackBoundary` is showing the fallback) —
+// still crashes Next's SSR pass, because ES module imports are evaluated
+// eagerly at load time regardless of whether the component is ever
+// rendered. `next/dynamic(..., { ssr: false })` is the one mechanism that
+// defers the MODULE IMPORT itself to the client, not just the render —
+// matching this project's own existing documented pattern ("3D graph via
+// `react-force-graph-3d`, dynamically imported (`ssr: false`)", see
+// `docs/PROJECT-LOG.md`'s Design Decisions), which this rebuild's scene
+// mount had not yet been wired through until this step surfaced the SSR
+// crash via the new fallback-boundary work.
+const KnowledgeMapScene = dynamic<KnowledgeMapSceneProps>(() => import("./KnowledgeMapScene").then((m) => m.KnowledgeMapScene), { ssr: false });
 
 const MOBILE_WIDTH_BREAKPOINT = 640;
 
@@ -85,33 +94,6 @@ function useViewport(): { width: number; height: number; device: DeviceClass } {
     return () => window.removeEventListener("resize", onResize);
   }, []);
   return { ...state, device: state.width < MOBILE_WIDTH_BREAKPOINT ? "mobile" : "desktop" };
-}
-
-interface SceneErrorBoundaryProps {
-  children: ReactNode;
-}
-interface SceneErrorBoundaryState {
-  hasError: boolean;
-}
-
-/** Minimal safety net — see this file's own scope note on why the full
- *  charter §14 fallback boundary isn't built in this step. Real React
- *  error boundaries must be classes (no hooks-only equivalent). */
-class SceneErrorBoundary extends Component<SceneErrorBoundaryProps, SceneErrorBoundaryState> {
-  state: SceneErrorBoundaryState = { hasError: false };
-  static getDerivedStateFromError(): SceneErrorBoundaryState {
-    return { hasError: true };
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[var(--color-text-muted)]">
-          The 3D view hit an unexpected error. Reload the page to try again.
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }
 
 type LoadStatus = "loading" | "loaded" | "not-found" | "error";
@@ -391,17 +373,43 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
   }, [context, topologyNodes]);
   const canonicalSelected = selectedNode ? (effectiveContextData?.canonicalNodeById.get(String(selectedNode.id)) ?? null) : null;
 
-  const { incomingCount, outgoingCount } = useMemo(() => {
-    if (!selectedNode) return { incomingCount: 0, outgoingCount: 0 };
+  // Only a "work" context has a real owning work id (spec §2/§3's own
+  // scoping rule for reading-status/mark-uncertain actions) — a passage/
+  // question/claim/debate single-root context never guesses one.
+  const rootWorkId = context?.context.kind === "work" ? context.context.id : null;
+
+  const topologyNodeById = useMemo(() => new Map(topologyNodes.map((n) => [String(n.id), n] as const)), [topologyNodes]);
+
+  const { incomingLinks, outgoingLinks } = useMemo(() => {
+    if (!selectedNode) return { incomingLinks: [], outgoingLinks: [] };
     const id = String(selectedNode.id);
-    let incoming = 0;
-    let outgoing = 0;
+    const incoming: { link: KnowledgeMapDisplayLink; otherNode: KnowledgeMapDisplayNode | null }[] = [];
+    const outgoing: { link: KnowledgeMapDisplayLink; otherNode: KnowledgeMapDisplayNode | null }[] = [];
     for (const l of topologyLinks) {
-      if (l.target === id) incoming += 1;
-      if (l.source === id) outgoing += 1;
+      if (l.target === id) incoming.push({ link: l, otherNode: topologyNodeById.get(l.source) ?? null });
+      if (l.source === id) outgoing.push({ link: l, otherNode: topologyNodeById.get(l.target) ?? null });
     }
-    return { incomingCount: incoming, outgoingCount: outgoing };
-  }, [selectedNode, topologyLinks]);
+    return { incomingLinks: incoming, outgoingLinks: outgoing };
+  }, [selectedNode, topologyLinks, topologyNodeById]);
+
+  // --- Charter §14 fallback (spec §5): whether the 3D scene is actually
+  // mounted right now, reported by `KnowledgeMapFallbackBoundary` — used
+  // to disable the toolbar's camera-only controls (Focus/Fit/Home) while
+  // showing the semantic view instead, so those controls never look
+  // interactive while silently doing nothing. `lastNonThreeDView` tracks
+  // which of 2D/List the user was last actually looking at (defaulting to
+  // List, spec §5.1's "never silently forcing 2D over List or vice versa")
+  // so the fallback banner shows whichever view they'd expect, even though
+  // the URL's own `view` stays "3d" (the DESIRED view) throughout a
+  // fallback episode.
+  const [sceneActive, setSceneActive] = useState(true);
+  const [lastNonThreeDView, setLastNonThreeDView] = useState<"2d" | "list">("list");
+  useEffect(() => {
+    if (context?.view === "2d" || context?.view === "list") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastNonThreeDView(context.view);
+    }
+  }, [context?.view]);
 
   // --- Scene imperative API + selection screen-position (inspector side).
   // The screen position comes from the scene's own live imperative ref
@@ -417,7 +425,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
     let cancelled = false;
     const frame = requestAnimationFrame(() => {
       if (cancelled) return;
-      if (!context?.selectedId || context.view !== "3d") {
+      if (!context?.selectedId || context.view !== "3d" || !sceneActive) {
         setAnchorScreenX(null);
         return;
       }
@@ -428,7 +436,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [context, topologyNodes]);
+  }, [context, topologyNodes, sceneActive]);
 
   const handleSelect = useCallback(
     (nodeId: string | null) => {
@@ -451,6 +459,22 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
       urlApi.setState({ expansionTrail: context.expansionTrail.slice(0, index + 1) });
     },
     [context, urlApi],
+  );
+
+  // --- The one shared filtered selection (spec §2's data-flow diagram):
+  // 2D view, List view, and the WebGL-fallback's own List/2D substitute
+  // all receive EXACTLY this bundle — never a second, independently
+  // filtered read of the same data. ---
+  const sharedViewProps = useMemo(
+    () => ({
+      nodes: topologyNodes,
+      links: topologyLinks,
+      visibleNodeIds: attributeVisibleIds,
+      rootNodeId: effectiveContextData?.rootId ?? null,
+      selectedId: context?.selectedId ?? null,
+      onSelect: handleSelect,
+    }),
+    [topologyNodes, topologyLinks, attributeVisibleIds, effectiveContextData, context?.selectedId, handleSelect],
   );
 
   // --- Transient UI (filters rail / help / secondary Arrange state) ---
@@ -538,11 +562,11 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
         onFocus={() => {
           if (context.selectedId) sceneApiRef.current?.focusOnNode(context.selectedId);
         }}
-        focusDisabled={!context.selectedId || context.view !== "3d"}
+        focusDisabled={!context.selectedId || context.view !== "3d" || !sceneActive}
         onFit={() => sceneApiRef.current?.fit()}
-        fitDisabled={context.view !== "3d"}
+        fitDisabled={context.view !== "3d" || !sceneActive}
         onHome={() => sceneApiRef.current?.home()}
-        homeDisabled={context.view !== "3d"}
+        homeDisabled={context.view !== "3d" || !sceneActive}
         filtersOpen={filtersOpen}
         onToggleFilters={() => setFiltersOpen((v) => !v)}
         activeFilterCount={activeFilterCount}
@@ -603,32 +627,44 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
               )}
 
               {context.view === "3d" ? (
-                <SceneErrorBoundary>
-                  <KnowledgeMapScene
-                    nodes={topologyNodes}
-                    links={topologyLinks}
-                    visibleNodeIds={attributeVisibleIds}
-                    rootNodeId={effectiveContextData.rootId}
-                    selectedId={context.selectedId}
-                    readingNodeIds={readingNodeIds}
-                    credibilityByNodeId={credibilityByNodeId}
-                    onSelect={handleSelect}
-                    onFocus={handleSelect}
-                    apiRef={sceneApiRef}
-                  />
-                </SceneErrorBoundary>
+                <KnowledgeMapFallbackBoundary
+                  onActiveChange={setSceneActive}
+                  renderFallback={(state) => (
+                    <SceneFallback state={state} view={lastNonThreeDView} canonicalNodeById={effectiveContextData.canonicalNodeById} {...sharedViewProps} />
+                  )}
+                >
+                  {(sceneHandlers) => (
+                    <KnowledgeMapScene
+                      nodes={topologyNodes}
+                      links={topologyLinks}
+                      visibleNodeIds={attributeVisibleIds}
+                      rootNodeId={effectiveContextData.rootId}
+                      selectedId={context.selectedId}
+                      readingNodeIds={readingNodeIds}
+                      credibilityByNodeId={credibilityByNodeId}
+                      onSelect={handleSelect}
+                      onFocus={handleSelect}
+                      onContextLost={sceneHandlers.onContextLost}
+                      onContextRestored={sceneHandlers.onContextRestored}
+                      onInteractive={sceneHandlers.onInteractive}
+                      apiRef={sceneApiRef}
+                    />
+                  )}
+                </KnowledgeMapFallbackBoundary>
+              ) : context.view === "2d" ? (
+                <KnowledgeMap2DView {...sharedViewProps} />
               ) : (
-                <div className="flex h-full items-center justify-center p-6 text-center text-sm text-[var(--color-text-muted)]">
-                  {context.view === "2d" ? "2D view" : "List view"} isn&rsquo;t built in this workspace yet — switch back to 3D.
-                </div>
+                <KnowledgeMapListView {...sharedViewProps} canonicalNodeById={effectiveContextData.canonicalNodeById} />
               )}
 
               <InspectorDrawer
                 displayNode={selectedNode}
                 canonicalNode={canonicalSelected}
                 canonicalState={canonicalSelected?.state ?? null}
-                incomingCount={incomingCount}
-                outgoingCount={outgoingCount}
+                canonicalNodeById={effectiveContextData.canonicalNodeById}
+                incomingLinks={incomingLinks}
+                outgoingLinks={outgoingLinks}
+                rootWorkId={rootWorkId}
                 anchorScreenX={anchorScreenX}
                 viewportWidth={viewport.width}
                 onClose={() => handleSelect(null)}
@@ -672,6 +708,44 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
         currentContext={context.context}
         onSelectRecent={(picked) => urlApi.openContext(picked)}
       />
+    </div>
+  );
+}
+
+/**
+ * What renders in place of the 3D scene whenever
+ * `KnowledgeMapFallbackBoundary` isn't active (spec §5.1/§5.2): a real,
+ * honest banner naming which of the three failure modes this is, plus the
+ * user's own last-chosen non-3D view (List by default) rendered against
+ * the EXACT same `sharedViewProps` bundle the toolbar's explicit 2D/List
+ * switch uses — this is the direct fix for the baseline's total-failure
+ * finding (charter §14 "the fallback cannot complete the same scholarly
+ * task"): real node data, real filters, real selection, real inspector,
+ * not an empty error screen.
+ */
+function SceneFallback({
+  state,
+  view,
+  canonicalNodeById,
+  ...viewProps
+}: {
+  state: FallbackState;
+  view: "2d" | "list";
+  canonicalNodeById: ReadonlyMap<string, GraphNode>;
+} & Parameters<typeof KnowledgeMap2DView>[0]) {
+  return (
+    <div className="flex h-full flex-col">
+      <div role="status" className="flex shrink-0 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
+        <span>{state.message}</span>
+        {state.retryMeaningful && (
+          <button type="button" onClick={state.retry} className="app-control ml-auto rounded border border-[var(--color-border)] px-2 py-1 font-medium text-[var(--color-text)]">
+            Retry 3D
+          </button>
+        )}
+      </div>
+      <div className="min-h-0 flex-1">
+        {view === "list" ? <KnowledgeMapListView {...viewProps} canonicalNodeById={canonicalNodeById} /> : <KnowledgeMap2DView {...viewProps} />}
+      </div>
     </div>
   );
 }
