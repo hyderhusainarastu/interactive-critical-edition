@@ -106,7 +106,12 @@ test.describe("Research monitoring (Phase 29.1)", () => {
     await monitorItem.getByLabel(/Cadence for/).selectOption("weekly");
     await expect(monitorItem.getByLabel(/Cadence for/)).toHaveValue("weekly");
 
+    // Integration pass: Delete now opens an accessible confirm dialog
+    // (charter §6 "Research") instead of deleting immediately.
     await monitorItem.getByRole("button", { name: "Delete" }).click();
+    const confirmDialog = page.getByRole("dialog", { name: "Delete this monitor?" });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Delete monitor" }).click();
     await expect(main(page).locator("li", { hasText: "care ethics and moral perception" })).toHaveCount(0);
   });
 

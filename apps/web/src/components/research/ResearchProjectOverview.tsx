@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
 import type { ResearchPipelineOverview } from "@/lib/research/pipeline";
 import { computeResearchPipelineSteps, parseAwaitingJudgmentCount } from "@/lib/research/pipelineSteps";
@@ -104,6 +105,17 @@ export function ResearchProjectOverview({
   const [pendingConfirm, setPendingConfirm] = useState<Record<string, { reason: string; estimatedUnits: number }>>({});
   const [dispatching, setDispatching] = useState<Record<string, boolean>>({});
   const [dispatchError, setDispatchError] = useState<Record<string, string>>({});
+  // Integration pass (charter §6 "Research": accessible dialogs for
+  // destructive actions) — neither `deleteQuestion` nor `removeMember` had
+  // any confirmation step before this. Two independent confirm-target/busy
+  // pairs (not one shared pair) since a question and a member removal are
+  // unrelated actions that could otherwise race each other's busy state.
+  const [confirmDeleteQuestionId, setConfirmDeleteQuestionId] = useState<string | null>(null);
+  const [removingQuestionId, setRemovingQuestionId] = useState<string | null>(null);
+  const deleteQuestionTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState<string | null>(null);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const removeMemberTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   // Item 1(a): `router.refresh()` re-renders this route's Server Components
   // with fresh props, but a "use client" component's own `useState` only
@@ -195,14 +207,19 @@ export function ResearchProjectOverview({
   }
 
   async function deleteQuestion(id: string) {
-    const response = await fetch(`/api/research/projects/${project.id}/questions`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    if (response.ok) {
-      setQuestions((current) => current.filter((q) => q.id !== id));
-      router.refresh();
+    setRemovingQuestionId(id);
+    try {
+      const response = await fetch(`/api/research/projects/${project.id}/questions`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (response.ok) {
+        setQuestions((current) => current.filter((q) => q.id !== id));
+        router.refresh();
+      }
+    } finally {
+      setRemovingQuestionId(null);
     }
   }
 
@@ -229,10 +246,15 @@ export function ResearchProjectOverview({
   }
 
   async function removeMember(memberId: string) {
-    const response = await fetch(`/api/research/projects/${project.id}/members?memberId=${memberId}`, { method: "DELETE" });
-    if (response.ok) {
-      setMembers((current) => current.filter((m) => m.id !== memberId));
-      router.refresh();
+    setRemovingMemberId(memberId);
+    try {
+      const response = await fetch(`/api/research/projects/${project.id}/members?memberId=${memberId}`, { method: "DELETE" });
+      if (response.ok) {
+        setMembers((current) => current.filter((m) => m.id !== memberId));
+        router.refresh();
+      }
+    } finally {
+      setRemovingMemberId(null);
     }
   }
 
@@ -358,7 +380,13 @@ export function ResearchProjectOverview({
           {questions.map((q) => (
             <li key={q.id} className="app-mount flex items-center justify-between gap-3 rounded border border-[var(--color-border)] px-3 py-2 text-sm">
               <span>{q.question}</span>
-              <button type="button" className="app-control app-press text-xs text-[var(--color-text-muted)] underline" onClick={() => deleteQuestion(q.id)}>Remove</button>
+              <button
+                type="button"
+                className="app-control app-press text-xs text-[var(--color-text-muted)] underline"
+                onClick={(event) => { deleteQuestionTriggerRef.current = event.currentTarget; setConfirmDeleteQuestionId(q.id); }}
+              >
+                Remove
+              </button>
             </li>
           ))}
           {!questions.length && <li className="app-empty app-mount rounded p-3 text-sm text-[var(--color-text-muted)]">No questions yet.</li>}
@@ -403,7 +431,13 @@ export function ResearchProjectOverview({
                       {dispatching[member.workId as string] ? "Starting…" : "Extract claims"}
                     </button>
                   )}
-                  <button type="button" className="app-control app-press text-xs text-[var(--color-text-muted)] underline" onClick={() => removeMember(member.id)}>Remove</button>
+                  <button
+                    type="button"
+                    className="app-control app-press text-xs text-[var(--color-text-muted)] underline"
+                    onClick={(event) => { removeMemberTriggerRef.current = event.currentTarget; setConfirmRemoveMemberId(member.id); }}
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
               {member.workId && pendingConfirm[member.workId] && (
@@ -544,6 +578,36 @@ export function ResearchProjectOverview({
           {!jobRequests.length && <li className="app-empty app-mount rounded p-3 text-sm text-[var(--color-text-muted)]">No research jobs yet.</li>}
         </ul>
       </section>
+
+      {confirmDeleteQuestionId && (
+        <ConfirmDialog
+          title="Remove this question?"
+          body={`This removes "${questions.find((q) => q.id === confirmDeleteQuestionId)?.question ?? "this question"}" from the project. This can't be undone.`}
+          confirmLabel="Remove question"
+          busy={removingQuestionId === confirmDeleteQuestionId}
+          triggerRef={deleteQuestionTriggerRef}
+          onCancel={() => setConfirmDeleteQuestionId(null)}
+          onConfirm={async () => {
+            await deleteQuestion(confirmDeleteQuestionId);
+            setConfirmDeleteQuestionId(null);
+          }}
+        />
+      )}
+
+      {confirmRemoveMemberId && (
+        <ConfirmDialog
+          title="Remove this work from the project?"
+          body={`This removes "${members.find((m) => m.id === confirmRemoveMemberId)?.workTitle ?? "this work"}" from the project. Claims and evidence already extracted from it are not deleted.`}
+          confirmLabel="Remove work"
+          busy={removingMemberId === confirmRemoveMemberId}
+          triggerRef={removeMemberTriggerRef}
+          onCancel={() => setConfirmRemoveMemberId(null)}
+          onConfirm={async () => {
+            await removeMember(confirmRemoveMemberId);
+            setConfirmRemoveMemberId(null);
+          }}
+        />
+      )}
     </section>
   );
 }

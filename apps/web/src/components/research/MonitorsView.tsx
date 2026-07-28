@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/primitives/ConfirmDialog";
 import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
 import { JobStageProgress } from "./JobStageProgress";
 import { LiveAnnouncer } from "./LiveAnnouncer";
@@ -112,6 +113,13 @@ export function MonitorsView({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [busyMonitorId, setBusyMonitorId] = useState<string | null>(null);
   const [busyHitId, setBusyHitId] = useState<string | null>(null);
+  // Integration pass (charter §6 "Research": accessible dialogs for
+  // destructive actions) — `deleteMonitor` had no confirmation step at all
+  // before this. `deleteTriggerRef` is set to whichever row's Delete button
+  // was actually clicked, right before opening the dialog, so focus returns
+  // to the SAME row's button regardless of which monitor is being deleted.
+  const [confirmDeleteMonitorId, setConfirmDeleteMonitorId] = useState<string | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const hitsQuery = project ? `?projectId=${project.id}` : "";
   const monitorsQuery = project ? `?projectId=${project.id}` : "";
@@ -394,7 +402,7 @@ export function MonitorsView({
                     <button
                       type="button"
                       className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 py-1 text-xs text-[var(--color-error,#b3261e)] disabled:opacity-50"
-                      onClick={() => deleteMonitor(m.id)}
+                      onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setConfirmDeleteMonitorId(m.id); }}
                       disabled={busyMonitorId === m.id}
                     >
                       Delete
@@ -483,6 +491,21 @@ export function MonitorsView({
           )}
         </ul>
       </section>
+
+      {confirmDeleteMonitorId && (
+        <ConfirmDialog
+          title="Delete this monitor?"
+          body={`This stops watching "${monitors.find((m) => m.id === confirmDeleteMonitorId)?.query ?? "this monitor"}" and removes its findings. This can't be undone.`}
+          confirmLabel="Delete monitor"
+          busy={busyMonitorId === confirmDeleteMonitorId}
+          triggerRef={deleteTriggerRef}
+          onCancel={() => setConfirmDeleteMonitorId(null)}
+          onConfirm={async () => {
+            await deleteMonitor(confirmDeleteMonitorId);
+            setConfirmDeleteMonitorId(null);
+          }}
+        />
+      )}
     </section>
   );
 }
