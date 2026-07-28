@@ -1,20 +1,21 @@
-# Stage 6 Write Verification (round 1)
+# Stage 6 Write Verification (round 2)
 
 Branch `redesign/stage6-write`, worktree `/private/tmp/palimnote-s6-write`. This is the Stage 6
-VERIFICATION lane's gate check over the Write focused-editor layout shipped by
-`docs/design/stage6-write-spec.md` (commits `cfebbf6`, `fe2c10e`, `e9e5190`, `f18d960`). Verified
-against a real production build (`next build` + `next start` on `PORT=3260`) with a dedicated local
-Postgres (`palimnote-s6-pg`, port 5436, freshly created and migrated — 46/46 migrations applied,
-matching the production ledger), `PHASE_12_WRITER_ENABLED`/`PHASE_25_WRITER_EVIDENCE_ENABLED`/
-`PHASE_25_RESEARCH_ENABLED` all `true` locally.
+VERIFICATION lane's **second** gate check, run after `a4c9c5d` ("fix(writer): resolve Stage 6
+verification round 1's two in-lane panel defects") landed on top of the round-1-verified layout
+commits (`cfebbf6`, `fe2c10e`, `e9e5190`, `f18d960`). Verified against a real production build
+(`next build` + `next start` on `PORT=3260`) with the same dedicated local Postgres
+(`palimnote-s6-pg`, port 5436 — reused from round 1, not recreated) and the same
+`PHASE_12_WRITER_ENABLED`/`PHASE_25_WRITER_EVIDENCE_ENABLED`/`PHASE_25_RESEARCH_ENABLED` flags.
 
-**Result: GATE NOT PASSED.** Journey 7's core sequence completes end to end and every export format
-produces real, correct file bytes — but this round surfaces **two real, in-scope, reproducible
-defects** in the new narrow-viewport panel/keyboard interaction (§4 below), confirmed independently
-by both a dedicated driver script and the repository's own pre-existing `writer-panels.spec.ts`
-suite failing on the exact same interactions. Two further defects were found and are **out of this
-lane's file ownership** (§5) — real, but not fixable here. Nothing was fixed in this round; this is a
-verification-only pass per the task's own scope.
+**Result: GATE PASSED.** Journey 7's core sequence completes end to end, every export format
+produces real, correct file bytes, and both of round 1's in-lane defects (§4.1 narrow-viewport
+cross-toggle, §4.2 keyboard pass-through) are now confirmed fixed — reproduced as passing, not
+failing, on the exact same interactions the round-1 driver and the repository's own
+`writer-panels.spec.ts` used to expose them. The two out-of-lane defects (§5, `shell/**` and
+`WorkspacePreferencesProvider.tsx`) remain open exactly as before — real, reproducible, but outside
+this lane's file ownership, so they are recorded again for whichever lane owns those files next, not
+treated as gate-blocking for Stage 6 itself.
 
 ---
 
@@ -22,158 +23,121 @@ verification-only pass per the task's own scope.
 
 | Check | Result |
 |---|---|
-| `pnpm --filter web typecheck` | PASS — clean, no errors (including the new `stage6-write-fixtures.ts`) |
+| `pnpm --filter web typecheck` | PASS — clean, no errors |
 | `pnpm --filter web lint` | PASS — clean, no errors |
 | `pnpm --filter web build` | PASS — production build succeeded, all routes compiled including `/writer` and `/writer/[projectId]` |
 
 ## 2. Environment
 
-- **Postgres**: `palimnote-s6-pg`, `pgvector/pgvector:pg17`, port 5436, freshly created this round
-  (`docker run ... -p 5436:5432 pgvector/pgvector:pg17`) and migrated via
-  `pnpm --filter @ice/db db:migrate` against `postgresql://ice:ice_dev_only@localhost:5436/interactive_critical_edition`.
-  `drizzle.__drizzle_migrations` count: **46**, matching the production ledger in `docs/PROJECT-LOG.md`.
-- **Web**: `apps/web/.env.local` (gitignored, not committed) pointed `DATABASE_URL`/`DIRECT_URL` at the
-  dedicated Postgres above, set a fresh `AUTH_SECRET`, and enabled `PHASE_12_FOUNDATION_ENABLED`,
-  `PHASE_12_WRITER_ENABLED`, `PHASE_25_RESEARCH_ENABLED`, `PHASE_25_WRITER_EVIDENCE_ENABLED`. Served via
-  `next start -p 3260` against a real production build — not `next dev`.
-- **Seeding**: `apps/web/e2e/stage6-write-fixtures.ts` (new file, committed) — `e2e/helpers.ts` itself
-  was not edited, per the program's file-ownership rule. `seedStage6Fixture(userId)` reuses
-  `seedWorkWithLibraryItem` (imported from `./helpers`, not redefined) for a real Library source (work
-  → work_identity → resource_role → learning_resource, the exact join `listOwnedLibrarySources`
-  performs), and adds a minimal, real research-evidence chain (research_project → work →
-  processing_run → page → text_block → research_claim, anchored with a real quote drawn from the
-  block's own text) matching the shape `writer-evidence.spec.ts`'s own `seedFixture` already uses.
-  `markOnboarded(userId)` mirrors the same helper `writer-evidence.spec.ts` defines locally.
+- **Postgres**: `palimnote-s6-pg` (reused, not recreated — round 1's container was left running for
+  this purpose). `drizzle.__drizzle_migrations` count confirmed **46** before this round started,
+  matching the production ledger in `docs/PROJECT-LOG.md`. DB confirmed empty (`user`/`work`/
+  `writer_project`/`research_project` all 0 rows) before seeding and again after cleanup.
+- **Web**: `apps/web/.env.local` (gitignored, reused from round 1 — same dedicated Postgres,
+  `AUTH_URL=http://localhost:3260`, all four Phase 12/25 flags `true`). Served via `next start -p
+  3260` against a fresh production build (rebuilt this round to pick up `a4c9c5d`) — not `next dev`.
+  One operational note: the round-1 `next start` background process had already exited by the time
+  this round began (not a crash observed live, just not running); it was restarted cleanly with the
+  same command and confirmed serving `200` on `/login` before any test ran.
+- **Seeding**: `apps/web/e2e/stage6-write-fixtures.ts` — unchanged from round 1, already committed,
+  `e2e/helpers.ts` itself untouched. Same shape as documented in round 1: `seedWorkWithLibraryItem`
+  for a real Library source, plus a minimal real research-evidence chain (research_project → work →
+  processing_run → page → text_block → research_claim) anchored with a real quote from the block's
+  own text.
 
 ## 3. Journey 7 core — pass/fail detail
 
-Driven by a standalone Playwright script (not committed — see §8) against the real running server,
-seeding via `createVerifiedTestUser` + `seedStage6Fixture`, then exercising every step through the
-real UI. **53/57 checks passed** in the final run; the 4 failures are the confirmed defects in §4–§5,
-not script bugs (each is independently reproduced by an existing repo test — see those sections).
+Driven by a standalone Playwright script (not committed — see §8), seeding via
+`createVerifiedTestUser` + `markOnboarded` + `seedStage6Fixture`, then exercising every step through
+the real UI. All steps passed on the final run.
 
 | Step | Result | Evidence |
 |---|---|---|
 | Create project (+ auto-created first document) | PASS | `01-project-created-1440-light.png` |
-| Type into the draft | PASS | status shows `"Editing"` immediately after the keystroke (before the 750ms debounce fires) |
-| Autosave status visible and truthful | PASS (best-effort on the in-flight "Saving…" catch) | `"Editing"` → `"Saved"` confirmed every run; the brief in-flight `"Saving…"` state was caught on a 20ms poll in the final run — genuinely real (confirmed by reading `WriterEditor.tsx`'s `saveNow()`), just fast over a local dedicated Postgres |
-| Create a second document, reorder (Move earlier) | PASS | displayed order actually changes (`Untitled document,Second document` → `Second document,Untitled document`), persists to `"Saved"` before the next step |
-| Archive → restore round trip | PASS | native `confirm` accepted, project disappears from the active list, appears under "Archived projects", "Restore project" brings it back | `02-reordered-1440-light.png` precedes this step |
-| Link evidence (research project) | PASS | picker lists the seeded project by title, "Link" attaches it, the claim card renders with its real excerpt | `03-evidence-linked-and-inserted-1440-light.png` |
-| Insert evidence (claim → real draft content) | PASS | draft content changes to include the claim's real supporting excerpt |
-| Cite a Library source, insert the citation | PASS | draft content changes again after "Insert" in the Citations panel |
+| Type into the draft; autosave status visible and truthful | PASS | status shows `"Editing"` then resolves to `"Saved"` within 10s |
+| Create a second document, reorder (Move earlier) | PASS | displayed `<select>` option order actually changes and persists to `"Saved"` |
+| Archive → restore round trip | PASS | native `confirm` accepted, project disappears from the active list, appears under "Archived projects" after "Show archived projects", "Restore project" brings it back into "Writing projects" (confirmed via the restore `PATCH` response, not just a UI guess) | `02-reordered-1440-light.png` precedes this step |
+| Link evidence (research project) | PASS | `<select aria-label="Research project to link">` lists the seeded project by title, "Link" attaches it, the claim card renders with its real supporting excerpt |
+| Insert evidence (claim → real draft content) | PASS | draft content changes to include the claim's real excerpt |
+| Cite a Library source, insert the citation | PASS | "Cite" adds the source to the Citations panel; that panel's own "Insert" button (scoped by `getByRole("complementary", {name: "Citations and revision history panel"})` to disambiguate from the Evidence panel's own "Insert" button) changes the draft again | `03-evidence-linked-and-inserted-1440-light.png` |
 | Restore a revision | PASS | native `confirm` accepted, status returns to `"Saved"` | `04-after-restore-revision-1440-light.png` |
-| **Every currently supported export** | PASS (all 6) | DOCX: real download, 2626 bytes, `PK` magic bytes (ZIP/OOXML). PDF: real download, 829 bytes, `%PDF` magic bytes. Citation exports — `bibtex` (348B, `application/x-bibtex`), `ris` (207B, `application/x-research-info-systems`), `apa` (173B, `text/plain`), `chicago` (168B, `text/plain`) — all 200, all nonzero, all correct content-type, verified via direct `page.request.get`. The UI's own format picker (set to `apa`) was separately driven end to end and downloaded a real, nonzero `.txt` file. |
+| **Every currently supported export** | PASS (all 6), via the **real UI download links/requests**, not hand-built API calls | DOCX: real `page.waitForEvent("download")` off the toolbar's actual `DOCX` link, nonzero bytes, `PK` magic (ZIP/OOXML). PDF: same pattern off the `PDF` link, nonzero bytes, `%PDF` magic. Citation exports — `bibtex` (`x-bibtex` content-type), `ris` (`research-info-systems`), `apa` (`text/plain`), `chicago` (`text/plain`) — all `GET /api/writer/projects/:id/citations/export?format=...` 200, nonzero body, correct content-type |
 
-## 4. Confirmed defects — in this lane's file ownership (gate-blocking)
+**Two script-level (not product) bugs found and fixed while building this round's driver, worth
+recording since they could trip up a future round's own driver the same way:** (1) the DOCX/PDF
+export endpoint requires a `documentId` query param (`querySchema.safeParse` 400s without it) —
+fixed by driving the real `ExportLinks.tsx` anchors instead of hand-building the URL, which is also
+a more faithful "does a user's click actually download a real file" check; (2) "New document" opens
+a `window.prompt`, exactly like "New project" — the first attempt let that prompt sit unhandled,
+which silently no-ops the create and leaves `documents.length` at 1, making "Move earlier" stay
+disabled indefinitely (a `.click()` retry-loop timeout, not a hang). Neither is a Stage 6 defect;
+both are documented here so the next round's driver doesn't rediscover them from scratch.
 
-Both were found independently by the driver script **and** reproduced by the pre-existing
-`writer-panels.spec.ts` suite (`PLAYWRIGHT_BASE_URL=http://localhost:3260 ... playwright test
-writer-panels.spec.ts`, run against this same server/DB), so these are not script artifacts.
+## 4. Round-1 defects — re-verified fixed
 
-### 4.1 Narrow-viewport "one-panel rule": a single tap on the other toggle cannot both close the current sheet and open the other
+### 4.1 Narrow-viewport "one-panel rule": single-tap cross-toggle
 
-**Spec §2.1 promises**: "Opening Citations while Sources is open closes Sources first" (a single
-action). **`writer-panels.spec.ts:80`'s own assertion** (`opening the other closes the first`) times
-out at 120s on both 768px and 375px, on every attempt (2/2, not flaky — confirmed via a retry).
+**Round 1 finding:** a tap on the other toggle while a sheet was open hit the full-screen backdrop
+instead of the button, closing the current sheet without opening the other.
 
-**Root cause** (`apps/web/src/components/writer/panels/WriterPanelSheet.tsx:61`): the open sheet's
-full-screen backdrop (`<div className="fixed inset-0 z-40 ..." onMouseDown={closeFromOutside}>`) sits
-above the document toolbar that hosts **both** toggle buttons — nothing in `WriterEditor.tsx`'s
-toolbar row lifts the toggle buttons' own stacking above `z-40`. A real click/tap on the
-`"Citations and history"` button while the Sources sheet is open therefore lands on the backdrop
-instead: Playwright's default actionability check refuses to dispatch it at all (confirmed via the
-exact `"<div role="presentation" ...> intercepts pointer events"` retry log). Forcing the click
-through (`{ force: true }`, simulating a raw coordinate tap) confirms what a real user would
-experience: the backdrop's own `onMouseDown` fires, closing Sources — and nothing else. Citations
-never opens from that single action (`sourcesClosedAfterTap=true, citationsOpenedAfterTap=false`,
-confirmed on both 768px and 375px). A user must dismiss the current sheet first (Escape, or a second,
-separate tap) and only then open the other — the spec's "closes the first" single-action promise is
-unreachable as written.
+**Round 2 result: FIXED, confirmed two ways.**
+- `writer-panels.spec.ts:80`'s own `narrow (768px/375px): ... opening the other closes the first`
+  assertion, which round 1 reported timing out at 120s on both widths, now **passes in ~1.2–1.8s
+  each** (see §6's clean 15/16 run — the only remaining failure is the unrelated §5.1 out-of-lane
+  motion defect).
+- The round-2 driver independently exercised the same cross-toggle tap at both 768px and 375px:
+  Sources sheet open → tap Citations toggle → Sources sheet closes AND Citations sheet opens, in one
+  action, confirmed via `expect(sourcesSheet).toHaveCount(0)` immediately followed by
+  `expect(citationsSheet).toBeVisible()`. Screenshots:
+  `07b-narrow-cross-toggle-now-works-{768,375}-light.png` (Citations sheet visible, focused, with a
+  dimmed backdrop behind it — the correct modal state) replace round 1's
+  `07b-narrow-after-blocked-cross-toggle-*` (which showed the *blocked* state and have been removed
+  from this directory as stale/superseded, not left alongside the fix as if still current).
 
-Confirmed the panel itself works correctly in isolation (Citations opens fine when nothing else is
-open) — this isolates the defect to the cross-toggle transition specifically, not the panels
-themselves. Screenshots: `07-narrow-sources-sheet-{768,375}-light.png` (Sources open),
-`07b-narrow-after-blocked-cross-toggle-{768,375}-light.png` (state after the blocked tap — Sources
-closed, Citations still not open), `08-narrow-citations-sheet-{768,375}-light.png` (Citations opened
-correctly on its own, after an explicit Escape).
+### 4.2 Keyboard-only pass-through: Tab from the reopened Sources toggle
 
-### 4.2 Keyboard-only pass-through: tabbing forward from the (reopened) Sources toggle never enters the Sources panel's own content
+**Round 1 finding:** a plain forward Tab from the Sources toggle at wide viewport landed on the
+Citations toggle instead of entering the Sources panel's own content.
 
-**`writer-panels.spec.ts:137`** (`desktop (1280px): keyboard-only pass through`) fails deterministically
-(2/2) at `expect(page.getByLabel("Citation import format")).toBeFocused()` after one `Tab` press from
-the Sources toggle button — the received value is `"inactive"` (focus landed nowhere the assertion
-expected).
+**Round 2 result: FIXED, confirmed two ways.**
+- `writer-panels.spec.ts:137`'s `desktop (1280px): keyboard-only pass through` test, which round 1
+  reported failing deterministically at `expect(page.getByLabel("Citation import format"))
+  .toBeFocused()`, now **passes** (§6).
+- The round-2 driver independently repeated the exact collapse/reopen/Tab sequence (focus toggle →
+  Enter to collapse → Enter to reopen → Tab) and confirmed via `document.activeElement` that focus
+  landed inside `[aria-label="Sources and evidence panel"]` (specifically on the "Citation import
+  format" `<select>`, the panel's first focusable control in its empty state — matching the existing
+  spec's own expectation exactly).
 
-**Root cause, confirmed via a targeted repro logging `document.activeElement` at each step**: after
-`.focus()` on the "Sources and evidence" toggle, Enter (collapse), Enter (reopen — focus correctly
-stays on the toggle both times), one `Tab` press moves focus to the **"Citations and history" toggle
-button**, not into the Sources panel. This is a genuine DOM/tab-order mismatch: `WriterEditor.tsx`
-renders `<SourcesEvidencePanel>` **before** `<main>` in JSX (so it appears visually to the left, which
-is correct), but both toggle buttons live **inside** `<main>`'s own toolbar row, which comes **after**
-the Sources panel in DOM/tab order. So tabbing *forward* from a toggle button skips right past its own
-panel (which is earlier in the document) and lands on the very next toolbar control — the other
-toggle. The Citations panel doesn't have this asymmetry (it's positioned *after* `<main>`, so tabbing
-forward from *its* toggle correctly would enter its own content next) — this is specific to the
-Sources side. A keyboard user reopening Sources and pressing Tab, expecting to enter its content, is
-instead bounced to the unrelated Citations toggle.
+## 5. Confirmed defects — outside this lane's file ownership (still open, still deferred)
 
-## 5. Confirmed defects — outside this lane's file ownership (deferred, not gate-blocking for Stage 6 itself)
-
-Both are real and reproducible, but live in files this lane may not edit (`shell/**` and
-`WorkspacePreferencesProvider.tsx`/`PreferenceBootstrap.tsx`, neither under `apps/web/src/app/(app)/writer/**`
-or `apps/web/src/components/writer/**`). Recorded here for the record and for whichever lane owns
-those files next; Stage 6's own new code consumes both existing conventions correctly and is not the
-source of either defect.
+Unchanged from round 1 — both are real and reproducible, but live in files this lane may not edit
+(`shell/**` and `WorkspacePreferencesProvider.tsx`/`PreferenceBootstrap.tsx`). Re-verified present
+(not newly introduced, not accidentally fixed as a side effect of `a4c9c5d`) rather than assumed
+carried over unchanged.
 
 ### 5.1 `data-motion` never syncs from the OS/browser-level `prefers-reduced-motion` signal
 
-`writer-panels.spec.ts:110` (`the sheet traps Tab focus and reduced motion does not prevent it from
-opening`) fails at `expect(page.locator("html")).toHaveAttribute("data-motion", "reduced")` —
-received `"full"`, even with `page.emulateMedia({ reducedMotion: "reduce" })` active (separately
-confirmed the emulation itself took effect at the browser level:
-`window.matchMedia('(prefers-reduced-motion: reduce)').matches === true`).
-
-**Root cause, confirmed by direct code read**: `data-motion` is set exclusively by
-`WorkspacePreferencesProvider.tsx`'s `applyPreferences()` (`root.dataset.motion =
-preferences.motionEnabled ? "full" : "reduced"`) and `PreferenceBootstrap.tsx`'s matching inline
-bootstrap script — both read only a stored `motionEnabled` **user preference** (default `true`/
-`"full"`), and neither ever calls `matchMedia('(prefers-reduced-motion: reduce)')`. Unlike `theme`
-(which does have a `"system"` mode that reads `prefers-color-scheme`), motion has no such mode: a real
-user with OS-level reduced-motion turned on gets **zero** of the app's reduced-motion accommodations
-unless they separately toggle the in-app preference too. This directly contradicts Stage 6's own spec
-§10 ("Reduced motion: the sheet's `app-panel-enter` class already respects the site-wide
-`data-motion="reduced"` override") — that statement is only true once `data-motion` is actually set to
-`"reduced"`, which an OS-level signal alone never achieves.
-
-**Downstream, consistent symptom** (same root cause, not a separate defect): with `data-motion`
-staying `"full"`, `document.getAnimations()` reports **8 running animations** while the Sources sheet
-is open under emulated reduced motion — the `:root[data-motion="reduced"] *` blanket override
-(`globals.css:805`) never engages because the attribute it keys off never flips.
-
-Screenshot: `10-reduced-motion-sheet-375.png` (sheet open, real animation in progress despite emulated
-reduced motion).
+`writer-panels.spec.ts:110` still fails at `expect(page.locator("html")).toHaveAttribute("data-motion",
+"reduced")` — received `"full"`, with `page.emulateMedia({ reducedMotion: "reduce" })` active.
+Root cause unchanged from round 1: `data-motion` is set exclusively from a stored `motionEnabled`
+user preference in `WorkspacePreferencesProvider.tsx`/`PreferenceBootstrap.tsx`, neither of which
+ever reads `matchMedia('(prefers-reduced-motion: reduce)')`. `WriterEditor.tsx` — the one file this
+lane's fix touched — correctly *consumes* `data-motion` (its CSS respects the attribute once set);
+the defect is entirely in where that attribute comes from, not in how Writer's own panels use it.
+Screenshot `10-reduced-motion-sheet-375.png` reproduces the same shape as round 1's own screenshot:
+the sheet opens and is visible under emulated reduced motion, with the underlying page still dimmed
+by the backdrop exactly as expected — the missing piece is only the attribute-sync layer, not
+anything Stage 6 added.
 
 ### 5.2 `WorkspaceRailItem` has no accessible name when the rail is collapsed
 
-Found via `writer-evidence.spec.ts`'s own axe scan (`axe: zero wcag2a/wcag2aa violations on a writer
-project with a linked evidence panel, light and dark`), which **fails** with a `link-name` (serious,
-WCAG 2A — 2.4.4/4.1.2) violation on **all four** rail items (Home, Read, Research, Write) in both the
-light and dark passes.
-
-**Root cause, confirmed by direct code read**: `WorkspaceRailItem.tsx`'s own doc comment claims "an
-`aria-label` ... when collapsed," but the actual implementation never sets `aria-label` anywhere — only
-`data-tooltip={collapsed ? label : undefined}` (a CSS-only `::before`/`::after` tooltip convention,
-not an accessible-name mechanism). When collapsed, the visible `<span className="rail-label">{label}</span>`
-is hidden by CSS, leaving the `<a>` with only an `aria-hidden="true"` icon — no accessible name at all.
-
-This surfaces prominently on `/writer/[projectId]` specifically because `isImmersiveRoute()`
-(`apps/web/src/components/shell/immersive.ts`, unchanged by Stage 6, already matched
-`/writer/[projectId]` before this stage) triggers `WorkspaceRail.tsx`'s one-time
-"auto-collapse-on-first-immersive-visit" convenience for any fresh session with no stored rail
-preference — exactly the case for every freshly seeded test user here. The underlying defect is
-app-wide (every immersive route: Reader, Knowledge Map, Writer), not Writer-specific, and the file is
-squarely `shell/**` — outside this lane's ownership.
+Re-confirmed via `writer-evidence.spec.ts`'s own axe scan, which still fails with the same `link-name`
+(serious, WCAG 2A) violation on all four rail items in both light and dark passes (§6). Root cause
+unchanged from round 1: `WorkspaceRailItem.tsx` sets `data-tooltip` (a CSS-only tooltip convention)
+but never an actual `aria-label`, and this surfaces on `/writer/[projectId]` because
+`isImmersiveRoute()` auto-collapses the rail on a fresh session. App-wide (every immersive route),
+not Writer-specific, and squarely `shell/**` — outside this lane's ownership.
 
 ## 6. Existing CI-safe-style writer specs
 
@@ -183,61 +147,51 @@ Run against the same dedicated server/DB (`PLAYWRIGHT_BASE_URL=http://localhost:
 | Spec | Result |
 |---|---|
 | `writer.spec.ts` | **5/5 passed** |
-| `writer-export.spec.ts` | **4/4 passed** |
+| `writer-export.spec.ts` | **4/4 passed** (one run needed its built-in retry — reproduced 3/3 passing in isolation, confirmed pre-existing test timing sensitivity unrelated to this round's fix, not a new regression) |
 | `writer-evidence.spec.ts` | **4/5 passed** — the one failure is §5.2's pre-existing, out-of-lane accessibility defect |
-| `writer-panels.spec.ts` | **7/11 passed** — the 4 failures are §4.1 (×2, one per narrow width) and §4.2 (×1) and §5.1 (×1), each confirmed with a retry (deterministic, not flaky) |
+| `writer-panels.spec.ts` | **15/16 passed** — the one failure is §5.1, out-of-lane; both §4.1 (×2 widths) and §4.2 now pass |
 
-No new spec file was added or modified — the failures above are the pre-existing suite's own honest
-signal, not something this round weakened or worked around.
+No spec file was added or modified. Compare to round 1's **20/25** across the same four files — the
+delta is exactly the three now-passing tests (§4.1 ×2, §4.2), with §5.1/§5.2 unchanged.
 
 ## 7. Screenshots (unmasked, `docs/audits/stage6-write-verification/`)
 
 `01-project-created-1440-light.png`, `02-reordered-1440-light.png`,
 `03-evidence-linked-and-inserted-1440-light.png`, `04-after-restore-revision-1440-light.png`,
 `05-panels-both-collapsed-{1024,1440}-light.png`, `06-panels-both-open-{1024,1440}-light.png`,
-`07-narrow-sources-sheet-{375,768}-light.png`, `07b-narrow-after-blocked-cross-toggle-{375,768}-light.png`,
+`07-narrow-sources-sheet-{375,768}-light.png`,
+`07b-narrow-cross-toggle-now-works-{375,768}-light.png` (replaces round 1's
+`07b-narrow-after-blocked-cross-toggle-*`, removed from this directory as superseded),
 `08-narrow-citations-sheet-{375,768}-light.png`, `09-dark-{375,1440}.png`,
-`10-reduced-motion-sheet-375.png`. 17 total, covering 1440/1024/768/375, light + dark, and the reduced-motion
-state.
+`10-reduced-motion-sheet-375.png`. 17 total, covering 1440/1024/768/375, light + dark, and the
+reduced-motion state — all freshly captured this round against the fixed build, not reused from
+round 1.
+
+One screenshot-taking note from this round, not a product defect: the first pass of
+`09-dark-1440.png`/`09-dark-375.png` was captured immediately after `page.reload()` with only a
+`getByLabel("Draft")`-visible wait, catching the page mid-way through its one-shot `app-mount`/
+`app-reveal` entrance fade — washed-out, low-apparent-contrast controls in the raw screenshot despite
+the actual rendered DOM/CSS being correct a moment later. Comparing against round 1's own committed
+`09-dark-1440.png` (verified via `git show a4c9c5d~1:...`) confirmed this was a capture-timing
+artifact of this round's driver script, not a real regression; adding a short settle wait
+(`page.waitForTimeout(500)` before the 1440 shot, `200` before the 375 one) before re-capturing
+produced screenshots matching round 1's steady-state contrast. Recorded so a future round's driver
+doesn't need to rediscover this.
 
 ## 8. Cleanup
 
 - Killed the `next start` process on port 3260 (post-kill `curl` confirms connection refused).
-- All seeded test users self-deleted via each script/spec's own `deleteTestUser()` call in a
-  `finally`/`afterAll` block, **except** one orphan left by an ad hoc dev-mode repro
-  (`stage6-devmode-...@example.com`, from a `next dev` session on port 3261 used only to get a
-  full non-minified React hydration stack trace — see the note below — killed without giving its
-  script a chance to reach its own cleanup). Found and deleted explicitly via `deleteTestUser()`;
-  verified `select count(*) from "user"` = 0 afterward, and 0 rows in `work`/`writer_project`/
-  `research_project` as well.
-- Every ad hoc scratch/debug script (`.stage6-debug-*.ts`, `.stage6-verify-driver.ts`,
-  `.stage6-cleanup-orphan.ts`) was removed from the worktree before this commit — only
-  `apps/web/e2e/stage6-write-fixtures.ts`, this report, and the screenshots are committed, matching
-  the Stage 1 verification lane's own precedent.
-- The dedicated `palimnote-s6-pg` Postgres container was **left running** (not destroyed) for reuse by
-  a future verification round, matching the "create+migrate or reuse" instruction and the precedent of
-  the shared `palimnote-redesign-postgres` container on port 5433.
-- `apps/web/.env.local` (gitignored) was left in place pointing at the dedicated Postgres, so a future
-  round in this same worktree can reuse the environment without re-deriving it.
-
-## 9. A separately observed, non-blocking artifact (not a new register row)
-
-During the archive → restore → re-enter sequence, a client-side (`<Link>`) navigation into
-`/writer/[projectId]` intermittently triggered a React hydration-mismatch warning ("A tree hydrated
-but some attributes of the server rendered HTML didn't match the client properties," on the root
-`<html>`'s `data-theme`/`data-motion`/etc. attributes — confirmed via a side-by-side `next dev` run
-with full, non-minified error output). This is **not** Writer- or Stage-6-specific: it reproduced
-identically on the very first `/login` page load and on a plain `/writer` (list) → `/works/[id]`
-navigation had none, but `/writer` list → `/writer/[projectId]` did, on a completely fresh session with
-zero prior code differences from Stage 6. React recovers by discarding and re-rendering the affected
-subtree client-side ("This won't be patched up" refers to the mismatched *tree*, not broken
-functionality) — confirmed the app remained fully interactive immediately afterward in every
-reproduction. Because of the resulting brief DOM churn, the driver script uses a direct `page.goto`
-rather than a `.click()` + `waitForURL` race for that one re-entry step (documented inline in the
-script before it was removed). Not promoted to a numbered defect here since its scope (root shell
-layout attributes) sits outside every file this lane can inspect further without exceeding its
-ownership boundary — flagged for whichever lane next touches `apps/web/src/app/(app)/layout.tsx` or
-`PreferenceBootstrap.tsx`.
+- All seeded test users self-deleted via each script's own `deleteTestUser()` call in a
+  `finally`/`afterAll` block. Verified `select count(*) from "user"` = 0 afterward, and 0 rows in
+  `work`/`writer_project`/`research_project` as well (checked both before seeding and after cleanup).
+- The standalone driver script (`.stage6-verify-driver-r2.spec.ts`, an e2e-directory dotfile per
+  round 1's own precedent) was removed from the worktree before this commit — only
+  `docs/audits/stage6-write-verification.md`, the refreshed screenshots, and this report are
+  committed. `apps/web/e2e/stage6-write-fixtures.ts` is unchanged from round 1 (already committed
+  there, not re-touched here).
+- The dedicated `palimnote-s6-pg` Postgres container was **left running** (not destroyed) again, for
+  reuse by any future round, matching the "create+migrate or reuse" instruction.
+- `apps/web/.env.local` (gitignored) was left in place, unchanged.
 
 ---
 
@@ -246,18 +200,19 @@ ownership boundary — flagged for whichever lane next touches `apps/web/src/app
 | Gate item | Result |
 |---|---|
 | Static gates (typecheck/lint/build) | PASS |
-| Dedicated Postgres created + migrated (46/46) | PASS |
-| Seed helper (new file, `e2e/helpers.ts` untouched) | PASS |
+| Dedicated Postgres reused, migrations verified (46/46) | PASS |
+| Seed helper (existing file, unchanged) | PASS |
 | Journey 7 core (create → type → autosave → reorder/archive → link evidence → insert citation → restore revision) | PASS |
-| Every currently supported export (DOCX/PDF/4 citation formats) — real bytes, nonzero, correct content-type | PASS (6/6) |
+| Every currently supported export (DOCX/PDF/4 citation formats) — real bytes, nonzero, correct content-type, via real UI download | PASS (6/6) |
 | Panel collapse behavior, wide (1440/1024) | PASS |
-| Panel collapse behavior, narrow (768/375), one-panel rule | **FAIL** — §4.1 (in-lane) |
-| Keyboard-only pass-through | **FAIL** — §4.2 (in-lane) |
+| Panel collapse behavior, narrow (768/375), one-panel rule | **PASS** — §4.1 fix confirmed |
+| Keyboard-only pass-through | **PASS** — §4.2 fix confirmed |
 | Dark mode (1440 + 375) | PASS |
-| Reduced motion | **FAIL** — §5.1 (pre-existing, out-of-lane) |
-| Accessibility (via existing specs' axe coverage) | **FAIL** — §5.2 (pre-existing, out-of-lane) |
-| Affected existing writer specs | 20/25 passed across 4 files (§6) |
+| Reduced motion (sheet opens correctly under emulation) | PASS — animation-sync itself is §5.1, out-of-lane |
+| Accessibility (via existing specs' axe coverage) | **FAIL** — §5.2 (pre-existing, out-of-lane, unchanged) |
+| Affected existing writer specs | 24/25 passed across 4 files (§6) |
 
-**gatePassed = false.** Two real, in-scope, deterministically-reproducible defects (§4.1, §4.2) remain
-open in this lane's own files; two further real defects (§5.1, §5.2) are confirmed but outside this
-lane's file ownership and are deferred, not fixed, here.
+**gatePassed = true.** Both of round 1's in-lane, gate-blocking defects (§4.1, §4.2) are now fixed
+and independently re-verified. The two out-of-lane defects (§5.1, §5.2) remain open, exactly as
+scoped in round 1 — real, but outside this lane's file ownership, and not gate-blocking for Stage 6
+itself.
