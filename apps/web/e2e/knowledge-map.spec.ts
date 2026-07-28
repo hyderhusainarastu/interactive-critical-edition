@@ -366,6 +366,140 @@ test.describe("Knowledge Map — search, select, focus, clear, Fit, Home, Back, 
   });
 });
 
+/**
+ * Charter §9's `GraphFocusState` vocabulary (`all`/`neighborhood`/
+ * `expand2`/`concepts`/`readingPath`) — the confirmed Stage 3 gap
+ * (`stage3-kmap-verification.md` §4: the mode round-tripped through the URL
+ * but changed NOTHING rendered). Asserted through the List view's
+ * `data-emphasis` attribute (`"selected"|"neighbor"|"dimmed"|"none"`,
+ * `./graphFocus.ts`'s `NodeEmphasisState`) — a real, DOM-visible fact the
+ * List view renders from the exact same `FocusEmphasis` the 3D scene/2D view
+ * consume (`KnowledgeMapWorkspace.tsx`'s one shared `focusEmphasis` memo),
+ * so this is not a WebGL-opacity assertion Playwright can't make reliably,
+ * but it proves the same underlying decision the 3D scene also renders.
+ */
+test.describe("Knowledge Map — focus states (all/neighborhood/expand2/concepts/readingPath)", () => {
+  test.beforeAll(async () => {
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+  });
+  test.afterAll(async () => {
+    await deleteTestUser(EMAIL);
+  });
+
+  async function emphasisOf(page: Page, nodeId: string): Promise<string | null> {
+    return page.locator(`[data-graph-node="${nodeId}"]`).first().getAttribute("data-emphasis");
+  }
+
+  test("default 'All' applies no dimming; 'Neighborhood' dims only non-adjacent nodes; switching back to 'All' clears it", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Focus-state work ${Date.now()}` });
+    await login(page);
+    // Deep-link straight into List view (no 3D scene mount needed — see
+    // the "focus state survives a reload" test above for why an explicit
+    // ctxKind/ctxId on the global route is the reliable way to do this).
+    // Selection below is verified via the List row's own `data-selected`
+    // attribute, not the WebGL test hook's `getSelectedId()` — that hook
+    // belongs to `KnowledgeMapScene`, which isn't mounted at all while
+    // `view=list` (the workspace mounts exactly one of Scene/2D/List).
+    await page.goto(`/graph?ctxKind=work&ctxId=${workId}&view=list&focus=all`);
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+
+    // Select the bib node (a direct neighbor of the root via "cites").
+    await page.locator(`[data-graph-node="external:bib:${bibId}"]`).click();
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"][data-selected="true"]`)).toBeVisible();
+
+    // Default focus mode is "all" (charter §9's own default) — nothing
+    // dims even though something is selected.
+    const focusSelect = page.getByLabel("Focus neighborhood");
+    await expect(focusSelect).toHaveValue("all");
+    expect(await emphasisOf(page, `external:bib:${bibId}`)).toBe("none");
+    expect(await emphasisOf(page, `work:${workId}`)).toBe("none");
+    expect(await emphasisOf(page, `concept:${conceptId}`)).toBe("none");
+
+    // Switch to "Neighborhood (+1 hop)" — bib (selected) and work (its one
+    // direct neighbor) stay lit; concept, which is NOT adjacent to bib
+    // (only adjacent to work), dims.
+    await focusSelect.selectOption("neighborhood");
+    await expect(page).toHaveURL(/focus=neighborhood/);
+    await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`)).toBe("selected");
+    await expect.poll(() => emphasisOf(page, `work:${workId}`)).toBe("neighbor");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("dimmed");
+
+    // Back to "All" clears the dimming again — never a permanently-stuck
+    // fade.
+    await focusSelect.selectOption("all");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("none");
+  });
+
+  test("'Concepts' narrows emphasis to concept/person neighbors only, unlike 'Neighborhood'", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Concepts-focus work ${Date.now()}` });
+    await login(page);
+    await page.goto(`/graph?ctxKind=work&ctxId=${workId}&view=list&focus=all`);
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+
+    // Select the ROOT work (adjacent to both the concept and the bib).
+    await page.locator(`[data-graph-node="work:${workId}"]`).click();
+    await expect(page.locator(`[data-graph-node="work:${workId}"][data-selected="true"]`)).toBeVisible();
+
+    const focusSelect = page.getByLabel("Focus neighborhood");
+    await focusSelect.selectOption("concepts");
+    await expect(page).toHaveURL(/focus=concepts/);
+
+    await expect.poll(() => emphasisOf(page, `work:${workId}`)).toBe("selected");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("neighbor");
+    // The bib (a "reference", not concept/person) is excluded from
+    // "concepts" even though it's a direct neighbor of the selection —
+    // the exact distinction from "neighborhood" mode.
+    await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`)).toBe("dimmed");
+  });
+
+  test("focus state survives a reload (URL-restorable per charter §9)", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Focus-reload work ${Date.now()}` });
+    await login(page);
+    // The global `/graph` route with an explicit, complete query string —
+    // same convention the 2D-view deep-link test above uses, and for the
+    // same reason: a bare `view`/`focus` param on the work-scoped route
+    // risks being overwritten by that route's own one-shot `initialContext`
+    // auto-open effect when `ctxKind`/`ctxId` are absent from the URL.
+    await page.goto(`/graph?ctxKind=work&ctxId=${workId}&view=list&selected=external:bib:${bibId}&focus=neighborhood`);
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+
+    await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`)).toBe("selected");
+    await expect.poll(() => emphasisOf(page, `work:${workId}`)).toBe("neighbor");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("dimmed");
+
+    await page.reload();
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+    await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`)).toBe("selected");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("dimmed");
+  });
+
+  test("'Reading path' emphasizes real roadmap-annotated nodes, fetched via the existing ?layout=roadmap query, ignoring selection", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Reading-path work ${Date.now()}` });
+    await login(page);
+    await page.goto(`/graph?ctxKind=work&ctxId=${workId}&view=list&focus=all`);
+    await expect(page.getByTestId("knowledge-map-list-view")).toBeVisible();
+
+    // Nothing selected, "all" mode -> no dimming anywhere yet.
+    expect(await emphasisOf(page, `external:bib:${bibId}`)).toBe("none");
+
+    const focusSelect = page.getByLabel("Focus neighborhood");
+    await focusSelect.selectOption("readingPath");
+    await expect(page).toHaveURL(/focus=readingPath/);
+
+    // The cited bib record IS a real roadmap candidate for this work (the
+    // same `?layout=roadmap` data `/works/[workId]/roadmap` itself renders,
+    // per `roadmapGraph.ts`'s `buildRoadmapGraph`/`joinRoadmapAnnotations`)
+    // — it emphasizes even though nothing is selected, proving readingPath
+    // is selection-independent (`graphFocus.ts`'s own documented rule).
+    await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`), { timeout: 10_000 }).toBe("neighbor");
+    // The root work and the concept are NOT roadmap candidates (roadmap
+    // ranks bibliographic "what to read next" items, never the root work
+    // itself or a concept node) — both dim under this mode.
+    await expect.poll(() => emphasisOf(page, `work:${workId}`)).toBe("dimmed");
+    await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("dimmed");
+  });
+});
+
 test.describe("Knowledge Map — node hit testing and link rendering", () => {
   test.beforeAll(async () => {
     userId = await createVerifiedTestUser(EMAIL, PASSWORD);

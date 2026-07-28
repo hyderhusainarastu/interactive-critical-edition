@@ -24,6 +24,7 @@ import Link from "next/link";
 import { STATE_META, type GraphNode, type NodeState } from "../graph/types";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
 import { buildListRows, LAYER_LABEL, LIST_PAGE_SIZE, paginateListRows, sortListRows, type ListSortKey } from "./listLayout";
+import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis, type NodeEmphasisState } from "./graphFocus";
 
 export interface KnowledgeMapListViewProps {
   /** The current disclosed topology (same array `KnowledgeMapScene` would
@@ -36,6 +37,12 @@ export interface KnowledgeMapListViewProps {
   rootNodeId: string | null;
   selectedId: string | null;
   canonicalNodeById: ReadonlyMap<string, GraphNode>;
+  /** Charter §9/§10's active `GraphFocusState` emphasis (`./graphFocus.ts`),
+   *  the SAME value `KnowledgeMapScene`/`KnowledgeMap2DView` consume — a
+   *  dimmed row stays in the table (charter: "never silently removed"),
+   *  just visually and semantically (`data-emphasis="dimmed"`) marked as
+   *  outside the active focus. */
+  emphasis?: FocusEmphasis;
   onSelect: (nodeId: string | null) => void;
 }
 
@@ -52,7 +59,16 @@ function distanceLabel(distance: number | null): string {
   return `${distance} hop${distance === 1 ? "" : "s"}`;
 }
 
-export function KnowledgeMapListView({ nodes, links, visibleNodeIds, rootNodeId, selectedId, canonicalNodeById, onSelect }: KnowledgeMapListViewProps) {
+export function KnowledgeMapListView({
+  nodes,
+  links,
+  visibleNodeIds,
+  rootNodeId,
+  selectedId,
+  canonicalNodeById,
+  emphasis = EMPTY_FOCUS_EMPHASIS,
+  onSelect,
+}: KnowledgeMapListViewProps) {
   const [sortKey, setSortKey] = useState<ListSortKey>("distance");
   const [ascending, setAscending] = useState(true);
   const [page, setPage] = useState(1);
@@ -113,6 +129,7 @@ export function KnowledgeMapListView({ nodes, links, visibleNodeIds, rootNodeId,
                     selected={selected}
                     isRoot={rootNodeId === id}
                     meta={meta}
+                    emphasisState={emphasisStateForNode(id, selectedId, emphasis)}
                     onSelect={() => onSelect(id)}
                   />
                 );
@@ -158,6 +175,7 @@ function FragmentRow({
   selected,
   isRoot,
   meta,
+  emphasisState,
   onSelect,
 }: {
   row: ReturnType<typeof buildListRows>[number];
@@ -165,9 +183,25 @@ function FragmentRow({
   selected: boolean;
   isRoot: boolean;
   meta: { label: string; colorVar: string } | null;
+  emphasisState: NodeEmphasisState;
   onSelect: () => void;
 }) {
   const node = row.node;
+  // Charter §10 "unrelated visible content dims to 0.12 opacity ... never
+  // silently removed" — a dimmed row stays a full, actionable row (same
+  // click/select/destination link), just visually de-emphasized and
+  // carrying `data-emphasis="dimmed"` for assistive tech/e2e assertions.
+  // The exact 0.12 figure is a SPATIAL-canvas rule (3D scene / SVG 2D dots)
+  // where a dimmed mark is still legible at a glance against its neighbors;
+  // a DATA TABLE ROW at 0.12 would fail this same view's own accessibility
+  // requirement to stay a fully readable, equal-capability representation
+  // (charter §17 "an equal-capability semantic 2D/List representation"),
+  // so this row uses a lighter, still-legible 0.55 — the semantic fact
+  // (`data-emphasis="dimmed"`, the row's position/grouping) is identical to
+  // the 3D/2D views either way; only the numeric opacity differs, and only
+  // because this is text a reader must still be able to read, not a mark on
+  // a spatial canvas.
+  const dimmed = emphasisState === "dimmed";
   return (
     <>
       {showHeader && (
@@ -184,7 +218,9 @@ function FragmentRow({
       <tr
         data-graph-node={node.id}
         data-selected={selected ? "true" : "false"}
+        data-emphasis={emphasisState}
         aria-current={selected ? "true" : undefined}
+        style={dimmed ? { opacity: 0.55 } : undefined}
         className={`cursor-pointer border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface)] ${selected ? "bg-[var(--color-surface)]" : ""}`}
         onClick={onSelect}
       >

@@ -7,30 +7,36 @@
  * Toolbar + FilterRail + Scene + InspectorDrawer + ContextTray workspace
  * once one is.
  *
- * ## Scope note for this step ("views-fallback")
+ * ## Scope note for this step ("views-fallback"), updated by integration
+ * step "focus-modes-map-tabs"
  *
  * This is a real, working implementation of the URL/context/toolbar/rail/
  * inspector/tray/disclosure machinery, plus the 2D/List views and the
  * charter §14 WebGL-unavailable/context-loss fallback boundary. One thing
- * remains genuinely out of this step's scope, carried over honestly from
- * the prior step rather than silently pretended done:
+ * remains genuinely out of scope, carried over honestly rather than
+ * silently pretended done:
  *
  * Only a "work" context has real, fully-expanded graph data (via the
- * existing `/api/works/[workId]/graph` endpoint + `./adapter.ts`).
- * "passage"/"question"/"claim"/"debate" contexts resolve to a real,
- * correctly-labeled ROOT node (`./resolveContextRoot.ts`) with zero
- * synthesized neighbors — spec §2.2's full context-scoped neighborhood
- * synthesis (a claim's judged relationships, a debate's member claims,
- * etc.) is out of this step's scope, and the workspace says so in the
+ * existing `/api/works/[workId]/graph` endpoint + `./adapter.ts`), and a
+ * "question" (research project) context now ALSO synthesizes a real,
+ * bounded one-hop neighborhood — its own claims and debate clusters
+ * (`loadQuestionContext` below) — since that is exactly what the research
+ * project's own Knowledge Map subnav tab needs to show. "passage"/"claim"/
+ * "debate" contexts still resolve to a real, correctly-labeled ROOT node
+ * (`./resolveContextRoot.ts`) with zero synthesized neighbors — spec §2.2's
+ * FULL context-scoped neighborhood synthesis (a claim's judged
+ * relationships, a debate's member claims/hypotheses/gaps, etc., for every
+ * entry kind) remains out of scope here, and the workspace says so in the
  * empty state rather than showing a misleadingly bare canvas.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { toDisplayNodeId, type DeviceClass, type GraphUrlContext, type ReconstructionValidators } from "@ice/graph-display";
+import { toDisplayLinkId, toDisplayNodeId, type DeviceClass, type GraphUrlContext, type ReconstructionValidators } from "@ice/graph-display";
 import { adaptGraphPayload, type KnowledgeMapDisplayLink, type KnowledgeMapDisplayNode } from "./adapter";
 import { computeDisclosure } from "./disclosurePipeline";
 import { computeVisibleNodeIds, toggleLayer } from "./attributeVisibility";
+import { computeFocusEmphasis } from "./graphFocus";
 import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphFiltersUrlAdapter";
 import { PERMISSIVE_RECONSTRUCTION_VALIDATORS, useGraphUrlState } from "./useGraphUrlState";
 import { useLegacyGraphUrlRedirect } from "./useLegacyGraphUrlRedirect";
@@ -128,6 +134,92 @@ async function loadWorkContext(workId: string): Promise<ContextData | "not-found
   };
 }
 
+/** A plain, direction-free "belongs to this project" edge — the one real,
+ *  owner-scoped fact `research_claim`/`debate_cluster` rows already carry
+ *  (their own `projectId`), rendered as the "structural" family per charter
+ *  §10's edge-grammar table ("Structural: ... provenance/containment-only
+ *  links") since project membership is containment, not a scholarly
+ *  relationship claim of its own. */
+function structuralContainmentLink(sourceId: string, targetId: string): KnowledgeMapDisplayLink {
+  return {
+    id: toDisplayLinkId(`${sourceId}->${targetId}`),
+    source: toDisplayNodeId(sourceId),
+    target: toDisplayNodeId(targetId),
+    canonicalLinkId: null,
+    displayFamily: "structural",
+    directed: false,
+    evidence: null,
+    provenance: null,
+    aiInferred: false,
+  };
+}
+
+/**
+ * The research-project ("question") context's own neighborhood synthesis
+ * (integration step "focus-modes-map-tabs" (b): the research project subnav
+ * Knowledge Map tab needs to "open the project's debate/claim context," not
+ * a bare unconnected root). Fetches the project's own claims
+ * (`GET /api/research/claims?projectId=`, existing, project-scoped) and
+ * debate clusters (`GET /api/research/debates?projectId=`, additive
+ * `projectId` filter on the existing cross-project route — see that
+ * route's own doc comment) and attaches each as a direct one-hop neighbor
+ * of the project root.
+ *
+ * Deliberately bounded, honest scope: this synthesizes real, owner-scoped
+ * claim/debate MEMBERSHIP (a project really does contain these claims and
+ * these debate clusters), not the deeper judged-relationship/hypothesis/gap
+ * neighborhood spec §2.2 describes as a later step's work — that remains
+ * genuinely out of scope here, same as it already was for passage/claim/
+ * debate single-root contexts. A failure fetching either extra list
+ * degrades to "the root alone" rather than failing the whole context —
+ * claims/debates are real extras, not the root's own required data.
+ */
+async function loadQuestionContext(projectId: string): Promise<ContextData | "not-found" | "error"> {
+  const projectRes = await fetch(`/api/research/projects/${encodeURIComponent(projectId)}`);
+  if (projectRes.status === 404) return "not-found";
+  if (!projectRes.ok) return "error";
+  const { project } = await projectRes.json();
+  const resolved = questionRoot(project);
+  const rootId = String(resolved.node.id);
+
+  const nodes: KnowledgeMapDisplayNode[] = [resolved.node];
+  const links: KnowledgeMapDisplayLink[] = [];
+
+  const [claimsOutcome, debatesOutcome] = await Promise.allSettled([
+    fetch(`/api/research/claims?projectId=${encodeURIComponent(projectId)}&pageSize=20`),
+    fetch(`/api/research/debates?projectId=${encodeURIComponent(projectId)}&limit=20`),
+  ]);
+
+  if (claimsOutcome.status === "fulfilled" && claimsOutcome.value.ok) {
+    const { claims } = await claimsOutcome.value.json();
+    for (const claim of (claims ?? []) as Parameters<typeof claimRoot>[0][]) {
+      const claimResolved = claimRoot(claim);
+      nodes.push(claimResolved.node);
+      links.push(structuralContainmentLink(rootId, String(claimResolved.node.id)));
+    }
+  }
+
+  if (debatesOutcome.status === "fulfilled" && debatesOutcome.value.ok) {
+    const { debates } = await debatesOutcome.value.json();
+    for (const cluster of (debates ?? []) as Parameters<typeof debateRoot>[0][]) {
+      const debateResolved = debateRoot(cluster);
+      nodes.push(debateResolved.node);
+      links.push(structuralContainmentLink(rootId, String(debateResolved.node.id)));
+    }
+  }
+
+  return {
+    rootId,
+    label: resolved.label,
+    breadcrumb: resolved.breadcrumb,
+    nodes,
+    links,
+    canonicalNodeById: new Map(),
+    structuralIssueCount: 0,
+    adapterIssueCount: 0,
+  };
+}
+
 async function loadSingleRootContext(context: GraphUrlContext): Promise<ContextData | "not-found" | "error"> {
   let resolved: { node: KnowledgeMapDisplayNode; label: string; breadcrumb: string } | null = null;
 
@@ -137,12 +229,6 @@ async function loadSingleRootContext(context: GraphUrlContext): Promise<ContextD
     if (!res.ok) return "error";
     const { passage } = await res.json();
     resolved = passageRoot(passage);
-  } else if (context.kind === "question") {
-    const res = await fetch(`/api/research/projects/${encodeURIComponent(context.id)}`);
-    if (res.status === 404) return "not-found";
-    if (!res.ok) return "error";
-    const { project } = await res.json();
-    resolved = questionRoot(project);
   } else if (context.kind === "claim") {
     const res = await fetch(`/api/research/claims/${encodeURIComponent(context.id)}`);
     if (res.status === 404) return "not-found";
@@ -272,7 +358,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
     if (!context || !context.contextValid) return;
     let cancelled = false;
     const { kind, id } = context.context;
-    const loader = kind === "work" ? loadWorkContext(id) : loadSingleRootContext(context.context);
+    const loader = kind === "work" ? loadWorkContext(id) : kind === "question" ? loadQuestionContext(id) : loadSingleRootContext(context.context);
     loader.then((result) => {
       if (cancelled) return;
       if (result === "not-found" || result === "error") {
@@ -354,6 +440,53 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
     if (!effectiveContextData || !disclosure) return [];
     return effectiveContextData.links.filter((l) => disclosure.visibleIds.has(l.source) && disclosure.visibleIds.has(l.target));
   }, [effectiveContextData, disclosure]);
+
+  // --- "readingPath" focus state's node set (charter §9's `focusMode` ->
+  // `readingThread=1` legacy row: "Restore the reading-path overlay/focus
+  // state"). Only a WORK context has real roadmap-sequence data — fetched
+  // lazily, ONLY while this exact focus mode is active, via the SAME
+  // `/api/works/[workId]/graph` endpoint every other Knowledge Map data load
+  // already uses, with its EXISTING `?layout=roadmap` query param (no new
+  // endpoint, no schema change — `apps/web/src/lib/roadmapGraph.ts`'s
+  // `buildRoadmapGraph()` is what actually computes each node's
+  // `roadmap.sequence`). A passage/question/claim/debate context, or a work
+  // with no roadmap-annotated nodes yet, degrades to an empty set — read by
+  // `graphFocus.ts`'s own honest "no reading-path data yet -> no emphasis"
+  // rule, never a crash and never a silent fallback to a different mode. ---
+  const [readingPathNodeIds, setReadingPathNodeIds] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    if (context?.focus !== "readingPath" || context.context.kind !== "work") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReadingPathNodeIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    const workId = context.context.id;
+    fetch(`/api/works/${encodeURIComponent(workId)}/graph?layout=roadmap`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: (GraphPayload & { nodes?: Array<{ id: string; roadmap?: unknown }> }) | null) => {
+        if (cancelled || !data) return;
+        const ids = new Set<string>();
+        for (const n of data.nodes ?? []) if (n.roadmap != null) ids.add(n.id);
+        setReadingPathNodeIds(ids);
+      })
+      .catch(() => {
+        if (!cancelled) setReadingPathNodeIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context?.focus, context?.context.kind, context?.context.id]);
+
+  // --- Focus-state emphasis (charter §9/§10, `./graphFocus.ts`) — computed
+  // ONCE here over the current disclosed topology and shared, unmodified,
+  // by the 3D scene, 2D view, List view, and the WebGL-fallback's own
+  // substitute (all via `sharedViewProps`/explicit props below) — never a
+  // second, independently-recomputed emphasis per view. ---
+  const focusEmphasis = useMemo(
+    () => computeFocusEmphasis(topologyNodes, topologyLinks, context?.selectedId ?? null, context?.focus ?? "all", readingPathNodeIds),
+    [topologyNodes, topologyLinks, context?.selectedId, context?.focus, readingPathNodeIds],
+  );
 
   const filters = useMemo(() => graphFiltersFromUrlFilters(context?.filters ?? {}), [context?.filters]);
   const activeLayers = useMemo(() => context?.activeLayers ?? [], [context?.activeLayers]);
@@ -492,9 +625,10 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
       visibleNodeIds: attributeVisibleIds,
       rootNodeId: effectiveContextData?.rootId ?? null,
       selectedId: context?.selectedId ?? null,
+      emphasis: focusEmphasis,
       onSelect: handleSelect,
     }),
-    [topologyNodes, topologyLinks, attributeVisibleIds, effectiveContextData, context?.selectedId, handleSelect],
+    [topologyNodes, topologyLinks, attributeVisibleIds, effectiveContextData, context?.selectedId, focusEmphasis, handleSelect],
   );
 
   // --- Transient UI (filters rail / help / secondary Arrange state) ---
@@ -654,6 +788,8 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
         onSearchChange={(value) => urlApi.setState({ filters: urlFiltersFromGraphFilters({ ...filters, search: value }) })}
         view={context.view}
         onViewChange={(view) => urlApi.setState({ view })}
+        focusMode={context.focus}
+        onFocusModeChange={(focus) => urlApi.setState({ focus })}
         onFocus={() => {
           if (context.selectedId) sceneApiRef.current?.focusOnNode(context.selectedId);
         }}
@@ -740,6 +876,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
                       selectedId={context.selectedId}
                       readingNodeIds={readingNodeIds}
                       credibilityByNodeId={credibilityByNodeId}
+                      emphasis={focusEmphasis}
                       onSelect={handleSelect}
                       onFocus={handleSelect}
                       onContextLost={sceneHandlers.onContextLost}

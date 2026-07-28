@@ -18,10 +18,11 @@
  */
 import { useMemo, useState } from "react";
 import { LAYER_ORDER } from "@ice/graph-display";
-import { EDGE_VISUALS, KIND_VISUALS } from "./theme";
+import { DEFAULT_LINK_OPACITY, DIMMED_NODE_OPACITY, EDGE_VISUALS, KIND_VISUALS, SELECTED_NEIGHBORHOOD_LINK_OPACITY, UNRELATED_WHILE_SELECTED_LINK_OPACITY } from "./theme";
 import { LAYER_LABEL } from "./listLayout";
 import { computeLayerColumnPositions, computePositionExtent, type TwoDPosition } from "./twoDLayout";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
+import { EMPTY_FOCUS_EMPHASIS, emphasisStateForNode, type FocusEmphasis } from "./graphFocus";
 
 export interface KnowledgeMap2DViewProps {
   nodes: KnowledgeMapDisplayNode[];
@@ -29,6 +30,11 @@ export interface KnowledgeMap2DViewProps {
   visibleNodeIds?: ReadonlySet<string> | null;
   rootNodeId: string | null;
   selectedId: string | null;
+  /** Charter §9/§10's active `GraphFocusState` emphasis (`./graphFocus.ts`),
+   *  the SAME value `KnowledgeMapScene`/`KnowledgeMapListView` consume —
+   *  never independently recomputed here. Defaults to no emphasis (every
+   *  node/link at full/default opacity), matching `focus === "all"`. */
+  emphasis?: FocusEmphasis;
   onSelect: (nodeId: string | null) => void;
 }
 
@@ -39,7 +45,7 @@ function endpointId(end: string): string {
   return end;
 }
 
-export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, selectedId, onSelect }: KnowledgeMap2DViewProps) {
+export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, selectedId, emphasis = EMPTY_FOCUS_EMPHASIS, onSelect }: KnowledgeMap2DViewProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const visibleNodes = useMemo(() => (visibleNodeIds ? nodes.filter((n) => visibleNodeIds.has(String(n.id))) : nodes), [nodes, visibleNodeIds]);
@@ -76,8 +82,17 @@ export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, s
               const targetPos = positions.get(String(link.target));
               if (!sourcePos || !targetPos) return null;
               const family = EDGE_VISUALS[link.displayFamily];
-              const emphasized = selectedId != null && (String(link.source) === selectedId || String(link.target) === selectedId);
-              const dimmed = selectedId != null && !emphasized;
+              // Same emphasis-driven rule `KnowledgeMapScene`'s
+              // `linkColorAccessor` uses (charter §10) — a plain "adjacent
+              // to selection" check here would be the exact Stage 3 gap
+              // (`stage3-kmap-verification.md` §4) that left the four
+              // non-default focus modes doing nothing.
+              const hasActiveFocus = emphasis.emphasizedNodeIds.size > 0;
+              let strokeOpacity = DEFAULT_LINK_OPACITY;
+              if (hasActiveFocus) {
+                strokeOpacity = emphasis.emphasizedLinkIds.has(String(link.id)) ? SELECTED_NEIGHBORHOOD_LINK_OPACITY : UNRELATED_WHILE_SELECTED_LINK_OPACITY;
+              }
+              if (link.aiInferred) strokeOpacity *= 0.7;
               return (
                 <line
                   key={String(link.id)}
@@ -87,7 +102,7 @@ export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, s
                   y2={targetPos.y}
                   stroke={family.color}
                   strokeWidth={family.widthPx}
-                  strokeOpacity={dimmed ? 0.12 : link.aiInferred ? 0.5 : 0.7}
+                  strokeOpacity={strokeOpacity}
                   strokeDasharray={link.aiInferred ? "3 3" : undefined}
                 />
               );
@@ -104,11 +119,14 @@ export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, s
               const isHovered = id === hoveredId;
               const visual = KIND_VISUALS[node.displayKind];
               const radius = isRoot ? ROOT_RADIUS : NODE_RADIUS;
+              const emphasisState = emphasisStateForNode(id, selectedId, emphasis);
+              const isDimmed = emphasisState === "dimmed";
               return (
                 <g
                   key={id}
                   data-graph-node={id}
                   data-selected={isSelected ? "true" : "false"}
+                  data-emphasis={emphasisState}
                   transform={`translate(${pos.x}, ${pos.y})`}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -131,11 +149,11 @@ export function KnowledgeMap2DView({ nodes, links, visibleNodeIds, rootNodeId, s
                   <circle
                     r={radius}
                     fill={visual.color}
-                    fillOpacity={node.unavailableReason ? 0.35 : 0.9}
+                    fillOpacity={isDimmed ? DIMMED_NODE_OPACITY : node.unavailableReason ? 0.35 : 0.9}
                     stroke={isSelected ? "var(--color-accent-ink)" : isHovered ? visual.color : "none"}
                     strokeWidth={isSelected ? 3 : 2}
                   />
-                  <text x={radius + 4} y={4} className="fill-[var(--color-text)] text-[10px]">
+                  <text x={radius + 4} y={4} className="fill-[var(--color-text)] text-[10px]" opacity={isDimmed ? DIMMED_NODE_OPACITY : 1}>
                     {node.label.length > 28 ? `${node.label.slice(0, 27)}…` : node.label}
                   </text>
                 </g>

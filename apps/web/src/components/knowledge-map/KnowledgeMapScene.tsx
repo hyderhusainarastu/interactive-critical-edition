@@ -58,6 +58,7 @@ import * as THREE from "three";
 
 import { distanceToTarget, zForLayer, type Layer, type Vec3 } from "@ice/graph-display";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
+import { EMPTY_FOCUS_EMPHASIS, type FocusEmphasis } from "./graphFocus";
 import { computeBandGap, computeFixedZ, medianXYLinkDistance, seededInitialPosition } from "./layout";
 import { computeNodeScale, computeVisibleDegrees } from "./sizing";
 import { NodeVisualFactory, type CredibilityRingInput, type NodeVisual } from "./nodeVisuals";
@@ -208,6 +209,13 @@ export interface KnowledgeMapSceneProps {
   /** Per-node credibility dossier for the segmented ring (charter §10),
    *  again supplied by the caller for the same reason. */
   credibilityByNodeId?: ReadonlyMap<string, CredibilityRingInput>;
+  /** Charter §9/§10's active `GraphFocusState` emphasis (`./graphFocus.ts`),
+   *  computed ONCE by `KnowledgeMapWorkspace` over the same filtered
+   *  selection the 2D/List views and inspector consume — never
+   *  independently recomputed here. `EMPTY_FOCUS_EMPHASIS` (the default
+   *  when omitted) renders every node/link at full/default opacity, exactly
+   *  matching `focus === "all"`. */
+  emphasis?: FocusEmphasis;
   onSelect?: (nodeId: string | null) => void;
   onHover?: (nodeId: string | null) => void;
   onFocus?: (nodeId: string) => void;
@@ -260,6 +268,7 @@ export function KnowledgeMapScene({
   selectedId: controlledSelectedId,
   readingNodeIds,
   credibilityByNodeId,
+  emphasis = EMPTY_FOCUS_EMPHASIS,
   onSelect,
   onHover,
   onFocus,
@@ -315,7 +324,6 @@ export function KnowledgeMapScene({
     rootNodeIdRef.current = rootNodeId;
   }, [rootNodeId]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(controlledSelectedId);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
@@ -330,7 +338,6 @@ export function KnowledgeMapScene({
       if (previous) nodeVisualById.current.get(previous)?.setSelected(false);
       if (controlledSelectedId) nodeVisualById.current.get(controlledSelectedId)?.setSelected(true, credibilityByNodeId?.get(controlledSelectedId) ?? null);
       selectedIdRef.current = controlledSelectedId;
-      setSelectedId(controlledSelectedId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [controlledSelectedId]);
@@ -510,6 +517,27 @@ export function KnowledgeMapScene({
     applyVisibleScale();
   }, [applyVisibleScale]);
 
+  // Charter §10 "unrelated visible content dims to 0.12 opacity" — applies
+  // `emphasis` (the active `GraphFocusState`'s emphasis, `./graphFocus.ts`)
+  // to every ALREADY-BUILT node visual, the same "mutate the cached
+  // NodeVisual in place, never rebuild `nodeThreeObject`" discipline
+  // `applyVisibleScale` above already uses for scale. Re-runs whenever
+  // EITHER `emphasis` changes (selection/focus-mode change) OR `graphData`
+  // changes (a genuine expansion adds nodes this pass must also cover).
+  const applyEmphasis = useCallback(() => {
+    const hasActiveFocus = emphasis.emphasizedNodeIds.size > 0;
+    for (const n of graphData.nodes) {
+      const id = n.id as string;
+      const visual = nodeVisualById.current.get(id);
+      if (!visual) continue;
+      visual.setEmphasis(hasActiveFocus && !emphasis.emphasizedNodeIds.has(id));
+    }
+  }, [graphData, emphasis]);
+
+  useEffect(() => {
+    applyEmphasis();
+  }, [applyEmphasis]);
+
   // --- Node visuals: built once per node id, cached; never rebuilt on
   // selection/hover/filter (matches protoA's own architecture). ---
   const nodeThreeObject = useCallback((node: GNode): THREE.Object3D => {
@@ -530,6 +558,8 @@ export function KnowledgeMapScene({
       visual.object.scale.setScalar(scale);
       if (readingNodeIds?.has(id)) visual.setReading(true);
       if (id === selectedIdRef.current) visual.setSelected(true, credibilityByNodeId?.get(id) ?? null);
+      const hasActiveFocus = emphasis.emphasizedNodeIds.size > 0;
+      visual.setEmphasis(hasActiveFocus && !emphasis.emphasizedNodeIds.has(id));
     }
     return visual.object;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -615,7 +645,6 @@ export function KnowledgeMapScene({
       if (previous) nodeVisualById.current.get(previous)?.setSelected(false);
       if (nodeId) nodeVisualById.current.get(nodeId)?.setSelected(true, credibilityByNodeId?.get(nodeId) ?? null);
       selectedIdRef.current = nodeId;
-      setSelectedId(nodeId);
       onSelect?.(nodeId);
     },
     [onSelect, credibilityByNodeId],
@@ -1063,21 +1092,27 @@ export function KnowledgeMapScene({
     // does once (the settling->banded transition).
   }, [camera]);
 
+  // Charter §10 edge-opacity rules, now driven by the active `emphasis`
+  // (`./graphFocus.ts`) rather than a hardcoded "adjacent to the selected
+  // node" check — that hardcoded version was the confirmed Stage 3 gap
+  // (`stage3-kmap-verification.md` §4): it always faded on selection
+  // regardless of the `focus` URL state, so every non-default
+  // `GraphFocusState` was a no-op. `emphasis.emphasizedNodeIds.size === 0`
+  // covers BOTH "focus === 'all'" and "nothing selected yet" — the exact
+  // "no dimming at all" default the charter's own default (`all`) requires.
   const linkColorAccessor = useCallback(
     (link: GLink) => {
       const family = EDGE_VISUALS[link.displayFamily];
-      const sourceId = endpointId(link.source);
-      const targetId = endpointId(link.target);
       let alpha = DEFAULT_LINK_OPACITY;
-      if (selectedId) {
-        alpha = sourceId === selectedId || targetId === selectedId ? SELECTED_NEIGHBORHOOD_LINK_OPACITY : UNRELATED_WHILE_SELECTED_LINK_OPACITY;
+      if (emphasis.emphasizedNodeIds.size > 0) {
+        alpha = emphasis.emphasizedLinkIds.has(link.id as string) ? SELECTED_NEIGHBORHOOD_LINK_OPACITY : UNRELATED_WHILE_SELECTED_LINK_OPACITY;
       }
       // Charter §10 ai_inferred provenance overlay: "reduce default
       // opacity to 70% of that family" — never a distinct color.
       if (link.aiInferred) alpha *= 0.7;
       return rgba(family.color, alpha);
     },
-    [selectedId],
+    [emphasis],
   );
 
   const linkWidthAccessor = useCallback((link: GLink) => EDGE_VISUALS[link.displayFamily].widthPx, []);
@@ -1087,12 +1122,10 @@ export function KnowledgeMapScene({
       if (!link.directed) return 0;
       const family = EDGE_VISUALS[link.displayFamily];
       if (family.arrow) return 3.2;
-      const sourceId = endpointId(link.source);
-      const targetId = endpointId(link.target);
-      if (selectedId && (sourceId === selectedId || targetId === selectedId)) return 3.2;
+      if (emphasis.emphasizedLinkIds.has(link.id as string)) return 3.2;
       return 0;
     },
-    [selectedId],
+    [emphasis],
   );
 
   const linkCurvatureAccessor = useCallback((link: GLink) => curvatureById.get(link.id as string) ?? 0, [curvatureById]);

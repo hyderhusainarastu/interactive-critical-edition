@@ -10,12 +10,26 @@
  * — this directly replaces the baseline's >13-flat-control toolbar defect.
  */
 import { useId, useRef, useState } from "react";
-import type { GraphViewMode, OmittedEntry } from "@ice/graph-display";
+import type { GraphFocusState, GraphViewMode, OmittedEntry } from "@ice/graph-display";
 import { useDialogEscape } from "@/components/primitives/useDialogEscape";
 import type { OrientationPreset } from "./useKnowledgeMapCamera";
 
 const VIEW_LABEL: Record<GraphViewMode, string> = { "3d": "3D", "2d": "2D", list: "List" };
 const VIEW_MODES: GraphViewMode[] = ["3d", "2d", "list"];
+
+/** Charter §9's `GraphFocusState` vocabulary, in the order the toolbar's
+ *  Focus-neighborhood control offers them — `"all"` (the default, no
+ *  dimming) listed first, matching charter §9's own listing order ("all
+ *  visible context, one-hop neighborhood, two-hop expansion, concepts-only,
+ *  or reading path"). */
+const FOCUS_MODES: GraphFocusState[] = ["all", "neighborhood", "expand2", "concepts", "readingPath"];
+const FOCUS_MODE_LABEL: Record<GraphFocusState, string> = {
+  all: "All (no dimming)",
+  neighborhood: "Neighborhood (+1 hop)",
+  expand2: "Expand (+2 hops)",
+  concepts: "Concepts only",
+  readingPath: "Reading path",
+};
 
 export interface DiagnosticsSummary {
   structuralIssueCount: number;
@@ -33,6 +47,13 @@ export interface KnowledgeMapToolbarProps {
 
   view: GraphViewMode;
   onViewChange: (view: GraphViewMode) => void;
+
+  /** Charter §9's URL-restorable `GraphFocusState` — a RENDER-level
+   *  emphasis/dimming choice (charter §10 "unrelated visible content dims
+   *  to 0.12 opacity"), independent of the camera "Focus" button below
+   *  (which only ever moves the camera, never changes what's dimmed). */
+  focusMode: GraphFocusState;
+  onFocusModeChange: (mode: GraphFocusState) => void;
 
   onFocus: () => void;
   focusDisabled?: boolean;
@@ -76,6 +97,8 @@ export function KnowledgeMapToolbar({
   onSearchChange,
   view,
   onViewChange,
+  focusMode,
+  onFocusModeChange,
   onFocus,
   focusDisabled,
   onFit,
@@ -155,6 +178,31 @@ export function KnowledgeMapToolbar({
           </button>
         ))}
       </div>
+
+      {/* Charter §10 primary-toolbar "Focus neighborhood" control — the
+          `GraphFocusState` select, distinct from the camera "Focus" BUTTON
+          just below (that one only moves the camera; this one decides what
+          dims). A plain, labeled `<select>` rather than a menu so it's a
+          single tab stop and its value round-trips through `aria-label`
+          without colliding with the "Focus" button's own accessible name
+          (different roles — `combobox` vs. `button` — so `getByRole`
+          queries never collide, but the visible text is deliberately
+          different too so a sighted user never reads them as one control). */}
+      <label className="flex shrink-0 items-center gap-1 text-xs text-[var(--color-text-muted)]">
+        <span className="sr-only">Focus neighborhood</span>
+        <select
+          aria-label="Focus neighborhood"
+          value={focusMode}
+          onChange={(e) => onFocusModeChange(e.target.value as GraphFocusState)}
+          className="app-control min-h-11 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-1.5 py-1 text-xs text-[var(--color-text)] md:min-h-0"
+        >
+          {FOCUS_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {FOCUS_MODE_LABEL[mode]}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <button type="button" onClick={onFocus} disabled={focusDisabled} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs disabled:opacity-40 md:min-h-0">
         Focus
