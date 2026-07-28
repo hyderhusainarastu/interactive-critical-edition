@@ -1,4 +1,142 @@
-# Stage 5 Research Integration — Verification (round 1)
+# Stage 5 Research Integration — Verification (rounds 1–2)
+
+## Round 2 (this pass) — independent fresh re-verification of the fix round
+
+Scoped gate re-run from scratch against `/private/tmp/palimnote-s5-research`
+(branch `redesign/stage5-research`, tip **`ea9cebf`** — clean working tree
+before and after this pass, only this round's own screenshot regeneration
+touched). This round does not take round 1's own "Fix round" write-up (below)
+on faith: every gate, every spec file, and both fixed findings were re-run
+independently, from a brand-new dedicated Postgres, a fresh production build,
+and a fresh server process, and one real discrepancy in round 1's own
+self-reported numbers was found and is corrected below rather than carried
+forward silently.
+
+### Environment (round 2)
+
+- **Postgres:** a fresh `palimnote-s5-pg` container (`pgvector/pgvector:pg17`), host port **5435**, database `interactive_critical_edition` — did not exist before this round (round 1's own container was already torn down per its "Cleanup" section), created fresh via `docker run` and migrated clean with `pnpm --filter @ice/db db:migrate` (no errors).
+- **App server:** a fresh production build (`next build`, not `next dev`) then `next start -p 3250`, reading the worktree's existing `apps/web/.env.local` (unchanged from round 1's documented shape: dedicated Postgres, all six `PHASE_25_*` research flags true except `PHASE_25_HUMANITIES_JUDGE_ENABLED`, `BETA_TESTING_MODE=false`).
+- No worker process ran; no live provider (OpenAI/Anthropic/Semantic Scholar/OpenAlex/arXiv/Tavily) was called anywhere in this round. Every claim/relationship/cluster/chamber/hypothesis/gap/monitor/corpus-item row was seeded directly against Postgres via the existing `apps/web/e2e/stage5-verification-seed.ts` (a genuinely new helper file added in round 1, confirmed by `git log` to have never touched `e2e/helpers.ts`) — reused as-is rather than duplicated, since it already composes exactly the fixture this charter asks for (one project, 2 works with anchored claims, 1 relationship, 1 debate cluster, 1 evidence chamber, 1 hypothesis + 1 gap, 1 imported corpus item + its own claim, 1 monitor + 1 hit, 4 job-request rows) and this round found no gap in it worth a second, competing fixture.
+
+### Gate results (round 2)
+
+| Check | Result |
+|---|---|
+| `pnpm -r typecheck` (17 workspace projects) | **Clean** |
+| `pnpm -r lint` | **Clean** |
+| `pnpm --filter web build` (production build) | **Clean** — full research route manifest present, including `/research/[projectId]/graph` (Finding 1's fix confirmed present at build level, not just at runtime) |
+| Bundle grep for `window.prompt(`/`window.alert(` | **Zero hits in any research-sourced chunk.** The only hits anywhere in `.next/static/chunks/*.js` + `.next/server/chunks/ssr/*.js` are in the two Writer chunks (`WriterEditor.tsx`, `WriterProjectsView.tsx` — confirmed by grepping component names inside those exact chunk files), outside this lane's ownership and untouched by Stage 5 |
+| Migrations | Clean apply, fresh `palimnote-s5-pg`, port 5435 |
+
+### `stage5-research-verification.spec.ts` — 13/13 pass (fresh run)
+
+Ran the existing 13-test file fresh (same file round 1 wrote, now including the round-1 "Fix round" edits for Findings 1/2) against the new stack above. **All 13 pass**, including both rewritten tests: the Knowledge Map tab now returns 200 with the honest stub heading/explanation/working `/graph` link (not a 404), and journey 6 verifies the relationship directly on the debate-cluster page (`data-research-correction-controls="relationship"` now renders there) before re-confirming the same, already-verified state on the hypotheses page's "Cited conflicts" section. This independently confirms both round-1 findings are genuinely fixed, not just self-reported as fixed.
+
+Everything the charter's journey list calls for was re-confirmed directly, not inferred from the spec file's own comments:
+- **Accessible create-project dialog, no `window.prompt` anywhere** — confirmed both by the passing test (dialog has `role="dialog"`, focus starts on the title field) and independently by the bundle grep above.
+- **Corpus view** — seeded imported item renders under "Corpus items", "Search providers" UI present; search was not submitted (would be a live network call, out of this lane's constraint).
+- **Claims list responsive at 375px** — `<table>` has `toHaveCount(0)` in the accessibility tree at 375px (not just visually hidden), the `role="list"` card view renders instead; the reverse holds at 1280px. Visually confirmed too (see screenshots below).
+- **Correct a claim: dispute with a reason → revision history shows it** — chip flips to "Disputed", History drawer shows "Revision 1 — Disputed" with the exact reason text plus "Revision 0 — Generated".
+- **Monitors page** — both project-scoped (`/research/[id]/monitors`, heading "Monitors") and global (`/research/monitors`, heading "Research monitors" — confirmed by direct read of `MonitorsView.tsx`'s `{project ? "Monitors" : "Research monitors"}` to be a real, intentional distinction, not a defect) render the seeded monitor/hit.
+- **Evidence Chambers project view + permalink** — lists the seeded chamber, links to `/research/chambers/[chamberId]`, following the link lands on the permalink with the same heading.
+- **Hypotheses + gaps combined view** — one project's hypothesis (statement/rationale/methodology) and its "Open gaps" section both render on `/research/[id]/hypotheses`.
+
+### Journey 6 — every correction action, re-confirmed round-tripping
+
+All six correctable object types (`claim`, `relationship`, `cluster`, `chamber`, `hypothesis`, `gap`) round-tripped through `verify`/`dispute`/`hide`/`restore` with the verification chip and revision history both updating, re-run fresh this round:
+
+- **cluster** — verify/hide/restore on `/research/[id]/debates/[clusterId]`.
+- **relationship** — **now reachable two independent ways** (Finding 2's fix, re-confirmed): directly on the debate-cluster page via a new "Relationships in this debate" section, AND via a hypothesis's "Cited conflicts" section on the hypotheses page. Verified on the cluster page, then re-confirmed the same already-verified state shows on the hypotheses page too — both doors lead to the same object, neither is a dead end.
+- **chamber** — verify, on its own permalink.
+- **hypothesis** — verify, on the hypotheses page.
+- **gap** — hide/restore, on the hypotheses page.
+- **claim** — verify/dispute/hide/restore (shared `ResearchCorrectionControls`), plus the claim-only extras: **Edit**, **Reclassify**, **Split**, **Merge**.
+
+**Honest "unsupported" enumeration — re-verified by direct source read, not just by the passing test:**
+- `ClaimCorrectionExtras` (Edit/Reclassify/Split/Merge) is imported and mounted in exactly one place in the whole codebase — `apps/web/src/app/(app)/research/claims/[claimId]/page.tsx` — confirmed by `grep -rn "ClaimCorrectionExtras" src/`. It is **omitted**, not shown-disabled, for relationship/cluster/chamber/hypothesis/gap.
+- `window.confirm`-style destructive confirmation for `deleteMonitor` (`MonitorsView.tsx`)/`removeMember`/`deleteQuestion` (`ResearchProjectOverview.tsx`) remains genuinely absent — confirmed by direct grep: each handler's `onClick` fires the delete immediately, no confirm wrapper anywhere. This is a documented, deliberate exclusion (spec §12: replace existing confirm flows, don't add new ones), not an oversight.
+
+### Pipeline surface — one canonical dispatch site, re-confirmed by source read
+
+- The "Pipeline" region renders **zero buttons** (`ResearchPipelineStepper.tsx` no longer accepts `onDispatch`/`actionState` — confirmed by grep, the only remaining reference is a code comment explaining *why* it was removed).
+- `grep -rl '"Detect relationships"\|"Cluster debates"' src/components/research/ src/app/(app)/research/` returns exactly two files: `ResearchProjectOverview.tsx` (the real dispatch buttons) and `ResearchPipelineStepper.tsx` (a comment only, no button). **One dispatch site**, confirmed structurally, not just by the passing assertion.
+- The old quick-link row ("View claims"/"View debates"/"Hypotheses & gaps") is absent; the persistent nav renders all 8 tabs in charter order.
+
+### Permalink preservation — re-confirmed
+
+`/research/claims/[claimId]`, `/research/chambers/[chamberId]`, `/research/[projectId]/debates/[clusterId]`, `/research/monitors` (global, heading "Research monitors"), `/research/[projectId]/monitors` (project, heading "Monitors") all resolve directly. **`/research/[projectId]/graph` now also resolves directly** (200, not 404) — the one permalink round 1 could not yet confirm.
+
+### Existing e2e specs — re-run fresh, with two real corrections to round 1's own reported numbers
+
+All run against the round-2 stack (`PLAYWRIGHT_BASE_URL=http://localhost:3250`; `research-projectnav.spec.ts` spawns its own dedicated port-3197/3198 servers per its existing design).
+
+| Spec | Round 2 result | Round 1's reported result | Note |
+|---|---|---|---|
+| `research.spec.ts` | **9/9 pass** | 9/9 | matches |
+| `research-projectnav.spec.ts` | **6/6 pass** | 6/6 | matches; same `PHASE_25_MONITORING_ENABLED` flip-to-false-then-back workaround as round 1 (see below) |
+| `research-claims-dialogs.spec.ts` | **5/5 pass** | 5/5 | matches |
+| `research-hypotheses.spec.ts` | **6/6 pass** | ~~10/10~~ | **Round 1's number was wrong.** The file has exactly 6 `test(` blocks (confirmed by `grep -c`), and `git log` shows it has one commit ever (Phase 27.2, before Stage 5 existed) — it was never 10 tests, at any point. Corrected here rather than carried forward. |
+| `research-dashboard.spec.ts` | **4/4 pass** | 4/4 | matches |
+| `research-chambers.spec.ts` | **4/4 pass** | 4/4 | matches |
+| `research-corpus.spec.ts` | **10/11 pass** — 1 fail, Finding 3 (out-of-lane) | 10/11 | matches |
+| `research-monitors.spec.ts` | **10/12 pass** — 2 fail, Finding 3 (out-of-lane, same defect twice) | ~~14/16~~ | **Round 1's number was wrong.** The file has exactly 12 `test(` blocks; re-run twice to confirm determinism — same 2 failures both times, both the Finding-3 touch-target defect, never flaky. Corrected here. |
+| `research-corrections.spec.ts` | **15/17 pass** (1 genuinely flaky, recovers on retry) — 1 fail, Finding 3 (out-of-lane) | 15/17 (+1 flaky) | matches count; **this round additionally stress-tested the flaky one**: re-ran the full file three times total — run 1 showed the "claim permalink: edit updates claim text" test failing on *both* its original attempt and its retry (a genuine anomaly, not seen in round 1); run 2 showed it fail-then-pass-on-retry (matching round 1's description exactly); running it alone (no other tests in the file first) passed cleanly in 1.8s. This is consistent with round 1's own diagnosis — a real, pre-existing timing sensitivity around `router.refresh()` under load, not a Stage-5 regression (confirmed: zero commits on `main..HEAD` for this branch touch `research-corrections.spec.ts`) — but round 1 undersold how easily it can fail twice in a row, not just once. Left as-is per this lane's own scope (untouched file, pre-existing flake, not caused by Stage 5). |
+
+**Root cause of the two wrong counts:** neither `research-hypotheses.spec.ts` nor `research-monitors.spec.ts` was ever modified by Stage 5 work (both predate it), so the discrepancy isn't a regression this round introduced — round 1's own doc simply reported inflated numbers for two files it didn't author. Flagging plainly rather than quietly reconciling, per this program's own standing "verify self-reported numbers, don't propagate them" discipline.
+
+**Environment note (unchanged from round 1, re-confirmed necessary):** `research-projectnav.spec.ts`'s flag-off assertion needs `.env.local`'s `PHASE_25_MONITORING_ENABLED` at `false` for its own dedicated port-3197 server (it flips its *own* second port-3198 server to `true` internally). Since the shared port-3250 server used for every other spec in this round needs the flag `true`, the file was flipped to `false`, this one spec run, then flipped back to `true` — confirmed harmless because `research-projectnav.spec.ts` spawns brand-new server processes per run rather than reusing port 3250, so the already-running main server's in-memory env never changes.
+
+### Cleanup residue check (round 2 addition — not run in round 1's own write-up)
+
+After every spec above finished (each with its own `afterAll`/`deleteTestUser` cleanup), queried the round-2 Postgres directly rather than trusting the specs' own cleanup code to have worked:
+
+```
+select count(*) from "user" where email like 'e2e-stage5%' or email like 'e2e-projectnav%';  -- 0
+select count(*), count(*) filter (where title ilike '%round1%') from research_project;          -- 0, 0
+select count(*) from "user";                                                                     -- 0
+```
+
+Zero leftover users, zero leftover research projects, zero rows of any kind — full cascade cleanup confirmed empirically, not assumed from reading the cascade schema.
+
+### Screenshots (round 2 — regenerated fresh, replacing round 1's committed images)
+
+**Process note, recorded honestly:** the spec's `SHOT_DIR` constant (`"docs/audits/stage5-research-verification"`) is a path relative to Playwright's cwd, which is `apps/web` — so running the spec from `apps/web` (as round 1 also did) writes screenshots to `apps/web/docs/audits/stage5-research-verification/`, **not** the repo-root `docs/audits/stage5-research-verification/` this report and the charter both mean. Round 1's committed screenshots at the repo-root path were never actually touched by round 1's own test run for this reason — their unchanged git status was mistakenly read as "confirmed identical," when the real cause was "written to the wrong directory and never diffed against the tracked one." This round caught it (`git status` showed a stray untracked `apps/web/docs/` directory after the run) and corrected it: copied the freshly generated files from `apps/web/docs/audits/stage5-research-verification/` over the repo-root tracked path, then deleted the stray directory. The repo-root files are now genuinely round-2 output (confirmed via `cmp` — every file's bytes changed), not round 1's leftovers with a refreshed checkout timestamp. **This mislocation risk exists for any future round too** unless the spec is changed to resolve `SHOT_DIR` from the repo root explicitly — left as a documented note rather than silently patched, since this lane's charter is verification-scoped here, not spec editing.
+
+| File | What it shows |
+|---|---|
+| `overview-1440-light.png` | Project overview, 1440px, light — persistent nav (8 tabs), pipeline stepper (status-only, no buttons), Research jobs panel (Detect relationships/Cluster debates) |
+| `overview-375-light.png` | Same page, 375px |
+| `overview-1440-dark.png` | Same page, dark mode — confirmed legible, correct contrast |
+| `overview-1440-reduced-motion.png` | Same page, `prefers-reduced-motion: reduce` — visually inspected, no layout difference from the no-preference version beyond the disabled transitions |
+| `claims-1440-light.png` | Claims page, 1440px — table view |
+| `claims-375-light.png` | Claims page, 375px — card view, filters wrap (no horizontal scroll), verified visually |
+| `chambers-1440-dark.png` | Evidence Chambers project view, dark mode — shows the seeded chamber already "Verified" (journey 6's own correction test ran earlier in the same file against the shared fixture — expected state carryover within one spec file, not a defect) |
+
+All seven visually spot-checked in this round (not just generated and left unopened): correct light/dark contrast, no clipped/overlapping content, 375px card view wraps cleanly.
+
+### Axe (WCAG 2A/2AA) — re-confirmed
+
+Zero violations, `/research/[id]` + `/corpus` + `/claims` + `/chambers` + `/hypotheses` + `/monitors` + `/graph` (the new stub page, added to the axe sweep in round 1's fix commit), light and dark — 14 page×theme combinations in `stage5-research-verification.spec.ts` alone, plus each of the other affected specs' own axe coverage.
+
+### Findings status after round 2
+
+- **Finding 1 (P2) — CONFIRMED FIXED**, independently, not just re-reading round 1's claim: `/research/[projectId]/graph` returns 200 with the honest stub in a fresh build, fresh server, fresh test run.
+- **Finding 2 (P3) — CONFIRMED FIXED**, independently: relationship correction is reachable from the debate-cluster page itself now, re-verified via a fresh run plus a direct source read of `DebateClusterDetail.tsx` and `lib/research/debates.ts`.
+- **Finding 3 (P3) — still open, still out-of-lane, re-confirmed.** `components/shell/WorkspaceRail.tsx:131`'s "Hide/Show Read section" toggle (20px tall, well under the 44×44 floor) still fails the touch-target audit in `research-corpus.spec.ts`, `research-monitors.spec.ts` (×2), `research-corrections.spec.ts` — same 4 failures, same signature, in this fresh round. `git diff main..HEAD -- apps/web/src/components/shell/` (scoped to this branch's *own* commits, from the Stage 5 SPEC commit onward) shows zero changes — confirmed pre-existing and out of this lane's ownership.
+- **New observation (not a Finding, a process note):** `apps/web/src/lib/research/debates.ts` was modified by round 1's own fix commit (`ea9cebf`) to implement Finding 2's fix. That path is not literally one of this lane's four named glob patterns (`app/(app)/research/**`, `components/research/**`, `app/api/research/**`, new e2e specs) — it's a `lib/research/` data-layer file. Flagging this plainly rather than silently endorsing or silently reverting it: the change itself is small, correctly scoped to research domain logic, reuses an existing unused join table (no migration), and is the only way Finding 2 could be fixed without touching `DebateClusterDetail.tsx`'s data source — but it is a literal deviation from the charter's stated four path patterns, made in a prior fix round, not in this verification round. This round did not touch it further and takes no position on whether it should be reverted; noting it for whoever owns the charter's next revision.
+- **No new findings surfaced this round.** Every check the charter asked for passed; the only corrections made to round 1's own record are the two test-count numbers above (both now proven to have been wrong from before Stage 5 even existed, not something this round's fixes broke) and the screenshot-directory mislocation (now fixed at the file-system level, the underlying relative-path fragility left documented rather than silently patched in the spec).
+
+### Cleanup (round 2)
+
+- Test users/rows: all deleted by each spec's own `afterAll`, confirmed empirically empty by direct SQL query above.
+- The `apps/web/docs/` stray directory (screenshot-mislocation artifact) was deleted after copying its contents to the correct repo-root path.
+- `apps/web/.env.local`'s `PHASE_25_MONITORING_ENABLED` was returned to `true` after the `research-projectnav.spec.ts` run (confirmed in the final file state).
+- The `next start` server process and the `palimnote-s5-pg` Postgres container are both torn down at the end of this round (see the accompanying JSON summary for the exact commands run).
+- `git status` is clean except for the screenshot content update, which is committed as part of this round.
+
+---
+
+# Round 1 (original write-up, unchanged below except this heading)
 
 Scoped gate run against `/private/tmp/palimnote-s5-research` (branch
 `redesign/stage5-research`, tip `c0b9418` at the time of this run — clean
