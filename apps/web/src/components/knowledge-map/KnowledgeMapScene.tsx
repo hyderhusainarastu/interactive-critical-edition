@@ -76,6 +76,12 @@ import {
 } from "./theme";
 import { LabelLayer, type LabelCandidate } from "./labelLayer";
 import { useKnowledgeMapCamera, type KnowledgeMapCameraApi, type OrientationPreset } from "./useKnowledgeMapCamera";
+import {
+  nextKnowledgeMapMountId,
+  registerKnowledgeMapTestHook,
+  unregisterKnowledgeMapTestHook,
+  type KnowledgeMapTestHook,
+} from "./testBridge";
 
 /** A link augmented, once per stable `links` array, with the two
  *  bakeoff-fixture-only fields §1.4's table says must now be computed at
@@ -289,6 +295,25 @@ export function KnowledgeMapScene({
 
   const selectedIdRef = useRef<string | null>(controlledSelectedId);
   const hoveredIdRef = useRef<string | null>(null);
+
+  // --- Test bridge (spec §7.3, ./testBridge.ts) — allocated once per real
+  // component instance (guarded, not a plain `useRef(nextKnowledgeMapMountId())`
+  // call, since THAT form would still evaluate the counter-increment
+  // expression on every render even though only the FIRST render's result is
+  // ever kept — wasteful and, more importantly, would make the id space less
+  // obviously "one per mount" to a future reader). ---
+  const testHookMountIdRef = useRef<number | null>(null);
+  if (testHookMountIdRef.current === null) testHookMountIdRef.current = nextKnowledgeMapMountId();
+  const testHookRef = useRef<KnowledgeMapTestHook | null>(null);
+  const visibleNodeIdsRef = useRef(visibleNodeIds);
+  const rootNodeIdRef = useRef(rootNodeId);
+  const cameraApiRef = useRef<KnowledgeMapCameraApi | null>(null);
+  useEffect(() => {
+    visibleNodeIdsRef.current = visibleNodeIds;
+  }, [visibleNodeIds]);
+  useEffect(() => {
+    rootNodeIdRef.current = rootNodeId;
+  }, [rootNodeId]);
 
   const [selectedId, setSelectedId] = useState<string | null>(controlledSelectedId);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -521,6 +546,64 @@ export function KnowledgeMapScene({
   }, [graphData, isNodeVisible]);
 
   const camera = useKnowledgeMapCamera(fgRef, containerRef, visiblePoints);
+  useEffect(() => {
+    cameraApiRef.current = camera;
+  }, [camera]);
+
+  // --- Register the test bridge exactly once per real mount (`[]` deps —
+  // deliberately NOT `[camera]`/`[graphData]`, both of which change far more
+  // often than a genuine mount/unmount does; re-running this on every such
+  // change would both mint confusing extra registration churn and, worse,
+  // reset `.interactive` back to `false` on every later topology/camera
+  // change even though the scene never actually remounted). Every accessor
+  // below reads through a REF, never a closed-over render value, so the one
+  // long-lived hook object this effect creates always reports the CURRENT
+  // state for the life of this mount. ---
+  useEffect(() => {
+    const mountId = testHookMountIdRef.current as number;
+    const hook: KnowledgeMapTestHook = {
+      mountId,
+      interactive: false,
+      isNodeVisible: (nodeId: string) => {
+        const visible = visibleNodeIdsRef.current;
+        return !visible || visible.has(nodeId);
+      },
+      getVisibleNodeIds: () => {
+        const visible = visibleNodeIdsRef.current;
+        const all = graphDataRef.current.nodes.map((n) => n.id as string);
+        return visible ? all.filter((id) => visible.has(id)) : all;
+      },
+      getRootNodeId: () => rootNodeIdRef.current,
+      getSelectedId: () => selectedIdRef.current,
+      isLayoutFrozen: () => layoutPhaseRef.current === "frozen",
+      getNodeScreenPosition: (nodeId: string) => {
+        const fg = fgRef.current;
+        if (!fg) return null;
+        const visible = visibleNodeIdsRef.current;
+        if (visible && !visible.has(nodeId)) return null;
+        const node = graphDataRef.current.nodes.find((n) => (n.id as string) === nodeId);
+        if (!node) return null;
+        const coords = fg.graph2ScreenCoords(node.x ?? 0, node.y ?? 0, node.z ?? 0);
+        if (!Number.isFinite(coords.x) || !Number.isFinite(coords.y)) return null;
+        return { x: coords.x, y: coords.y };
+      },
+      getCameraPose: () => {
+        const pose = cameraApiRef.current?.getCameraPose();
+        return pose ?? { position: [0, 0, 0], target: [0, 0, 0] };
+      },
+      getNodeWorldPosition: (nodeId: string) => {
+        const node = graphDataRef.current.nodes.find((n) => (n.id as string) === nodeId);
+        return node ? { x: node.x ?? 0, y: node.y ?? 0, z: node.z ?? 0 } : null;
+      },
+    };
+    testHookRef.current = hook;
+    registerKnowledgeMapTestHook(hook);
+    return () => {
+      testHookRef.current = null;
+      unregisterKnowledgeMapTestHook(mountId);
+    };
+    // Mount/unmount only — see comment above.
+  }, []);
 
   // --- Selection / hover / background handlers (charter §11: single
   // click selects only, never moves the camera; hover never moves the
@@ -801,6 +884,13 @@ export function KnowledgeMapScene({
     trackerRef.current?.addListener(canvas, "webglcontextrestored", onContextRestoredHandler);
 
     onInteractive?.();
+    // Charter §16 "data loading to scene ready": flips the test bridge's
+    // `interactive` flag the same instant the caller's own `onInteractive`
+    // fires — this effect only runs once the scene has nonzero dimensions
+    // and `<ForceGraph3D>` has actually mounted (`hasSize` gate above), so
+    // "interactive" here means the same thing it means everywhere else in
+    // this file, not a separately-invented definition.
+    if (testHookRef.current) testHookRef.current.interactive = true;
 
     return () => {
       scene.remove(grid);
