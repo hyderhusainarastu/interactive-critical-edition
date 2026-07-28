@@ -1,0 +1,456 @@
+{
+  "protocolVersion": "2.0.0",
+  "prototypeId": "a",
+  "fixtureName": "fixture-24",
+  "environment": {
+    "machineModel": "Mac15,12",
+    "os": "macOS 26.6",
+    "browser": "chromium",
+    "browserVersion": "151.0.7922.34",
+    "powerMode": "unknown",
+    "viewportWidth": 1440,
+    "viewportHeight": 900,
+    "devicePixelRatio": 1,
+    "fixtureName": "fixture-24",
+    "fixtureContentHash": "39dd86c9cd845374f9b8ca724e3efb5391e1e528f51de25887d1a11e23bb738f",
+    "rendererBuild": "prototype-a@react-force-graph-3d@1.29.1",
+    "cacheState": "warm"
+  },
+  "lifecycle": {
+    "warmupCycles": 2,
+    "measuredCycles": 20,
+    "mountedSettled": {
+      "baseline": {
+        "cycle": 0,
+        "geometries": 24,
+        "textures": 0,
+        "programs": 4,
+        "activeWorkers": 0,
+        "activeObservers": 1,
+        "activeTimers": 1,
+        "registeredListeners": 2
+      },
+      "cycles": [
+        {
+          "cycle": 1,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 2,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 3,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 4,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 5,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 6,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 7,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 8,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 9,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 10,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 11,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 12,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 13,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 14,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 15,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 16,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 17,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 18,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 19,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        {
+          "cycle": 20,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        }
+      ],
+      "withinPlateauTolerance": true,
+      "monotonicGrowthDetected": false
+    },
+    "postUnmount": {
+      "baseline": {
+        "cycle": 0,
+        "geometries": 0,
+        "textures": 0,
+        "programs": 0,
+        "activeWorkers": 0,
+        "activeObservers": 0,
+        "activeTimers": 0,
+        "registeredListeners": 0
+      },
+      "cycles": [
+        {
+          "cycle": 1,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 2,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 3,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 4,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 5,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 6,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 7,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 8,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 9,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 10,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 11,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 12,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 13,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 14,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 15,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 16,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 17,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 18,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 19,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        },
+        {
+          "cycle": 20,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 0
+        }
+      ],
+      "withinPlateauTolerance": true,
+      "monotonicGrowthDetected": false
+    }
+  },
+  "recordedAtIso": "2026-07-28T02:41:46.261Z"
+}

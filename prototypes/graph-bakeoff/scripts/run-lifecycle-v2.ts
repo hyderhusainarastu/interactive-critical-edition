@@ -86,9 +86,35 @@ async function runOnePrototype(prototypeId: PrototypeId, page: Page): Promise<Li
 
   log(`--- Corrected lifecycle 20x mount/unmount (v2): ${prototypeId}/${LIFECYCLE_FIXTURE} ---`);
 
+  // Navigate explicitly (rather than letting the first runLifecycleCycleV2
+  // call do it lazily) so the harness bridge — and therefore the real
+  // fixtureContentHash — is still live at capture time. Every lifecycle
+  // cycle clears the bridge on its own unmount step, so reading the hash
+  // AFTER the sweep runs would silently read "unknown" instead of the real
+  // value; caught by inspecting the first real run's output before writing
+  // this up.
+  await driver.navigate(prototypeId, LIFECYCLE_FIXTURE, "warm");
+  // Wait for the initial auto-mount's harness bridge to actually register
+  // (App.tsx registers it only inside mountOnce()'s .then(), after
+  // "interactive") before reading fixtureContentHash off it — without
+  // this, whichever prototype's bundle happened to parse/mount slightly
+  // slower raced the hash read and silently fell back to "unknown"
+  // (reproduced directly: prototype b did exactly this on the first fixed
+  // attempt, while prototype a's slower page load happened to win the
+  // race by accident).
+  await driver.waitForPayloadReceived();
+  await driver.waitForInteractive();
   const envBase = await driver.captureEnvironment();
   const fixtureContentHash = await driver.getFixtureContentHash(LIFECYCLE_FIXTURE);
   const rendererBuild = await driver.getRendererBuildLabel(prototypeId);
+  // Mark the driver as already navigated so runLifecycleCycleV2's first
+  // call doesn't navigate a second time.
+  (driver as unknown as { lifecycleMounted: boolean }).lifecycleMounted = true;
+  await page.waitForFunction(
+    () => Boolean((window as unknown as { __graphBakeoffLifecycleV2?: unknown }).__graphBakeoffLifecycleV2),
+    undefined,
+    { timeout: 5_000 },
+  );
 
   const lifecycle = await runLifecycleBenchmarkV2(driver, { prototypeId, fixtureName: LIFECYCLE_FIXTURE });
   const evalResult = evaluateLifecycleV2(lifecycle);

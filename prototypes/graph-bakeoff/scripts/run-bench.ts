@@ -1020,9 +1020,21 @@ async function main() {
 // competes for CPU/GPU and pollutes the next run's own preflight
 // machine-load check — confirmed directly: a fresh DRY_RUN's preflight
 // saw an inflated loadavg caused by exactly this kind of leftover.
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error("FATAL:", err);
-    process.exit(1);
-  });
+//
+// Entry-point guard (Stage 2 correction lane, found live): this module's
+// class/helpers are now `export`ed so `scripts/run-lifecycle-v2.ts` can
+// reuse them without re-implementing the build/serve/browser-launch
+// plumbing — but without this guard, simply *importing* this file for
+// those exports ALSO ran this entire 57-file-producing `main()`, racing
+// the importing script's own preview server for port 5183 (reproduced
+// directly: both processes logged "Starting vite preview on port 5183",
+// the second one crashing with EADDRINUSE). Only run `main()` when this
+// file is the actual process entry point, not merely imported.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("FATAL:", err);
+      process.exit(1);
+    });
+}
