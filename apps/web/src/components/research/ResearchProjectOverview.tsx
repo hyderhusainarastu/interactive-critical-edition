@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
@@ -309,26 +308,10 @@ export function ResearchProjectOverview({
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="research-project-title">
       <LiveAnnouncer message={announcement} />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title }]} />
-          <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
-          {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/research/${project.id}/claims`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            View claims
-          </Link>
-          <Link href={`/research/${project.id}/debates`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            View debates
-          </Link>
-          <Link href={`/research/${project.id}/hypotheses`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            Hypotheses &amp; gaps
-          </Link>
-          <Link href={`/research/${project.id}/corpus`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            Corpus
-          </Link>
-        </div>
+      <div>
+        <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title }]} />
+        <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
+        {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
       </div>
 
       <ResearchPipelineStepper
