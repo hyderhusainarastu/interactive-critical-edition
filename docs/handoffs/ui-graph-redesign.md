@@ -1,15 +1,12 @@
-# UI/graph redesign handoff — pre-final
+# UI/graph redesign handoff — final candidate
 
 ## Current state
 
-This handoff transfers a prepared redesign program, not a release. `main`
-remains at `6f9330c`; the canonical redesign lineage is
-`redesign/ui-graph-rebuild`, whose pre-Stage-7 integration head is `491c092`.
-The Stage 7 journey matrix is a child commit, `fbfedf3`, on
-`redesign/journey-matrix`.
-
-Do not merge individual Stage 2/4/5/6 branches: their work is already
-reachable from the canonical redesign lineage.
+The canonical local redesign candidate is `2c0f820` on
+`redesign/ui-graph-rebuild`. It integrates the Stage 7 journey matrix,
+accessibility/hydration repairs, graph coverage, and legacy-chooser/touch
+repairs. It is **not** a release: the final journey matrix is incomplete,
+manual VoiceOver has not run, and no merge/push/deploy authority exists.
 
 ## Commit map
 
@@ -23,45 +20,46 @@ reachable from the canonical redesign lineage.
 | Stage 5 Research | `528623f` (branch verification tip `ceff954`) |
 | Stage 6 Write | `e5650a2` (branch verification tip `857bee7`) |
 | Cross-stage integration | `9a9485b` → `491c092` |
-| Stage 7 journeys | `fbfedf3` |
+| Stage 7 matrix and accessibility/hydration integration | `ff0b9c4` → `aa8ca51` |
+| Final graph/browser and legacy-chooser repairs | `79bb2cd` → `2c0f820` |
 
-## Recommended continuation order
+## Verified final-candidate evidence
 
-1. Preserve and commit the separate accessibility/hydration worktree changes.
-2. Integrate that commit and `fbfedf3` onto the one canonical redesign
-   lineage; resolve overlapping test/config edits deliberately.
-3. Freeze the resulting commit as the final-tree candidate.
-4. Run the final gate in
-   `docs/audits/ui-graph-redesign-verification.md`, update it with actual
-   results, and refresh the preservation matrix only if the final tree
-   changes routes/capabilities.
-5. Obtain explicit authorization before any merge to `main`, push, migration,
-   deployment, or production action.
+- Earlier final-program monorepo unit pass is retained as evidence.
+- Web typecheck, lint, and production build are green on the final candidate.
+- Targeted Chromium accessibility/hydration checks: 7/7 green.
+- Firefox 151 and WebKit 26.5 login hydration checks are clean.
+- Invalid/ambiguous legacy chooser and small-fixture mobile touch stress pass
+  with retries disabled.
+- Stage 7 journeys: 15 passed before interruption; J01 and J07 are active
+  repair/re-run blockers, not waived results.
+
+See `docs/audits/ui-graph-redesign-verification.md` for the precise gate
+boundary and remaining requirements.
+
+## Required continuation
+
+1. Finish the parallel J01 and J07 repairs, then re-run those journeys.
+2. Complete the remaining final journey matrix, including declared viewport,
+   browser, keyboard, light/dark, and reduced-motion coverage.
+3. Run and record the required manual VoiceOver walkthroughs and real-GPU
+   performance measurement.
+4. Refresh the preservation matrix and verification record with completed
+   evidence from the same final integrated commit.
+5. Obtain explicit owner authorization before merge to `main`, push,
+   migration, deploy, production setting change, paid API use, or production
+   action.
 
 ## Authorization boundary
 
-Authorized by this handoff: local integration, review, CI-safe tests, and
-documentation updates in the supplied worktrees. Not authorized: production
-database changes, secrets, live provider calls, real Storage tests, merge to
-`main`, push, deploy, or cleanup of external/local runtime resources.
+Authorized in the redesign program: local integration, review, CI-safe
+testing, and documentation updates. Not authorized: production database
+changes, secrets, live provider calls, real Storage tests, merge to `main`,
+push, deploy, or external-runtime cleanup.
 
-## Evidence index
+## Explicit limitations
 
-- Stage-level verification: `docs/audits/stage3-kmap-verification.md`,
-  `stage4-read-verification.md`, `stage5-research-verification.md`, and
-  `stage6-write-verification.md`.
-- Journey matrix and viewport rationale:
-  `docs/design/stage7-journey-matrix.md` and `apps/web/e2e/journeys/`.
-- Preservation status:
-  `docs/audits/ui-graph-redesign-preservation-matrix.md`.
-- Pre-final prep artifacts (not tracked, not final evidence):
-  `/private/tmp/claude-501/-Users-hyderhusainarastu-Project-AutoCriticalEditionProject/6c3d839e-398b-49e8-b9c3-2a6d03612b7d/scratchpad/stage7-prep`.
-
-## Open/explicit limitations
-
-- Final-tree verification has not yet run.
-- Manual VoiceOver validation remains open.
-- The current local environment has no server on port 3000, so the journey
-  matrix has typechecked and been discovered but has not been executed here.
-- The scratchpad accessibility pass found issues on the pre-final snapshot;
-  do not call them fixed without final-tree evidence.
+- The final full Stage 7 journey matrix is incomplete; J01 and J07 require
+  re-run after their repairs.
+- Manual VoiceOver validation has not been run.
+- Local/seeded verification does not establish production behavior.

@@ -1,24 +1,21 @@
-# UI/graph redesign verification — pre-final handoff
+# UI/graph redesign verification — final-candidate record
 
-**Status: NOT A RELEASE GATE.** This document records the evidence available
-before final-tree integration and identifies the work that must be repeated
-after the final merge. It must not be read as deployment, production, or
-VoiceOver sign-off.
+**Candidate:** `2c0f820` on `redesign/ui-graph-rebuild`.
 
-## Scope and snapshot boundary
+**Status: verification remains partial; this is not a release, production, or
+VoiceOver sign-off.** It records final-candidate facts verified during the
+Stage 7 run and retains every unclosed gate explicitly.
 
-The recovered Stage 7 preparation evidence was gathered against two distinct
-pre-final snapshots:
+## Scope and commit boundary
 
-- `6f9330c` (`main`) for the before baseline, build, and visual capture.
-- `4e779e6` for the merged redesign snapshot used for preservation and
-  accessibility preparation.
+The canonical redesign lineage integrated the Stage 7 journey matrix,
+accessibility/hydration repair, graph-browser coverage, and subsequent
+legacy-chooser and touch-stress repairs through `2c0f820`. Earlier
+preparation evidence at `6f9330c` and `4e779e6` remains useful only as
+before-state/context evidence; it is not substituted for final-candidate
+results.
 
-The current journey-matrix commit is `fbfedf3`, a descendant of `4e779e6`.
-None of these is the eventual final integrated tree. Therefore every result in
-the **final gate** table below is deliberately `PENDING FINAL TREE`.
-
-## What prior stages established
+## Prior-stage record
 
 | Stage | Recorded outcome | Primary evidence |
 | --- | --- | --- |
@@ -28,59 +25,46 @@ the **final gate** table below is deliberately `PENDING FINAL TREE`.
 | 3 | Re-verification completed after the degenerate-resize blank-scene repair. | `a246da0`, `docs/audits/stage3-kmap-verification.md` |
 | 4 | Read gate passed with documented storage/environment exceptions. | `e6bfa62`, `docs/audits/stage4-read-verification.md` |
 | 5 | Research round-two independent verification passed. | `ceff954`, `docs/audits/stage5-research-verification.md` |
-| 6 | Writer round two passed after two in-lane fixes. | `857bee7`, `docs/audits/stage6-write-verification.md` |
+| 6 | Writer round two passed after in-lane repairs. | `857bee7`, `docs/audits/stage6-write-verification.md` |
 
-Stage 6's first verification was explicitly not passed (`e4ac773`); this was
-subsequently repaired (`a4c9c5d`) and re-verified at `857bee7`. That history
-is retained here to avoid presenting the program as a single clean pass.
+## Final-candidate evidence
 
-## Recovered Stage 7 preparation evidence (pre-final only)
-
-The retained scratchpad evidence is outside this repository at
-`/private/tmp/claude-501/-Users-hyderhusainarastu-Project-AutoCriticalEditionProject/6c3d839e-398b-49e8-b9c3-2a6d03612b7d/scratchpad/stage7-prep`.
-It reports a successful production build and 33 before screenshots at
-`6f9330c`, plus pre-final Firefox/WebKit smoke captures. It also records a
-proxy accessibility pass, not a human screen-reader pass.
-
-That proxy found four real issues on the `4e779e6` snapshot: unnamed
-collapsed-rail links, Reader evidence/sidebar contrast, Knowledge Map/Writer
-dialog contrast, and missing Knowledge Map result/selection announcements.
-Those observations are inputs to the separate accessibility-fix work; they
-are **not** certified fixed by this document.
-
-The preparation preservation comparison found no page-route removals from
-the baseline snapshot. Its three added pages were `/works/[workId]/sources`,
-`/research/[projectId]/chambers`, and `/research/[projectId]/graph`.
-`docs/audits/ui-graph-redesign-preservation-matrix.md` carries the durable,
-reviewable version of that comparison.
-
-## Final gate — PENDING FINAL TREE
-
-| Required final-tree activity | State | Required record |
+| Activity | Result | Boundary / notes |
 | --- | --- | --- |
-| Install/typecheck/lint/production build | **PENDING FINAL TREE** | exact commands, exit status, commit |
-| Stage 7 signed-in journeys at declared viewports | **PENDING FINAL TREE** | matrix run and 10 journey outcomes |
-| Critical Chromium/Firefox/WebKit smoke | **PENDING FINAL TREE** | browser/version/viewport and results |
-| Light/dark and reduced-motion targeted checks | **PENDING FINAL TREE** | screenshot/assertion locations |
-| Automated axe and keyboard-only workflows | **PENDING FINAL TREE** | violations, fixes, or accepted limitations |
-| Manual VoiceOver walkthroughs | **PENDING FINAL TREE** | operator, routes, findings; automation is insufficient |
-| Preservation/legacy-bookmark regression check | **PENDING FINAL TREE** | route and codec results |
-| Real-GPU performance measurement | **PENDING FINAL TREE** | machine/browser/GPU; headless timing is not a substitute |
+| Monorepo unit suite | **PASS (earlier final-program run)** | Retained evidence from the final-program run; no claim that it was re-run in this documentation lane. |
+| Web typecheck, lint, production build | **PASS** | Final candidate `2c0f820`; recorded final-gate result. |
+| Chromium targeted accessibility/hydration checks | **PASS, 7/7** | Final-candidate targeted checks; includes the repaired collapsed-rail naming, contrast, Map live-region, and hydration coverage. |
+| Firefox login hydration | **PASS, 151** | Final-candidate login hydration check; no reported hydration error. |
+| WebKit login hydration | **PASS, 26.5** | Final-candidate login hydration check; no reported hydration error. |
+| Legacy bookmark chooser | **PASS, retries=0** | Invalid and ambiguous legacy roadmap-root chooser case passed at `2c0f820`. |
+| Small-fixture touch stress | **PASS, retries=0** | Mobile hub/satellite selection and Home-framing check passed at `2c0f820`. |
+| Stage 7 signed-in journey matrix | **PARTIAL** | 15 journeys passed before interruption. J01 and J07 have real blockers in parallel repair and must be re-run after those repairs. |
+
+## Final gate status
+
+| Required final-tree activity | State | Required remaining record |
+| --- | --- | --- |
+| Install/typecheck/lint/production build | **PASS** | Final-candidate command record retained by the gate run. |
+| Stage 7 signed-in journeys at declared viewports | **PENDING: J01/J07 RE-RUN; full matrix incomplete** | Re-run J01 and J07 after their repairs, then complete the matrix. |
+| Critical Chromium/Firefox/WebKit smoke | **PARTIAL PASS** | Chromium targeted checks and Firefox/WebKit login hydration passed; complete the declared critical-route smoke record if not otherwise captured by the final matrix. |
+| Light/dark and reduced-motion targeted checks | **PENDING FINAL MATRIX** | Link final screenshots/assertions. |
+| Automated axe and keyboard-only workflows | **PARTIAL PASS** | Chromium targeted accessibility/hydration checks passed; record remaining required keyboard workflows with the final matrix. |
+| Manual VoiceOver walkthroughs | **PENDING — NOT RUN** | Operator, specified routes, findings; automation is insufficient. |
+| Preservation/legacy-bookmark regression check | **PARTIAL PASS** | Legacy chooser browser regression passed; route/deep-link and capability matrix remains open. |
+| Real-GPU performance measurement | **PENDING** | Machine/browser/GPU and measured result; headless timing is not a substitute. |
 
 ## Known limitations and non-claims
 
-- No production access, migration application, deployment, push, or merge is
-  authorized by this verification record.
-- Seeded tests do not prove live-provider, worker, real Storage, or paid API
-  behavior. Existing stage docs already record the dummy-Storage limitation.
-- The recovered cross-browser captures and accessibility proxy are pre-final
-  snapshot evidence only. They cannot close a final-tree gate.
-- A human VoiceOver pass remains mandatory for the Charter's specified
-  Home/Read, Reader evidence, Research claim/debate, Knowledge Map, and
-  Writer insertion walkthroughs.
+- J01 and J07 are not waived: their re-runs and the full final journey matrix
+  remain required after the parallel repairs complete.
+- Manual VoiceOver validation was not run.
+- Seeded and local checks do not prove live-provider, worker, real Storage,
+  paid API, or production behavior.
+- No production access, migration application, merge to `main`, push,
+  deployment, or production action is authorized by this record.
 
 ## Closing rule
 
-Only after every `PENDING FINAL TREE` row is replaced by evidence from the
-same final commit may this file be changed from **pre-final handoff** to a
-verification gate record.
+Do not call the redesign complete until every remaining row above has linked
+evidence from the final integrated tree, or is listed as an explicit accepted
+limitation under owner authority.
