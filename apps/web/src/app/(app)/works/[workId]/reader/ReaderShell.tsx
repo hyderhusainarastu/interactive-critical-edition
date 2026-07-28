@@ -643,11 +643,46 @@ export function ReaderShell({
           </div>}
 
           <div
-            className="reader-content-container px-6 py-8"
+            className="reader-content-container py-8"
             style={{
               ["--reader-font-size" as string]: `${readerFontSize}rem`,
             }}
           >
+            {/* KNOWN ISSUE, not fixed here (2026-07-28, discovered during the
+                Stage 4 visual sweep — see docs/audits/stage4-read-verification.md):
+                on a narrow (~375px) viewport, the mobile fixed bottom nav
+                (`MobileBottomNav`, `apps/web/src/components/shell/**`) can
+                visually overlap the last visible line of a reader whose
+                total content height lands close to one viewport — verified
+                on a natural (non-fullPage) screenshot, not just the
+                full-page capture. A `padding-bottom` added here (tried and
+                reverted) does NOT fix it: padding trailing the content only
+                extends the document's total scrollable height, it doesn't
+                move the ALREADY-rendered text off the screen real-estate
+                the fixed nav currently occupies at scroll position 0 — the
+                text's on-screen position is set by normal flow from the
+                top, unaffected by anything after it. A real fix needs the
+                page's effective layout height on mobile to already exclude
+                the nav's height (e.g. a `100dvh - nav-height` calculation
+                upstream of where `min-h-screen` gets applied), which is a
+                shell-level layout concern, not a single reader-page
+                padding tweak — left as a documented, unresolved finding
+                rather than shipping a change that doesn't actually work.
+                The horizontal padding lives on this INNER wrapper, not on
+                `.reader-content-container` itself, deliberately. That class
+                carries `container-type: inline-size` (globals.css) for the
+                `@container (min-width: 40rem)` rule that reveals wide-screen
+                marginalia — container-query size features measure the
+                container's own CONTENT box, so padding on the container
+                itself silently eats into that budget. At a 1280px viewport
+                with both rails open, the outer element's 24px×2 padding was
+                shrinking the measured width to just under 40rem, so
+                marginalia never appeared there even though the design
+                intends it to (fixed 2026-07-28, caught by
+                edition.spec.ts's "wide-reader marginalia" test). Moving the
+                padding one level in recovers the full width for the query
+                while leaving the rendered layout identical. */}
+            <div className="px-6">
             {effectiveShowInteractive && visibleEdition ? <EditionReader edition={visibleEdition} onOpenAnnotation={openAnnotation} activeAnnotationId={activeAnnotationId} activeBlockId={activeReaderBlockId} highlights={data.highlights} notes={data.notes} scriptDisplay={enablePhase12Reader ? preferences.scriptDisplay : "original"} focusMode={readerFocus} pendingColor={pendingColor} onColorChange={setPendingColor} onPositionChange={enablePhase12Reader ? (position) => { const saved: Position = { kind: "processed", ...position }; currentPositionRef.current = saved; savePosition(saved); } : undefined} onCreateHighlight={enablePhase12Reader ? (anchor) => createHighlight({ kind: "processed", ...anchor }) : undefined} onCreateLinkedNote={enablePhase12Reader ? createLinkedNote : undefined} onLinkExistingNote={enablePhase12Reader ? linkExistingNote : undefined} claims={enableReaderClaimLayer ? claims : []} /> : isPdf ? (
               data.fileUrl ? (
                 <section aria-label="Published edition — original PDF"><p className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · original PDF · immutable source</p><PdfReader
@@ -687,6 +722,7 @@ export function ReaderShell({
             ) : (
               <section aria-label="Published edition — original source file"><p className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">Published edition · immutable original source file</p><p className="mt-4 text-sm text-[var(--color-text-muted)]">This source format is preserved without rewriting it in the browser.</p>{data.fileUrl && <a className="mt-3 inline-block underline" href={data.fileUrl} download>Open immutable source file</a>}</section>
             )}
+            </div>
           </div>
         </div>
 

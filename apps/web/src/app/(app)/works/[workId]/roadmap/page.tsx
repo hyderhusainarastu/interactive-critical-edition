@@ -16,14 +16,16 @@ export default async function RoadmapPage({
   if (!doc) notFound();
 
   // Default the roadmap's level to the reader level chosen at onboarding
-  // (plan §34.4 9.4); "research" (full view) when the reader never chose one.
+  // (plan §34.4 9.4); "all" (the real full view, unfiltered) when the
+  // reader never chose one — see RoadmapView's own doc comment for why
+  // this was "research" before and why that was wrong post-2026-07-26.
   const readerLevel = await getUserReaderLevel(session.user.id);
 
   return (
     <RoadmapView
       workId={workId}
       title={doc.title}
-      initialReaderLevel={readerLevel ?? "research"}
+      initialReaderLevel={readerLevel ?? "all"}
     />
   );
 }

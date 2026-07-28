@@ -77,19 +77,23 @@ test.describe("Work status controls (Phase 19)", () => {
     await confirmResponse;
 
     await expect(page.getByText("Ready", { exact: true })).toBeVisible();
-    // "Confirmed Title" only appears once router.refresh() (fired by
-    // WorkStatusPanel's handleConfirm after the POST above) completes its
-    // own, separate RSC round trip and re-renders the Server Component
-    // <h1> with the newly-saved work.title — WorkStatusPanel's own client
-    // state only tracks status, not title, so this is never satisfied by
-    // local state alone. CI observed the whole flow (POST + refresh) take
-    // 6.3s/6.6s under runner load, just over the bare 5s default; this is
-    // a real, reproducible network-bound latency (confirmed locally by
-    // hitting the same cold-pg-boss-init confirm path against a real
-    // production build), not a functional regression, so the fix is
-    // headroom on the assertion that actually depends on it rather than a
-    // weaker assertion.
-    await expect(page.getByText("Confirmed Title")).toBeVisible({ timeout: 15_000 });
+    // "Confirmed Title" only appears (as the page's own <h1>) once
+    // router.refresh() (fired by WorkStatusPanel's handleConfirm after the
+    // POST above) completes its own, separate RSC round trip and
+    // re-renders the Server Component <h1> with the newly-saved
+    // work.title — WorkStatusPanel's own client state only tracks status,
+    // not title, so this is never satisfied by local state alone. CI
+    // observed the whole flow (POST + refresh) take 6.3s/6.6s under runner
+    // load, just over the bare 5s default; this is a real, reproducible
+    // network-bound latency (confirmed locally by hitting the same
+    // cold-pg-boss-init confirm path against a real production build), not
+    // a functional regression, so the fix is headroom on the assertion
+    // that actually depends on it rather than a weaker assertion. Scoped
+    // to the heading role (not a bare getByText) since the Stage 4 work
+    // context header now also echoes the work title in its own banner
+    // span, which would otherwise be a second, ambiguous match — fixed
+    // 2026-07-28.
+    await expect(page.getByRole("heading", { name: "Confirmed Title" })).toBeVisible({ timeout: 15_000 });
 
     const [row] = await db.select({ status: documents.processingStatus }).from(documents).where(eq(documents.id, documentId));
     expect(row.status).toBe("ready");
@@ -162,7 +166,11 @@ test.describe("Work status controls (Phase 19)", () => {
     await login(page);
     await page.goto(`/works/${workId}`);
 
-    await expect(page.getByText("Processing failed")).toBeVisible();
+    // Exact match: the Stage 4 work context header's subnav now also shows
+    // "Unavailable — processing failed." per disabled tab (case-insensitive
+    // substring match would otherwise hit 5 of those plus this page's own
+    // "Processing failed" heading — 6 matches, a strict-mode violation).
+    await expect(page.getByText("Processing failed", { exact: true })).toBeVisible();
     await expect(page.getByText("No extractable text found. OCR was unavailable or produced no text.")).toBeVisible();
     // Phase 20.5: the failed state states the recovery semantics honestly —
     // the immutable original upload is retained and retry restarts from it,
@@ -245,13 +253,16 @@ test.describe("Work status controls (Phase 19)", () => {
 
     await login(page);
     await page.goto(`/works/${workId}`);
-    await expect(page.getByText("In trash")).toBeVisible();
+    // Exact match: the Stage 4 work context header's subnav also shows
+    // "This work is in Trash — restore it to continue." per disabled tab,
+    // which a case-insensitive substring match on "In trash" also hits.
+    await expect(page.getByText("In trash", { exact: true })).toBeVisible();
 
     const trashLink = page.getByRole("link", { name: "Trash" });
     await expect(trashLink).toHaveAttribute("href", "/works/trash");
 
     await page.getByRole("button", { name: "Undo move to trash" }).click();
-    await expect(page.getByText("In trash")).not.toBeVisible();
+    await expect(page.getByText("In trash", { exact: true })).not.toBeVisible();
     await expect(page.getByText("Ready", { exact: true })).toBeVisible();
 
     const [row] = await db.select({ deletedAt: works.deletedAt }).from(works).where(eq(works.id, workId));
@@ -434,7 +445,8 @@ test.describe("Work status controls (Phase 19)", () => {
     });
     await login(page);
     await page.goto(`/works/${workId}`);
-    await expect(page.getByText("Processing failed")).toBeVisible();
+    // Exact match — see the identical fix above (line ~163) for why.
+    await expect(page.getByText("Processing failed", { exact: true })).toBeVisible();
     await page.waitForTimeout(300);
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(results.violations).toEqual([]);

@@ -57,6 +57,14 @@ test.describe("Sources tab (Stage 4 read spec §3.4)", () => {
 
     await login(page);
     await page.goto(`/works/${workId}/sources`);
-    await expect(page.getByText("Available once processing finishes.")).toBeVisible();
+    // Scoped to the page's own explanatory <p>, not a bare page-wide
+    // getByText — the identical "Available once processing finishes."
+    // disabled-reason text also renders once per disabled tab in the
+    // work-context-header subnav (Roadmap/Curriculum/Diagnostic/Knowledge
+    // Map, all disabled while processing, and all still inside
+    // #main-content alongside this page's own content), so anything less
+    // specific than the actual <p> element hits a strict-mode violation
+    // (6 matches) rather than proving THIS page's own explanatory copy.
+    await expect(page.locator("p").filter({ hasText: "Available once processing finishes." })).toBeVisible();
   });
 });

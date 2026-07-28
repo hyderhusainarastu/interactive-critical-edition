@@ -137,13 +137,23 @@ export function EditionAnnotationsPanel({
    *  card affordance, reusing the same `activeReaderBlockId` mechanism the
    *  outline rail and bookmark selection already use. */
   onLocatePassage?: (textBlockId: string) => void;
-  /** Stage 4 read spec §4.2: which tab this mount should open on. Read only
-   *  once, as this state's initial value — the parent (`ReaderShell`)
-   *  conditionally mounts/unmounts this whole panel rather than hiding it,
-   *  so a fresh mount happens every time the drawer opens, making a plain
-   *  initial value sufficient (no external-signal effect needed the way
-   *  `activeId` below needs one, since `activeId` can change while this
-   *  panel stays mounted). */
+  /** Stage 4 read spec §4.2: which tab this mount should switch to (e.g.
+   *  "+ Bookmark" requests "my-notes"). NOT read only-once: on a wide
+   *  viewport `showDrawer` starts `true` (the drawer is default-open), so
+   *  this panel is ALREADY mounted before the first bookmark/highlight
+   *  action ever fires — `ReaderShell`'s `showDrawer` never has a
+   *  false→true transition to remount it, only when the drawer starts
+   *  closed (narrow viewports). A plain `useState(initialTab)` therefore
+   *  missed every default-open-drawer case (fixed 2026-07-28, caught by
+   *  edition.spec.ts's "bookmark and standalone note" test — the "My
+   *  notes" tab's `aria-pressed` never flipped true after bookmarking on
+   *  a wide viewport even though the bookmark itself was created fine).
+   *  An effect syncs local `tab` state whenever this prop changes; it's
+   *  safe to fire on every distinct value because the parent only ever
+   *  changes `pendingDrawerTab` for the express purpose of requesting a
+   *  switch (see `openDrawer`), never as an incidental re-render, so it
+   *  never fights the reader's own subsequent manual tab clicks (those
+   *  only change local `tab` state, not this prop). */
   initialTab?: Tab;
   /** Stage 4 read spec §4.2: `NotesSidebar`'s content, merged in as the
    *  "My notes" tab — same data/handlers `ReaderShell` already owned and
@@ -159,6 +169,18 @@ export function EditionAnnotationsPanel({
   pendingNoteHighlightIds?: string[];
 }) {
   const [tab, setTab] = useState<Tab>(initialTab);
+  // See `initialTab`'s own doc comment: this panel can outlive the drawer
+  // opening (default-open on wide viewports), so a request to switch tabs
+  // has to be able to reach an already-mounted instance, not just seed a
+  // fresh mount's initial state. Same "one-shot sync from an external prop
+  // change, not a derived value" shape as the activeId-driven tab switch
+  // below, so the reader stays free to switch tabs afterward without this
+  // firing again (the prop value only changes when the parent explicitly
+  // requests a switch).
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTab(initialTab);
+  }, [initialTab]);
   const myNotesCount = highlights.length + notes.length + bookmarks.length;
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
   const anchoredNotes = edition.passageAnnotations.filter((a) => a.textBlockId !== null);

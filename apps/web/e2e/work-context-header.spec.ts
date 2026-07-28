@@ -87,8 +87,12 @@ test.describe("Work context header (Stage 4 read spec §3)", () => {
 
     // Stage 4 read spec §3.3: the reader page's own defensive guard renders
     // the same explanation inline rather than redirecting away silently.
+    // Scoped to the page's own explanatory <p> (not a bare getByText): the
+    // identical "Unavailable — processing failed." reason also renders once
+    // per OTHER disabled subnav tab (Roadmap/Curriculum/Diagnostic/
+    // Knowledge Map), so an unscoped locator is a strict-mode violation.
     await page.goto(`/works/${workId}/reader`);
-    await expect(page.getByText("Unavailable — processing failed.")).toBeVisible();
+    await expect(page.locator("p").filter({ hasText: "Unavailable — processing failed." })).toBeVisible();
     await expect(page.getByRole("link", { name: "View work details" })).toBeVisible();
   });
 });
