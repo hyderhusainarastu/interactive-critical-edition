@@ -133,4 +133,139 @@ test.describe("Writer panel layout (Stage 6)", () => {
     await expect(sheet).toHaveCount(0);
     await expect(sourcesToggle).toBeFocused();
   });
+
+  test("desktop (1280px): keyboard-only pass through — toggle, tab into contents, insert a citation, and restore a revision, with focus never lost", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await login(page);
+    await newProject(page, "Keyboard desktop panels project");
+
+    const sourcesToggle = page.getByRole("button", { name: "Sources and evidence" });
+    const citationsToggle = page.getByRole("button", { name: "Citations and history" });
+
+    // Collapsing and reopening a wide panel via the keyboard alone never
+    // drops focus off its own toggle button — there is no dialog here to
+    // trap/restore focus (that's the narrow-viewport sheet's job, covered
+    // above), but focus should still never be lost.
+    await sourcesToggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("complementary", { name: "Sources and evidence panel" })).toHaveCount(0);
+    await expect(sourcesToggle).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("complementary", { name: "Sources and evidence panel" })).toBeVisible();
+    await expect(sourcesToggle).toBeFocused();
+
+    // Tab from the toggle into the reopened panel's own content — with no
+    // Library sources yet (the empty state renders no interactive control),
+    // its first focusable control is the citation import form.
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Citation import format")).toBeFocused();
+    await page.getByLabel("Citation import format").selectOption("bibtex");
+    await page.getByLabel("Citation metadata").fill("@book{keyb, title={Keyboard-Only Sources}, author={Keys, K.}, year={2020}, publisher={Press}}");
+    await page.getByRole("button", { name: "Add" }).click();
+    await expect(page.getByText("Keyboard-Only Sources")).toBeVisible();
+
+    // Same collapse/reopen-without-losing-focus check for Citations, then
+    // insert and restore entirely with the keyboard.
+    await citationsToggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("complementary", { name: "Citations and revision history panel" })).toHaveCount(0);
+    await expect(citationsToggle).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(citationsToggle).toBeFocused();
+
+    const draft = page.getByLabel("Draft");
+    await expect(draft).toHaveValue("");
+    await page.getByRole("button", { name: "Insert" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(draft).not.toHaveValue("");
+
+    // Restoring a revision opens a native `confirm` dialog (§6: kept native
+    // and unchanged by this stage) — accepting it should return focus to
+    // the Restore control that triggered it, not somewhere unpredictable.
+    const restoreButton = page.getByRole("button", { name: "Restore" }).first();
+    page.once("dialog", (dialog) => dialog.accept());
+    await restoreButton.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+    await expect(restoreButton).toBeFocused();
+  });
+
+  test("autosave failure shows 'Save failed' with a working Retry that reaches 'Saved' on a subsequent successful save", async ({ page }) => {
+    await login(page);
+    await newProject(page, "Autosave failure project");
+
+    let patchCount = 0;
+    await page.route("**/api/writer/projects/*/documents/*", async (route) => {
+      if (route.request().method() !== "PATCH") {
+        await route.continue();
+        return;
+      }
+      patchCount += 1;
+      if (patchCount === 1) {
+        await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Simulated failure" }) });
+        return;
+      }
+      await route.continue();
+    });
+
+    const draft = page.getByLabel("Draft");
+    await draft.fill("This save will fail once.");
+    await expect(page.getByRole("status")).toContainText("Save failed", { timeout: 10_000 });
+    const retryButton = page.getByRole("button", { name: "Retry" });
+    await expect(retryButton).toBeVisible();
+
+    await retryButton.click();
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+    expect(patchCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test("same-browser two-tab conflict: a second tab editing the same document sees 'Edited in another tab', and Reload picks up the other tab's saved content", async ({ context }) => {
+    // Same `BrowserContext` (one shared browser storage partition) with two
+    // separate pages/tabs — deliberately not two independent
+    // `browser.newContext()`s: `BroadcastChannel` (§4.3's cross-tab signal)
+    // is scoped per storage partition, not per logged-in account, so two
+    // different contexts would never see each other's messages regardless
+    // of which document or user is involved.
+    const pageA = await context.newPage();
+    await login(pageA);
+    const projectId = await newProject(pageA, "Two-tab conflict project");
+
+    const pageB = await context.newPage();
+    // Tab B's own saves are made to fail deterministically, so it stays
+    // "unsaved" (Editing, then Save failed) for the whole test regardless
+    // of exact timing — the conflict predicate (§4.3) only surfaces while
+    // THIS tab has unsaved-or-unconfirmed local edits, and racing Tab A's
+    // own save timing without this would make the test flaky.
+    await pageB.route("**/api/writer/projects/*/documents/*", async (route) => {
+      if (route.request().method() === "PATCH") {
+        await route.abort();
+        return;
+      }
+      await route.continue();
+    });
+    await pageB.goto(`/writer/${projectId}`);
+    const draftB = pageB.getByLabel("Draft");
+    await expect(draftB).toBeVisible();
+    await draftB.fill("Tab B's own unsaved edit");
+    await expect(pageB.getByRole("status")).toContainText("Save failed", { timeout: 10_000 });
+
+    const draftA = pageA.getByLabel("Draft");
+    await draftA.fill("Tab A's saved content");
+    await expect(pageA.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+
+    await expect(pageB.getByRole("status")).toContainText("Edited in another tab", { timeout: 10_000 });
+    const reloadButton = pageB.getByRole("button", { name: "Reload this document" });
+    await expect(reloadButton).toBeVisible();
+    await expect(pageB.getByRole("button", { name: "Keep editing here" })).toBeVisible();
+
+    // Clear the route block before reloading, so the fresh mount's own GET
+    // fetches (sources, revisions) go through normally.
+    await pageB.unroute("**/api/writer/projects/*/documents/*");
+    await reloadButton.click();
+    await expect(draftB).toHaveValue("Tab A's saved content", { timeout: 10_000 });
+    await expect(pageB.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+
+    await pageA.close();
+    await pageB.close();
+  });
 });
