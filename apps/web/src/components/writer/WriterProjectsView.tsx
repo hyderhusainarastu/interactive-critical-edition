@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useToast } from "@/components/app/ToastProvider";
 
 type Project = { id: string; title: string; documentCount: number; updatedAt: string | Date; archivedAt?: string | Date | null };
 
 export function WriterProjectsView({ initialProjects }: { initialProjects: Project[] }) {
+  const { toast } = useToast();
   const [projects, setProjects] = useState(initialProjects);
   const [archivedProjects, setArchivedProjects] = useState<Project[]>([]);
   const [showArchived, setShowArchived] = useState(false);
@@ -21,7 +23,7 @@ export function WriterProjectsView({ initialProjects }: { initialProjects: Proje
       setArchivedProjects((body.projects as Project[]).filter((project) => project.archivedAt));
       setShowArchived(true);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not load archived projects.");
+      toast(error instanceof Error ? error.message : "Could not load archived projects.", "error");
     } finally {
       setLoadingArchived(false);
     }
@@ -31,7 +33,7 @@ export function WriterProjectsView({ initialProjects }: { initialProjects: Proje
     const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: false }) });
     const restored = await response.json();
     if (!response.ok) {
-      window.alert(restored.error ?? "Could not restore project.");
+      toast(restored.error ?? "Could not restore project.", "error");
       return;
     }
     setArchivedProjects((current) => current.filter((item) => item.id !== project.id));
@@ -48,7 +50,7 @@ export function WriterProjectsView({ initialProjects }: { initialProjects: Proje
       if (!response.ok) throw new Error(created.error ?? "Could not create project.");
       window.location.assign(`/writer/${created.project.id}`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not create project.");
+      toast(error instanceof Error ? error.message : "Could not create project.", "error");
     } finally { setCreating(false); }
   }
   return (

@@ -72,6 +72,7 @@ export function CitationsHistoryPanel({
             {mlaWorksCited(citation)}
           </li>
         ))}
+        {!citationList.length && <li className="app-empty rounded p-2 text-xs text-[var(--color-text-muted)]">No citations yet. Import one from the panel on the left, or from a Library source.</li>}
       </ul>
       <h2 className="mt-6 font-medium">Revision recovery</h2>
       <ul className="mt-2 space-y-2 text-sm">
@@ -85,6 +86,7 @@ export function CitationsHistoryPanel({
             </button>
           </li>
         ))}
+        {!revisions.length && <li className="app-empty rounded p-2 text-xs text-[var(--color-text-muted)]">No saved revisions yet.</li>}
       </ul>
     </>
   );

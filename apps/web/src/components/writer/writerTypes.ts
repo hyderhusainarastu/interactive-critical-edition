@@ -7,7 +7,12 @@
  * from the shapes `WriterEditor.tsx` actually fetches.
  */
 
-export type WriterDocument = { id: string; title: string; content: unknown; sortOrder: number };
+// `updatedAt` is used by `WriterEditor.tsx`'s outer remount wrapper (Stage 6
+// spec §4.3) to detect when the server's copy of a document has moved since
+// this tab last fetched it — `string | Date` because the value crosses the
+// server/client boundary, same convention `WriterProjectsView.tsx`'s own
+// `Project` type already uses for the same reason.
+export type WriterDocument = { id: string; title: string; content: unknown; sortOrder: number; updatedAt: string | Date };
 export type WriterCitation = { id: string; cslJson: unknown; source: string };
 export type WriterSource = { id: string; title: string; workId: string; workTitle: string; url: string | null; doi: string | null };
 export type WriterRevision = { id: string; revision: number; reason: string; createdAt: string };

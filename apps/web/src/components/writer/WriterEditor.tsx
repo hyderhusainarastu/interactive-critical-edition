@@ -1,15 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { mlaParenthetical, plainTextToProseMirror, proseMirrorToPlainText, type CslJson } from "@/lib/writer";
 import { useRegisterContextBar } from "@/components/shell/ContextBarProvider";
 import { useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
+import { useToast } from "@/components/app/ToastProvider";
+import { EmptyState } from "@/components/primitives/EmptyState";
 import { ExportLinks } from "./ExportLinks";
 import { CitationsHistoryPanel, type CitationExportFormat } from "./panels/CitationsHistoryPanel";
 import { DEFAULT_WIDE_PANEL_STATE, toggleWidePanel, type WidePanelState } from "./panels/panelState";
 import { SourcesEvidencePanel, type CitationImportKind } from "./panels/SourcesEvidencePanel";
 import { useIsNarrowViewport } from "./panels/useIsNarrowViewport";
 import { ProjectTitleField } from "./ProjectTitleField";
+import { SaveStatus, type SaveState } from "./SaveStatus";
+import { useDocumentBroadcast, type DocumentSavedMessage } from "./useDocumentBroadcast";
 import type {
   EvidenceClaim,
   EvidenceView,
@@ -45,6 +50,29 @@ function readStoredWidePanels(): WidePanelState {
   }
 }
 
+function documentTimeKey(value: string | Date): string {
+  return typeof value === "string" ? value : value.toISOString();
+}
+
+/**
+ * Stage 6 spec §4.3's "Reload this document" needs a real remount so the
+ * inner session below re-initializes its `useState(initialDocuments)` from
+ * fresh server data, not the stale in-memory draft — a plain prop update
+ * alone would leave that existing state untouched (React only re-derives
+ * state from new props across a `key` change, never automatically).
+ *
+ * This outer component is a thin wrapper for exactly that reason. Its own
+ * `documentsFingerprint` (id + `updatedAt` per document) changes only when
+ * `router.refresh()` (called from inside the session, on "Reload this
+ * document") actually pulls fresher data from the server component this
+ * page renders under (`(app)/writer/[projectId]/page.tsx` — untouched by
+ * this stage). When the fingerprint changes, using it as `key` forces a
+ * full remount of `WriterEditorSession` with the new `initialDocuments` as
+ * its fresh starting state. Ordinary same-tab autosave never calls
+ * `router.refresh()`, so this never remounts the session out from under a
+ * normal editing session — only an explicit "Reload this document" click
+ * can trigger it.
+ */
 export function WriterEditor({
   project,
   initialDocuments,
@@ -56,9 +84,54 @@ export function WriterEditor({
   initialCitations: Citation[];
   evidenceEnabled?: boolean;
 }) {
+  const documentsFingerprint = initialDocuments.map((document) => `${document.id}:${documentTimeKey(document.updatedAt)}`).join("|");
+  return (
+    <WriterEditorSession
+      key={documentsFingerprint}
+      project={project}
+      initialDocuments={initialDocuments}
+      initialCitations={initialCitations}
+      evidenceEnabled={evidenceEnabled}
+    />
+  );
+}
+
+function WriterEditorSession({
+  project,
+  initialDocuments,
+  initialCitations,
+  evidenceEnabled,
+}: {
+  project: { id: string; title: string };
+  initialDocuments: Document[];
+  initialCitations: Citation[];
+  evidenceEnabled: boolean;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  // Stage 6 spec §4.3: when "Reload this document" remounts this session
+  // (via the outer wrapper's `key` change), the fresh `initialDocuments[0]`
+  // is not necessarily the document the user was actually looking at —
+  // stash which one that was here, right before triggering the reload, and
+  // consume it once on the way back in. Self-cleaning (removed as soon as
+  // it's read) so a later, unrelated remount never picks up a stale value.
+  const activeDocSessionKey = `palimnote:writer-active-document:${project.id}`;
   const [documents, setDocuments] = useState(initialDocuments);
   const [projectTitle, setProjectTitle] = useState(project.title);
-  const [activeId, setActiveId] = useState(initialDocuments[0]?.id ?? "");
+  const [activeId, setActiveId] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.sessionStorage.getItem(activeDocSessionKey);
+        if (stored) {
+          window.sessionStorage.removeItem(activeDocSessionKey);
+          if (initialDocuments.some((document) => document.id === stored)) return stored;
+        }
+      } catch {
+        /* sessionStorage unavailable — fall through to the default below */
+      }
+    }
+    return initialDocuments[0]?.id ?? "";
+  });
   const active = documents.find((document) => document.id === activeId) ?? documents[0];
   const [title, setTitle] = useState(active?.title ?? "Untitled document");
   const [text, setText] = useState(active ? proseMirrorToPlainText(active.content) : "");
@@ -66,7 +139,7 @@ export function WriterEditor({
   const [sources, setSources] = useState<Source[]>([]);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [status, setStatus] = useState("Saved");
+  const [status, setStatus] = useState<SaveState>("Saved");
   const [importValue, setImportValue] = useState("");
   const [importKind, setImportKind] = useState<CitationImportKind>("doi");
   const [citationExportFormat, setCitationExportFormat] = useState<CitationExportFormat>("bibtex");
@@ -113,6 +186,17 @@ export function WriterEditor({
   const titleField = useMemo(() => <ProjectTitleField value={projectTitle} onChange={setProjectTitle} onBlur={saveProjectTitle} />, [projectTitle]);
   useRegisterContextBar({ title: titleField });
 
+  // Stage 6 spec §4.3: a same-browser, cross-tab conflict signal. `postSaved`
+  // is called from `saveNow()` below on every successful save; `onConflict`
+  // shows the "Edited in another tab" status variant instead of continuing
+  // the normal Saving/Saved cycle, but only while this tab itself has
+  // unsaved-or-unconfirmed local edits (the hook's own predicate).
+  const { postSaved } = useDocumentBroadcast({
+    activeDocumentId,
+    status,
+    onConflict: (_message: DocumentSavedMessage) => setStatus("Edited in another tab"),
+  });
+
   useEffect(() => {
     if (!active) return;
     const frame = window.requestAnimationFrame(() => { setTitle(active.title); setText(proseMirrorToPlainText(active.content)); setStatus("Saved"); });
@@ -147,33 +231,88 @@ export function WriterEditor({
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setEvidence(data && data.researchProject ? data : null));
   }, [project.id, evidenceEnabled, researchLink, evidenceWorkFilter, evidenceNatureFilter]);
+  // Stage 6 spec §4.2: `saveNow()` is the one save path both the debounce
+  // timer below AND the "Retry" control call — no duplicated fetch logic.
+  // It reads `title`/`text` from this render's own closure, which is always
+  // the draft's current content (not a stale snapshot from a past failure):
+  // every keystroke re-renders the component, so by the time a user clicks
+  // Retry the in-scope `saveNow` already closes over whatever they typed
+  // since the failure.
+  async function saveNow() {
+    if (!activeDocumentId) return;
+    setStatus("Saving…");
+    // A network-level failure (offline, DNS, an aborted request) makes
+    // `fetch` itself reject rather than resolve with a non-ok response —
+    // the pre-Stage-6 code had no `catch` here, so that case left `status`
+    // stuck at "Saving…" forever with no Retry ever offered, which is
+    // exactly the kind of dishonest failure state §4 exists to fix.
+    let ok = false;
+    try {
+      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave" }) });
+      ok = response.ok;
+    } catch {
+      ok = false;
+    }
+    // A functional update, not a plain `setStatus(...)`: a fresher cross-tab
+    // conflict can arrive from `useDocumentBroadcast` while this fetch is
+    // still in flight, and this save's own (now-stale) result must not
+    // clobber that just-shown "Edited in another tab" banner.
+    setStatus((current) => (current === "Edited in another tab" ? current : ok ? "Saved" : "Save failed"));
+    if (ok) postSaved(activeDocumentId);
+  }
   useEffect(() => {
     if (!activeDocumentId || status !== "Editing") return;
-    const timeout = window.setTimeout(async () => {
-      setStatus("Saving…");
-      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave" }) });
-      setStatus(response.ok ? "Saved" : "Save failed");
-    }, 750);
+    const timeout = window.setTimeout(() => { saveNow(); }, 750);
     return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, text, activeDocumentId, project.id, status]);
+  // Stage 6 spec §4.2: warn on tab close/navigation only while there is real
+  // unsaved-or-unconfirmed content — never while settled ("Saved") or during
+  // the cross-tab conflict banner, where a native "leave site?" prompt would
+  // be redundant or actively misleading.
+  useEffect(() => {
+    const hasUnconfirmedContent = status === "Editing" || status === "Saving…" || status === "Save failed";
+    if (!hasUnconfirmedContent) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [status]);
   function updateDraft(next: string) { setText(next); setStatus("Editing"); }
+  // Stage 6 spec §4.3: "Keep editing here" dismisses the conflict banner and
+  // resumes plain last-write-wins — identical to today's behavior, no
+  // capability regresses. Flipping to "Editing" (rather than leaving the
+  // banner up) both clears the variant and, since the debounce effect above
+  // depends on `status`, immediately schedules a fresh save of whatever this
+  // tab already has, with no further keystroke required.
+  function keepEditingHere() { setStatus("Editing"); }
+  // Stage 6 spec §4.3: "Reload this document" discards local edits and
+  // picks up the other tab's saved content. `router.refresh()` re-runs this
+  // route's server component with fresh data; the outer `WriterEditor`
+  // wrapper's `documentsFingerprint`-keyed remount (see its own comment)
+  // is what actually re-initializes state from that fresh data once it
+  // arrives — this handler's job is only to request it and remember which
+  // document to land back on.
+  function reloadDocument() {
+    try { window.sessionStorage.setItem(activeDocSessionKey, activeDocumentId ?? ""); } catch { /* best-effort only */ }
+    router.refresh();
+  }
   async function newDocument() {
     const nextTitle = window.prompt("Document title", "Untitled document"); if (!nextTitle?.trim()) return;
     const response = await fetch(`/api/writer/projects/${project.id}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: nextTitle }) });
-    const document = await response.json(); if (!response.ok) return window.alert(document.error ?? "Could not create document.");
+    const document = await response.json(); if (!response.ok) return toast(document.error ?? "Could not create document.", "error");
     setDocuments((items) => [...items, document]); setActiveId(document.id);
   }
   async function saveProjectTitle() {
     const next = projectTitle.trim();
     if (!next || next === project.title) return;
     const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: next }) });
-    if (!response.ok) { setProjectTitle(project.title); window.alert("Could not rename project."); }
+    if (!response.ok) { setProjectTitle(project.title); toast("Could not rename project.", "error"); }
   }
   async function archiveProject() {
     if (!window.confirm("Archive this private project? You can restore it later from the archived-projects API.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true, confirmArchive: true }) });
     if (response.ok) window.location.assign("/writer");
-    else window.alert("Could not archive project.");
+    else toast("Could not archive project.", "error");
   }
   async function moveDocument(direction: -1 | 1) {
     const index = documents.findIndex((document) => document.id === activeId);
@@ -194,13 +333,13 @@ export function WriterEditor({
   async function importCitation(kind: "library" | "identifier" | "bibtex" | "ris", value: string, resourceId?: string) {
     const body = kind === "library" ? { kind, resourceId } : kind === "identifier" ? { kind, identifierType: importKind, value } : { kind, value };
     const response = await fetch(`/api/writer/projects/${project.id}/citations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await response.json(); if (!response.ok) return window.alert(data.error ?? "Could not import citation.");
+    const data = await response.json(); if (!response.ok) return toast(data.error ?? "Could not import citation.", "error");
     setCitations((items) => [...items, ...data.citations.filter((candidate: Citation) => !items.some((item) => item.id === candidate.id))]); setImportValue("");
   }
   async function restore(revisionId: string) {
     if (!active || !window.confirm("Restore this revision? Your current draft will be saved as a new recoverable revision.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}/documents/${active.id}/revisions/${revisionId}/restore`, { method: "POST" });
-    const document = await response.json(); if (!response.ok) return window.alert(document.error ?? "Could not restore revision.");
+    const document = await response.json(); if (!response.ok) return toast(document.error ?? "Could not restore revision.", "error");
     setText(proseMirrorToPlainText(document.content)); setStatus("Saved");
   }
   function insertCitation(citation: CslJson) { updateDraft(`${text}${text && !text.endsWith(" ") ? " " : ""}${mlaParenthetical(citation)} `); }
@@ -211,7 +350,7 @@ export function WriterEditor({
     try {
       const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ researchProjectId: selectedResearchProjectId }) });
       const data = await response.json();
-      if (!response.ok) return window.alert(data.error ?? "Could not link that research project.");
+      if (!response.ok) return toast(data.error ?? "Could not link that research project.", "error");
       setResearchLink(data.linked);
     } finally { setLinkingResearch(false); }
   }
@@ -219,7 +358,7 @@ export function WriterEditor({
     if (!window.confirm("Unlink this research project? The Evidence panel will hide its claims until you link a project again.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "DELETE" });
     if (response.ok) { setResearchLink(null); setEvidence(null); }
-    else window.alert("Could not unlink the research project.");
+    else toast("Could not unlink the research project.", "error");
   }
   async function insertEvidence(claim: EvidenceClaim) {
     if (!activeDocumentId) return;
@@ -227,7 +366,7 @@ export function WriterEditor({
     try {
       const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}/evidence`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claimId: claim.id }) });
       const data = await response.json();
-      if (!response.ok) return window.alert(data.error ?? "Could not insert this evidence.");
+      if (!response.ok) return toast(data.error ?? "Could not insert this evidence.", "error");
       setDocuments((items) => items.map((document) => (document.id === data.document.id ? { ...document, content: data.document.content } : document)));
       if (data.document.id === activeDocumentId) {
         // Rehydrate the visible draft from the server's authoritative
@@ -278,7 +417,13 @@ export function WriterEditor({
     if (isNarrow) { if (citationsSecondaryPanel.isOpen) citationsSecondaryPanel.close(); else citationsSecondaryPanel.open(); }
     else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "citations")));
   }
-  if (!active) return <p className="p-6">This project has no active documents.</p>;
+  if (!active) {
+    return (
+      <div className="app-mount p-6">
+        <EmptyState heading="No documents in this project" body="This project has no active documents to display." />
+      </div>
+    );
+  }
   return (
     <section className="app-mount min-h-[calc(100vh-3.5rem)]" aria-label="Writer workspace">
       {/* Stage 6 layout spec §3: the project title itself now lives in
@@ -289,7 +434,7 @@ export function WriterEditor({
           Archive, nothing else. DOCX/PDF export moved to the central
           document toolbar below (document-scoped, not project-scoped). */}
       <div className="app-card flex flex-wrap items-center justify-end gap-3 border-x-0 border-t-0 px-4 py-3">
-        <span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span>
+        <SaveStatus status={status} onRetry={saveNow} onKeepEditingHere={keepEditingHere} onReloadDocument={reloadDocument} />
         <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button>
       </div>
       <div className="flex flex-col lg:flex-row">

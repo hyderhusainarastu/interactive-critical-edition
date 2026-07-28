@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { EmptyState } from "@/components/primitives/EmptyState";
 import type { EvidenceClaim, EvidenceView, ResearchProjectOption, WriterSource } from "../writerTypes";
 import { WriterPanelSheet } from "./WriterPanelSheet";
 
@@ -91,22 +92,28 @@ export function SourcesEvidencePanel({
     <>
       <h2 className="font-medium">Library sources</h2>
       <p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
-      <ul className="app-reveal-stagger mt-3 max-h-52 space-y-2 overflow-auto">
-        {sources.map((source) => (
-          <li key={source.id} className="app-card app-lift app-mount rounded p-2 text-sm">
-            <strong className="block">{source.title}</strong>
-            <span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span>
-            <div className="mt-1 flex gap-2">
-              <button type="button" className="app-control app-press underline" onClick={() => onCite(source.id)}>
-                Cite
-              </button>
-              <Link className="app-control app-press underline" href={`/works/${source.workId}/reader`}>
-                Read
-              </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {sources.length ? (
+        <ul className="app-reveal-stagger mt-3 max-h-52 space-y-2 overflow-auto">
+          {sources.map((source) => (
+            <li key={source.id} className="app-card app-lift app-mount rounded p-2 text-sm">
+              <strong className="block">{source.title}</strong>
+              <span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span>
+              <div className="mt-1 flex gap-2">
+                <button type="button" className="app-control app-press underline" onClick={() => onCite(source.id)}>
+                  Cite
+                </button>
+                <Link className="app-control app-press underline" href={`/works/${source.workId}/reader`}>
+                  Read
+                </Link>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="mt-3">
+          <EmptyState heading="No Library sources yet" body="Connect a source from a work's Reader, or add a citation below." />
+        </div>
+      )}
       <div className="mt-5 border-t border-[var(--color-border)] pt-3">
         <h3 className="text-sm font-medium">Add citation</h3>
         <div className="mt-2 flex gap-1">
