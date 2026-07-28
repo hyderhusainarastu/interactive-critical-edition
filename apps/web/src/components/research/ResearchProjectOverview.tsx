@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useResearchJobPolling } from "@/hooks/useResearchJobPolling";
@@ -97,9 +96,11 @@ export function ResearchProjectOverview({
   const [announcement, setAnnouncement] = useState("");
   const [newQuestion, setNewQuestion] = useState("");
   const [addingQuestion, setAddingQuestion] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
   const [workToAdd, setWorkToAdd] = useState("");
   const [roleToAdd, setRoleToAdd] = useState<"central" | "supporting" | "background">("supporting");
   const [addingMember, setAddingMember] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<Record<string, { reason: string; estimatedUnits: number }>>({});
   const [dispatching, setDispatching] = useState<Record<string, boolean>>({});
   const [dispatchError, setDispatchError] = useState<Record<string, string>>({});
@@ -174,6 +175,7 @@ export function ResearchProjectOverview({
     const question = newQuestion.trim();
     if (!question) return;
     setAddingQuestion(true);
+    setQuestionError(null);
     try {
       const response = await fetch(`/api/research/projects/${project.id}/questions`, {
         method: "POST",
@@ -186,7 +188,7 @@ export function ResearchProjectOverview({
       setNewQuestion("");
       router.refresh();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not add question.");
+      setQuestionError(error instanceof Error ? error.message : "Could not add question.");
     } finally {
       setAddingQuestion(false);
     }
@@ -207,6 +209,7 @@ export function ResearchProjectOverview({
   async function addMember() {
     if (!workToAdd) return;
     setAddingMember(true);
+    setMemberError(null);
     try {
       const response = await fetch(`/api/research/projects/${project.id}/members`, {
         method: "POST",
@@ -219,7 +222,7 @@ export function ResearchProjectOverview({
       setWorkToAdd("");
       router.refresh();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not add work to this project.");
+      setMemberError(error instanceof Error ? error.message : "Could not add work to this project.");
     } finally {
       setAddingMember(false);
     }
@@ -309,33 +312,13 @@ export function ResearchProjectOverview({
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6" aria-labelledby="research-project-title">
       <LiveAnnouncer message={announcement} />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title }]} />
-          <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
-          {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={`/research/${project.id}/claims`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            View claims
-          </Link>
-          <Link href={`/research/${project.id}/debates`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            View debates
-          </Link>
-          <Link href={`/research/${project.id}/hypotheses`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            Hypotheses &amp; gaps
-          </Link>
-          <Link href={`/research/${project.id}/corpus`} className="app-control app-press rounded border border-[var(--color-border)] px-4 py-2 text-sm font-medium">
-            Corpus
-          </Link>
-        </div>
+      <div>
+        <ResearchBreadcrumb items={[{ label: "Research", href: "/research" }, { label: project.title }]} />
+        <h1 id="research-project-title" className="font-serif text-3xl font-semibold">{project.title}</h1>
+        {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
       </div>
 
-      <ResearchPipelineStepper
-        result={pipelineResult}
-        onDispatch={dispatchPipelineAction}
-        actionState={pipelineResult.nextAction?.action ? pipelineActionState(pipelineResult.nextAction.action) : undefined}
-      />
+      <ResearchPipelineStepper result={pipelineResult} />
 
       {/* Insight feed — zero-LLM, pure DB reads (see lib/research/feed.ts). */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-feed-title">
@@ -394,6 +377,7 @@ export function ResearchProjectOverview({
             {addingQuestion ? "Adding…" : "Add"}
           </button>
         </div>
+        {questionError && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{questionError}</p>}
       </section>
 
       {/* Members */}
@@ -457,6 +441,7 @@ export function ResearchProjectOverview({
             {addingMember ? "Adding…" : "Add to project"}
           </button>
         </div>
+        {memberError && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{memberError}</p>}
       </section>
 
       {/* Jobs panel — status/stage/progress/coverage only, deliberately no

@@ -173,39 +173,73 @@ export function ResearchClaimsTable({
         {loading && <span className="text-sm text-[var(--color-text-muted)]" role="status">Loading…</span>}
       </div>
 
-      <div className="app-panel-enter mt-4 overflow-x-auto">
-        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-          <caption className="sr-only">Claims for {project.title}, filtered by work, nature, anchor state, and verification status</caption>
-          <thead>
-            <tr className="border-b border-[var(--color-border)] text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
-              <th scope="col" className="py-2 pr-4">Claim</th>
-              <th scope="col" className="py-2 pr-4">Work</th>
-              <th scope="col" className="py-2 pr-4">Nature</th>
-              <th scope="col" className="py-2 pr-4">Anchor</th>
-              <th scope="col" className="py-2 pr-4">Verification</th>
-            </tr>
-          </thead>
-          <tbody>
+      {!result.claims.length && !loading && <p className="app-empty app-mount mt-4 rounded-lg p-6 text-sm text-[var(--color-text-muted)]">No claims match these filters yet.</p>}
+
+      {/* Stage 5 §7: dual render, CSS-toggled at Tailwind's 768px `md:`
+          breakpoint (the charter's own literal threshold). The table's fixed
+          `min-w-[720px]` is dropped in favor of `table-fixed` column widths
+          plus `truncate` on the Claim cell — between 768px and ~1023px an
+          expanded rail plus content padding can leave less than 720px of
+          real table width, which would still force the exact horizontal
+          scroll this stage is asking to eliminate. Below 768px, the same
+          `result.claims` data instead renders as one card per claim, the
+          same card shape every other research list already uses
+          (`CorpusView`, `MonitorsView`, `DebateClusterDetail`). */}
+      {result.claims.length > 0 && (
+        <>
+          <div className="app-panel-enter mt-4 hidden overflow-x-auto md:block">
+            <table className="w-full table-fixed border-collapse text-left text-sm">
+              <caption className="sr-only">Claims for {project.title}, filtered by work, nature, anchor state, and verification status</caption>
+              <thead>
+                <tr className="border-b border-[var(--color-border)] text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
+                  <th scope="col" className="w-[40%] py-2 pr-4">Claim</th>
+                  <th scope="col" className="w-[20%] py-2 pr-4">Work</th>
+                  <th scope="col" className="w-[16%] py-2 pr-4">Nature</th>
+                  <th scope="col" className="w-[12%] py-2 pr-4">Anchor</th>
+                  <th scope="col" className="w-[12%] py-2 pr-4">Verification</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.claims.map((claim) => (
+                  <tr key={claim.id} className="app-control border-b border-[var(--color-border)] align-top">
+                    <td className="py-2 pr-4">
+                      <Link href={`/research/claims/${claim.id}`} className="app-control block truncate underline" title={claim.claimText}>
+                        {claim.claimText}
+                      </Link>
+                    </td>
+                    <td className="truncate py-2 pr-4" title={claim.workTitle ?? claim.corpusItemTitle ?? undefined}>{claim.workTitle ?? claim.corpusItemTitle ?? "—"}</td>
+                    <td className="py-2 pr-4">
+                      <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">{NATURE_LABEL[claim.claimNature] ?? claim.claimNature}</span>
+                      {claim.sourceScope === "abstract" && (
+                        <span className="app-control ml-1 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)]">From abstract</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4">{ANCHOR_LABEL[claim.anchorState] ?? claim.anchorState}</td>
+                    <td className="py-2 pr-4">{VERIFICATION_LABEL[claim.verificationStatus] ?? claim.verificationStatus}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <ul className="app-reveal-stagger mt-4 flex flex-col gap-3 md:hidden" aria-label={`Claims for ${project.title}`}>
             {result.claims.map((claim) => (
-              <tr key={claim.id} className="app-control border-b border-[var(--color-border)] align-top">
-                <td className="py-2 pr-4">
-                  <Link href={`/research/claims/${claim.id}`} className="app-control underline">{claim.claimText}</Link>
-                </td>
-                <td className="py-2 pr-4">{claim.workTitle ?? claim.corpusItemTitle ?? "—"}</td>
-                <td className="py-2 pr-4">
+              <li key={claim.id} className="app-card app-mount rounded-lg p-4 text-sm">
+                <Link href={`/research/claims/${claim.id}`} className="app-control font-medium underline">{claim.claimText}</Link>
+                <p className="mt-1 text-[var(--color-text-muted)]">{claim.workTitle ?? claim.corpusItemTitle ?? "—"}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
                   <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">{NATURE_LABEL[claim.claimNature] ?? claim.claimNature}</span>
                   {claim.sourceScope === "abstract" && (
-                    <span className="app-control ml-1 rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)]">From abstract</span>
+                    <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)]">From abstract</span>
                   )}
-                </td>
-                <td className="py-2 pr-4">{ANCHOR_LABEL[claim.anchorState] ?? claim.anchorState}</td>
-                <td className="py-2 pr-4">{VERIFICATION_LABEL[claim.verificationStatus] ?? claim.verificationStatus}</td>
-              </tr>
+                  <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">{ANCHOR_LABEL[claim.anchorState] ?? claim.anchorState}</span>
+                  <span className="app-control rounded-full border border-[var(--color-border)] px-2 py-0.5 text-xs">{VERIFICATION_LABEL[claim.verificationStatus] ?? claim.verificationStatus}</span>
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
-        {!result.claims.length && !loading && <p className="app-empty app-mount mt-3 rounded-lg p-6 text-sm text-[var(--color-text-muted)]">No claims match these filters yet.</p>}
-      </div>
+          </ul>
+        </>
+      )}
 
       {totalPages > 1 && (
         <nav className="mt-4 flex items-center gap-3" aria-label="Claims pagination">

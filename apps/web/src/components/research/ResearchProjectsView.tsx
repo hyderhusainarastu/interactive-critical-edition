@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { CreateResearchProjectDialog } from "./CreateResearchProjectDialog";
 
 type Project = {
   id: string;
@@ -18,10 +19,14 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
   const [archivedProjects, setArchivedProjects] = useState<Project[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [loadingArchived, setLoadingArchived] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<{ id: string; message: string } | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const createTriggerRef = useRef<HTMLElement | null>(null);
 
   async function loadArchived() {
     setLoadingArchived(true);
+    setArchiveError(null);
     try {
       const response = await fetch("/api/research/projects?archived=true");
       const body = await response.json();
@@ -29,13 +34,14 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
       setArchivedProjects((body.projects as Project[]).filter((project) => project.archivedAt));
       setShowArchived(true);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not load archived projects.");
+      setArchiveError(error instanceof Error ? error.message : "Could not load archived projects.");
     } finally {
       setLoadingArchived(false);
     }
   }
 
   async function restoreProject(project: Project) {
+    setRestoreError(null);
     const response = await fetch(`/api/research/projects/${project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -43,27 +49,32 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
     });
     const body = await response.json();
     if (!response.ok) {
-      window.alert(body.error ?? "Could not restore project.");
+      setRestoreError({ id: project.id, message: body.error ?? "Could not restore project." });
       return;
     }
     setArchivedProjects((current) => current.filter((item) => item.id !== project.id));
     setProjects((current) => [...current, body.project].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()));
   }
 
-  async function createProject() {
-    const title = window.prompt("Project title", "Untitled research project");
-    if (!title?.trim()) return;
-    setCreating(true);
-    try {
-      const response = await fetch("/api/research/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Could not create project.");
-      window.location.assign(`/research/${body.project.id}`);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not create project.");
-    } finally {
-      setCreating(false);
-    }
+  function openCreateDialog(trigger: HTMLElement | null) {
+    createTriggerRef.current = trigger;
+    setDialogOpen(true);
+  }
+
+  function closeCreateDialog() {
+    setDialogOpen(false);
+    const trigger = createTriggerRef.current;
+    createTriggerRef.current = null;
+    // Same idiom `TrashView.tsx`'s `closePurgeDialog` already establishes
+    // for `PermanentDeleteDialog` — restore focus to the trigger on close.
+    window.requestAnimationFrame(() => trigger?.focus());
+  }
+
+  function onProjectCreated(project: { id: string; title: string }) {
+    // Identical to the prior `window.prompt` flow's success path: a full
+    // navigation so the new project's page renders with fresh server-fetched
+    // data, not a client-side `router.push`.
+    window.location.assign(`/research/${project.id}`);
   }
 
   return (
@@ -77,25 +88,27 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
             re-verified passage, confidence and provenance always visible.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={loadArchived} disabled={loadingArchived}>
-            {loadingArchived ? (
-              <>
-                <span className="app-shimmer inline-block h-4 w-24 rounded" aria-hidden />
-                <span className="sr-only">Loading archived projects…</span>
-              </>
-            ) : (
-              "Show archived projects"
-            )}
-          </button>
-          <button
-            type="button"
-            className="app-control app-press rounded bg-[var(--color-accent-ink)] px-4 py-2 text-sm font-medium text-[var(--color-background)] disabled:opacity-50"
-            onClick={createProject}
-            disabled={creating}
-          >
-            {creating ? "Creating…" : "New project"}
-          </button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-3">
+            <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={loadArchived} disabled={loadingArchived}>
+              {loadingArchived ? (
+                <>
+                  <span className="app-shimmer inline-block h-4 w-24 rounded" aria-hidden />
+                  <span className="sr-only">Loading archived projects…</span>
+                </>
+              ) : (
+                "Show archived projects"
+              )}
+            </button>
+            <button
+              type="button"
+              className="app-control app-press rounded bg-[var(--color-accent-ink)] px-4 py-2 text-sm font-medium text-[var(--color-background)]"
+              onClick={(event) => openCreateDialog(event.currentTarget)}
+            >
+              New project
+            </button>
+          </div>
+          {archiveError && <p className="text-sm text-[var(--color-error,#b3261e)]">{archiveError}</p>}
         </div>
       </div>
       <ul className="app-reveal-stagger mt-7 grid gap-3 sm:grid-cols-2" aria-label="Research projects">
@@ -126,6 +139,7 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
                   <h3 className="font-medium">{project.title}</h3>
                   <p className="mt-1 text-sm text-[var(--color-text-muted)]">Archived {project.archivedAt ? new Date(project.archivedAt).toLocaleDateString() : "recently"}</p>
                   <button type="button" className="app-control app-press mt-3 rounded border border-[var(--color-border)] px-3 py-1.5 text-sm" onClick={() => restoreProject(project)}>Restore project</button>
+                  {restoreError?.id === project.id && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{restoreError.message}</p>}
                 </li>
               ))}
             </ul>
@@ -134,6 +148,7 @@ export function ResearchProjectsView({ initialProjects }: { initialProjects: Pro
           )}
         </section>
       )}
+      {dialogOpen && <CreateResearchProjectDialog onCancel={closeCreateDialog} onCreated={onProjectCreated} />}
     </section>
   );
 }

@@ -6,7 +6,10 @@ export type PipelineDispatchableAction = "detect" | "cluster";
 /** Per-action dispatch state the parent owns (mirrors
  *  `ResearchProjectOverview.tsx`'s existing per-work `dispatching`/
  *  `pendingConfirm`/`dispatchError` records, keyed here by the action name
- *  instead of a work id). */
+ *  instead of a work id). Kept as an export even though this component no
+ *  longer consumes it (see the Stage 5 §6 note below) — the Jobs panel's own
+ *  `pipelineActionState()` in `ResearchProjectOverview.tsx` still imports
+ *  this type. */
 export interface PipelineActionState {
   dispatching: boolean;
   pendingConfirm: { reason: string; estimatedUnits: number } | null;
@@ -23,26 +26,19 @@ export interface PipelineActionState {
  * one). Purely a status display; `computeResearchPipelineSteps()` (the pure
  * function backing it) is the only place that decides what each step says.
  *
- * Phase 30 gap-fix lane: when `result.nextAction.action` names a
- * dispatchable job ("detect"/"cluster"), this renders a real button
- * alongside the informational message instead of just text — the same
- * `dispatchExtractClaimsJob` needs_confirmation flow `ResearchProjectOverview.tsx`
- * already uses for "Extract claims", surfaced here via `onDispatch`/
- * `actionState` (both optional so this component still degrades to a plain
- * status display if a caller ever renders it without wiring dispatch).
+ * Stage 5 §6 (pipeline-surface): this component renders status only. The
+ * Phase 30 gap-fix lane briefly gave it its own dispatch button (an
+ * `onDispatch`/`actionState` pair duplicating the "Research jobs" panel's
+ * action row below on the same page), which produced two independently
+ * wired controls for the same "Detect relationships"/"Cluster debates"
+ * actions. The Jobs panel is the one, canonical dispatch surface — it
+ * already reads the same `pipelineOverview` fields this component's
+ * `nextAction` derives from, so nothing here duplicates its readiness
+ * logic — and this stepper goes back to being pure status + a link for
+ * steps that already had one (`extract`/`synthesize`), never a button.
  */
-export function ResearchPipelineStepper({
-  result,
-  onDispatch,
-  actionState,
-}: {
-  result: PipelineStepperResult;
-  onDispatch?: (action: PipelineDispatchableAction, confirm?: boolean) => void;
-  actionState?: PipelineActionState;
-}) {
+export function ResearchPipelineStepper({ result }: { result: PipelineStepperResult }) {
   const firstUndoneIndex = result.steps.findIndex((s) => !s.done);
-  const action = result.nextAction?.action;
-  const ACTION_LABEL: Record<PipelineDispatchableAction, string> = { detect: "Detect relationships", cluster: "Cluster debates" };
 
   return (
     <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-pipeline-title">
@@ -89,29 +85,6 @@ export function ResearchPipelineStepper({
               result.nextAction.message
             )}
           </p>
-          {action && onDispatch && (
-            <button
-              type="button"
-              className="app-control app-press mt-2 inline-flex min-h-11 items-center rounded border border-[var(--color-border)] px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-              onClick={() => onDispatch(action)}
-              disabled={Boolean(actionState?.dispatching)}
-            >
-              {actionState?.dispatching ? "Starting…" : ACTION_LABEL[action]}
-            </button>
-          )}
-          {action && actionState?.pendingConfirm && (
-            <div className="app-panel-enter mt-2 rounded border border-[var(--color-accent)] p-2 text-xs">
-              <p>{actionState.pendingConfirm.reason}</p>
-              <button
-                type="button"
-                className="app-control app-press mt-2 rounded bg-[var(--color-accent-ink)] px-3 py-1.5 text-[var(--color-background)]"
-                onClick={() => onDispatch?.(action, true)}
-              >
-                Confirm and {ACTION_LABEL[action].toLowerCase()}
-              </button>
-            </div>
-          )}
-          {actionState?.error && <p className="mt-2 text-xs text-[var(--color-error,#b3261e)]">{actionState.error}</p>}
         </div>
       )}
     </section>

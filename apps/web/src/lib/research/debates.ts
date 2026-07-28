@@ -1,4 +1,4 @@
-import { db, debateClusterMembers, debateClusters, evidenceChambers, researchClaims, researchProjects, works } from "@ice/db";
+import { claimRelationships, db, debateClusterMembers, debateClusterRelationships, debateClusters, evidenceChambers, researchClaims, researchProjects, works } from "@ice/db";
 import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import { getOwnedResearchProject } from "./projects";
 
@@ -65,6 +65,20 @@ export interface DebateClusterMemberClaimRow {
   claimNature: string;
 }
 
+/** One judged edge connecting this cluster's members (`debate_cluster_relationship`
+ *  → `claim_relationship`) — the same shape `ResearchHypothesesView.tsx`'s
+ *  "Cited conflicts" list already reads, reused here so the cluster page
+ *  that actually shows the relationship can offer its own correction
+ *  controls directly rather than only reachable indirectly via a hypothesis
+ *  that happens to cite it (Stage 5 verification Finding 2). */
+export interface DebateClusterRelationshipRow {
+  id: string;
+  valence: string;
+  category: string;
+  verificationStatus: string;
+  hidden: boolean;
+}
+
 export interface DebateClusterDetail {
   id: string;
   projectId: string;
@@ -82,6 +96,7 @@ export interface DebateClusterDetail {
   hidden: boolean;
   createdAt: Date;
   members: DebateClusterMemberClaimRow[];
+  relationships: DebateClusterRelationshipRow[];
   latestChamberId: string | null;
 }
 
@@ -112,7 +127,7 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
     .limit(1);
   if (!cluster) return null;
 
-  const [members, latestChamber] = await Promise.all([
+  const [members, relationships, latestChamber] = await Promise.all([
     db
       .select({
         id: researchClaims.id,
@@ -127,6 +142,18 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
       .where(eq(debateClusterMembers.clusterId, clusterId))
       .orderBy(asc(researchClaims.createdAt)),
     db
+      .select({
+        id: claimRelationships.id,
+        valence: claimRelationships.valence,
+        category: claimRelationships.category,
+        verificationStatus: claimRelationships.verificationStatus,
+        hidden: claimRelationships.hidden,
+      })
+      .from(debateClusterRelationships)
+      .innerJoin(claimRelationships, eq(claimRelationships.id, debateClusterRelationships.claimRelationshipId))
+      .where(eq(debateClusterRelationships.clusterId, clusterId))
+      .orderBy(asc(claimRelationships.createdAt)),
+    db
       .select({ id: evidenceChambers.id })
       .from(evidenceChambers)
       .where(and(eq(evidenceChambers.userId, userId), eq(evidenceChambers.clusterId, clusterId), eq(evidenceChambers.status, "active")))
@@ -134,7 +161,7 @@ export async function getDebateClusterDetail(userId: string, projectId: string, 
       .limit(1),
   ]);
 
-  return { ...cluster, members, latestChamberId: latestChamber[0]?.id ?? null };
+  return { ...cluster, members, relationships, latestChamberId: latestChamber[0]?.id ?? null };
 }
 
 /**

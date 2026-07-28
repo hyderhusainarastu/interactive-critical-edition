@@ -313,8 +313,16 @@ test.describe("Research workspace (Phase 28.1)", () => {
     await page.goto("/research");
     await expect(main(page).getByRole("heading", { name: "Research" })).toBeVisible();
 
-    page.once("dialog", (dialog) => dialog.accept("Vice and akrasia"));
+    // Stage 5 §5.1: `window.prompt` replaced by `CreateResearchProjectDialog`
+    // — same `getByRole("dialog", ...)` idiom `trash.spec.ts` already uses
+    // for `PermanentDeleteDialog`.
     await main(page).getByRole("button", { name: "New project" }).click();
+    const createDialog = page.getByRole("dialog", { name: /New research project/i });
+    await expect(createDialog).toBeVisible();
+    const titleField = createDialog.getByLabel("Project title");
+    await expect(titleField).toBeFocused();
+    await titleField.fill("Vice and akrasia");
+    await createDialog.getByRole("button", { name: "Create" }).click();
     await page.waitForURL("**/research/*");
     await expect(main(page).getByRole("heading", { name: "Vice and akrasia" })).toBeVisible();
 
@@ -569,23 +577,29 @@ test.describe("Research workspace (Phase 28.1)", () => {
 
     await page.goto(`/research/${projectId}/claims`);
     await expect(main(page).getByRole("heading", { name: "Claims" })).toBeVisible();
-    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).toBeVisible();
-    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
-    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+    // Stage 5 §7: the claims list now dual-renders (a `md:block` table plus
+    // an `md:hidden` card list carrying the same claim text) — scoped to the
+    // table itself, which is the one of the pair actually visible at this
+    // (desktop-default) viewport, so a bare `main(page).getByText(...)`
+    // no longer resolves ambiguously to both.
+    const table = main(page).getByRole("table");
+    await expect(table.getByText("Vicious agents act on decision while living according to passion.")).toBeVisible();
+    await expect(table.getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
+    await expect(table.getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
 
     await main(page).getByLabel("Nature").selectOption("empirical");
-    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
-    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
+    await expect(table.getByText("The vicious agent is distinct from the merely incontinent agent.")).toBeVisible();
+    await expect(table.getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
 
     await main(page).getByLabel("Nature").selectOption("");
     await main(page).getByLabel("Anchor").selectOption("unanchored");
-    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
-    await expect(main(page).getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
+    await expect(table.getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+    await expect(table.getByText("Vicious agents act on decision while living according to passion.")).not.toBeVisible();
 
     await main(page).getByLabel("Anchor").selectOption("");
     await main(page).getByLabel("Verification").selectOption("disputed");
-    await expect(main(page).getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
-    await expect(main(page).getByText("The vicious agent is distinct from the merely incontinent agent.")).not.toBeVisible();
+    await expect(table.getByText("A claim whose original passage no longer matches after reprocessing.")).toBeVisible();
+    await expect(table.getByText("The vicious agent is distinct from the merely incontinent agent.")).not.toBeVisible();
   });
 
   test("claim permalink shows excerpt, scores, loci, and a jump-to-reader link only when a real anchor exists", async ({ page }) => {
