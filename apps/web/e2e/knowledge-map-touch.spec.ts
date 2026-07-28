@@ -86,6 +86,54 @@ test.describe("Knowledge Map — touch tap, orbit, pinch, pan (mobile)", () => {
     await expect(page.getByTestId("knowledge-map-inspector")).toBeVisible();
   });
 
+  test("small-fixture touch selection never promotes the hub over the requested satellite and keeps Home framing valid", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId, { title: `Small-fixture occlusion touch ${Date.now()}` });
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await waitForSceneInteractive(page);
+    await waitForLayoutFrozen(page);
+
+    const targetId = `external:bib:${bibId}`;
+    const rootId = `work:${workId}`;
+    const canvas = page.locator('[data-testid="knowledge-map-scene"] canvas');
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+
+    // No helper retry: this directly guards the former depth-occlusion
+    // condition where a tap at the satellite's own projected point chose
+    // the nearer, oversized root hub instead.
+    for (let pass = 0; pass < 2; pass += 1) {
+      await page.getByRole("button", { name: "Home", exact: true }).click();
+      await waitForLayoutFrozen(page);
+      const point = await page.evaluate((id) => window.__knowledgeMapTestHook__?.getNodeScreenPosition(id) ?? null, targetId);
+      expect(point).not.toBeNull();
+      await canvas.tap({ position: point! });
+      await expect.poll(() => page.evaluate(() => window.__knowledgeMapTestHook__?.getSelectedId() ?? null), { timeout: 1_500, intervals: [100] }).toBe(targetId);
+      expect(await page.evaluate(() => window.__knowledgeMapTestHook__?.getSelectedId() ?? null)).not.toBe(rootId);
+
+      const pose = await cameraPose(page);
+      expect(pose).not.toBeNull();
+      expect(Math.hypot(
+        pose!.position[0] - pose!.target[0],
+        pose!.position[1] - pose!.target[1],
+        pose!.position[2] - pose!.target[2],
+      )).toBeGreaterThan(1);
+      expect(pose!.position[2] - pose!.target[2]).toBeGreaterThan(0);
+
+      const projections = await page.evaluate(() => {
+        const hook = window.__knowledgeMapTestHook__;
+        return hook?.getVisibleNodeIds().map((id) => ({ id, point: hook.getNodeScreenPosition(id) })) ?? [];
+      });
+      for (const projection of projections) {
+        expect(projection.point, `visible node ${projection.id} should remain in the Home frustum`).not.toBeNull();
+        expect(projection.point!.x).toBeGreaterThanOrEqual(0);
+        expect(projection.point!.x).toBeLessThanOrEqual(box!.width);
+        expect(projection.point!.y).toBeGreaterThanOrEqual(0);
+        expect(projection.point!.y).toBeLessThanOrEqual(box!.height);
+      }
+    }
+  });
+
   /**
    * Real multi-touch dispatch via the CDP `Input.dispatchTouchEvent`
    * method (through Playwright's own `context.newCDPSession`, a real,

@@ -303,6 +303,53 @@ test.describe("Knowledge Map — search, select, focus, clear, Fit, Home, Back, 
     }).toBe(true);
   });
 
+  test("small-fixture mouse selection never selects the hub instead of the requested satellite, and preserves a valid Home frustum", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId, { title: `Small-fixture occlusion mouse ${Date.now()}` });
+    await login(page);
+    await page.goto(`/works/${workId}/graph`);
+    await waitForSceneInteractive(page);
+    await waitForLayoutFrozen(page);
+
+    const targetId = `external:bib:${bibId}`;
+    const rootId = `work:${workId}`;
+    const canvas = page.locator('[data-testid="knowledge-map-scene"] canvas');
+    const canvasBox = await canvas.boundingBox();
+    expect(canvasBox).not.toBeNull();
+
+    // This is deliberately a single genuine click per pass: the historical
+    // failure chose the root hub at the satellite's exact coordinates. A
+    // retry would conceal that regression instead of detecting it.
+    for (let pass = 0; pass < 3; pass += 1) {
+      await page.getByRole("button", { name: "Home", exact: true }).click();
+      await waitForLayoutFrozen(page);
+      const pos = await page.evaluate((id) => window.__knowledgeMapTestHook__?.getNodeScreenPosition(id) ?? null, targetId);
+      expect(pos).not.toBeNull();
+      await canvas.hover({ position: pos! });
+      await canvas.click({ position: pos! });
+      await expect.poll(() => selectedId(page), { timeout: 1_500, intervals: [100] }).toBe(targetId);
+      expect(await selectedId(page)).not.toBe(rootId);
+
+      const pose = await cameraPose(page);
+      expect(pose).not.toBeNull();
+      const separation = Math.hypot(
+        pose!.position[0] - pose!.target[0],
+        pose!.position[1] - pose!.target[1],
+        pose!.position[2] - pose!.target[2],
+      );
+      expect(separation).toBeGreaterThan(1);
+      expect(pose!.position[2] - pose!.target[2]).toBeGreaterThan(0);
+
+      for (const id of await visibleNodeIds(page)) {
+        const projected = await page.evaluate((nodeId) => window.__knowledgeMapTestHook__?.getNodeScreenPosition(nodeId) ?? null, id);
+        expect(projected, `visible node ${id} should remain in the Home frustum`).not.toBeNull();
+        expect(projected!.x).toBeGreaterThanOrEqual(0);
+        expect(projected!.x).toBeLessThanOrEqual(canvasBox!.width);
+        expect(projected!.y).toBeGreaterThanOrEqual(0);
+        expect(projected!.y).toBeLessThanOrEqual(canvasBox!.height);
+      }
+    }
+  });
+
   test("Fit reframes the camera to the current visible bounds", async ({ page }) => {
     const { workId } = await seedWorkWithGraphData(userId, { title: `Fit work ${Date.now()}` });
     await login(page);
@@ -453,6 +500,34 @@ test.describe("Knowledge Map — focus states (all/neighborhood/expand2/concepts
     await expect.poll(() => emphasisOf(page, `external:bib:${bibId}`)).toBe("dimmed");
   });
 
+  test("'Expand 2' changes the shared emphasis in 3D, 2D, and List without changing the selected node", async ({ page }) => {
+    const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Expand-2 parity work ${Date.now()}` });
+    await login(page);
+    await page.goto(`/graph?ctxKind=work&ctxId=${workId}&view=3d&focus=all`);
+    await waitForSceneInteractive(page);
+    await clickNodeInScene(page, `external:bib:${bibId}`, 1);
+    await expect.poll(() => selectedId(page)).toBe(`external:bib:${bibId}`);
+
+    const focusSelect = page.getByLabel("Focus neighborhood");
+    await focusSelect.selectOption("expand2");
+    await expect(page).toHaveURL(/focus=expand2/);
+
+    // 3D has no semantic DOM row, so its observable contract is the real
+    // selected scene plus a nonblank canvas after the emphasis update.
+    await expect.poll(() => selectedId(page)).toBe(`external:bib:${bibId}`);
+    expect(await canvasScreenshotByteLength(page)).toBeGreaterThan(MIN_NONBLANK_SCREENSHOT_BYTES);
+
+    await page.getByRole("button", { name: "2D", exact: true }).click();
+    const twoDConcept = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    await expect(twoDConcept).toHaveAttribute("data-emphasis", "neighbor");
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toHaveAttribute("data-selected", "true");
+
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    const listConcept = page.locator(`[data-graph-node="concept:${conceptId}"]`);
+    await expect(listConcept).toHaveAttribute("data-emphasis", "neighbor");
+    await expect(page.locator(`[data-graph-node="external:bib:${bibId}"]`)).toHaveAttribute("data-selected", "true");
+  });
+
   test("focus state survives a reload (URL-restorable per charter §9)", async ({ page }) => {
     const { workId, bibId, conceptId } = await seedWorkWithGraphData(userId, { title: `Focus-reload work ${Date.now()}` });
     await login(page);
@@ -498,6 +573,50 @@ test.describe("Knowledge Map — focus states (all/neighborhood/expand2/concepts
     // itself or a concept node) — both dim under this mode.
     await expect.poll(() => emphasisOf(page, `work:${workId}`)).toBe("dimmed");
     await expect.poll(() => emphasisOf(page, `concept:${conceptId}`)).toBe("dimmed");
+  });
+});
+
+test.describe("Knowledge Map — legacy bookmark compatibility at the browser route", () => {
+  test.beforeAll(async () => {
+    userId = await createVerifiedTestUser(EMAIL, PASSWORD);
+  });
+  test.afterAll(async () => {
+    await deleteTestUser(EMAIL);
+  });
+
+  test("explore/pinned/focus bookmark translates to a contextful 3D Knowledge Map without losing selection", async ({ page }) => {
+    const { workId, bibId } = await seedWorkWithGraphData(userId, { title: `Legacy explore bookmark ${Date.now()}` });
+    await login(page);
+    await page.goto(`/graph?layout=explore&pinnedWork=work:${workId}&focusMode=focus&selected=external:bib:${bibId}`);
+    await expect(page).toHaveURL(new RegExp(`ctxKind=work.*ctxId=${workId}`));
+    await expect(page).toHaveURL(/view=3d/);
+    await expect(page).toHaveURL(/focus=neighborhood/);
+    await waitForSceneInteractive(page);
+    await expect.poll(() => selectedId(page)).toBe(`external:bib:${bibId}`);
+  });
+
+  test("roadmap bookmark redirects to the 2D Roadmap and preserves reader-level, stage, and reading-path state", async ({ page }) => {
+    const { workId } = await seedWorkWithGraphData(userId, { title: `Legacy roadmap bookmark ${Date.now()}` });
+    await login(page);
+    await page.goto(`/graph?layout=roadmap&roadmapRoot=work:${workId}&readerLevel=intermediate&stage=3&readingThread=1`);
+    await page.waitForURL(new RegExp(`/works/${workId}/roadmap\\?`));
+    await expect(page).toHaveURL(/readerLevel=intermediate/);
+    await expect(page).toHaveURL(/stage=3/);
+    await expect(page).toHaveURL(/readingThread=1/);
+  });
+
+  test("invalid and ambiguous legacy roadmap bookmarks remain honest chooser states rather than silently selecting a work", async ({ page }) => {
+    const first = await seedWorkWithGraphData(userId, { title: `Legacy root A ${Date.now()}` });
+    const second = await seedWorkWithGraphData(userId, { title: `Legacy root B ${Date.now()}` });
+    await login(page);
+
+    await page.goto("/graph?layout=roadmap&roadmapRoot=work:not-owned-or-deleted");
+    await expect(page.getByText("This saved reading-order link no longer points at a work you can open — choose a work to continue.")).toBeVisible();
+    await expect(page.getByTestId("knowledge-map-toolbar")).toHaveCount(0);
+
+    await page.goto(`/graph?layout=roadmap&roadmapRoot=work:${first.workId}&roadmapRoot=work:${second.workId}`);
+    await expect(page.getByRole("tab", { name: "Work" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("knowledge-map-toolbar")).toHaveCount(0);
   });
 });
 
