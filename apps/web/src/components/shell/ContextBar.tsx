@@ -68,7 +68,7 @@ export function ContextBar({
 }) {
   const pathname = usePathname();
   const { preferences, updatePreferences } = useWorkspacePreferences();
-  const { title } = useContextBarState();
+  const { title, actions } = useContextBarState();
   const [compact, setCompact] = useState(false);
   const preferencesPanel = useSecondaryPanel("preferences");
   const profilePanel = useSecondaryPanel("profile");
@@ -148,6 +148,17 @@ export function ContextBar({
           )}
           <span className="truncate font-serif text-base font-semibold text-[var(--color-text)]">{title ?? fallbackTitle}</span>
         </div>
+        {/* Route-registered contextual actions (`useRegisterContextBar`'s
+            `actions` field — defined since Stage 1 but never rendered until
+            now, per redesign-shell-spec.md §2.2/§3.3 and
+            stage6-write-spec.md §3's flagged follow-up). A page calls
+            `useRegisterContextBar({ actions: <...> })` for as long as it
+            stays mounted; nothing renders here for any route that never
+            registers one. Kept as its own non-shrinking flex item — never
+            inside the truncating title `<span>` above — so a page's own
+            controls (e.g. Writer's save status + Archive) are never clipped
+            by title overflow. */}
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="md:hidden"><UploadAction collapsed /></span>
           <Link href="/graph" data-sound="click" className="app-control app-icon-button hidden md:inline-flex" data-tooltip="Knowledge Map" aria-label="Knowledge Map">◈</Link>
