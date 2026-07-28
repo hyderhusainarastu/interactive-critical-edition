@@ -1081,3 +1081,14 @@ tr[data-emphasis="dimmed"] * {
   height: calc(var(--bottom-nav-height) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* Knowledge Map rebuild (redesign Stage 3, spec §1.1's KnowledgeMapWorkspace.tsx
+   row; charter §10 "use the full available viewport; remove the narrow
+   max-w-5xl constraint"). Both /graph and /works/[workId]/graph are
+   immersive routes (immersive.ts), so the shell renders the shorter
+   --context-bar-height chrome above this — the workspace fills exactly
+   what's left, not the full 100dvh. */
+.knowledge-map-workspace { height: calc(100dvh - var(--context-bar-height)); min-height: 0; }
+@media (max-width: 767.98px) {
+  .knowledge-map-workspace { height: calc(100dvh - var(--mobile-context-bar-height)); }
+}

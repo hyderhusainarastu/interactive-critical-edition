@@ -4,6 +4,14 @@
  * Claim / Debate, plus "Recent"). Spec §1.1's `contextChooser.ts` row and
  * §2.1's per-kind data-source table.
  *
+ * Named `contextCandidates.ts`, not the spec's literal `contextChooser.ts`
+ * — this repo's filesystem is case-insensitive, and `ContextChooser.tsx`
+ * (the component) collides with `contextChooser.ts` (this module) at the
+ * OS level even though TypeScript's own module resolution is
+ * case-sensitive; `tsc` correctly refuses to build with two files whose
+ * names differ only in casing. A documented, forced rename, not a design
+ * change.
+ *
  * This module does NOT fetch anything — it only maps each entry-context
  * kind's already-fetched raw row shape (see §2.1: `GET /api/works`,
  * `GET /api/passages/recent`, `GET /api/research/projects`,
@@ -11,7 +19,7 @@
  * common `ContextCandidate` shape the `ContextChooser.tsx` component
  * renders uniformly, plus small pure sort/filter helpers over that common
  * shape. Kept free of React/fetch/DOM so it's directly unit-testable
- * (`contextChooser.test.ts`).
+ * (`contextCandidates.test.ts`).
  */
 import type { GraphContextKind, GraphUrlContext } from "@ice/graph-display";
 

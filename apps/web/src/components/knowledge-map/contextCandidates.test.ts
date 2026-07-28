@@ -10,9 +10,9 @@ import {
   toGraphUrlContext,
   workToCandidate,
   type ContextCandidate,
-} from "./contextChooser";
+} from "./contextCandidates";
 
-/** `pnpm --filter web exec tsx apps/web/src/components/knowledge-map/contextChooser.test.ts` */
+/** `pnpm --filter web exec tsx apps/web/src/components/knowledge-map/contextCandidates.test.ts` */
 
 // --- per-kind mappers ---
 {
@@ -120,4 +120,4 @@ console.log("filterCandidatesBySearch: OK");
 }
 console.log("groupCandidatesByKind: OK");
 
-console.log("contextChooser.test.ts: all assertions passed");
+console.log("contextCandidates.test.ts: all assertions passed");

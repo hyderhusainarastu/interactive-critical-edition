@@ -21,7 +21,7 @@ import {
   sortCandidatesByRecency,
   workToCandidate,
   type ContextCandidate,
-} from "./contextChooser";
+} from "./contextCandidates";
 import { browserStorage, readRecentContexts, type RecentContextEntry } from "./recentContexts";
 
 const TAB_LABEL: Record<GraphContextKind, string> = {
