@@ -73,14 +73,21 @@ export interface LifecycleSnapshotLike {
   registeredListeners: number;
 }
 
-export function readLifecycleSnapshot(
-  renderer: THREE.WebGLRenderer | null,
-  tracker: ResourceTracker | null,
-  cycle: number,
-): LifecycleSnapshotLike {
+export type LifecycleCountsLike = Omit<LifecycleSnapshotLike, "cycle">;
+
+/**
+ * Reads live counts off a specific renderer/tracker pair, with no `cycle`
+ * attached (the caller stamps that on). Deliberately takes the concrete
+ * `renderer`/`tracker` objects as plain arguments rather than reading them
+ * off a ref — see `readLifecycleAccessor()` below for why that distinction
+ * is what makes the corrected two-snapshot lifecycle protocol (Stage 2
+ * correction lane) actually work: a ref-based read returns zeros the
+ * instant the owning ref is nulled by unrelated cleanup code, which is not
+ * the same fact as "the renderer's resources were actually released."
+ */
+export function readLifecycleCounts(renderer: THREE.WebGLRenderer | null, tracker: ResourceTracker | null): LifecycleCountsLike {
   const info = renderer?.info;
   return {
-    cycle,
     geometries: info?.memory.geometries ?? 0,
     textures: info?.memory.textures ?? 0,
     programs: info?.programs?.length ?? 0,
@@ -89,4 +96,30 @@ export function readLifecycleSnapshot(
     activeTimers: tracker?.activeTimerCount ?? 0,
     registeredListeners: tracker?.registeredListenerCount ?? 0,
   };
+}
+
+export function readLifecycleSnapshot(
+  renderer: THREE.WebGLRenderer | null,
+  tracker: ResourceTracker | null,
+  cycle: number,
+): LifecycleSnapshotLike {
+  return { cycle, ...readLifecycleCounts(renderer, tracker) };
+}
+
+/**
+ * Captures a closure bound to the CONCRETE `renderer`/`tracker` object
+ * references at call time (not the refs that hold them). Calling the
+ * returned function again later — after `unmount()` has nulled `fgRef`/
+ * `trackerRef` and called `renderer.dispose()`/`tracker.disposeAll()` —
+ * still reads real, live values off those same still-referenced JS objects:
+ * `dispose()` frees GPU/JS resources and, for a correctly-implemented
+ * teardown, drives `renderer.info`'s counts and the tracker's own counts
+ * back down; it does not make the objects themselves unreadable. This is
+ * what lets one accessor produce both the "mounted-settled" and the
+ * "post-unmount" snapshot for the same cycle, with no risk of the second
+ * read silently defaulting to a stale/unrelated zero just because some
+ * OTHER ref (like `fgRef.current`) was cleared in between.
+ */
+export function readLifecycleAccessor(renderer: THREE.WebGLRenderer | null, tracker: ResourceTracker | null): () => LifecycleCountsLike {
+  return () => readLifecycleCounts(renderer, tracker);
 }

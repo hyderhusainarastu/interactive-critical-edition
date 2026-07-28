@@ -91,6 +91,45 @@ export interface LifecycleCycleResult {
   monotonicGrowthDetected: boolean;
 }
 
+/**
+ * Corrected two-snapshot lifecycle protocol (Stage 2 CORRECTION lane,
+ * 2026-07-27/28). The original single-snapshot protocol read whichever
+ * mount happened to be "current" at an ambiguous instant relative to
+ * mount/unmount — see `docs/audits/graph-renderer-bakeoff.md`'s Correction
+ * addendum for the full diagnosis. This version takes two unambiguous,
+ * phase-consistent, live (non-cached) readings per cycle:
+ *   - `mountedSettled`: after mount, after the scene's own "interactive"
+ *     signal, after an explicit settle (real rendered frames + a fixed
+ *     delay) — a genuine "fully up and rendering" reading.
+ *   - `postUnmount`: after `unmount()`, after a fixed settle delay — a
+ *     genuine "actually torn down" reading, read off the SAME renderer/
+ *     tracker object references captured before teardown (not through a
+ *     ref that gets nulled by unrelated cleanup code, which would read
+ *     zero regardless of whether real disposal happened).
+ * Each series gets its own baseline/plateau/monotonic-growth check; the
+ * gate requires both to pass (see `evaluateLifecycleV2` in `../bench/
+ * runner.ts`).
+ */
+export interface LifecycleSeriesResult {
+  baseline: LifecycleSnapshot;
+  cycles: LifecycleSnapshot[];
+  withinPlateauTolerance: boolean;
+  monotonicGrowthDetected: boolean;
+}
+
+export interface LifecycleCycleResultV2 {
+  warmupCycles: number;
+  measuredCycles: number;
+  mountedSettled: LifecycleSeriesResult;
+  postUnmount: LifecycleSeriesResult;
+}
+
+export interface LifecycleSnapshotPair {
+  cycle: number;
+  mountedSettled: LifecycleSnapshot;
+  postUnmount: LifecycleSnapshot;
+}
+
 export interface TrialResult {
   protocolVersion: "1.0.0";
   prototypeId: PrototypeId;
@@ -126,6 +165,15 @@ export interface LifecycleTrialResult {
   recordedAtIso: string;
 }
 
+export interface LifecycleTrialResultV2 {
+  protocolVersion: "2.0.0";
+  prototypeId: PrototypeId;
+  fixtureName: string;
+  environment: BenchEnvironment;
+  lifecycle: LifecycleCycleResultV2;
+  recordedAtIso: string;
+}
+
 /** Charter §13 protocol constants — named, not scattered as magic numbers. */
 export const BENCH_PROTOCOL = {
   DPR_CAP: 1.5,
@@ -139,6 +187,21 @@ export const BENCH_PROTOCOL = {
   LIFECYCLE_MEASURED_CYCLES: 20,
   LIFECYCLE_PLATEAU_TOLERANCE: 0.05,
   LIFECYCLE_FINAL_WINDOW: 5,
+  /** Corrected v2 protocol only (Stage 2 correction lane). Number of real
+   * `requestAnimationFrame` callbacks to wait through, after the scene
+   * reports "interactive", before taking the mounted-settled snapshot —
+   * guarantees at least this many actual render passes have happened, so
+   * `renderer.info`'s counts reflect genuinely-rendered geometry/programs
+   * rather than racing the first draw call. */
+  LIFECYCLE_MOUNT_SETTLE_FRAMES: 5,
+  /** Fixed buffer (ms) after the settle frames, before the mounted-settled
+   * read — absorbs any residual scheduling jitter beyond raw frame count. */
+  LIFECYCLE_MOUNT_SETTLE_MS: 50,
+  /** Fixed delay (ms) after `unmount()` returns, before the post-unmount
+   * read — gives synchronous-looking dispose calls' any deferred/async
+   * cleanup (e.g. WebGL context teardown) room to actually complete before
+   * being read as "did resources return to rest". */
+  LIFECYCLE_UNMOUNT_SETTLE_MS: 150,
 } as const;
 
 /** Mandatory numeric floors from the charter's decision rule (§13). Applied

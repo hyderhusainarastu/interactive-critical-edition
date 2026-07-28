@@ -126,6 +126,14 @@ export interface SceneImperativeApi {
    * `pointermove`/`click` listeners added in the mount effect below are the
    * only resources this component itself is responsible for tracking. */
   readLifecycleSnapshot(cycle: number): SceneLifecycleSnapshot;
+  /** Stage 2 correction-lane addition — mirrors Prototype A's
+   * `captureLifecycleAccessor()` (`src/protoA/lifecycle.ts`). Returns a
+   * closure bound to this mount's concrete `gl` (WebGLRenderer, from
+   * `useThree()`) and listener-count ref, so it keeps reading real, live
+   * values after `unmount()` — R3F disposes `gl` on `<Canvas>` teardown,
+   * but the object reference itself, and the ref holding the listener
+   * count, both remain readable. */
+  captureLifecycleAccessor(): () => Omit<SceneLifecycleSnapshot, "cycle">;
 }
 
 export interface SceneCallbacks {
@@ -618,6 +626,19 @@ function SceneContent({ fixture, apiRef, callbacks }: SceneContentProps) {
           registeredListeners: registeredListenerCountRef.current,
         };
       },
+      captureLifecycleAccessor() {
+        const renderer = gl; // retained by closure, not by a ref that gets nulled on unmount
+        const listenerCountRef = registeredListenerCountRef; // the ref object itself outlives unmount
+        return () => ({
+          geometries: renderer.info.memory.geometries,
+          textures: renderer.info.memory.textures,
+          programs: renderer.info.programs?.length ?? 0,
+          activeWorkers: 0,
+          activeObservers: 0,
+          activeTimers: 0,
+          registeredListeners: listenerCountRef.current,
+        });
+      },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fixture, boundingBox],
@@ -796,6 +817,17 @@ export const GraphSceneB = forwardRef<SceneImperativeApi, GraphSceneBProps>(func
         activeTimers: 0,
         registeredListeners: 0,
       },
+    captureLifecycleAccessor: () =>
+      apiRef.current?.captureLifecycleAccessor() ??
+      (() => ({
+        geometries: 0,
+        textures: 0,
+        programs: 0,
+        activeWorkers: 0,
+        activeObservers: 0,
+        activeTimers: 0,
+        registeredListeners: 0,
+      })),
   }));
 
   return (

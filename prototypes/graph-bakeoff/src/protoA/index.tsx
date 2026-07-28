@@ -22,7 +22,7 @@ import type { GraphPrototypeHandle, NodeFilterPredicate, PrototypeCallbacks } fr
 import type { CameraPose } from "../types/prototype";
 import type { BakeoffFixture } from "../fixtures/types";
 import { GraphScene, type GraphSceneApi } from "./GraphScene";
-import type { LifecycleSnapshotLike } from "./lifecycle";
+import type { LifecycleCountsLike, LifecycleSnapshotLike } from "./lifecycle";
 
 const IDLE_CAMERA_POSE: CameraPose = { position: [0, 0, 300], target: [0, 0, 0] };
 
@@ -59,6 +59,10 @@ export interface ProtoAHandle extends GraphPrototypeHandle {
   getNodeScreenPosition(nodeId: string): { x: number; y: number } | null;
   isHighlightConfirmed(nodeId: string): boolean;
   readLifecycleSnapshot(cycle: number): LifecycleSnapshotLike;
+  /** Stage 2 correction-lane addition — see `./lifecycle.ts`'s
+   * `readLifecycleAccessor()` doc comment. Returns null only in the race
+   * where `mount()` hasn't produced a live api yet. */
+  captureLifecycleAccessor(): (() => LifecycleCountsLike) | null;
 }
 
 export function createProtoAHandle(): ProtoAHandle {
@@ -180,6 +184,10 @@ export function createProtoAHandle(): ProtoAHandle {
 
     readLifecycleSnapshot(cycle: number): LifecycleSnapshotLike {
       return apiRef.current?.readLifecycleSnapshot(cycle) ?? { cycle, ...EMPTY_LIFECYCLE_SNAPSHOT };
+    },
+
+    captureLifecycleAccessor(): (() => LifecycleCountsLike) | null {
+      return apiRef.current?.captureLifecycleAccessor() ?? null;
     },
 
     unmount() {

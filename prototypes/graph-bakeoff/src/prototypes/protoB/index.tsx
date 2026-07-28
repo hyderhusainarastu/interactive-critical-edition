@@ -37,6 +37,9 @@ export interface ProtoBHandle extends GraphPrototypeHandle {
   getNodeScreenPosition(nodeId: string): { x: number; y: number } | null;
   isHighlightConfirmed(nodeId: string): boolean;
   readLifecycleSnapshot(cycle: number): SceneLifecycleSnapshot;
+  /** Stage 2 correction-lane addition — see `GraphSceneB.tsx`'s
+   * `SceneImperativeApi.captureLifecycleAccessor()` doc comment. */
+  captureLifecycleAccessor(): (() => Omit<SceneLifecycleSnapshot, "cycle">) | null;
 }
 
 export function createProtoBHandle(): ProtoBHandle {
@@ -182,6 +185,9 @@ export function createProtoBHandle(): ProtoBHandle {
           registeredListeners: 0,
         }
       );
+    },
+    captureLifecycleAccessor(): (() => Omit<SceneLifecycleSnapshot, "cycle">) | null {
+      return api.current?.captureLifecycleAccessor() ?? null;
     },
     unmount() {
       if (!root) return;

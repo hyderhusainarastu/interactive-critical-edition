@@ -29,7 +29,7 @@ import {
   type HarnessBridge,
 } from "../src/bench/harnessBridge";
 import { runMeasuredTrial, type BenchDriver } from "../src/bench/runner";
-import { BENCH_PROTOCOL, type CacheState, type LifecycleSnapshot, type NavigationTiming, type PointerLatencySample, type TrialResult } from "../src/bench/types";
+import { BENCH_PROTOCOL, type CacheState, type LifecycleSnapshot, type LifecycleSnapshotPair, type NavigationTiming, type PointerLatencySample, type TrialResult } from "../src/bench/types";
 import { FIXTURE_NAMES } from "../src/fixtures/types";
 import type { PrototypeId } from "../src/types/prototype";
 
@@ -160,6 +160,25 @@ class PlaywrightBenchDriver implements BenchDriver {
       activeTimers: 0,
       registeredListeners: 0,
     };
+  }
+
+  async runLifecycleCycleV2(cycleIndex: number): Promise<LifecycleSnapshotPair> {
+    // Same placeholder rationale as `runLifecycleCycle` above — this
+    // dormant scaffold has no real renderer to read from. Mirrors the
+    // corrected v2 shape (`src/App.tsx`'s `LifecycleControlV2`) so this
+    // file stays typecheck-compatible with `BenchDriver` without
+    // fabricating nonzero counts.
+    const empty: LifecycleSnapshot = {
+      cycle: cycleIndex,
+      geometries: 0,
+      textures: 0,
+      programs: 0,
+      activeWorkers: 0,
+      activeObservers: 0,
+      activeTimers: 0,
+      registeredListeners: 0,
+    };
+    return { cycle: cycleIndex, mountedSettled: empty, postUnmount: empty };
   }
 
   async getFixtureContentHash(fixtureName: string): Promise<string> {

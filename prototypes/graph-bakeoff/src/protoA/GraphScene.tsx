@@ -77,7 +77,7 @@ import {
   UNRELATED_WHILE_SELECTED_LINK_OPACITY,
 } from "./theme";
 import { LabelLayer, type LabelCandidate } from "./labelLayer";
-import { ResourceTracker, readLifecycleSnapshot } from "./lifecycle";
+import { ResourceTracker, readLifecycleAccessor, readLifecycleSnapshot, type LifecycleCountsLike } from "./lifecycle";
 
 type GNode = NodeObject<FixtureNode>;
 type GLink = LinkObject<FixtureNode, FixtureLink>;
@@ -125,6 +125,10 @@ export interface GraphSceneApi {
   getNodeScreenPosition(nodeId: string): { x: number; y: number } | null;
   isHighlightConfirmed(nodeId: string): boolean;
   readLifecycleSnapshot(cycle: number): ReturnType<typeof readLifecycleSnapshot>;
+  /** Stage 2 correction-lane addition: see `readLifecycleAccessor()`'s doc
+   * comment in `./lifecycle.ts`. Returns a closure bound to this mount's
+   * concrete renderer/tracker objects, safe to call again after unmount. */
+  captureLifecycleAccessor(): () => LifecycleCountsLike;
 }
 
 export interface GraphSceneProps {
@@ -408,6 +412,7 @@ export function GraphScene({ fixture, callbacks, onReady, apiRef }: GraphScenePr
       },
       isHighlightConfirmed: (nodeId: string) => confirmedIdRef.current === nodeId,
       readLifecycleSnapshot: (cycle: number) => readLifecycleSnapshot(fgRef.current?.renderer() ?? null, trackerRef.current, cycle),
+      captureLifecycleAccessor: () => readLifecycleAccessor(fgRef.current?.renderer() ?? null, trackerRef.current),
     }),
     [applySelection, applyFocus, applyHome, applyFit, applyFilter, currentPoseVectors, nodesById, isNodeVisible],
   );

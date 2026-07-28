@@ -38,8 +38,10 @@ import {
   runMeasuredTrial,
   runNavigationBenchmark,
   runLifecycleBenchmark,
+  runLifecycleBenchmarkV2,
   evaluateFloors,
   evaluateLifecycle,
+  evaluateLifecycleV2,
   percentileOf,
   type BenchDriver,
 } from "../src/bench/runner";
@@ -51,24 +53,26 @@ import {
   type BenchEnvironment,
   type CacheState,
   type LifecycleSnapshot,
+  type LifecycleSnapshotPair,
   type NavigationTiming,
   type PointerLatencySample,
   type TrialResult,
   type NavigationTrialResult,
   type LifecycleTrialResult,
+  type LifecycleTrialResultV2,
 } from "../src/bench/types";
 import type { PrototypeId } from "../src/types/prototype";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, "..");
+export const ROOT = join(__dirname, "..");
 const RESULTS_DIR = join(ROOT, "results");
-const PORT = 5183;
-const BASE_URL = `http://localhost:${PORT}`;
+export const PORT = 5183;
+export const BASE_URL = `http://localhost:${PORT}`;
 const HARNESS_BRIDGE_KEY = "__graphBakeoffHarness";
 const NAV_FIXTURE = "fixture-120"; // charter's own warm/cold nav floors name the 120-node scene explicitly
 const LIFECYCLE_FIXTURE = "fixture-24"; // lightweight, representative; not FPS-sensitive
 
-function log(msg: string): void {
+export function log(msg: string): void {
   const t = new Date().toISOString();
   console.log(`[${t}] ${msg}`);
 }
@@ -121,12 +125,12 @@ async function preflightMachineCheck(): Promise<{ waited: boolean; finalLoadAvg:
 // ---------------------------------------------------------------------
 // Build + serve production bundle
 // ---------------------------------------------------------------------
-function buildProductionBundle(): void {
+export function buildProductionBundle(): void {
   log("Building production bundle (npm run build)...");
   execSync("npm run build", { cwd: ROOT, stdio: "inherit" });
 }
 
-function startPreviewServer(): ChildProcess {
+export function startPreviewServer(): ChildProcess {
   log(`Starting vite preview on port ${PORT}...`);
   const proc = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], {
     cwd: ROOT,
@@ -137,7 +141,7 @@ function startPreviewServer(): ChildProcess {
   return proc;
 }
 
-async function waitForServer(url: string, timeoutMs: number): Promise<void> {
+export async function waitForServer(url: string, timeoutMs: number): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -173,7 +177,7 @@ function macOsVersion(): string {
 // ---------------------------------------------------------------------
 // Real Playwright BenchDriver implementation
 // ---------------------------------------------------------------------
-class RealBenchDriver implements BenchDriver {
+export class RealBenchDriver implements BenchDriver {
   private page: Page;
   private cdp: CDPSession | null = null;
   currentPrototypeId: PrototypeId | null = null;
@@ -595,6 +599,32 @@ class RealBenchDriver implements BenchDriver {
     return snapshot;
   }
 
+  /** Corrected v2 protocol (Stage 2 correction lane) — see `App.tsx`'s
+   * `LifecycleControlV2`/`runCorrectedCycle()` doc comment for the full
+   * per-cycle sequence. Each call is a single, self-contained mount →
+   * settle → snapshot → unmount → settle → snapshot round trip driven
+   * entirely in-page (one `page.evaluate` awaiting the in-page async
+   * function's own promise) — no split boolean-poll-then-evaluate pattern,
+   * for the same CDP-race reason documented at the top of this file. */
+  async runLifecycleCycleV2(cycleIndex: number): Promise<LifecycleSnapshotPair> {
+    if (!this.lifecycleMounted) {
+      await this.navigate(this.currentPrototypeId!, this.currentFixtureName, "warm");
+      await this.page.waitForFunction(
+        () => Boolean((window as unknown as { __graphBakeoffLifecycleV2?: unknown }).__graphBakeoffLifecycleV2),
+        undefined,
+        { timeout: 5_000 },
+      );
+      this.lifecycleMounted = true;
+    }
+
+    return this.page.evaluate(async (cycle) => {
+      const control = (window as unknown as { __graphBakeoffLifecycleV2?: { runCorrectedCycle(c: number): Promise<LifecycleSnapshotPair> } })
+        .__graphBakeoffLifecycleV2;
+      if (!control) throw new Error("window.__graphBakeoffLifecycleV2 not registered");
+      return control.runCorrectedCycle(cycle);
+    }, cycleIndex);
+  }
+
   async getFixtureContentHash(fixtureName: string): Promise<string> {
     try {
       return await this.page.evaluate(
@@ -618,7 +648,7 @@ class RealBenchDriver implements BenchDriver {
 // ---------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------
-function writeResult(filename: string, data: unknown): void {
+export function writeResult(filename: string, data: unknown): void {
   mkdirSync(RESULTS_DIR, { recursive: true });
   writeFileSync(join(RESULTS_DIR, filename), JSON.stringify(data, null, 2) + "\n", "utf8");
 }

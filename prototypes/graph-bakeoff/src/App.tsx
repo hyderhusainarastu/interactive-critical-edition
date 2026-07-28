@@ -4,7 +4,7 @@ import type { FixtureName } from "./fixtures/types";
 import type { GraphPrototypeHandle } from "./types/prototype";
 import type { PrototypeId } from "./types/prototype";
 import { clearHarnessBridge, registerHarnessBridge } from "./bench/harnessBridge";
-import type { LifecycleSnapshot } from "./bench/types";
+import { BENCH_PROTOCOL, type LifecycleSnapshot, type LifecycleSnapshotPair } from "./bench/types";
 import { createProtoAHandle } from "./prototypes/protoA";
 import { createProtoBHandle } from "./prototypes/protoB";
 
@@ -23,6 +23,10 @@ interface BenchInstrumentedHandle extends GraphPrototypeHandle {
   getNodeScreenPosition(nodeId: string): { x: number; y: number } | null;
   isHighlightConfirmed(nodeId: string): boolean;
   readLifecycleSnapshot(cycle: number): LifecycleSnapshot;
+  /** Stage 2 correction-lane addition — see `src/protoA/lifecycle.ts`'s
+   * `readLifecycleAccessor()` doc comment for why this is a distinct method
+   * from `readLifecycleSnapshot` rather than a parameter on it. */
+  captureLifecycleAccessor(): (() => Omit<LifecycleSnapshot, "cycle">) | null;
 }
 
 function isBenchInstrumented(handle: GraphPrototypeHandle): handle is BenchInstrumentedHandle {
@@ -30,7 +34,8 @@ function isBenchInstrumented(handle: GraphPrototypeHandle): handle is BenchInstr
   return (
     typeof candidate.getNodeScreenPosition === "function" &&
     typeof candidate.isHighlightConfirmed === "function" &&
-    typeof candidate.readLifecycleSnapshot === "function"
+    typeof candidate.readLifecycleSnapshot === "function" &&
+    typeof candidate.captureLifecycleAccessor === "function"
   );
 }
 
@@ -84,11 +89,80 @@ interface LifecycleControl {
   remountCycle(cycle: number): Promise<LifecycleSnapshot>;
 }
 
+/**
+ * Corrected v2 lifecycle control surface (Stage 2 CORRECTION lane,
+ * 2026-07-27/28). `remountCycle()` above reads whichever mount happens to
+ * be "current" at an ambiguous instant relative to that mount's own first
+ * rendered frame and relative to the NEXT cycle's teardown — see
+ * `docs/audits/graph-renderer-bakeoff.md`'s Correction addendum for the
+ * full diagnosis (Prototype A's per-cycle reads alternated between the
+ * settled-mounted numbers and all-zero, not because of a leak, but because
+ * nothing guaranteed a frame had actually rendered by read time, and the
+ * read was of a *different* mount than the one about to be torn down).
+ *
+ * `runCorrectedCycle()` fixes this by making each cycle fully
+ * self-contained and unambiguous:
+ *   1. Unmount whatever's currently mounted (harmless no-op on the very
+ *      first call, when only the router's own initial auto-mount exists).
+ *   2. Mount a fresh handle, wait for "interactive".
+ *   3. Settle: wait `LIFECYCLE_MOUNT_SETTLE_FRAMES` real animation frames
+ *      (guarantees actual `renderer.render()` calls have happened, not
+ *      just that the scene *reported* ready) plus a fixed
+ *      `LIFECYCLE_MOUNT_SETTLE_MS` buffer.
+ *   4. Capture a **live, non-cached** accessor bound to this mount's
+ *      concrete renderer/tracker objects (`captureLifecycleAccessor()` —
+ *      see `src/protoA/lifecycle.ts`), and read it: `mountedSettled`.
+ *   5. Unmount.
+ *   6. Settle: wait `LIFECYCLE_UNMOUNT_SETTLE_MS`.
+ *   7. Re-invoke the SAME accessor (not a fresh one) — a genuine
+ *      "did this mount's resources actually return to rest" reading,
+ *      immune to any OTHER ref being nulled by unrelated cleanup code:
+ *      `postUnmount`.
+ * Both readings are real-time; neither is fabricated or interpolated.
+ */
+interface LifecycleControlV2 {
+  runCorrectedCycle(cycle: number): Promise<LifecycleSnapshotPair>;
+}
+
 declare global {
   interface Window {
     __graphBakeoffLifecycle?: LifecycleControl;
+    __graphBakeoffLifecycleV2?: LifecycleControlV2;
   }
 }
+
+/** Waits through `count` real `requestAnimationFrame` callbacks. Used only
+ * by the corrected v2 lifecycle protocol to guarantee actual render passes
+ * have happened before reading `renderer.info`, rather than trusting that
+ * a scene's own "interactive" report implies a frame was already drawn. */
+function waitAnimationFrames(count: number): Promise<void> {
+  return new Promise((resolve) => {
+    let remaining = count;
+    function tick() {
+      remaining -= 1;
+      if (remaining <= 0) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const EMPTY_LIFECYCLE_COUNTS: Omit<LifecycleSnapshot, "cycle"> = {
+  geometries: 0,
+  textures: 0,
+  programs: 0,
+  activeWorkers: 0,
+  activeObservers: 0,
+  activeTimers: 0,
+  registeredListeners: 0,
+};
 
 /**
  * Entry page for the isolated renderer-bakeoff harness. Routes
@@ -192,10 +266,53 @@ export function App() {
       },
     };
 
+    window.__graphBakeoffLifecycleV2 = {
+      async runCorrectedCycle(cycle: number): Promise<LifecycleSnapshotPair> {
+        // 1. Clean slate — unmount whatever's currently mounted. On the
+        // very first call this is the router's own initial auto-mount
+        // (above); on every later call it's a no-op, since step 5 below
+        // always unmounts before this function returns.
+        handleRef.current?.unmount();
+        handleRef.current = null;
+        clearHarnessBridge();
+
+        // 2. Fresh mount, wait for "interactive".
+        const handle = createHandle(prototypeId);
+        handleRef.current = handle;
+        setStatus("mounting");
+        await mountOnce(handle);
+
+        // 3. Settle: real rendered frames + a fixed buffer, so the
+        // mounted-settled read isn't racing the first draw call.
+        await waitAnimationFrames(BENCH_PROTOCOL.LIFECYCLE_MOUNT_SETTLE_FRAMES);
+        await delay(BENCH_PROTOCOL.LIFECYCLE_MOUNT_SETTLE_MS);
+
+        // 4. Live, non-cached accessor bound to THIS mount's concrete
+        // renderer/tracker objects — safe to call again after unmount.
+        const instrumented = isBenchInstrumented(handle) ? handle : null;
+        const accessor = instrumented?.captureLifecycleAccessor() ?? (() => EMPTY_LIFECYCLE_COUNTS);
+        const mountedSettled: LifecycleSnapshot = { cycle, ...accessor() };
+
+        // 5. Unmount.
+        handle.unmount();
+        clearHarnessBridge();
+        handleRef.current = null;
+
+        // 6. Settle: fixed delay for any deferred/async teardown to finish.
+        await delay(BENCH_PROTOCOL.LIFECYCLE_UNMOUNT_SETTLE_MS);
+
+        // 7. Re-invoke the SAME accessor — a genuine post-disposal reading.
+        const postUnmount: LifecycleSnapshot = { cycle, ...accessor() };
+
+        return { cycle, mountedSettled, postUnmount };
+      },
+    };
+
     return () => {
       cancelled = true;
       clearHarnessBridge();
       delete window.__graphBakeoffLifecycle;
+      delete window.__graphBakeoffLifecycleV2;
       handleRef.current?.unmount();
       handleRef.current = null;
     };

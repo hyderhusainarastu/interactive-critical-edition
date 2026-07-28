@@ -4,10 +4,11 @@ import {
   derivePointerLatencyMetrics,
   detectMonotonicGrowth,
   evaluateFloors,
+  evaluateLifecycleV2,
   isWithinPlateau,
   percentileOf,
 } from "./runner";
-import type { LifecycleSnapshot, TrialResult } from "./types";
+import type { LifecycleCycleResultV2, LifecycleSnapshot, TrialResult } from "./types";
 
 describe("percentileOf", () => {
   it("returns 0 for an empty array", () => {
@@ -137,5 +138,62 @@ describe("isWithinPlateau / detectMonotonicGrowth", () => {
   it("does not flag a stable (non-growing) final window", () => {
     const cycles = Array.from({ length: 5 }, (_, i) => snapshot(i, { geometries: 10 }));
     expect(detectMonotonicGrowth(cycles, 5)).toBe(false);
+  });
+});
+
+/** Corrected v2 lifecycle gate — Stage 2 correction lane. Mirrors the real
+ * shape `runLifecycleBenchmarkV2` produces: a mounted-settled series and a
+ * post-unmount series, each independently checked. */
+function seriesResult(overrides: { withinPlateauTolerance?: boolean; monotonicGrowthDetected?: boolean } = {}) {
+  return {
+    baseline: snapshot(0),
+    cycles: Array.from({ length: 20 }, (_, i) => snapshot(i + 1)),
+    withinPlateauTolerance: overrides.withinPlateauTolerance ?? true,
+    monotonicGrowthDetected: overrides.monotonicGrowthDetected ?? false,
+  };
+}
+
+function lifecycleResultV2(overrides: {
+  mountedSettled?: { withinPlateauTolerance?: boolean; monotonicGrowthDetected?: boolean };
+  postUnmount?: { withinPlateauTolerance?: boolean; monotonicGrowthDetected?: boolean };
+} = {}): LifecycleCycleResultV2 {
+  return {
+    warmupCycles: 2,
+    measuredCycles: 20,
+    mountedSettled: seriesResult(overrides.mountedSettled),
+    postUnmount: seriesResult(overrides.postUnmount),
+  };
+}
+
+describe("evaluateLifecycleV2", () => {
+  it("passes when both series plateau with no monotonic growth", () => {
+    const result = evaluateLifecycleV2(lifecycleResultV2());
+    expect(result.pass).toBe(true);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it("fails when only the mounted-settled series drifts outside tolerance", () => {
+    const result = evaluateLifecycleV2(lifecycleResultV2({ mountedSettled: { withinPlateauTolerance: false } }));
+    expect(result.pass).toBe(false);
+    expect(result.violations.join(" ")).toMatch(/mounted-settled.*plateau/);
+  });
+
+  it("fails when only the post-unmount series drifts outside tolerance (a real disposal defect)", () => {
+    const result = evaluateLifecycleV2(lifecycleResultV2({ postUnmount: { withinPlateauTolerance: false } }));
+    expect(result.pass).toBe(false);
+    expect(result.violations.join(" ")).toMatch(/post-unmount.*plateau/);
+  });
+
+  it("fails when the post-unmount series grows monotonically (a genuine leak signature)", () => {
+    const result = evaluateLifecycleV2(lifecycleResultV2({ postUnmount: { monotonicGrowthDetected: true } }));
+    expect(result.pass).toBe(false);
+    expect(result.violations.join(" ")).toMatch(/post-unmount.*monotonically/);
+  });
+
+  it("reports violations from both series when both fail", () => {
+    const result = evaluateLifecycleV2(
+      lifecycleResultV2({ mountedSettled: { withinPlateauTolerance: false }, postUnmount: { withinPlateauTolerance: false } }),
+    );
+    expect(result.violations).toHaveLength(2);
   });
 });

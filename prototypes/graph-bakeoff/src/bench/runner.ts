@@ -21,7 +21,9 @@ import {
   type BenchEnvironment,
   type CacheState,
   type LifecycleCycleResult,
+  type LifecycleCycleResultV2,
   type LifecycleSnapshot,
+  type LifecycleSnapshotPair,
   type NavigationTiming,
   type NavigationTrialResult,
   type OrbitMetrics,
@@ -116,6 +118,29 @@ export function evaluateLifecycle(result: LifecycleCycleResult): { pass: boolean
   return { pass: violations.length === 0, violations };
 }
 
+/** Corrected v2 gate (Stage 2 correction lane): requires BOTH the
+ * mounted-settled series AND the post-unmount series to plateau within
+ * tolerance and show no monotonic growth. Either series alone failing is
+ * a real finding — a leak that shows up only post-unmount (mounted numbers
+ * fine, disposal incomplete) is just as real as one that shows up only
+ * mounted-settled (e.g. growing per-mount cost). */
+export function evaluateLifecycleV2(result: LifecycleCycleResultV2): { pass: boolean; violations: string[] } {
+  const violations: string[] = [];
+  if (!result.mountedSettled.withinPlateauTolerance) {
+    violations.push("mounted-settled resource counts did not return to the mounted-settled baseline within the 5% plateau tolerance");
+  }
+  if (result.mountedSettled.monotonicGrowthDetected) {
+    violations.push("mounted-settled resource counts grew monotonically across the final 5 mount/unmount cycles");
+  }
+  if (!result.postUnmount.withinPlateauTolerance) {
+    violations.push("post-unmount resource counts did not return to the post-unmount baseline within the 5% plateau tolerance");
+  }
+  if (result.postUnmount.monotonicGrowthDetected) {
+    violations.push("post-unmount resource counts grew monotonically across the final 5 mount/unmount cycles");
+  }
+  return { pass: violations.length === 0, violations };
+}
+
 /** Detects monotonic growth across the final `windowSize` cycles for every
  * tracked numeric field of `LifecycleSnapshot` (excluding `cycle` itself). */
 export function detectMonotonicGrowth(cycles: readonly LifecycleSnapshot[], windowSize: number): boolean {
@@ -185,6 +210,14 @@ export interface BenchDriver {
   /** Runs one mount/unmount cycle and returns the post-unmount lifecycle
    * snapshot. */
   runLifecycleCycle(cycleIndex: number): Promise<LifecycleSnapshot>;
+  /** Corrected v2 protocol (Stage 2 correction lane): runs one FULLY
+   * self-contained mount → settle → mounted-settled snapshot → unmount →
+   * settle → post-unmount snapshot cycle, and returns both readings. Unlike
+   * `runLifecycleCycle` above, this never reads a previous cycle's mount —
+   * each call mounts its own fresh instance and tears it down again before
+   * returning. See `docs/audits/graph-renderer-bakeoff.md`'s Correction
+   * addendum for why that mattered. */
+  runLifecycleCycleV2(cycleIndex: number): Promise<LifecycleSnapshotPair>;
   getFixtureContentHash(fixtureName: string): Promise<string>;
   getRendererBuildLabel(prototypeId: PrototypeId): Promise<string>;
 }
@@ -313,5 +346,49 @@ export async function runLifecycleBenchmark(
     cycles,
     withinPlateauTolerance,
     monotonicGrowthDetected,
+  };
+}
+
+/** Corrected v2 protocol (Stage 2 correction lane): same 2 warm-up + 20
+ * measured cycle shape as `runLifecycleBenchmark`, but each cycle is fully
+ * self-contained (`runLifecycleCycleV2` mounts, settles, snapshots,
+ * unmounts, settles, snapshots again, all within one call) and produces
+ * two independent series — mounted-settled and post-unmount — each
+ * checked for its own baseline plateau and monotonic growth. */
+export async function runLifecycleBenchmarkV2(
+  driver: BenchDriver,
+  opts: { prototypeId: PrototypeId; fixtureName: string },
+): Promise<LifecycleCycleResultV2> {
+  for (let i = 0; i < BENCH_PROTOCOL.LIFECYCLE_WARMUP_CYCLES; i++) {
+    await driver.runLifecycleCycleV2(-1 - i); // negative index marks warm-up, discarded from measurement
+  }
+
+  const baselinePair = await driver.runLifecycleCycleV2(0);
+  const mountedCycles: LifecycleSnapshot[] = [];
+  const postUnmountCycles: LifecycleSnapshot[] = [];
+  for (let i = 1; i <= BENCH_PROTOCOL.LIFECYCLE_MEASURED_CYCLES; i++) {
+    const pair = await driver.runLifecycleCycleV2(i);
+    mountedCycles.push(pair.mountedSettled);
+    postUnmountCycles.push(pair.postUnmount);
+  }
+
+  const mountedLatest = mountedCycles[mountedCycles.length - 1];
+  const postUnmountLatest = postUnmountCycles[postUnmountCycles.length - 1];
+
+  return {
+    warmupCycles: BENCH_PROTOCOL.LIFECYCLE_WARMUP_CYCLES,
+    measuredCycles: BENCH_PROTOCOL.LIFECYCLE_MEASURED_CYCLES,
+    mountedSettled: {
+      baseline: baselinePair.mountedSettled,
+      cycles: mountedCycles,
+      withinPlateauTolerance: isWithinPlateau(baselinePair.mountedSettled, mountedLatest, BENCH_PROTOCOL.LIFECYCLE_PLATEAU_TOLERANCE),
+      monotonicGrowthDetected: detectMonotonicGrowth(mountedCycles, BENCH_PROTOCOL.LIFECYCLE_FINAL_WINDOW),
+    },
+    postUnmount: {
+      baseline: baselinePair.postUnmount,
+      cycles: postUnmountCycles,
+      withinPlateauTolerance: isWithinPlateau(baselinePair.postUnmount, postUnmountLatest, BENCH_PROTOCOL.LIFECYCLE_PLATEAU_TOLERANCE),
+      monotonicGrowthDetected: detectMonotonicGrowth(postUnmountCycles, BENCH_PROTOCOL.LIFECYCLE_FINAL_WINDOW),
+    },
   };
 }
