@@ -268,4 +268,56 @@ test.describe("Writer panel layout (Stage 6)", () => {
     await pageA.close();
     await pageB.close();
   });
+
+  test("cross-device conflict (409): a stale save is rejected with 'Edited elsewhere', and Reload picks up the other device's saved content", async ({ page }) => {
+    // Integration pass: the server-side `expectedUpdatedAt` contract
+    // (stage6-write-spec.md §4.3's flagged follow-up, now implemented).
+    // Simulated with a direct API PATCH rather than a second tab/page — this
+    // deliberately bypasses this page's own JS entirely, so no
+    // `BroadcastChannel` message is ever posted, which is what makes this
+    // test exercise the real server-side 409 path instead of the same-tab
+    // signal the adjacent test above already covers.
+    await login(page);
+    const projectId = await newProject(page, "Cross-device conflict project");
+    const documentId = await page.getByLabel("Active document").inputValue();
+
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+
+    const response = await page.request.patch(`/api/writer/projects/${projectId}/documents/${documentId}`, {
+      data: { title: "Renamed on another device" },
+    });
+    expect(response.ok()).toBe(true);
+
+    // This tab's own in-memory `expectedUpdatedAt` is now stale — its next
+    // autosave must be rejected with a real 409, never silently overwrite
+    // the other device's save.
+    await page.getByLabel("Draft").fill("This tab's edit races the other device's save.");
+    await expect(page.getByRole("status")).toContainText("Edited elsewhere", { timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Reload this document" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Keep editing here" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Reload this document" }).click();
+    await expect(page.getByLabel("Document title")).toHaveValue("Renamed on another device", { timeout: 10_000 });
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+  });
+
+  test("cross-device conflict (409): 'Keep editing here' adopts the other device's version so the very next autosave succeeds", async ({ page }) => {
+    await login(page);
+    const projectId = await newProject(page, "Cross-device keep-editing project");
+    const documentId = await page.getByLabel("Active document").inputValue();
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+
+    const response = await page.request.patch(`/api/writer/projects/${projectId}/documents/${documentId}`, {
+      data: { title: "Renamed elsewhere first" },
+    });
+    expect(response.ok()).toBe(true);
+
+    await page.getByLabel("Draft").fill("First edit races the stale expectedUpdatedAt.");
+    await expect(page.getByRole("status")).toContainText("Edited elsewhere", { timeout: 10_000 });
+
+    // "Keep editing here" must not be a dead end: the very next autosave has
+    // to reach "Saved", not 409 again against the same now-stale value.
+    await page.getByRole("button", { name: "Keep editing here" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved", { timeout: 10_000 });
+  });
 });

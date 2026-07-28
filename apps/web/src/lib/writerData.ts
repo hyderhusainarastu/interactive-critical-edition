@@ -9,7 +9,7 @@ import {
   writerDocuments,
   writerProjects,
 } from "@ice/db";
-import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, max, sql, type SQL } from "drizzle-orm";
 import { citationKey, type CslJson, emptyWriterDocument, type ProseMirrorDocument } from "./writer";
 
 /** Accepts either the top-level `db` or a `db.transaction()` callback's `tx`
@@ -111,6 +111,37 @@ export async function getOwnedWriterDocument(userId: string, projectId: string, 
   return document ?? null;
 }
 
+/** Shared write body for `saveWriterDocument`/`saveWriterDocumentIfCurrent`
+ *  below — takes the already-fetched `current` row (needed for the
+ *  content-changed comparison) and the caller's own `updateWhere` (a plain
+ *  `id` match for the unconditional path, or an `id AND updatedAt = <the
+ *  value we just read>` guard for the optimistic-concurrency path) so the
+ *  revision-insert/pruning logic lives in exactly one place. Returns
+ *  `undefined` when `updateWhere` matched zero rows — the only way that
+ *  happens is a genuine race between the caller's own `current` read and
+ *  this write (someone else updated the row in between), which
+ *  `saveWriterDocumentIfCurrent` turns into an honest conflict rather than a
+ *  silent no-op. */
+async function writeWriterDocument(
+  documentId: string,
+  patch: { title?: string; content?: ProseMirrorDocument; sortOrder?: number },
+  reason: string,
+  dbClient: DbOrTx,
+  current: { content: unknown },
+  updateWhere: SQL,
+) {
+  const contentChanged = patch.content !== undefined && JSON.stringify(current.content) !== JSON.stringify(patch.content);
+  const [updated] = await dbClient.update(writerDocuments).set({ ...patch, updatedAt: new Date() }).where(updateWhere).returning();
+  if (updated && contentChanged) {
+    const [last] = await dbClient.select({ revision: writerDocumentRevisions.revision }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).limit(1);
+    await dbClient.insert(writerDocumentRevisions).values({ documentId, revision: (last?.revision ?? 0) + 1, content: patch.content!, reason });
+    // Keep recovery intentionally bounded without deleting the initial snapshot.
+    const old = await dbClient.select({ id: writerDocumentRevisions.id }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).offset(50);
+    if (old.length) await dbClient.delete(writerDocumentRevisions).where(sql`${writerDocumentRevisions.id} in (${sql.join(old.map((row) => sql`${row.id}`), sql`, `)})`);
+  }
+  return updated;
+}
+
 export async function saveWriterDocument(
   documentId: string,
   patch: { title?: string; content?: ProseMirrorDocument; sortOrder?: number },
@@ -119,16 +150,59 @@ export async function saveWriterDocument(
 ) {
   const [current] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
   if (!current) return null;
-  const contentChanged = patch.content !== undefined && JSON.stringify(current.content) !== JSON.stringify(patch.content);
-  const [updated] = await dbClient.update(writerDocuments).set({ ...patch, updatedAt: new Date() }).where(eq(writerDocuments.id, documentId)).returning();
-  if (contentChanged) {
-    const [last] = await dbClient.select({ revision: writerDocumentRevisions.revision }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).limit(1);
-    await dbClient.insert(writerDocumentRevisions).values({ documentId, revision: (last?.revision ?? 0) + 1, content: patch.content!, reason });
-    // Keep recovery intentionally bounded without deleting the initial snapshot.
-    const old = await dbClient.select({ id: writerDocumentRevisions.id }).from(writerDocumentRevisions).where(eq(writerDocumentRevisions.documentId, documentId)).orderBy(desc(writerDocumentRevisions.revision)).offset(50);
-    if (old.length) await dbClient.delete(writerDocumentRevisions).where(sql`${writerDocumentRevisions.id} in (${sql.join(old.map((row) => sql`${row.id}`), sql`, `)})`);
+  return writeWriterDocument(documentId, patch, reason, dbClient, current, eq(writerDocuments.id, documentId));
+}
+
+export type SaveWriterDocumentIfCurrentResult =
+  | { status: "not_found" }
+  | { status: "conflict"; latest: Awaited<ReturnType<typeof saveWriterDocument>> }
+  | { status: "ok"; document: NonNullable<Awaited<ReturnType<typeof saveWriterDocument>>> };
+
+/**
+ * Stage 6 spec §4.3's flagged follow-up, now implemented: an additive
+ * optimistic-concurrency wrapper, kept entirely separate from
+ * `saveWriterDocument` above rather than folding a conflict branch into it,
+ * so that function's two other, unrelated callers
+ * (`restoreWriterDocumentRevision`, `writerEvidence.ts`'s evidence insert)
+ * keep their exact existing `WriterDocument | null` return shape — neither
+ * passes `expectedUpdatedAt`, so widening `saveWriterDocument`'s own return
+ * type to include a conflict branch would have made both type-check against
+ * a shape they never actually produce.
+ *
+ * When `expectedUpdatedAt` is `undefined` (no caller today omits it, since
+ * the one call site — the PATCH route — always forwards whatever the client
+ * sent, including `undefined` for an older/non-conflict-aware client), this
+ * behaves byte-for-byte like calling `saveWriterDocument` directly: no
+ * extra query, no possibility of a `"conflict"` result. When it IS provided,
+ * the actual conflict check is the atomic `updateWhere` guard inside
+ * `writeWriterDocument` (`id AND updatedAt = current.updatedAt`), not the
+ * earlier `SELECT` — closing the TOCTOU race between reading `current` and
+ * writing, rather than only checking the timestamps in application code
+ * with a window for a concurrent writer to land in between.
+ */
+export async function saveWriterDocumentIfCurrent(
+  documentId: string,
+  patch: { title?: string; content?: ProseMirrorDocument; sortOrder?: number },
+  reason: string,
+  expectedUpdatedAt: string | undefined,
+  dbClient: DbOrTx = db,
+): Promise<SaveWriterDocumentIfCurrentResult> {
+  const [current] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
+  if (!current) return { status: "not_found" };
+  if (expectedUpdatedAt !== undefined && current.updatedAt.toISOString() !== expectedUpdatedAt) {
+    return { status: "conflict", latest: current };
   }
-  return updated;
+  const updateWhere = expectedUpdatedAt !== undefined
+    ? and(eq(writerDocuments.id, documentId), eq(writerDocuments.updatedAt, current.updatedAt))!
+    : eq(writerDocuments.id, documentId);
+  const updated = await writeWriterDocument(documentId, patch, reason, dbClient, current, updateWhere);
+  if (updated) return { status: "ok", document: updated };
+  // Lost the race between the `SELECT` above and this `UPDATE ... WHERE
+  // updatedAt = <the value we just read>` — someone else wrote first.
+  // Re-fetch so the caller gets the real current row, not a bare not-found
+  // for a document that in fact still exists.
+  const [latest] = await dbClient.select().from(writerDocuments).where(eq(writerDocuments.id, documentId)).limit(1);
+  return latest ? { status: "conflict", latest } : { status: "not_found" };
 }
 
 export async function listWriterDocumentRevisions(documentId: string) {

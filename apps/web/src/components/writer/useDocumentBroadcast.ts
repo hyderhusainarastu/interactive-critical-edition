@@ -81,8 +81,15 @@ export function useDocumentBroadcast({
     };
   }, []);
 
-  function postSaved(documentId: string) {
-    const message: DocumentSavedMessage = { documentId, updatedAt: new Date().toISOString() };
+  /**
+   * `updatedAt` is the server's own confirmed value from the just-completed
+   * save's response body — not a client-generated `new Date()` — so a
+   * receiving tab can safely adopt it as its next `expectedUpdatedAt`
+   * (integration pass, §4.3's now-implemented 409 contract) without risking
+   * a spurious mismatch against what the row actually holds.
+   */
+  function postSaved(documentId: string, updatedAt: string) {
+    const message: DocumentSavedMessage = { documentId, updatedAt };
     channelRef.current?.postMessage(message);
   }
 
