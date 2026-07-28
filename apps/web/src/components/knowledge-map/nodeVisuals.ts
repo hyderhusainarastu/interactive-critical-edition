@@ -28,6 +28,7 @@ import {
   CREDIBILITY_RING_NOT_ASSESSED_COLOR,
   CREDIBILITY_RING_SEGMENT_COUNT,
   desaturate,
+  DIMMED_NODE_OPACITY,
   HOVER_RING_COLOR,
   isStructuralOrDisplayOnly,
   KIND_VISUALS,
@@ -72,6 +73,12 @@ export interface NodeVisual {
   /** Charter §10 "Reading state: a small lower progress arc." Idempotent —
    *  safe to call every time the underlying node state is (re)computed. */
   setReading(reading: boolean): void;
+  /** Charter §10 "Unrelated visible content while selected: 0.12" — applied
+   *  to a NODE whenever `graphFocus.ts`'s active `FocusEmphasis` has at
+   *  least one emphasized node and this one isn't in it. Idempotent, cheap
+   *  (a material-reference swap between two already-cached materials, no
+   *  allocation), safe to call every render. */
+  setEmphasis(dimmed: boolean): void;
   /** Disposes any resources this specific node's visual lazily allocated
    *  beyond what `NodeVisualFactory` shares (today: the per-node
    *  credibility-ring materials — see `factory.build`'s doc comment). Must
@@ -183,12 +190,26 @@ export class NodeVisualFactory {
     });
   }
 
+  /** The shared, non-dimmed accessory material for `color` — pulled out of
+   *  `accessoryMesh` so `build()` can also resolve the DIMMED variant
+   *  (`accessory:${color}:dimmed`) from the exact same color key without
+   *  re-deriving `visual.accessoryColor ?? visual.color` a second time in a
+   *  way that could silently drift from what `accessoryMesh` itself uses. */
+  private getAccessoryMaterial(color: string, dimmed: boolean): THREE.Material {
+    const key = dimmed ? `accessory:${color}:dimmed` : `accessory:${color}`;
+    return this.getMaterial(key, () =>
+      dimmed
+        ? new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.15, transparent: true, opacity: DIMMED_NODE_OPACITY })
+        : new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.15 }),
+    );
+  }
+
   private accessoryMesh(kind: KMDisplayKind, radius: number): THREE.Object3D | null {
     const visual = KIND_VISUALS[kind];
     if (!visual.accessory) return null;
     const color = visual.accessoryColor ?? visual.color;
     const geom = this.getGeometry(`accessory:${visual.accessory}`, () => new THREE.TorusGeometry(1, 0.045, 8, 24));
-    const mat = this.getMaterial(`accessory:${color}`, () => new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.15 }));
+    const mat = this.getAccessoryMaterial(color, false);
     const mesh = new THREE.Mesh(geom, mat);
     switch (visual.accessory) {
       case "equatorial-ring":
@@ -242,15 +263,31 @@ export class NodeVisualFactory {
     const isUnavailable = node.unavailableReason !== null;
     const displayOnly = isStructuralOrDisplayOnly({ displayKind: node.displayKind, sourceEntity: node.sourceEntity });
     const baseColor = displayOnly ? desaturate(visual.color) : visual.color;
+    // Two variants of the SAME material family — full opacity (the default)
+    // and DIMMED (charter §10 "unrelated visible content ... 0.12 opacity"
+    // — `graphFocus.ts`'s emphasis, applied per-node via `setEmphasis`
+    // below). Both are cached/shared the same way every other material here
+    // is (charter §14 "share ... materials"), just under two keys instead
+    // of one, so many same-kind dimmed nodes still share one GPU resource.
     const mainMaterial = isUnavailable
       ? this.getMaterial("unavailable-wireframe", () => new THREE.MeshBasicMaterial({ color: UNAVAILABLE_WIREFRAME_COLOR, wireframe: true }))
       : this.getMaterial(`solid:${node.displayKind}:${displayOnly ? "muted" : "full"}`, () => new THREE.MeshLambertMaterial({ color: baseColor }));
+    const dimmedMainMaterial = isUnavailable
+      ? this.getMaterial("unavailable-wireframe:dimmed", () => new THREE.MeshBasicMaterial({ color: UNAVAILABLE_WIREFRAME_COLOR, wireframe: true, transparent: true, opacity: DIMMED_NODE_OPACITY }))
+      : this.getMaterial(`solid:${node.displayKind}:${displayOnly ? "muted" : "full"}:dimmed`, () => new THREE.MeshLambertMaterial({ color: baseColor, transparent: true, opacity: DIMMED_NODE_OPACITY }));
 
     const mainMesh = new THREE.Mesh(geometry, mainMaterial);
     group.add(mainMesh);
 
+    const accessoryColor = visual.accessoryColor ?? visual.color;
     const accessory = this.accessoryMesh(node.displayKind, radius);
     if (accessory) group.add(accessory);
+    // Both resolved via the cache (`getAccessoryMaterial`), so `full` here
+    // is the EXACT SAME material instance `accessoryMesh()` already
+    // assigned — re-fetching it (rather than threading it back out of that
+    // method) keeps `accessoryMesh()`'s own signature unchanged.
+    const fullAccessoryMaterial = accessory ? this.getAccessoryMaterial(accessoryColor, false) : null;
+    const dimmedAccessoryMaterial = accessory ? this.getAccessoryMaterial(accessoryColor, true) : null;
 
     // Selection ring (bone inner + gold outer) and hover ring (thin bone),
     // hidden by default — cheap to keep resident and just toggle .visible
@@ -354,6 +391,19 @@ export class NodeVisualFactory {
       },
       setReading(reading: boolean) {
         readingArc.visible = reading;
+      },
+      setEmphasis(dimmed: boolean) {
+        mainMesh.material = dimmed ? dimmedMainMaterial : mainMaterial;
+        // `accessory` is a single Mesh (ring/band) or a Group of exactly
+        // two Meshes (double-band) that all share ONE material reference —
+        // reassigning `.material` on every Mesh child covers both shapes
+        // without needing to know which one this particular kind built.
+        if (accessory && dimmedAccessoryMaterial) {
+          const full = fullAccessoryMaterial;
+          accessory.traverse((child) => {
+            if (child instanceof THREE.Mesh) child.material = dimmed ? dimmedAccessoryMaterial : full;
+          });
+        }
       },
       dispose() {
         // The Group/Mesh instances themselves need no explicit disposal

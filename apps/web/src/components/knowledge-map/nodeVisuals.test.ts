@@ -129,6 +129,66 @@ console.log("reading-state arc: OK");
 }
 console.log("credibility ring lazy build + selection-only visibility: OK");
 
+// --- setEmphasis (charter §10 "unrelated visible content dims to 0.12
+// opacity") — the main mesh and any accessory mesh(es) swap to a
+// transparent, low-opacity material variant, and back, without ever
+// rebuilding geometry or losing the shared-material discipline. ---
+{
+  const factory = new NodeVisualFactory();
+  // "work" carries an accessory (equatorial ring) — exercises BOTH the main
+  // mesh and the accessory swap in one node.
+  const a = factory.build({ displayKind: "work", unavailableReason: null, sourceEntity: { kind: "work", id: "a" } });
+  const b = factory.build({ displayKind: "work", unavailableReason: null, sourceEntity: { kind: "work", id: "b" } });
+
+  const mainA = mainMesh(a.object);
+  const fullMaterial = mainA.material as THREE.MeshLambertMaterial;
+  assert.equal(fullMaterial.transparent, false, "the default (non-dimmed) main material is fully opaque, not transparent");
+
+  a.setEmphasis(true);
+  const dimmedMaterial = mainA.material as THREE.MeshLambertMaterial;
+  assert.notEqual(dimmedMaterial, fullMaterial, "dimming swaps to a different material instance");
+  assert.equal(dimmedMaterial.transparent, true);
+  assert.equal(dimmedMaterial.opacity, 0.12, "dimmed opacity matches charter's 0.12 (DIMMED_NODE_OPACITY)");
+
+  // The accessory ring (child index 1 — after the main mesh) also swaps.
+  const accessory = a.object.children[1] as THREE.Mesh;
+  assert.equal((accessory.material as THREE.MeshLambertMaterial).transparent, true, "the accessory ring dims too, not just the main body");
+
+  b.setEmphasis(true);
+  assert.equal(mainMesh(b.object).material, dimmedMaterial, "two same-kind dimmed nodes SHARE one dimmed material instance (charter §14 'share materials')");
+
+  a.setEmphasis(false);
+  assert.equal(mainMesh(a.object).material, fullMaterial, "un-dimming restores the exact original full-opacity material reference");
+
+  // Idempotent — calling with the same value twice must not throw or
+  // allocate a third material.
+  a.setEmphasis(false);
+  assert.equal(mainMesh(a.object).material, fullMaterial);
+
+  a.dispose();
+  b.dispose();
+  factory.dispose();
+}
+console.log("setEmphasis: main + accessory dim/undim, shared materials: OK");
+
+// --- setEmphasis on an unavailable (wireframe) node — the dimmed variant
+// must still be a wireframe, just transparent, never losing the
+// "unavailable" visual signal while also dimmed. ---
+{
+  const factory = new NodeVisualFactory();
+  const visual = factory.build({ displayKind: "reference", unavailableReason: "no_source_text", sourceEntity: { kind: "bibliographic_record", id: "x" } });
+  const full = mainMesh(visual.object).material as THREE.MeshBasicMaterial;
+  assert.equal(full.wireframe, true);
+  visual.setEmphasis(true);
+  const dimmed = mainMesh(visual.object).material as THREE.MeshBasicMaterial;
+  assert.equal(dimmed.wireframe, true, "still renders as wireframe (unavailable) while dimmed");
+  assert.equal(dimmed.transparent, true);
+  assert.equal(dimmed.opacity, 0.12);
+  visual.dispose();
+  factory.dispose();
+}
+console.log("setEmphasis on an unavailable/wireframe node: OK");
+
 // --- factory.dispose() is idempotent and actually disposes tracked resources ---
 {
   const factory = new NodeVisualFactory();

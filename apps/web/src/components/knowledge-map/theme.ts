@@ -152,6 +152,14 @@ export const EDGE_VISUALS: Record<DisplayEdgeFamily, EdgeVisual> = {
 export const DEFAULT_LINK_OPACITY = 0.25;
 export const SELECTED_NEIGHBORHOOD_LINK_OPACITY = 0.85;
 export const UNRELATED_WHILE_SELECTED_LINK_OPACITY = 0.12;
+/** Charter §10: "Unrelated visible content while selected: 0.12, never
+ *  silently removed unless explicit Focus mode is active." Applied to both
+ *  links (above) and NODES (this constant) whenever a `GraphFocusState`
+ *  emphasis is active (`graphFocus.ts`'s `computeFocusEmphasis`) and a node
+ *  isn't part of the emphasized set. Kept numerically identical to the link
+ *  constant on purpose — one dimmed-opacity value for the whole scene, not
+ *  two that could silently drift apart. */
+export const DIMMED_NODE_OPACITY = UNRELATED_WHILE_SELECTED_LINK_OPACITY;
 
 export const UNAVAILABLE_WIREFRAME_COLOR = PALETTE.rose;
 
