@@ -2,11 +2,13 @@
 
 ## Current state
 
-The canonical local redesign candidate is `2c0f820` on
+The canonical redesign release candidate is `c00b2bf` on
 `redesign/ui-graph-rebuild`. It integrates the Stage 7 journey matrix,
 accessibility/hydration repairs, graph coverage, and legacy-chooser/touch
-repairs. It is **not** a release: the final journey matrix is incomplete,
-manual VoiceOver has not run, and no merge/push/deploy authority exists.
+repairs, plus the final Trash pointer-target and Writer optimistic-concurrency
+repairs. J01, J07, and five focused Writer regressions pass with retries
+disabled. The full journey matrix and manual VoiceOver remain explicit
+limitations; the owner separately authorized deployment on 2026-07-28.
 
 ## Commit map
 
@@ -22,6 +24,7 @@ manual VoiceOver has not run, and no merge/push/deploy authority exists.
 | Cross-stage integration | `9a9485b` → `491c092` |
 | Stage 7 matrix and accessibility/hydration integration | `ff0b9c4` → `aa8ca51` |
 | Final graph/browser and legacy-chooser repairs | `79bb2cd` → `2c0f820` |
+| Final Trash and Writer release blockers | `67cf454` → `c00b2bf` |
 
 ## Verified final-candidate evidence
 
@@ -31,35 +34,32 @@ manual VoiceOver has not run, and no merge/push/deploy authority exists.
 - Firefox 151 and WebKit 26.5 login hydration checks are clean.
 - Invalid/ambiguous legacy chooser and small-fixture mobile touch stress pass
   with retries disabled.
-- Stage 7 journeys: 15 passed before interruption; J01 and J07 are active
-  repair/re-run blockers, not waived results.
+- Stage 7 journeys: 15 passed before interruption; repaired J01 and J07
+  desktop checks pass with retries disabled.
+- Five focused Writer save/conflict regressions pass with retries disabled,
+  including PostgreSQL microsecond timestamp handling and genuine 409s.
 
 See `docs/audits/ui-graph-redesign-verification.md` for the precise gate
 boundary and remaining requirements.
 
 ## Required continuation
 
-1. Finish the parallel J01 and J07 repairs, then re-run those journeys.
-2. Complete the remaining final journey matrix, including declared viewport,
+1. Complete the remaining final journey matrix, including declared viewport,
    browser, keyboard, light/dark, and reduced-motion coverage.
-3. Run and record the required manual VoiceOver walkthroughs and real-GPU
+2. Run and record the required manual VoiceOver walkthroughs and real-GPU
    performance measurement.
-4. Refresh the preservation matrix and verification record with completed
-   evidence from the same final integrated commit.
-5. Obtain explicit owner authorization before merge to `main`, push,
-   migration, deploy, production setting change, paid API use, or production
-   action.
+3. Keep migrations, paid API calls, and production-data canaries separately
+   authorized if future work requires them.
 
 ## Authorization boundary
 
-Authorized in the redesign program: local integration, review, CI-safe
-testing, and documentation updates. Not authorized: production database
-changes, secrets, live provider calls, real Storage tests, merge to `main`,
-push, deploy, or external-runtime cleanup.
+The owner authorized branch push and deployment on 2026-07-28. Production
+database changes, live provider calls, real Storage tests, paid canaries, and
+external-runtime cleanup remain outside this release.
 
 ## Explicit limitations
 
-- The final full Stage 7 journey matrix is incomplete; J01 and J07 require
-  re-run after their repairs.
+- The final full Stage 7 journey matrix is incomplete; targeted J01/J07
+  desktop release blockers pass.
 - Manual VoiceOver validation has not been run.
 - Local/seeded verification does not establish production behavior.
