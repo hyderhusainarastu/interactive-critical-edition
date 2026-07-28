@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Runs against an already-running local dev stack (web + worker +
@@ -33,5 +33,20 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
+  projects: [
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /knowledge-map-touch\.spec\.ts$/ },
+    // Touch-capable mobile project (Stage 3 Knowledge Map rebuild, spec
+    // §7.3 "Touch tap/orbit/pinch/pan (mobile project)") — `devices["Pixel
+    // 7"]` ships as part of the already-installed `@playwright/test`
+    // package itself (not a new npm dependency: this project's own
+    // operating constraints forbid adding one). Scoped via `testMatch` to
+    // ONLY the dedicated touch spec, since every other spec in this suite
+    // assumes the default desktop chromium viewport/pointer model and was
+    // never written to run twice.
+    {
+      name: "mobile-chromium",
+      use: { ...devices["Pixel 7"] },
+      testMatch: /knowledge-map-touch\.spec\.ts$/,
+    },
+  ],
 });

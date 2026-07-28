@@ -994,6 +994,184 @@ export async function seedWorkWithGraphData(
 }
 
 /**
+ * Bare `work` + `document` pair (no analysis apparatus) — the minimal
+ * ownership-chain shape `getOwnedDocument()` (the `/api/works/:id/graph`
+ * gate) requires, shared by the Stage 3 TEST-lane fixture helpers below.
+ * Mirrors `graph-scene.spec.ts`'s own local `seedMinimalWork`, hoisted here
+ * since several new fixtures need it.
+ */
+async function insertBareWork(userId: string, title: string): Promise<string> {
+  const [work] = await db.insert(works).values({ userId, title, authorName: "Test Author" }).returning({ id: works.id });
+  await db.insert(documents).values({
+    userId,
+    workId: work.id,
+    storagePath: `${userId}/${work.id}/fixture.txt`,
+    originalFilename: "fixture.txt",
+    mimeType: "text/plain",
+    fileSize: 42,
+    processingStatus: "ready",
+    analysisStatus: "complete",
+    extractedText: `${title} — fixture text.`,
+  });
+  return work.id;
+}
+
+/**
+ * Charter §16 / spec §7.1 boundary-count and dense-hub/long-label fixtures
+ * — a work connected to exactly `count` distinct `concept` nodes via a
+ * `presupposes` `graph_edge` each. Deliberately the CHEAPEST real shape
+ * that produces an exact, predictable total node count (`count` + 1 for
+ * the root work itself): no research_resource/credibility scaffolding,
+ * since the boundary-count tests (11/12/13, 23/24/25, 59/60/61, 119/120/121
+ * — `disclosure.ts`'s `INITIAL_NEIGHBOR_CAP`/`VISIBLE_CAP`) only need a
+ * real, owner-scoped topology of the right SIZE, not varied node kinds.
+ *
+ * `longLabelAt` (0-based index into the generated concepts) seeds one
+ * concept with a deliberately long, multi-word label — the same "long
+ * labels" fixture spec §7.1 calls for, folded into this generator rather
+ * than a separate DB round trip, since both are cheap to produce in the
+ * same loop.
+ */
+export async function seedWorkWithManyConceptNodes(
+  userId: string,
+  options: { title?: string; count: number; longLabelAt?: number },
+): Promise<{ workId: string; documentId: string; conceptIds: string[] }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const title = options.title ?? `Boundary-count work ${options.count} ${suffix}`;
+  const workId = await insertBareWork(userId, title);
+  const [doc] = await db.select({ id: documents.id }).from(documents).where(eq(documents.workId, workId)).limit(1);
+
+  const conceptIds: string[] = [];
+  for (let i = 0; i < options.count; i += 1) {
+    const label =
+      options.longLabelAt === i
+        ? `An unusually long concept label meant to exercise the label layer's two-line maximum and truncation rules, item ${i} of ${suffix}`
+        : `Boundary concept ${i} ${suffix}`;
+    const [concept] = await db
+      .insert(concepts)
+      .values({ slug: `boundary-${suffix}-${i}`, kind: "concept", label, summary: `Fixture concept ${i}.` })
+      .returning({ id: concepts.id });
+    conceptIds.push(concept.id);
+  }
+
+  await db.insert(graphEdges).values(
+    conceptIds.map((conceptId) => ({
+      userId,
+      sourceType: "work" as const,
+      sourceId: workId,
+      targetType: "concept" as const,
+      targetId: conceptId,
+      edgeType: "presupposes" as const,
+      confidence: 0.7,
+      evidence: { role: "fixture", reason: "seeded boundary-count fixture" },
+      createdBy: "system" as const,
+    })),
+  );
+
+  return { workId, documentId: doc.id, conceptIds };
+}
+
+/**
+ * Dense-hub fixture (spec §7.1 "Dense hub: 1 node, many links") — the root
+ * work node cites `hubDegree` distinct bibliographic records, so the work
+ * node itself carries `hubDegree` real edges. Exercises `sizing.ts`'s
+ * `computeNodeScale` clamp (charter: "no hub may exceed the sizing
+ * formula's own clamp") against a REAL degree, not a synthetic one.
+ */
+export async function seedWorkWithDenseHub(userId: string, options: { title?: string; hubDegree: number }): Promise<{ workId: string; documentId: string; bibIds: string[] }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const title = options.title ?? `Dense-hub work ${suffix}`;
+  const workId = await insertBareWork(userId, title);
+  const [doc] = await db.select({ id: documents.id }).from(documents).where(eq(documents.workId, workId)).limit(1);
+
+  const bibIds: string[] = [];
+  for (let i = 0; i < options.hubDegree; i += 1) {
+    const [bib] = await db
+      .insert(bibliographicRecords)
+      .values({ source: "crossref", title: `Hub citation ${i} ${suffix}`, authors: "Fixture Author", year: 1900 + i, accessStatus: "metadata_only" })
+      .returning({ id: bibliographicRecords.id });
+    bibIds.push(bib.id);
+  }
+
+  await db.insert(graphEdges).values(
+    bibIds.map((bibId) => ({
+      userId,
+      sourceType: "work" as const,
+      sourceId: workId,
+      targetType: "bibliographic_record" as const,
+      targetId: bibId,
+      edgeType: "cites" as const,
+      confidence: 0.8,
+      evidence: { category: "explicit_reference" },
+      createdBy: "system" as const,
+    })),
+  );
+
+  return { workId, documentId: doc.id, bibIds };
+}
+
+/**
+ * "Realistic held/missing mix" (spec §7.1) — a work citing several
+ * bibliographic records in three real states: `read` (a `reading_record`
+ * with `status: "completed"`), `reading` (`status: "reading"`), and
+ * `missing` (no `reading_record`/`understanding_rating` at all — the
+ * default a cited-but-unowned record gets, per `buildGraph()`'s own state
+ * derivation read above this helper's own module). Exercises `theme.ts`'s
+ * per-`NodeState` visual mapping against real DB-derived states rather
+ * than a hand-constructed `DisplayNode`.
+ */
+export async function seedWorkWithMixedStateNodes(
+  userId: string,
+  options: { title?: string; readCount: number; readingCount: number; missingCount: number },
+): Promise<{ workId: string; documentId: string; readBibIds: string[]; readingBibIds: string[]; missingBibIds: string[] }> {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  const title = options.title ?? `Mixed-state work ${suffix}`;
+  const workId = await insertBareWork(userId, title);
+  const [doc] = await db.select({ id: documents.id }).from(documents).where(eq(documents.workId, workId)).limit(1);
+
+  async function seedBibGroup(count: number, label: string): Promise<string[]> {
+    const ids: string[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const [bib] = await db
+        .insert(bibliographicRecords)
+        .values({ source: "crossref", title: `${label} citation ${i} ${suffix}`, authors: "Fixture Author", year: 1950 + i, accessStatus: "metadata_only" })
+        .returning({ id: bibliographicRecords.id });
+      ids.push(bib.id);
+    }
+    return ids;
+  }
+
+  const readBibIds = await seedBibGroup(options.readCount, "Read");
+  const readingBibIds = await seedBibGroup(options.readingCount, "Reading");
+  const missingBibIds = await seedBibGroup(options.missingCount, "Missing");
+  const allBibIds = [...readBibIds, ...readingBibIds, ...missingBibIds];
+
+  await db.insert(graphEdges).values(
+    allBibIds.map((bibId) => ({
+      userId,
+      sourceType: "work" as const,
+      sourceId: workId,
+      targetType: "bibliographic_record" as const,
+      targetId: bibId,
+      edgeType: "cites" as const,
+      confidence: 0.75,
+      evidence: { category: "explicit_reference" },
+      createdBy: "system" as const,
+    })),
+  );
+
+  if (readBibIds.length > 0) {
+    await db.insert(readingRecords).values(readBibIds.map((bibId) => ({ userId, bibId, status: "completed" as const })));
+  }
+  if (readingBibIds.length > 0) {
+    await db.insert(readingRecords).values(readingBibIds.map((bibId) => ({ userId, bibId, status: "reading" as const })));
+  }
+  // missingBibIds intentionally get no reading_record/understanding_rating.
+
+  return { workId, documentId: doc.id, readBibIds, readingBibIds, missingBibIds };
+}
+
+/**
  * Seeds a minimal, real debate cluster (Phase 28.4: the knowledge-graph
  * debate layer) — `research_claim` → `claim_relationship` → `debate_cluster`/
  * `debate_cluster_member`/`debate_cluster_relationship`, the exact tables
