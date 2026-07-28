@@ -16,7 +16,9 @@ test.describe("Journey 6 — correction provenance", () => {
   test("claim and relationship correction surfaces are reachable from their contextual pages", async ({ page }) => {
     await login(page); await page.goto(`/research/claims/${fixture.claimAId}`);
     await expect(page.locator('[data-research-correction-controls="claim"]')).toBeVisible();
-    await page.goto(`/research/debates/${fixture.clusterId}`);
+    // Debate clusters are project-scoped; the unscoped path is a genuine
+    // not-found route, not evidence that correction controls are absent.
+    await page.goto(`/research/${fixture.projectId}/debates/${fixture.clusterId}`);
     await expect(page.locator('[data-research-correction-controls="relationship"]')).toBeVisible();
   });
 });

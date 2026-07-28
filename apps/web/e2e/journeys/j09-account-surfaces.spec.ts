@@ -9,7 +9,7 @@ test.describe("Journey 9 — account surfaces", () => {
   test("profile, sharing, plan, usage and deletion confirmation remain available", async ({ page }) => {
     await login(page); await page.goto("/account/profile");
     await expect(page.getByLabel("Share my activity for research")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Delete account/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Delete my account" })).toBeVisible();
     await page.goto("/account/plan"); await expect(page.getByRole("heading", { name: "Beta (free)" })).toBeVisible();
     await page.goto("/account/usage"); await expect(page.locator("#main-content")).toContainText(/usage|activity/i);
   });

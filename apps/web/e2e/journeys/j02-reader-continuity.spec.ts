@@ -107,6 +107,12 @@ test.describe("Journey 2 — reader continuity", () => {
     await sidebar.getByRole("button", { name: /^Sources/ }).click();
     await expect(sidebar.getByText("Ethics with Aristotle").first()).toBeVisible();
 
+    // On narrow viewports the edition sidebar is a modal bottom sheet. Close
+    // that sheet before exercising the selection toolbar in the document; a
+    // real sheet intentionally intercepts pointer events behind it.
+    const closeSidebar = sidebar.getByRole("button", { name: /Close edition sidebar/i });
+    if (await closeSidebar.isVisible().catch(() => false)) await closeSidebar.click();
+
     // My notes tab — highlight, note, bookmark. The interactive reader
     // anchors real DOM text blocks by `id="block-<id>"`, not a plain-text
     // paragraph index (that's the legacy TextReader's own convention, per
@@ -159,7 +165,13 @@ test.describe("Journey 2 — reader continuity", () => {
     // then return — the Interactive reader (the saved/default
     // representation) and 2a's own highlight must both still hold.
     await page.goto("/dashboard");
-    await page.goto(`/works/${workId}/reader`);
+    // A Reader navigation can be redirected by the app's context-restoration
+    // effect. Wait for the final reader document rather than treating that
+    // client redirect as a failed request.
+    await page.goto(`/works/${workId}/reader`, { waitUntil: "domcontentloaded" }).catch((error: Error) => {
+      if (!error.message.includes("ERR_ABORTED")) throw error;
+    });
+    await page.waitForURL(new RegExp(`/works/${workId}/reader`));
     await expect(page.getByRole("region", { name: "Interactive reader — processed text" })).toBeVisible();
     const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });
     const bodyBlock = edition.locator('[id^="block-"]').filter({ hasText: "Vicious people act on decision" });

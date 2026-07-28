@@ -32,7 +32,9 @@ test.describe("Journey 4 — Research project continuity", () => {
     await page.goto(`/research/${fixture.projectId}/corpus`);
     await expect(page.getByRole("heading", { name: "Corpus", exact: true })).toBeVisible();
     await page.goto(`/research/claims/${fixture.claimAId}`);
-    const controls = page.locator('[data-research-correction-controls="claim"]');
+    // Next's streaming holder can transiently duplicate the hydrated route;
+    // scope semantic assertions to the live application main landmark.
+    const controls = page.locator("#main-content").locator('[data-research-correction-controls="claim"]');
     await expect(controls).toBeVisible();
     await page.goto(`/research/${fixture.projectId}/chambers`);
     await expect(page.getByRole("heading", { name: "Evidence Chambers" })).toBeVisible();

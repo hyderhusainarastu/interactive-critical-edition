@@ -8,9 +8,9 @@ async function login(page: import("@playwright/test").Page) { await page.goto("/
  * remains covered by @ice/graph-display unit tests and knowledge-map.spec.ts. */
 test.describe("Journey 10 — legacy bookmarks", () => {
   test.beforeAll(async () => { userId = await createVerifiedTestUser(email, password); ({ workId } = await seedWorkWithGraphData(userId, { title: "Journey 10 graph" })); }); test.afterAll(() => deleteTestUser(email));
-  test("a legacy roadmap bookmark is translated to its canonical semantic List state", async ({ page }) => {
+  test("a legacy roadmap bookmark is translated to its canonical Roadmap route", async ({ page }) => {
     await login(page); await page.goto(`/graph?layout=roadmap&roadmapRoot=work:${workId}`);
-    await expect(page).toHaveURL(new RegExp(`ctxKind=work.*ctxId=${workId}.*view=list`));
-    await expect(page.locator("#main-content")).toContainText(/Knowledge Map/i);
+    await expect(page).toHaveURL(new RegExp(`/works/${workId}/roadmap`));
+    await expect(page.getByRole("heading", { name: "Reading roadmap" })).toBeVisible();
   });
 });
