@@ -1,5 +1,5 @@
-import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
-import { claimRelationships, db, debateClusters, researchClaims, researchJobRequests, researchMonitorHits, researchMonitors, researchProjects } from "@ice/db";
+import { and, count, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { claimRelationships, db, debateClusters, researchClaims, researchCorpusItems, researchJobRequests, researchMonitorHits, researchMonitors, researchProjects, works } from "@ice/db";
 
 /**
  * Zero-LLM, zero-cache dashboard insight-feed queries (Phase 29.3
@@ -126,6 +126,48 @@ export async function getResearchInsightCounts(userId: string): Promise<Research
  * empty "Research activity" card competing for attention with the rest of
  * the dashboard.
  */
+/**
+ * Home surface's second evidence card (stage4-read-spec.md §1.2 item 2):
+ * one concrete, linkable claim awaiting attention — not the
+ * `claimsAwaitingReview` count above, which only tells Home "some number of
+ * claims need review," not which one to name. Same owner-scoping and
+ * active/unreviewed/not-hidden filter as `getResearchInsightCounts`'s own
+ * `claimsAwaitingReviewRows` query (kept in exact sync — a claim this query
+ * excludes must never be the one that count is nonzero for), just returning
+ * the single most recently extracted row instead of a count. Zero new AI
+ * call, zero cache — same discipline as every other query in this file.
+ */
+export interface ClaimAwaitingAttention {
+  id: string;
+  claimText: string;
+  workTitle: string | null;
+  corpusItemTitle: string | null;
+}
+
+export async function getClaimAwaitingAttention(userId: string): Promise<ClaimAwaitingAttention | null> {
+  const [row] = await db
+    .select({
+      id: researchClaims.id,
+      claimText: researchClaims.claimText,
+      workTitle: works.title,
+      corpusItemTitle: researchCorpusItems.title,
+    })
+    .from(researchClaims)
+    .leftJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(researchCorpusItems, eq(researchCorpusItems.id, researchClaims.corpusItemId))
+    .where(
+      and(
+        eq(researchClaims.userId, userId),
+        eq(researchClaims.status, "active"),
+        eq(researchClaims.verificationStatus, "unreviewed"),
+        eq(researchClaims.hidden, false),
+      ),
+    )
+    .orderBy(desc(researchClaims.createdAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export function hasResearchInsightSignal(counts: ResearchInsightCounts): boolean {
   return (
     counts.activeProjects > 0 ||

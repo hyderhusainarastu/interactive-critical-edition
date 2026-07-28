@@ -61,6 +61,39 @@ export async function createWriterProject(userId: string, title: string) {
   return { project, document };
 }
 
+/**
+ * Home surface's fourth evidence card (stage4-read-spec.md §1.2 item 4,
+ * §1.3): the most recently updated non-archived `writer_document` this user
+ * owns. Ownership is a real join through `writer_project` — `writer_document`
+ * itself carries no `user_id` (see the schema's own shape) — never inferred
+ * from a caller-supplied id alone, matching the owner-scoping discipline
+ * `lib/research/claims.ts` documents for its own domain. Both the document
+ * and its owning project are excluded once either is archived, since an
+ * archived project's documents aren't a "latest draft" worth resuming.
+ */
+export interface LatestWriterDraft {
+  projectId: string;
+  projectTitle: string;
+  documentTitle: string;
+  updatedAt: Date;
+}
+
+export async function getLatestWriterDraft(userId: string): Promise<LatestWriterDraft | null> {
+  const [row] = await db
+    .select({
+      projectId: writerProjects.id,
+      projectTitle: writerProjects.title,
+      documentTitle: writerDocuments.title,
+      updatedAt: writerDocuments.updatedAt,
+    })
+    .from(writerDocuments)
+    .innerJoin(writerProjects, eq(writerProjects.id, writerDocuments.projectId))
+    .where(and(eq(writerProjects.userId, userId), isNull(writerProjects.archivedAt), isNull(writerDocuments.archivedAt)))
+    .orderBy(desc(writerDocuments.updatedAt))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function createWriterDocument(projectId: string, title: string) {
   const [order] = await db.select({ value: max(writerDocuments.sortOrder) }).from(writerDocuments).where(eq(writerDocuments.projectId, projectId));
   const [document] = await db.insert(writerDocuments).values({ projectId, title, content: emptyWriterDocument(), sortOrder: (order?.value ?? -1) + 1 }).returning();
