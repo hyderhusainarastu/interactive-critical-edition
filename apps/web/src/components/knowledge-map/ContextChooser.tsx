@@ -105,7 +105,11 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
     const storage = browserStorage();
     return storage ? readRecentContexts(userId, storage) : [];
   });
-  const [activeTab, setActiveTab] = useState<TabKey>(() => (candidateWorkIds && candidateWorkIds.length > 0 ? "work" : "recent"));
+  // A legacy candidate set can arrive asynchronously after the chooser has
+  // mounted. Until the user explicitly selects a tab, derive the default
+  // from those candidates; once they choose, their choice always wins.
+  const [chosenTab, setChosenTab] = useState<TabKey | null>(null);
+  const activeTab: TabKey = chosenTab ?? (candidateWorkIds && candidateWorkIds.length > 0 ? "work" : "recent");
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<Partial<Record<GraphContextKind, TabFetchResult>>>({});
   // Tracks kinds with a fetch already in flight — a plain ref (not state),
@@ -115,15 +119,6 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
   // promise's `.then`, an external-system callback, not the effect body
   // itself).
   const inFlightRef = useRef<Set<GraphContextKind>>(new Set());
-
-  // Legacy URL translation resolves only after the owner-scoped work list
-  // arrives. The chooser therefore mounts first with no candidates and then
-  // receives an ambiguous roadmap-root set; move to Work at that point so
-  // the user can actually see the candidate roots instead of remaining on
-  // the unrelated Recent tab.
-  useEffect(() => {
-    if (candidateWorkIds && candidateWorkIds.length > 0) setActiveTab("work");
-  }, [candidateWorkIds]);
 
   useEffect(() => {
     if (activeTab === "recent") return;
@@ -172,7 +167,7 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
             type="button"
             role="tab"
             aria-selected={activeTab === "recent"}
-            onClick={() => setActiveTab("recent")}
+            onClick={() => setChosenTab("recent")}
             className={`app-control rounded-t px-3 py-1.5 text-sm ${activeTab === "recent" ? "border-b-2 border-[var(--color-highlight)] font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
           >
             Recent
@@ -183,7 +178,7 @@ export function ContextChooser({ userId, notice, candidateWorkIds, onSelect }: C
               type="button"
               role="tab"
               aria-selected={activeTab === kind}
-              onClick={() => setActiveTab(kind)}
+              onClick={() => setChosenTab(kind)}
               className={`app-control rounded-t px-3 py-1.5 text-sm ${activeTab === kind ? "border-b-2 border-[var(--color-highlight)] font-medium text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
             >
               {TAB_LABEL[kind]}
