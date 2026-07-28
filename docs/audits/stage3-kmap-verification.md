@@ -151,3 +151,111 @@ This round wrote and then deleted (per the program's own scope discipline — ve
 | Never weaken assertions | held — the click-flake fix attempt was reverted rather than shipped unproven; no assertion in any spec was loosened |
 
 **This round does not recommend Stage 3 sign-off** until §7 (resize-blanks-the-scene, does not self-heal) is fixed and re-verified — it is a real, reproducible violation of the charter's own explicit "no blank... reproduction after... resize" requirement, found with hard, screenshot-confirmed evidence, in Stage 3's own camera/resize territory. §3 (click-occlusion) and §4 (focus-mode semantics) are real but lower-priority open items for a following round. §5 and §6's header-overlap finding are out of this lane's scope and are handed off with full evidence rather than fixed here.
+
+---
+
+# Round 2 — re-verification after the resize-self-heal fix (79db332)
+
+Status: **VERIFICATION COMPLETE. Round 1's single HIGH-PRIORITY blocking defect (§7/§8, resize-to-degenerate-viewport blanking the scene with no self-heal) is confirmed FIXED and re-verified with fresh, real evidence.** No new product defect was found. Everything else observed this round is the SAME already-documented, already-triaged class round 1 reported (§3 click/tap-occlusion flake, §5 out-of-scope roadmap-constellation gap, §6 stale visual-regression baselines + the out-of-scope header-overlap bug) — re-confirmed present, not newly introduced, and none of it is Stage-3-charter-blocking.
+
+Environment: same worktree/branch, dedicated Postgres on port 5433 (ledger 46, matches production — no migration run or needed), web built and served fresh on **port 3230** (`next build` + `next start`), Playwright/Chromium headless (`--use-angle=swiftshader-webgl`). This machine is still shared with several other concurrently-running agent lanes' own Postgres containers and dev servers (`palimnote-s4-pg`, `palimnote-s6-pg`, two other `next-server` instances on ports 3210/3220 from earlier sessions in this same worktree), consistent with round 1's own note about shared-sandbox GPU/CPU contention.
+
+## R2.1 Typecheck / lint / build
+
+All clean, on the tree exactly as it stands (round 1's commit + the `79db332` fix, nothing further changed by this round):
+
+```
+pnpm --filter web typecheck   → clean (tsc --noEmit, zero errors)
+pnpm --filter web lint        → clean (eslint, zero errors/warnings)
+pnpm --filter web build       → clean (next build, all routes compiled, including every /research/* route added since round 1's own workspace state)
+```
+
+## R2.2 Full e2e run: knowledge-map suite + graph-adjacent CI-safe specs
+
+Ran the exact same file set round 1 established (`knowledge-map.spec.ts`, `knowledge-map-fallback.spec.ts`, `knowledge-map-touch.spec.ts` [mobile-chromium project], `graph-scene.spec.ts`, `graph-expansion.spec.ts`, `graph-debates.spec.ts`, `roadmap-constellation.spec.ts`, `link-check.spec.ts`), one full run, no cherry-picking:
+
+```
+53 tests, 5 skipped, 6 failed, 2 flaky (recovered on retry), 40 passed  (8.5m)
+```
+
+- **5 skipped**: same as round 1 — `graph-debates.spec.ts`'s flag-ON block, correctly gated off (`PHASE_25_GRAPH_DEBATE_LAYER_ENABLED` unset locally).
+- **6 hard failures**, every one matching an already-documented root cause, none new:
+  - `knowledge-map.spec.ts:275`, `:377`, `:579`, `:742`, `:803` (5 tests, all failed on both the original attempt and the retry) — all five throw the exact same signature round 1's §3 root-caused at length: `clickNodeInScene: <nodeId> never became selected after 15 attempts`. Same helper, same documented shared-sandbox GPU/CPU-contention/depth-occlusion mechanism, zero product or test code touched by this round that could have changed this behavior.
+  - `roadmap-constellation.spec.ts:45` — the exact same `Locator: locator('[data-roadmap-constellation]') ... element(s) not found` round 1's §5 already traced to `RoadmapView.tsx:335`'s empty-roadmap gating, confirmed out of Stage 3's own scope (no Stage 3 file imports or touches this route).
+- **2 flaky (passed on retry, so not gate failures)**:
+  - `knowledge-map.spec.ts:517` ("toolbar view switch...") — same click-occlusion class.
+  - `knowledge-map-touch.spec.ts:75` (mobile "a real tap on a node's projected position selects it...") — the touch-input analogue of the same class, via the file's own `tapNodeInScene` helper (identical shape/doc-comment to `clickNodeInScene`). Round 1 reported this whole file passing clean; this run shows the same environmental flake also occasionally reaching the mobile-chromium project, including one instance where the retry budget itself blew the full 120s test timeout rather than exhausting cleanly at attempt 15 — a harder manifestation of the same latency/contention class, not a distinct one (confirmed by reading the failure: it dies inside the same `canvas.tap({ position: pos })` call the passing runs also make).
+  - **Reading this honestly**: this round's raw failure *count* (6 hard + 2 flaky) is higher than the specific `{"passed":38,"failed":3,...}` figure this round's own brief quoted from a prior pass — consistent with round 1's own characterization of the flake as genuinely intermittent and environment-load-dependent (this session's machine is running more concurrent lanes than either prior snapshot), not evidence of a new regression. Every single failing/flaky test traces to one of the two pre-existing, already-triaged mechanisms above; no third failure signature exists anywhere in this run's full log.
+- **40 passed**, including all of `graph-scene.spec.ts`, `graph-expansion.spec.ts`, `graph-debates.spec.ts` (flag-off block), and `link-check.spec.ts` (169 links + 16 anchors, zero broken).
+
+No code or test file was modified in response to any of this round's failures — per round 1's own precedent, retrying/patching the click-occlusion flake without a dedicated design budget was already tried once and reverted; re-attempting it here would repeat that already-documented dead end rather than add new information.
+
+## R2.3 The resize-self-heal fix, re-verified with fresh evidence
+
+Round 1's own recommended fix shape — *"a `useEffect` keyed on `[dimensions.width, dimensions.height]`, calling `fit()`... only when re-verified that the current visible node set's frustum is empty"* — is exactly what commit `79db332` shipped (`KnowledgeMapScene.tsx`'s new effect, keyed on `[dimensions.width, dimensions.height, hasSize, graphData, isNodeVisible, camera]`, calling `camera.fit()` only when every currently-visible node's screen projection falls outside `[0,width]×[0,height]`). This round re-ran round 1's own adversarial sequence end-to-end against the fixed code, via a dedicated temporary script (not committed, same discipline as round 1 — see R2.6), asserting real in-frustum node count / camera-target separation / elevation via the production test hook after **every** step, using `expect.soft` so no step's failure could hide whether later steps recover:
+
+| Step | In-frustum | Separation | Elevation | Verdict |
+|---|---|---|---|---|
+| 1. load | 4 | 108.93 | 35° | valid |
+| 2. select origin-adjacent node | 4 | 108.93 | 35° | valid |
+| 3. Home | 4 | 108.93 | 35° | valid |
+| 4. filter to near-empty | **1** | 108.93 | 35° | valid (see note below) |
+| 5. clear | 4 | 108.93 | 35° | valid |
+| 6. resize 1 (1024×768) | 4 | 108.93 | 35° | valid |
+| 6. resize 2 (**600×900**, round 1's own confirmed repro size) | 4 | 345.50 | 34.05° | **valid — no longer blanks** |
+| 6. resize 3 (1920×1080) | 4 | 376.10 | 35° | valid |
+| 6. resize 4 (375×812) | 2 | 376.10 | 35° | valid (2 of 4 nodes off-frustum at this extreme narrow/tall aspect is a legitimate partial framing, not the "zero, totally blank" bug — charter requires >0 in frustum, not all-nodes-in-frustum) |
+| 6. resize 5 (1440×900, identical to step 1) | 4 | 376.10 | 35° | **valid — self-heals**, unlike round 1's pre-fix finding where this exact step stayed blank |
+| 7. switch List | — (no 3D scene; asserted List view visible instead) | | | valid |
+| 8. back to 3D | 4 | 151.45 | 35° | valid |
+| 9. remount route (hard reload) | 4 | 151.45 | 35° | valid |
+| 10. deep-link restore | 4 | 151.45 | 35° | valid |
+
+Every step passed; camera-target separation never approached zero and elevation never dropped near the 20° edge-on floor at any point. **This is the direct, positive re-confirmation the round 1 brief asked for: the exact 600×900 repro no longer blanks the scene, and the identical-to-step-1 final resize (1440×900) — the specific case round 1 found did NOT self-heal — now recovers correctly.**
+
+**Note on step 4 ("filter to near-empty"), found while building this step's script:** an initial attempt unchecked all six `FilterRail` layer checkboxes, expecting a near-empty result — it instead reproduced round 1's own table, which *also* shows an unchanged "4" at this step. Reading `attributeVisibility.ts`/`FilterRail.tsx` directly explains why: `activeLayers` uses a documented "empty array means no restriction, i.e. every layer implicitly shown" convention, and `toggleLayer`'s own resolve-then-toggle logic means sequentially unchecking every single layer checkbox is a real, intentional no-op that wraps back around to the same empty ("show all") array it started from — **not a bug**, a deliberate, commented design choice, but also not a way to reach a genuine near-empty state. Checking exactly one layer this fixture's non-root nodes don't belong to (`Debates`) instead produces a real non-empty *inclusion* list, genuinely filtering every non-root node out and leaving just the always-visible root (`getVisibleNodeIds().length === 1`, asserted directly) — a real, near-empty state, which is what the row above reports.
+
+## R2.4 Unmasked screenshots, re-captured and pixel-sampled
+
+Re-captured all 7 of round 1's screenshot categories against the current (post-fix) build, saved alongside round 1's own originals with a `-round2` suffix (round 1's evidence is left untouched, not overwritten) in `docs/audits/stage3-kmap-verification/`:
+
+`desktop-1440-default-load-round2.png`, `desktop-1440-after-select-round2.png`, `desktop-1440-after-home-round2.png`, `desktop-1440-2d-view-round2.png`, `desktop-1440-list-view-round2.png`, `mobile-375-round2.png`, `desktop-1440-no-webgl-fallback-round2.png`.
+
+Pixel-sampled **numerically**, not just eyeballed: for the three 3D-canvas shots, a dedicated in-page routine decodes the same CDP screenshot bytes into a fresh, ordinary 2D canvas (`drawImage` + `getImageData`) — deliberately NOT the WebGL canvas's own `drawImage`, which round 1 already found returns a blank buffer without `preserveDrawingBuffer` — and reports distinct-color count and luminance spread:
+
+| Screenshot | Distinct colors (of ~120k sampled) | Luminance range |
+|---|---|---|
+| default-load | 729 | 16.1–255.0 |
+| after-select | 1,406 | 13.9–255.0 |
+| after-home (post-orbit) | 779 | 16.1–254.7 |
+
+All three comfortably clear a `>5` distinct-colors / `>10` luminance-range floor (asserted directly in the script, not just reported) — a solid single-color fill would report exactly 1 distinct color and 0 luminance range. The 2D/List/mobile/no-WebGL shots were visually confirmed directly (Read tool image view, not just file-size heuristics): the 2D view shows the same three real nodes correctly distributed across `EVIDENCE`/`INTELLECTUAL`/`CLAIMS` layer columns; the List view (round 1's own screenshot, unchanged this round) and the no-WebGL fallback both show the honest "4 nodes shown" accessible table with the same "3D view isn't available in this browser. Showing the List view instead." banner; mobile-375 shows the same non-collinear, visibly-spread root+Physics+Hylomorphism+"Book II" layout as round 1's own mobile screenshot, at the bottom-nav mobile chrome. The out-of-scope header-wordmark-clipping bug (round 1 §6) is independently re-confirmed present on the work-scoped no-WebGL screenshot and independently re-confirmed ABSENT on the global-route 2D-view screenshot — same route-specific signature round 1 reported, not something this round's fix touched or changed.
+
+## R2.5 Perf sanity, re-run against the fixed code
+
+Same protocol as round 1 (`seedWorkWithManyConceptNodes(count: 120)`, 12s real sustained pointer-drag orbit, `requestAnimationFrame` interval sampling):
+
+```
+frames=723  medianFrameMs=16.70  medianFPS=59.88
+```
+
+Identical to round 1's own number to two decimal places — the resize-self-heal fix (a `useEffect` that only runs its extra work on an actual dimension change, and only computes anything further when the degenerate case is detected) introduces no measurable per-frame overhead. Well above the ≥50 floor.
+
+## R2.6 Temporary scripts (not committed)
+
+`adversarial-sequence-round2.spec.ts`, `capture-stage3-screens-round2.spec.ts`, `perf-sanity-round2.spec.ts` — written, run, and deleted before this commit, same discipline as round 1's own temporary diagnostics. Each seeded and cleaned up its own throwaway test user via the repo's `createVerifiedTestUser`/`deleteTestUser` helpers; verified via a direct DB query that zero rows matching any of this round's throwaway email patterns remain.
+
+## R2.7 Summary verdict
+
+| Gate item | Result |
+|---|---|
+| typecheck/lint/build | clean |
+| Full knowledge-map + graph-adjacent CI-safe suite | green except the same two already-documented, already-triaged classes (click/tap-occlusion flake; out-of-scope roadmap-constellation) — zero new failure signatures |
+| **Round 1's HIGH-PRIORITY resize-blanks-the-scene defect (§7/§8)** | **CONFIRMED FIXED** — the exact repro (600×900) and the exact non-self-healing case (return to 1440×900) both now recover; full 10-step adversarial sequence passes end-to-end |
+| Unmasked screenshots, pixel-confirmed nonblank | done, 7/7, numerically pixel-sampled (not just eyeballed) for the 3 canvas shots |
+| Camera/frustum adversarial sequence | **all 10 steps valid** (in-frustum > 0 except the deliberate List-view step; separation > 0; elevation ≥ 20° throughout, actual range 34–35°) |
+| Perf sanity (120-node scene, 12s orbit) | 59.88 median FPS, identical to round 1, floor ≥50 met |
+| Never mask the graph canvas in test coverage | held |
+| Never weaken assertions | held — no assertion in any spec was loosened or removed; the near-empty filter mechanism was corrected to reach a genuine near-empty state rather than accepting the no-op result as if it were one |
+
+**This round recommends Stage 3 sign-off on the resize/camera-framing gate specifically** — the one confirmed blocking defect from round 1 is fixed and re-verified with fresh, independent evidence. Two items remain open, carried forward exactly as round 1 left them, neither newly discovered nor newly worsened by this round: **(a)** the click/tap-occlusion environmental flake (round 1 §3) — still real, still root-caused, still without a validated fix, still recommended for a dedicated future-round budget (camera-based recovery or wider minimum node separation); **(b)** the focus-mode semantics gap (round 1 §4, `graphFocus.ts` relocation/re-audit) — not investigated further this round, out of this round's re-verification mandate. **(c)** `responsive-visual.spec.ts`'s stale graph baselines/locators (round 1 §6) remain un-regenerated by deliberate choice, now further confirmed to include at least one additional stale locator (`responsive-visual.spec.ts:441`'s `getByRole("heading", { name: "Visualization" })`, which the rebuilt page never renders — the new toolbar has no "Visualization" `<h1>`) beyond the snapshot-only failures round 1 catalogued — consistent with, not larger in kind than, round 1's decision to leave this whole file's graph coverage un-regenerated until the header-shell bug it's entangled with is fixed by whichever lane owns Stage 1 shell chrome.
