@@ -149,6 +149,15 @@ export interface KnowledgeMapSceneApi extends KnowledgeMapCameraApi {
   select(nodeId: string | null): void;
   getNodeScreenPosition(nodeId: string): { x: number; y: number } | null;
   applyOrientationPreset(preset: OrientationPreset): void;
+  /** Focuses the camera on a node BY ID — the toolbar's "Focus" control
+   *  (spec §1.1's `KnowledgeMapWorkspace.tsx`) needs this because, unlike
+   *  the inline double-click handler, it has no live `Vec3` position of
+   *  its own to pass to the inherited `focus(nodePosition, ...)`. A thin
+   *  wrapper around the same internal `applyFocus` the double-click
+   *  handler already calls — no new focus math, just an id-keyed entry
+   *  point into it. A no-op when the node doesn't exist or isn't
+   *  currently visible, same as the double-click path. */
+  focusOnNode(nodeId: string): void;
 }
 
 export interface KnowledgeMapSceneProps {
@@ -428,7 +437,7 @@ export function KnowledgeMapScene({
   const applyFocus = useCallback(
     (nodeId: string) => {
       const node = nodesById.get(nodeId);
-      if (!node) return;
+      if (!node || !isNodeVisible(node)) return;
       const neighborIds = neighborsOf.get(nodeId) ?? new Set<string>();
       const points: Vec3[] = [[node.x ?? 0, node.y ?? 0, node.z ?? 0]];
       for (const nid of neighborIds) {
@@ -492,8 +501,9 @@ export function KnowledgeMapScene({
         if (!Number.isFinite(coords.x) || !Number.isFinite(coords.y)) return null;
         return { x: coords.x, y: coords.y };
       },
+      focusOnNode: applyFocus,
     }),
-    [applySelection, camera, nodesById, isNodeVisible],
+    [applySelection, camera, nodesById, isNodeVisible, applyFocus],
   );
 
   useEffect(() => {
