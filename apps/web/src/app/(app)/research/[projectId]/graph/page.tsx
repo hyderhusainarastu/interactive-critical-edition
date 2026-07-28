@@ -1,4 +1,4 @@
-import { phase25FeatureEnabled } from "@ice/config";
+import { phase12FeatureEnabled, phase25FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { KnowledgeMapWorkspace } from "@/components/knowledge-map";
 import { requireSession } from "@/lib/auth";
@@ -49,7 +49,7 @@ export default async function ResearchProjectGraphPage({ params }: { params: Pro
           toolbar's own live context label, already give a sighted user the
           "where am I" orientation a visible heading would otherwise add. */}
       <h1 className="sr-only">{project.title} — Knowledge Map</h1>
-      <KnowledgeMapWorkspace userId={session.user.id} initialContext={{ kind: "question", id: projectId }} />
+      <KnowledgeMapWorkspace userId={session.user.id} initialContext={{ kind: "question", id: projectId }} writerEnabled={phase12FeatureEnabled("writer")} />
     </>
   );
 }

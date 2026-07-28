@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { InsertIntoWriterButton } from "@/components/writer/insertion/InsertIntoWriterButton";
 import { VERIFICATION_LABELS } from "./annotationMeta";
 import type { EditionPayload } from "./EditionReader";
 import { readerScrollBehavior } from "./readerMotion";
@@ -63,6 +64,7 @@ function ClaimCard({
   activationId,
   onSelect,
   onLocatePassage,
+  writerEnabled,
 }: {
   claim: ResearchClaimSummary;
   /** Set only for an `unanchored` claim that re-matched exactly one block at
@@ -73,6 +75,12 @@ function ClaimCard({
   activationId: string | null;
   onSelect?: (id: string) => void;
   onLocatePassage?: (textBlockId: string) => void;
+  /** Integration step "writer-insertion-dialogs": gates the "Insert into
+   *  Writer" action (charter §6 "Write" — Reader is one of the four named
+   *  context-preserving insertion entry points). Off entirely when Writer
+   *  itself is feature-flagged off, matching how every other Writer-adjacent
+   *  affordance in this app is gated. */
+  writerEnabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLLIElement | null>(null);
@@ -154,6 +162,14 @@ function ClaimCard({
                 Locate passage
               </button>
             )}
+            {writerEnabled && claim.supportingExcerpt && (
+              <InsertIntoWriterButton
+                quote={claim.supportingExcerpt}
+                attribution={`${CLAIM_NATURE_LABEL[claim.claimNature]} claim, ${claim.section} (${SOURCE_SCOPE_LABEL[claim.sourceScope]})`}
+                sourceLabel="Reader"
+                className="app-control underline"
+              />
+            )}
             <a className="app-control ml-auto underline" href={`/research/claims/${claim.id}`}>
               Open full claim →
             </a>
@@ -179,12 +195,14 @@ export function ClaimsTab({
   activeId,
   onSelectClaim,
   onLocatePassage,
+  writerEnabled,
 }: {
   claims: ResearchClaimSummary[];
   blocks: EditionPayload["blocks"];
   activeId: string | null;
   onSelectClaim?: (id: string) => void;
   onLocatePassage?: (textBlockId: string) => void;
+  writerEnabled?: boolean;
 }) {
   if (claims.length === 0) {
     return <p className="px-4 py-6 text-[0.8rem] text-[var(--color-text-muted)]">No research claims for this work yet.</p>;
@@ -206,6 +224,7 @@ export function ClaimsTab({
             activationId={activeId}
             onSelect={onSelectClaim}
             onLocatePassage={onLocatePassage}
+            writerEnabled={writerEnabled}
           />
         ))}
       </ul>

@@ -295,6 +295,33 @@ export interface CitedOnlyInfo {
   citingWorkIds: string[];
 }
 
+// ---------------------------------------------------------------------
+// Insert into Writer (charter §6 "Write": context-preserving insertion
+// from the Knowledge Map — integration step "writer-insertion-dialogs")
+// ---------------------------------------------------------------------
+
+export interface WriterInsertionCandidate {
+  quote: string;
+  attribution: string;
+}
+
+/**
+ * Scoped to `research_claim` nodes only — the one entity kind whose real,
+ * already-loaded `displayNode.label` genuinely IS quotable content (a
+ * claim's own text, not a paraphrased heading). A passage/`text_block`
+ * node's label is a short display heading, not the passage's actual text
+ * (`resolveDestination`'s own comment above records that real Reader
+ * passage anchoring doesn't exist on this contract yet) — offering an
+ * "Insert into Writer" action there would silently fabricate an excerpt
+ * from a label never meant to be one, so it's deliberately NOT offered for
+ * any other node kind. This mirrors the charter's own worked example
+ * ("claim → evidence ... Writer insertion").
+ */
+export function resolveWriterInsertionCandidate(displayNode: KnowledgeMapDisplayNode): WriterInsertionCandidate | null {
+  if (displayNode.sourceEntity?.kind !== "research_claim") return null;
+  return { quote: displayNode.label, attribution: "Claim, Knowledge Map" };
+}
+
 /**
  * `"missing"` is this project's own already-established definition of
  * "referenced but not acquired" (see PROJECT-LOG's Design Decisions row:

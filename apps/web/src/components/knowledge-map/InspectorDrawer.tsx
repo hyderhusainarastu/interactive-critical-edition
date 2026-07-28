@@ -38,6 +38,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { useDialogEscape } from "@/components/primitives/useDialogEscape";
+import { InsertIntoWriterButton } from "@/components/writer/insertion/InsertIntoWriterButton";
 import type { CredibilityDimension } from "../graph/types";
 import { CREDIBILITY_DIMENSIONS, CREDIBILITY_DIMENSION_LABEL, STATE_META, TYPE_LABEL, type GraphNode, type NodeState, type NodeType } from "../graph/types";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
@@ -47,6 +48,7 @@ import {
   resolveLinkActions,
   resolveNodeScholarlyActions,
   resolveReadingStatusTarget,
+  resolveWriterInsertionCandidate,
   type ScholarlyAction,
   type ScholarlyActionRequest,
 } from "./inspectorActions";
@@ -96,6 +98,11 @@ export interface InspectorDrawerProps {
   /** Needed only by the mobile sheet, to convert a snap fraction into a
    *  concrete pixel height (`./inspectorSheet.ts`'s `sheetHeightPx`). */
   viewportHeight: number;
+  /** Integration step "writer-insertion-dialogs": gates the "Insert into
+   *  Writer" action (charter §6 "Write"). Off when Writer itself is
+   *  feature-flagged off, matching every other Writer-adjacent affordance
+   *  in this app. */
+  writerEnabled?: boolean;
   onClose: () => void;
 }
 
@@ -130,6 +137,7 @@ export function InspectorDrawer({
   viewportWidth,
   device,
   viewportHeight,
+  writerEnabled = false,
   onClose,
 }: InspectorDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -187,6 +195,7 @@ export function InspectorDrawer({
   const { available: availableActions, unavailable: unavailableActions } = resolveNodeScholarlyActions(displayNode);
   const readingStatusTarget = resolveReadingStatusTarget(displayNode, rootWorkId);
   const citedOnly = resolveCitedOnlyInfo(canonicalNode);
+  const writerInsertionCandidate = writerEnabled ? resolveWriterInsertionCandidate(displayNode) : null;
 
   async function run(action: ScholarlyAction, extra: Record<string, unknown> = {}) {
     setActionStatus((prev) => ({ ...prev, [action.id]: { status: "pending" } }));
@@ -330,6 +339,21 @@ export function InspectorDrawer({
           <p className="text-xs text-[var(--color-text-muted)]">{destination.unavailableReason}</p>
         )}
       </div>
+
+      {/* Insert into Writer (charter §6 "Write", integration step
+          "writer-insertion-dialogs") — only ever rendered when real
+          quotable content already exists on this node (a claim's own text,
+          see `resolveWriterInsertionCandidate`'s own doc comment). */}
+      {writerInsertionCandidate && (
+        <div className="border-t border-[var(--color-border)] pt-3">
+          <InsertIntoWriterButton
+            quote={writerInsertionCandidate.quote}
+            attribution={writerInsertionCandidate.attribution}
+            sourceLabel="Knowledge Map"
+            className="app-control w-full rounded border border-[var(--color-border)] px-3 py-1.5 text-center text-xs font-medium"
+          />
+        </div>
+      )}
 
       {/* Cited-only work (charter §12's closing paragraph) */}
       {citedOnly && (

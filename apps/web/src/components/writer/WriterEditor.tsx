@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { mlaParenthetical, plainTextToProseMirror, proseMirrorToPlainText, type CslJson } from "@/lib/writer";
+import { formatInsertionExcerpt, takePendingWriterInsertion } from "@/lib/writer/insertionHandoff";
 import { useRegisterContextBar } from "@/components/shell/ContextBarProvider";
 import { useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
 import { useToast } from "@/components/app/ToastProvider";
@@ -140,6 +142,24 @@ function WriterEditorSession({
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [status, setStatus] = useState<SaveState>("Saved");
+  // §4.3's now-implemented 409 contract: the last known-good `updated_at`
+  // for the active document, sent as `expectedUpdatedAt` on every save.
+  // Reset whenever the active document changes (the effect below, keyed on
+  // `activeDocumentId`) and advanced to the server's own confirmed value on
+  // every successful save (`saveNow`) — never a client-generated timestamp.
+  const [activeUpdatedAt, setActiveUpdatedAt] = useState<string | undefined>(active ? documentTimeKey(active.updatedAt) : undefined);
+  // Stashed the moment either conflict variant (same-tab broadcast or
+  // cross-device 409) first surfaces — the one piece of information
+  // "Keep editing here" needs to make the very next save succeed instead of
+  // 409-ing again against the same now-stale `expectedUpdatedAt` (§4.3: "no
+  // capability regresses").
+  const [pendingConflictUpdatedAt, setPendingConflictUpdatedAt] = useState<string | null>(null);
+  // Integration step "writer-insertion-dialogs": set once, right after this
+  // session consumes a pending cross-surface insertion handoff (Reader's
+  // Claims tab or the Knowledge Map inspector) — renders a dismissible
+  // "Inserted from ..." notice with a real link back to exactly where the
+  // user came from, keeping the round trip reversible (charter §16 journey 5).
+  const [insertionNotice, setInsertionNotice] = useState<{ sourceHref: string; sourceLabel: string } | null>(null);
   const [importValue, setImportValue] = useState("");
   const [importKind, setImportKind] = useState<CitationImportKind>("doi");
   const [citationExportFormat, setCitationExportFormat] = useState<CitationExportFormat>("bibtex");
@@ -184,22 +204,83 @@ function WriterEditorSession({
   // itself changes, which is exactly when its closure needs to be fresh.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const titleField = useMemo(() => <ProjectTitleField value={projectTitle} onChange={setProjectTitle} onBlur={saveProjectTitle} />, [projectTitle]);
-  useRegisterContextBar({ title: titleField });
+  // Integration pass (stage6-write-spec.md §3's flagged follow-up, now
+  // built): `ContextBar.tsx` renders its `actions` slot, so the save
+  // status + Archive control move out of `WriterEditor`'s own local chrome
+  // row entirely — no more local row stacked directly under the immersive
+  // ContextBar. Memoized on `status` alone (not a fresh element every
+  // render) for the exact same reason `titleField` above is memoized on
+  // `projectTitle` alone: `useRegisterContextBar`'s effect keys off
+  // `state.actions`'s referential identity, and re-firing on every
+  // WriterEditor render would re-trigger `ContextBarProvider`'s state,
+  // which re-renders every context consumer (WriterEditor included) — an
+  // infinite loop. `saveNow`/`keepEditingHere`/`reloadDocument`/
+  // `archiveProject` are ordinary function declarations (hoisted within
+  // this component body, defined further below) — always current by the
+  // time this memo's callback actually runs during render, exactly like
+  // `titleField`'s own `saveProjectTitle` reference above.
+  const actionsField = useMemo(
+    () => (
+      <>
+        <SaveStatus status={status} onRetry={saveNow} onKeepEditingHere={keepEditingHere} onReloadDocument={reloadDocument} />
+        <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button>
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [status],
+  );
+  useRegisterContextBar({ title: titleField, actions: actionsField });
 
   // Stage 6 spec §4.3: a same-browser, cross-tab conflict signal. `postSaved`
-  // is called from `saveNow()` below on every successful save; `onConflict`
-  // shows the "Edited in another tab" status variant instead of continuing
-  // the normal Saving/Saved cycle, but only while this tab itself has
-  // unsaved-or-unconfirmed local edits (the hook's own predicate).
+  // is called from `saveNow()` below on every successful save with the
+  // SERVER's own confirmed `updatedAt` (never a client-generated timestamp);
+  // `onConflict` shows the "Edited in another tab" status variant instead of
+  // continuing the normal Saving/Saved cycle, but only while this tab itself
+  // has unsaved-or-unconfirmed local edits (the hook's own predicate).
+  // `message.updatedAt` is also stashed so "Keep editing here" can adopt it
+  // as this tab's next `expectedUpdatedAt` (integration pass, §4.3).
   const { postSaved } = useDocumentBroadcast({
     activeDocumentId,
     status,
-    onConflict: (_message: DocumentSavedMessage) => setStatus("Edited in another tab"),
+    onConflict: (message: DocumentSavedMessage) => {
+      setStatus("Edited in another tab");
+      setPendingConflictUpdatedAt(message.updatedAt);
+    },
   });
 
   useEffect(() => {
     if (!active) return;
-    const frame = window.requestAnimationFrame(() => { setTitle(active.title); setText(proseMirrorToPlainText(active.content)); setStatus("Saved"); });
+    const frame = window.requestAnimationFrame(() => {
+      setTitle(active.title);
+      let nextText = proseMirrorToPlainText(active.content);
+      // Integration step "writer-insertion-dialogs": a pending cross-surface
+      // handoff (Reader's Claims tab or the Knowledge Map inspector) is
+      // consumed here, inside the SAME `requestAnimationFrame` callback that
+      // otherwise resets the draft from the active document — consuming it
+      // in a separate effect risked a real race, since a second effect's own
+      // deferred update could fire after this one and silently clobber the
+      // just-inserted excerpt back to the document's plain saved content.
+      // `takePendingWriterInsertion` is self-cleaning (removed the instant
+      // it's read), so this only ever fires once per real handoff, never on
+      // a later document switch within the same session.
+      const pendingInsertion = takePendingWriterInsertion(project.id);
+      if (pendingInsertion) {
+        const excerpt = formatInsertionExcerpt(pendingInsertion);
+        nextText = `${nextText}${nextText && !nextText.endsWith(" ") && !nextText.endsWith("\n") ? " " : ""}${excerpt} `;
+        setInsertionNotice({ sourceHref: pendingInsertion.sourceHref, sourceLabel: pendingInsertion.sourceLabel });
+      }
+      setText(nextText);
+      // A consumed insertion leaves the draft with real unsaved content —
+      // "Editing" (not "Saved") so the normal autosave debounce picks it up
+      // and actually persists it, exactly like any other keystroke.
+      setStatus(pendingInsertion ? "Editing" : "Saved");
+      // §4.3: a freshly-switched-to document's own `updatedAt` is the only
+      // correct starting point for the next save's `expectedUpdatedAt` —
+      // never the previous document's value, and never stale across a
+      // conflict banner this switch just silently left behind.
+      setActiveUpdatedAt(documentTimeKey(active.updatedAt));
+      setPendingConflictUpdatedAt(null);
+    });
     fetch(`/api/writer/projects/${project.id}/documents/${active.id}/revisions`).then((response) => response.ok ? response.json() : { revisions: [] }).then((data) => setRevisions(data.revisions ?? []));
     return () => window.cancelAnimationFrame(frame);
     // Deliberately keyed on the stable activeDocumentId, not the `active`
@@ -246,19 +327,50 @@ function WriterEditorSession({
     // the pre-Stage-6 code had no `catch` here, so that case left `status`
     // stuck at "Saving…" forever with no Retry ever offered, which is
     // exactly the kind of dishonest failure state §4 exists to fix.
-    let ok = false;
+    let result: "ok" | "failed" | "conflict" = "failed";
+    let savedUpdatedAt: string | null = null;
+    let conflictLatestUpdatedAt: string | null = null;
     try {
-      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave" }) });
-      ok = response.ok;
+      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        // §4.3's now-implemented 409 contract: `activeUpdatedAt` is this
+        // tab's last known-good version of the row. Sending `undefined`
+        // (a document just switched to, before its own effect has run) is
+        // fine — the route treats an absent field exactly like an older
+        // client that never sends it, i.e. unconditional last-write-wins.
+        body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave", expectedUpdatedAt: activeUpdatedAt }),
+      });
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null) as { latest?: { updatedAt?: unknown } } | null;
+        const latestUpdatedAt = body?.latest?.updatedAt;
+        conflictLatestUpdatedAt = typeof latestUpdatedAt === "string" ? latestUpdatedAt : latestUpdatedAt instanceof Date ? latestUpdatedAt.toISOString() : null;
+        result = "conflict";
+      } else if (response.ok) {
+        const updated = await response.json() as { updatedAt?: unknown };
+        savedUpdatedAt = typeof updated.updatedAt === "string" ? updated.updatedAt : updated.updatedAt instanceof Date ? updated.updatedAt.toISOString() : null;
+        result = "ok";
+      } else {
+        result = "failed";
+      }
     } catch {
-      ok = false;
+      result = "failed";
     }
-    // A functional update, not a plain `setStatus(...)`: a fresher cross-tab
-    // conflict can arrive from `useDocumentBroadcast` while this fetch is
-    // still in flight, and this save's own (now-stale) result must not
-    // clobber that just-shown "Edited in another tab" banner.
-    setStatus((current) => (current === "Edited in another tab" ? current : ok ? "Saved" : "Save failed"));
-    if (ok) postSaved(activeDocumentId);
+    // A functional update, not a plain `setStatus(...)`: a fresher conflict
+    // signal (either variant) can arrive from `useDocumentBroadcast` while
+    // this fetch is still in flight, and this save's own (now-stale) result
+    // must not clobber whichever conflict banner is already showing.
+    setStatus((current) => {
+      if (current === "Edited in another tab" || current === "Edited elsewhere") return current;
+      if (result === "conflict") return "Edited elsewhere";
+      return result === "ok" ? "Saved" : "Save failed";
+    });
+    if (result === "ok" && savedUpdatedAt) {
+      setActiveUpdatedAt(savedUpdatedAt);
+      postSaved(activeDocumentId, savedUpdatedAt);
+    } else if (result === "conflict" && conflictLatestUpdatedAt) {
+      setPendingConflictUpdatedAt(conflictLatestUpdatedAt);
+    }
   }
   useEffect(() => {
     if (!activeDocumentId || status !== "Editing") return;
@@ -284,7 +396,20 @@ function WriterEditorSession({
   // banner up) both clears the variant and, since the debounce effect above
   // depends on `status`, immediately schedules a fresh save of whatever this
   // tab already has, with no further keystroke required.
-  function keepEditingHere() { setStatus("Editing"); }
+  //
+  // Integration pass addition: with the real 409 contract now in place,
+  // "no capability regresses" requires actually adopting the other tab's/
+  // device's confirmed `updatedAt` as this tab's next `expectedUpdatedAt` —
+  // without this, the very next autosave would still carry the stale value
+  // and 409 again, turning "Keep editing here" into a dead end instead of
+  // the last-write-wins override it promises.
+  function keepEditingHere() {
+    setStatus("Editing");
+    if (pendingConflictUpdatedAt) {
+      setActiveUpdatedAt(pendingConflictUpdatedAt);
+      setPendingConflictUpdatedAt(null);
+    }
+  }
   // Stage 6 spec §4.3: "Reload this document" discards local edits and
   // picks up the other tab's saved content. `router.refresh()` re-runs this
   // route's server component with fresh data; the outer `WriterEditor`
@@ -453,17 +578,13 @@ function WriterEditorSession({
   }
   return (
     <section className="app-mount min-h-[calc(100vh-3.5rem)]" aria-label="Writer workspace">
-      {/* Stage 6 layout spec §3: the project title itself now lives in
-          ContextBar's title slot (registered above via
-          `useRegisterContextBar`), so this row carries only what cannot yet
-          move there (the `actions` slot exists but isn't rendered by
-          ContextBar.tsx, a file this lane doesn't own) — save status and
-          Archive, nothing else. DOCX/PDF export moved to the central
-          document toolbar below (document-scoped, not project-scoped). */}
-      <div className="app-card flex flex-wrap items-center justify-end gap-3 border-x-0 border-t-0 px-4 py-3">
-        <SaveStatus status={status} onRetry={saveNow} onKeepEditingHere={keepEditingHere} onReloadDocument={reloadDocument} />
-        <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button>
-      </div>
+      {/* Stage 6 layout spec §3 + this integration pass: the project title
+          AND the save status/Archive controls now both live in ContextBar's
+          title/actions slots (registered above via `useRegisterContextBar`)
+          — no more local chrome row stacked under the immersive ContextBar
+          at all. DOCX/PDF export stays in the central document toolbar
+          below (document-scoped, not project-scoped, so it belongs beside
+          the document switcher rather than project-level chrome). */}
       <div className="flex flex-col lg:flex-row">
         <SourcesEvidencePanel
           mode={isNarrow ? "sheet" : "inline"}
@@ -527,6 +648,18 @@ function WriterEditorSession({
             data-panels-collapsed={bothWideCollapsed || undefined}
             className={`app-card mx-auto rounded-xl p-4 sm:p-6 ${bothWideCollapsed ? "max-w-4xl" : "max-w-3xl"}`}
           >
+            {/* Integration step "writer-insertion-dialogs": a real,
+                reversible-navigation link back to exactly where the just-
+                inserted excerpt came from (charter §16 journey 5), not just
+                a bare confirmation. Dismissible — this is a one-time
+                notice about what just happened, not persistent chrome. */}
+            {insertionNotice && (
+              <div className="app-panel-enter mb-4 flex flex-wrap items-center gap-3 rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
+                <span>Inserted from {insertionNotice.sourceLabel}.</span>
+                <Link href={insertionNotice.sourceHref} className="underline">Return to source</Link>
+                <button type="button" className="app-control app-press ml-auto" aria-label="Dismiss" onClick={() => setInsertionNotice(null)}>×</button>
+              </div>
+            )}
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select>
               <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button>

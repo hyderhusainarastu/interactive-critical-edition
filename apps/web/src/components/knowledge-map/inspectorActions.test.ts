@@ -5,6 +5,7 @@ import {
   resolveLinkActions,
   resolveNodeScholarlyActions,
   resolveReadingStatusTarget,
+  resolveWriterInsertionCandidate,
 } from "./inspectorActions";
 import type { GraphNode } from "../graph/types";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
@@ -235,6 +236,29 @@ function displayLink(overrides: Partial<KnowledgeMapDisplayLink>): KnowledgeMapD
 // --- No canonical node at all -> null, never crashes ---
 {
   assert.equal(resolveCitedOnlyInfo(null), null);
+}
+
+// --- Insert into Writer (integration step "writer-insertion-dialogs"): a
+// claim node's own real label becomes the quote --------------------------
+{
+  const node = displayNode({
+    id: "claim:1" as KnowledgeMapDisplayNode["id"],
+    sourceEntity: { kind: "research_claim", id: "claim-uuid" },
+    label: "Vice is a state of character concerned with choice.",
+  });
+  const result = resolveWriterInsertionCandidate(node);
+  assert.deepEqual(result, { quote: "Vice is a state of character concerned with choice.", attribution: "Claim, Knowledge Map" });
+}
+
+// --- Every other node kind -> null, never fabricates a quote from a
+// non-claim label ----------------------------------------------------------
+{
+  const work = displayNode({ id: "work:1" as KnowledgeMapDisplayNode["id"], sourceEntity: { kind: "work", id: "work-uuid" } });
+  assert.equal(resolveWriterInsertionCandidate(work), null);
+  const section = displayNode({ id: "section:1" as KnowledgeMapDisplayNode["id"], sourceEntity: { kind: "text_block", id: "block-uuid" } });
+  assert.equal(resolveWriterInsertionCandidate(section), null);
+  const aggregate = displayNode({ id: "agg:1" as KnowledgeMapDisplayNode["id"], sourceEntity: null });
+  assert.equal(resolveWriterInsertionCandidate(aggregate), null);
 }
 
 console.log("inspectorActions.test.ts: all assertions passed");

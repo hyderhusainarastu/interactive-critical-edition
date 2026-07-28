@@ -48,6 +48,7 @@ export function ReaderShell({
   enableReaderClaimLayer = false,
   enableEvidenceChips = false,
   enableAskResearchModes = false,
+  writerEnabled = false,
 }: {
   workId: string;
   embedded?: boolean;
@@ -64,6 +65,11 @@ export function ReaderShell({
   /** Phase 28.6: Ask Library's per-message research modes, behind
    *  `askResearchModes` (plan §"Web surfaces (Ask Library)"). */
   enableAskResearchModes?: boolean;
+  /** Integration step "writer-insertion-dialogs": gates the Claims tab's
+   *  "Insert into Writer" action (charter §6 "Write"), behind
+   *  `phase12FeatureEnabled("writer")` — the same flag every other
+   *  Writer-adjacent affordance in this app is gated on. */
+  writerEnabled?: boolean;
 }) {
   const { preferences } = useWorkspacePreferences();
   const [data, setData] = useState<ReaderData | null>(null);
@@ -768,7 +774,7 @@ export function ReaderShell({
                 Close split
               </button>
             </div>
-            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableEvidenceChips={enableEvidenceChips} enableAskResearchModes={enableAskResearchModes} />
+            <ReaderShell workId={splitWorkId} embedded initialReaderLevel={initialReaderLevel} enablePhase12Identity={enablePhase12Identity} enablePhase12Reader={enablePhase12Reader} enablePhase18Rag={enablePhase18Rag} enableReaderClaimLayer={enableReaderClaimLayer} enableEvidenceChips={enableEvidenceChips} enableAskResearchModes={enableAskResearchModes} writerEnabled={writerEnabled} />
           </div>
         )}
       </div>
@@ -813,6 +819,7 @@ export function ReaderShell({
             claims={enableReaderClaimLayer ? claims : []}
             enableReaderClaimLayer={enableReaderClaimLayer}
             enableEvidenceChips={enableEvidenceChips}
+            writerEnabled={writerEnabled}
             onLocatePassage={setActiveReaderBlockId}
             highlights={data.highlights}
             notes={data.notes}

@@ -83,6 +83,7 @@ export function EditionAnnotationsPanel({
   claims = [],
   enableReaderClaimLayer = false,
   enableEvidenceChips = false,
+  writerEnabled = false,
   onLocatePassage,
   initialTab = "annotations",
   highlights,
@@ -133,6 +134,11 @@ export function EditionAnnotationsPanel({
    *  notes" tab, ships even when the Research workspace itself is off, as
    *  long as `research` is on. */
   enableEvidenceChips?: boolean;
+  /** Integration step "writer-insertion-dialogs": gates the Claims tab's
+   *  "Insert into Writer" action (charter §6 "Write"). Off when Writer
+   *  itself is feature-flagged off, matching every other Writer-adjacent
+   *  affordance in this app. */
+  writerEnabled?: boolean;
   /** Scrolls the main reader pane to a text block — the "Locate passage"
    *  card affordance, reusing the same `activeReaderBlockId` mechanism the
    *  outline rail and bookmark selection already use. */
@@ -345,7 +351,7 @@ export function EditionAnnotationsPanel({
         ) : tab === "terms" ? (
           <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
         ) : tab === "claims" ? (
-          <ClaimsTab claims={claims} blocks={edition.blocks} activeId={activeId} onSelectClaim={onSelectAnnotation} onLocatePassage={onLocatePassage} />
+          <ClaimsTab claims={claims} blocks={edition.blocks} activeId={activeId} onSelectClaim={onSelectAnnotation} onLocatePassage={onLocatePassage} writerEnabled={writerEnabled} />
         ) : tab === "my-notes" ? (
           <MyNotesTab
             highlights={highlights}

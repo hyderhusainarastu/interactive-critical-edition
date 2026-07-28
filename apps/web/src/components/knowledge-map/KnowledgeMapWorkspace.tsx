@@ -266,9 +266,14 @@ export interface KnowledgeMapWorkspaceProps {
    *  guard), so explicitly opening the chooser afterward (to switch to a
    *  different context) is never immediately overridden back to this. */
   initialContext?: GraphUrlContext;
+  /** Integration step "writer-insertion-dialogs": gates the inspector's
+   *  "Insert into Writer" action (charter §6 "Write"). Off when Writer
+   *  itself is feature-flagged off, matching every other Writer-adjacent
+   *  affordance in this app. */
+  writerEnabled?: boolean;
 }
 
-export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWorkspaceProps) {
+export function KnowledgeMapWorkspace({ userId, initialContext, writerEnabled = false }: KnowledgeMapWorkspaceProps) {
   const router = useRouter();
   const pathname = usePathname();
   const viewport = useViewport();
@@ -908,6 +913,7 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
                 viewportWidth={viewport.width}
                 device={viewport.device}
                 viewportHeight={viewport.height}
+                writerEnabled={writerEnabled}
                 onClose={() => handleSelect(null)}
               />
             </>

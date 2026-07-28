@@ -1,3 +1,4 @@
+import { phase12FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { KnowledgeMapWorkspace } from "@/components/knowledge-map";
 import { requireSession } from "@/lib/auth";
@@ -19,5 +20,5 @@ export default async function WorkGraphPage({
   const doc = await getOwnedDocument(workId, session.user.id);
   if (!doc) notFound();
 
-  return <KnowledgeMapWorkspace userId={session.user.id} initialContext={{ kind: "work", id: workId }} />;
+  return <KnowledgeMapWorkspace userId={session.user.id} initialContext={{ kind: "work", id: workId }} writerEnabled={phase12FeatureEnabled("writer")} />;
 }

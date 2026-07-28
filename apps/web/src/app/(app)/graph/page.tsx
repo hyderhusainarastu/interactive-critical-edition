@@ -1,3 +1,4 @@
+import { phase12FeatureEnabled } from "@ice/config";
 import { KnowledgeMapWorkspace } from "@/components/knowledge-map";
 import { requireSession } from "@/lib/auth";
 
@@ -10,5 +11,5 @@ import { requireSession } from "@/lib/auth";
  */
 export default async function GlobalGraphPage() {
   const session = await requireSession();
-  return <KnowledgeMapWorkspace userId={session.user.id} />;
+  return <KnowledgeMapWorkspace userId={session.user.id} writerEnabled={phase12FeatureEnabled("writer")} />;
 }
