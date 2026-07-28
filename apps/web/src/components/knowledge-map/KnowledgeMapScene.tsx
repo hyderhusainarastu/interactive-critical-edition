@@ -56,7 +56,7 @@ import {
 import ForceGraph3D, { type ForceGraphMethods, type LinkObject, type NodeObject } from "react-force-graph-3d";
 import * as THREE from "three";
 
-import { distanceToTarget, type Vec3 } from "@ice/graph-display";
+import { distanceToTarget, zForLayer, type Layer, type Vec3 } from "@ice/graph-display";
 import type { KnowledgeMapDisplayLink, KnowledgeMapDisplayNode } from "./adapter";
 import { computeBandGap, computeFixedZ, medianXYLinkDistance, seededInitialPosition } from "./layout";
 import { computeNodeScale, computeVisibleDegrees } from "./sizing";
@@ -67,6 +67,10 @@ import {
   EDGE_VISUALS,
   GRID_COLOR,
   GRID_OPACITY,
+  LAYER_GUIDE_OPACITY,
+  LAYER_GUIDE_ORDER,
+  LAYER_GUIDE_PLANE_COLOR,
+  LAYER_LABEL,
   SELECTED_NEIGHBORHOOD_LINK_OPACITY,
   UNRELATED_WHILE_SELECTED_LINK_OPACITY,
 } from "./theme";
@@ -158,6 +162,24 @@ export interface KnowledgeMapSceneApi extends KnowledgeMapCameraApi {
    *  point into it. A no-op when the node doesn't exist or isn't
    *  currently visible, same as the double-click path. */
   focusOnNode(nodeId: string): void;
+  /** Live world X/Y of a currently-topology-known node — backs the
+   *  toolbar's explicit "Pin" action (spec §4.3), which pins whatever
+   *  position the node is CURRENTLY at (post-settle, or mid-drag) rather
+   *  than requiring the user to drag it. `null` when the node isn't part
+   *  of the current topology. */
+  getNodePosition(nodeId: string): { x: number; y: number } | null;
+  /** Fixes a node's live simulation `fx`/`fy` to exactly `position` — the
+   *  same in-place mutation `handleEngineStop` already performs for `fz`
+   *  (see that handler's own doc comment on why this is a different fact
+   *  from charter §9's canonical-payload immutability). Z is deliberately
+   *  untouched (Arrange never moves a node out of its semantic band,
+   *  charter §8/§11) — only x/y are ever pinned. A no-op for an unknown
+   *  node id. */
+  pinNode(nodeId: string, position: { x: number; y: number }): void;
+  /** Releases a node's `fx`/`fy` back to the force simulation (Z stays
+   *  fixed, as above) — a no-op for an unknown or already-unpinned node
+   *  id. */
+  unpinNode(nodeId: string): void;
 }
 
 export interface KnowledgeMapSceneProps {
@@ -187,6 +209,41 @@ export interface KnowledgeMapSceneProps {
   onContextRestored?: () => void;
   onInteractive?: () => void;
   apiRef?: MutableRefObject<KnowledgeMapSceneApi | null>;
+  /** Explicit Arrange mode (charter §11 "Arrange mode", spec §4.3) —
+   *  `false`/omitted keeps ordinary navigation (`enableNodeDrag={false}`,
+   *  the charter-mandated default). `true` enables node dragging AND wires
+   *  `onArrangeNodeDragEnd` below; both flip together, never independently,
+   *  so a caller can't accidentally leave drag enabled without a persist
+   *  path or vice versa. */
+  arrangeMode?: boolean;
+  /** Positions previously pinned for THIS context (`arrangeStore.ts`,
+   *  keyed by the caller's own `(userId, contextKind, contextId)` — this
+   *  component knows nothing about that scoping, only the resolved
+   *  node-id → position map for whatever's currently open). Applied via a
+   *  dedicated effect (not inside `graphData`'s own `useMemo` — see that
+   *  memo's doc comment for why reading this prop there would either
+   *  violate the "no ref reads during render" rule or force an expensive
+   *  full topology rebuild on every later pin/unpin) that mutates the
+   *  already-built nodes' `x`/`y`/`fx`/`fy` in place — so a pinned node's
+   *  position is deterministic from local storage on a fresh mount
+   *  (charter §14 "deterministic layout seed" / spec §4.3), without ever
+   *  discarding every OTHER node's already-settled position along the way. */
+  pinnedPositions?: ReadonlyMap<string, { x: number; y: number }>;
+  /** Fires once per completed drag while `arrangeMode` is true, with the
+   *  node's final (post-drag) x/y — spec §4.3: "wires onNodeDragEnd to
+   *  write the dragged node's final (x, y) ... into arrangeStore.ts's
+   *  localStorage-backed map." This component does NOT touch
+   *  `localStorage` itself (that stays the caller's job, same separation
+   *  `KnowledgeMapWorkspace.tsx` already keeps for `recentContexts.ts`) —
+   *  it only reports the drag outcome and locks the node's own `fx`/`fy`
+   *  in the live simulation (see `handleNodeDragEnd`'s own comment for why
+   *  the latter is necessary at all). */
+  onArrangeNodeDragEnd?: (nodeId: string, position: { x: number; y: number }) => void;
+  /** Charter §8 "Provide restrained layer-reference labels or planes at no
+   *  more than 6% opacity when the layer guide is enabled." Toggled from
+   *  the toolbar's secondary menu (spec §10's "advanced layout controls in
+   *  secondary menus"), never on by default. */
+  showLayerGuide?: boolean;
 }
 
 export function KnowledgeMapScene({
@@ -204,6 +261,10 @@ export function KnowledgeMapScene({
   onContextRestored,
   onInteractive,
   apiRef,
+  arrangeMode,
+  pinnedPositions,
+  onArrangeNodeDragEnd,
+  showLayerGuide,
 }: KnowledgeMapSceneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fgRef = useRef<ForceGraphMethods<GNode, GLink> | undefined>(undefined);
@@ -217,6 +278,14 @@ export function KnowledgeMapScene({
   const upVectorSetRef = useRef(false);
   const layoutPhaseRef = useRef<"settling" | "banded" | "frozen">("settling");
   const bandGapRef = useRef(60);
+  /** Charter §8 layer-reference planes (`showLayerGuide` prop) — one
+   *  translucent plane per band, repositioned once the real `BAND_GAP`
+   *  emerges (same "settling" → "banded" transition `handleEngineStop`
+   *  already drives for node `fz`, §14 below). Kept in a Map (not just the
+   *  group) so that reposition step can address each plane by layer
+   *  without a linear scan. */
+  const layerPlanesGroupRef = useRef<THREE.Group | null>(null);
+  const layerPlaneByLayerRef = useRef<Map<Layer, THREE.Mesh> | null>(null);
 
   const selectedIdRef = useRef<string | null>(controlledSelectedId);
   const hoveredIdRef = useRef<string | null>(null);
@@ -246,7 +315,22 @@ export function KnowledgeMapScene({
   // see this file's top comment). Keyed on the `nodes`/`links` array
   // REFERENCES, which the caller (KnowledgeMapWorkspace, a later step) is
   // responsible for keeping stable across ordinary attribute-filter
-  // changes and only replacing on a genuine topology change. ---
+  // changes and only replacing on a genuine topology change.
+  //
+  // Deliberately does NOT read `pinnedPositions` here, for two independent
+  // reasons: (1) reading a prop/ref inside a `useMemo` callback whose
+  // dependency array doesn't include it is exactly what this repo's
+  // stricter lint rules (`react-hooks/refs`) exist to catch — a memo must
+  // not silently depend on something outside its own deps; and (2) even
+  // setting that lint concern aside, adding `pinnedPositions` to this
+  // memo's OWN dependency array would rebuild the ENTIRE topology (every
+  // node's seeded position, not just the pinned one) on every later
+  // pin/unpin, discarding every other node's already-settled position —
+  // exactly the "stable topology reference across ordinary changes"
+  // invariant this file's own top comment is built around. Pinned
+  // positions are instead applied by a dedicated effect below
+  // (`applyPinnedPositions`), which mutates the already-built nodes in
+  // place instead of rebuilding this array. ---
   const graphData = useMemo(() => {
     const augmentedLinks: AugmentedLink[] = links.map((l) => ({ ...l, isSelfLink: l.source === l.target }));
     const gNodes: GNode[] = nodes.map((n, i) => {
@@ -256,6 +340,26 @@ export function KnowledgeMapScene({
     const gLinks: GLink[] = augmentedLinks.map((l) => ({ ...l }) as GLink);
     return { nodes: gNodes, links: gLinks };
   }, [nodes, links]);
+
+  // Applies `pinnedPositions` to the just-(re)built `graphData.nodes` by
+  // direct mutation (same live-simulation-runtime-state fact as
+  // `handleEngineStop`'s `fz` assignment below) — runs once per genuine
+  // topology rebuild AND again whenever `pinnedPositions` itself changes
+  // (a later pin/unpin), without ever touching `graphData`'s own identity.
+  // A pinned node's position is therefore deterministic from local storage
+  // on a fresh mount (charter §14 "deterministic layout seed" / spec §4.3).
+  useEffect(() => {
+    if (!pinnedPositions || pinnedPositions.size === 0) return;
+    for (const n of graphData.nodes) {
+      const pinned = pinnedPositions.get(n.id as string);
+      if (!pinned) continue;
+      // eslint-disable-next-line react-hooks/immutability
+      n.x = pinned.x;
+      n.y = pinned.y;
+      n.fx = pinned.x;
+      n.fy = pinned.y;
+    }
+  }, [graphData, pinnedPositions]);
 
   // A plain ref mirror of `graphData`, read (not the `useMemo` binding
   // itself) by `handleEngineStop` below. `d3-force-3d`'s own contract for a
@@ -484,6 +588,30 @@ export function KnowledgeMapScene({
     applySelection(null);
   }, [applySelection]);
 
+  // --- Arrange mode drag persistence (charter §11 "Arrange mode", spec
+  // §4.3). The underlying `3d-force-graph` drag implementation fixes a
+  // node's fx/fy only WHILE dragging and — since this node had no fx/fy set
+  // before the drag started — releases them again once the drag ends
+  // (verified by reading `3d-force-graph`'s own `dragend` handler: it
+  // restores whatever `fx`/`fy` state existed at `dragstart`, which for an
+  // unpinned node is `undefined`). So dragging alone does NOT pin a node —
+  // this handler is what actually turns "drag" into "drag, and it stays
+  // there," by re-fixing fx/fy itself immediately after the library's own
+  // cleanup runs, then reporting the outcome so the caller can persist it
+  // to `arrangeStore.ts` (this component never touches `localStorage`
+  // itself — same separation as `onArrangeNodeDragEnd`'s own doc comment). */
+  const handleNodeDragEnd = useCallback(
+    (node: GNode) => {
+      if (!arrangeMode) return;
+      const x = node.x ?? 0;
+      const y = node.y ?? 0;
+      node.fx = x;
+      node.fy = y;
+      onArrangeNodeDragEnd?.(node.id as string, { x, y });
+    },
+    [arrangeMode, onArrangeNodeDragEnd],
+  );
+
   // --- Imperative API exposed to callers (toolbar/inspector/etc.) ---
   const api: KnowledgeMapSceneApi = useMemo(
     () => ({
@@ -502,6 +630,27 @@ export function KnowledgeMapScene({
         return { x: coords.x, y: coords.y };
       },
       focusOnNode: applyFocus,
+      getNodePosition: (nodeId: string) => {
+        const node = nodesById.get(nodeId);
+        return node ? { x: node.x ?? 0, y: node.y ?? 0 } : null;
+      },
+      pinNode: (nodeId: string, position: { x: number; y: number }) => {
+        const node = nodesById.get(nodeId);
+        if (!node) return;
+        // Live simulation runtime mutation — same fact as `handleEngineStop`'s
+        // own `fz` assignment below (physics-engine "fixed axis" state, not
+        // the canonical DisplayNode/DisplayLink contract charter §9 guards).
+        node.fx = position.x;
+        node.fy = position.y;
+        node.x = position.x;
+        node.y = position.y;
+      },
+      unpinNode: (nodeId: string) => {
+        const node = nodesById.get(nodeId);
+        if (!node) return;
+        node.fx = undefined;
+        node.fy = undefined;
+      },
     }),
     [applySelection, camera, nodesById, isNodeVisible, applyFocus],
   );
@@ -604,6 +753,34 @@ export function KnowledgeMapScene({
     grid.rotation.x = Math.PI / 2; // lie flat in the X/Y plane (Z-up world)
     scene.add(grid);
 
+    // Layer-reference planes (charter §8, `showLayerGuide` prop) — built
+    // eagerly (like the grid above) so toggling the prop later is a plain
+    // visibility flip, not a rebuild; positioned at z=0 for now since the
+    // real BAND_GAP isn't known until the first free-settle pass converges
+    // (handleEngineStop repositions them once it does — see that handler).
+    // `THREE.PlaneGeometry` already lies flat in the X/Y plane by default
+    // (its face normal is +Z), so — unlike the grid above — no rotation is
+    // needed for a Z-up world.
+    const layerGuideGroup = new THREE.Group();
+    layerGuideGroup.visible = Boolean(showLayerGuide);
+    const layerPlaneMaterial = new THREE.MeshBasicMaterial({
+      color: LAYER_GUIDE_PLANE_COLOR,
+      transparent: true,
+      opacity: LAYER_GUIDE_OPACITY,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const layerPlaneGeometry = new THREE.PlaneGeometry(400, 400);
+    const layerPlaneByLayer = new Map<Layer, THREE.Mesh>();
+    for (const layer of LAYER_GUIDE_ORDER) {
+      const plane = new THREE.Mesh(layerPlaneGeometry, layerPlaneMaterial);
+      layerGuideGroup.add(plane);
+      layerPlaneByLayer.set(layer, plane);
+    }
+    scene.add(layerGuideGroup);
+    layerPlanesGroupRef.current = layerGuideGroup;
+    layerPlaneByLayerRef.current = layerPlaneByLayer;
+
     const renderer = fg.renderer();
     const canvas = renderer.domElement;
     rendererDomRef.current = canvas;
@@ -629,9 +806,22 @@ export function KnowledgeMapScene({
       scene.remove(grid);
       grid.geometry.dispose();
       for (const mat of gridMaterials) mat.dispose();
+
+      scene.remove(layerGuideGroup);
+      layerPlaneGeometry.dispose();
+      layerPlaneMaterial.dispose();
+      layerPlanesGroupRef.current = null;
+      layerPlaneByLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSize]);
+
+  // Reactive visibility toggle — flipping `showLayerGuide` never rebuilds
+  // the planes (built once above), only shows/hides the already-resident
+  // group, matching the grid's own "cheap to keep resident" cost profile.
+  useEffect(() => {
+    if (layerPlanesGroupRef.current) layerPlanesGroupRef.current.visible = Boolean(showLayerGuide);
+  }, [showLayerGuide]);
 
   // --- Per-frame loop: label positions only. Never touches React state
   // (charter §14 frame-loop rule) — `pendingConfirm`/scale updates happen
@@ -714,6 +904,19 @@ export function KnowledgeMapScene({
         // eslint-disable-next-line react-hooks/immutability
         n.fz = computeFixedZ({ id: n.id as string, layer: n.layer }, bandGap);
       }
+      // Layer-reference planes (charter §8) reposition to the same real
+      // BAND_GAP the nodes themselves were just pinned to, so the "planes
+      // make the band structure legible" guarantee reflects the actual
+      // layout, not a placeholder z=0 guess.
+      if (layerPlaneByLayerRef.current) {
+        for (const [layer, plane] of layerPlaneByLayerRef.current) {
+          // Same physics/scene-runtime-mutation fact as `n.fz` above — a
+          // THREE.Object3D transform, not the canonical DisplayNode/
+          // DisplayLink contract.
+          // eslint-disable-next-line react-hooks/immutability
+          plane.position.z = zForLayer(layer, bandGap);
+        }
+      }
       layoutPhaseRef.current = "banded";
       fgRef.current?.d3ReheatSimulation();
     } else if (layoutPhaseRef.current === "banded") {
@@ -771,6 +974,17 @@ export function KnowledgeMapScene({
 
   return (
     <div ref={containerRef} style={{ position: "relative", width: "100%", height: "100%" }} data-testid="knowledge-map-scene">
+      {showLayerGuide && (
+        <ul
+          aria-hidden="true"
+          data-testid="knowledge-map-layer-guide-legend"
+          className="pointer-events-none absolute bottom-2 left-2 z-10 flex flex-col gap-0.5 rounded bg-[var(--color-background)]/70 px-2 py-1.5 text-[10px] text-[var(--color-text-muted)]"
+        >
+          {LAYER_GUIDE_ORDER.map((layer) => (
+            <li key={layer}>{LAYER_LABEL[layer]}</li>
+          ))}
+        </ul>
+      )}
       {dimensions.width > 0 && dimensions.height > 0 && (
         <ForceGraph3D<KnowledgeMapDisplayNode, AugmentedLink>
           ref={fgRef as MutableRefObject<ForceGraphMethods<GNode, GLink> | undefined>}
@@ -795,10 +1009,11 @@ export function KnowledgeMapScene({
           linkOpacity={1}
           onNodeClick={handleNodeClick}
           onNodeHover={handleNodeHover}
+          onNodeDragEnd={handleNodeDragEnd}
           onBackgroundClick={handleBackgroundClick}
           onEngineStop={handleEngineStop}
           onEngineTick={handleEngineTick}
-          enableNodeDrag={false}
+          enableNodeDrag={Boolean(arrangeMode)}
         />
       )}
     </div>

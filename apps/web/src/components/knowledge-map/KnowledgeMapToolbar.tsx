@@ -50,6 +50,20 @@ export interface KnowledgeMapToolbarProps {
   arrangeMode: boolean;
   onToggleArrangeMode: () => void;
   onResetLayout: () => void;
+  /** Whether the CURRENTLY SELECTED node already has a saved pin — governs
+   *  whether the Arrange section shows "Pin" or "Unpin" (spec §4.3: "Pin /
+   *  Unpin / Reset Layout are three toolbar-secondary-menu buttons"). */
+  isSelectedPinned: boolean;
+  onPinSelected: () => void;
+  onUnpinSelected: () => void;
+  /** True with nothing selected, or outside the 3D view where there is no
+   *  live node position to pin (same rationale as `focusDisabled` above). */
+  pinUnpinDisabled: boolean;
+  /** Charter §8 "restrained layer-reference labels or planes ... when the
+   *  layer guide is enabled" — an explicit, off-by-default secondary-menu
+   *  toggle, never shown automatically. */
+  showLayerGuide: boolean;
+  onToggleLayerGuide: () => void;
   onOrientationPreset: (preset: OrientationPreset) => void;
   diagnostics: DiagnosticsSummary;
 }
@@ -75,6 +89,12 @@ export function KnowledgeMapToolbar({
   arrangeMode,
   onToggleArrangeMode,
   onResetLayout,
+  isSelectedPinned,
+  onPinSelected,
+  onUnpinSelected,
+  pinUnpinDisabled,
+  showLayerGuide,
+  onToggleLayerGuide,
   onOrientationPreset,
   diagnostics,
 }: KnowledgeMapToolbarProps) {
@@ -94,16 +114,16 @@ export function KnowledgeMapToolbar({
       role="toolbar"
       aria-label="Knowledge Map"
       data-testid="knowledge-map-toolbar"
-      className="flex h-[52px] min-h-[52px] items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-background)] px-3 text-sm"
+      className="flex h-[52px] min-h-[52px] items-center gap-2 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-background)] px-2 text-sm sm:gap-3 sm:px-3"
     >
       <button
         type="button"
         onClick={onOpenContextChooser}
-        className="app-control flex min-w-0 flex-col items-start rounded px-2 py-1 text-left hover:bg-[var(--color-surface)]"
+        className="app-control flex min-h-11 min-w-0 shrink-0 flex-col items-start justify-center rounded px-2 py-1 text-left hover:bg-[var(--color-surface)] md:min-h-0"
         aria-label={`Current context: ${contextLabel}. Open context chooser.`}
       >
-        <span className="max-w-[16rem] truncate font-medium text-[var(--color-text)]">{contextLabel}</span>
-        {breadcrumb && <span className="max-w-[16rem] truncate text-xs text-[var(--color-text-muted)]">{breadcrumb}</span>}
+        <span className="max-w-[10rem] truncate font-medium text-[var(--color-text)] sm:max-w-[16rem]">{contextLabel}</span>
+        {breadcrumb && <span className="max-w-[10rem] truncate text-xs text-[var(--color-text-muted)] sm:max-w-[16rem]">{breadcrumb}</span>}
       </button>
 
       <label className="flex min-w-0 flex-1 items-center gap-2">
@@ -113,31 +133,36 @@ export function KnowledgeMapToolbar({
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search…"
-          className="app-control w-full min-w-0 rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm"
+          className="app-control min-h-11 w-full min-w-[6rem] rounded border border-[var(--color-border)] bg-[var(--color-background)] px-2 py-1 text-sm md:min-h-0"
         />
       </label>
 
-      <div role="group" aria-label="View" className="flex items-center gap-1 rounded border border-[var(--color-border)] p-0.5">
+      {/* Persistent 3D/2D/List switch (charter §10 Mobile bullet:
+          "Persistent 3D / 2D / List switch") — never hidden behind the
+          "More…" menu on any viewport, and its own buttons meet the
+          44px mobile touch-target floor (charter Mobile: "At least 44px
+          controls"), reverting to the desktop-density sizing at `md:`. */}
+      <div role="group" aria-label="View" className="flex shrink-0 items-center gap-1 rounded border border-[var(--color-border)] p-0.5">
         {VIEW_MODES.map((mode) => (
           <button
             key={mode}
             type="button"
             onClick={() => onViewChange(mode)}
             aria-pressed={view === mode}
-            className={`app-control rounded px-2 py-1 text-xs font-medium ${view === mode ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : "text-[var(--color-text-muted)]"}`}
+            className={`app-control min-h-11 min-w-11 rounded px-2 py-1 text-xs font-medium md:min-h-0 md:min-w-0 ${view === mode ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : "text-[var(--color-text-muted)]"}`}
           >
             {VIEW_LABEL[mode]}
           </button>
         ))}
       </div>
 
-      <button type="button" onClick={onFocus} disabled={focusDisabled} className="app-control rounded px-2 py-1 text-xs disabled:opacity-40">
+      <button type="button" onClick={onFocus} disabled={focusDisabled} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs disabled:opacity-40 md:min-h-0">
         Focus
       </button>
-      <button type="button" onClick={onFit} disabled={fitDisabled} className="app-control rounded px-2 py-1 text-xs disabled:opacity-40">
+      <button type="button" onClick={onFit} disabled={fitDisabled} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs disabled:opacity-40 md:min-h-0">
         Fit
       </button>
-      <button type="button" onClick={onHome} disabled={homeDisabled} className="app-control rounded px-2 py-1 text-xs disabled:opacity-40">
+      <button type="button" onClick={onHome} disabled={homeDisabled} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs disabled:opacity-40 md:min-h-0">
         Home
       </button>
 
@@ -145,12 +170,12 @@ export function KnowledgeMapToolbar({
         type="button"
         onClick={onToggleFilters}
         aria-pressed={filtersOpen}
-        className={`app-control rounded px-2 py-1 text-xs ${filtersOpen ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : ""}`}
+        className={`app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs md:min-h-0 ${filtersOpen ? "bg-[var(--color-highlight)] text-[var(--color-accent-ink)]" : ""}`}
       >
         Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
       </button>
 
-      <div className="relative">
+      <div className="relative shrink-0">
         <button
           ref={moreButtonRef}
           type="button"
@@ -158,7 +183,7 @@ export function KnowledgeMapToolbar({
           aria-haspopup="menu"
           aria-expanded={moreOpen}
           aria-controls={moreMenuId}
-          className="app-control rounded px-2 py-1 text-xs"
+          className="app-control min-h-11 rounded px-2 py-1 text-xs md:min-h-0"
         >
           More…
         </button>
@@ -175,14 +200,30 @@ export function KnowledgeMapToolbar({
                 role="menuitemcheckbox"
                 aria-checked={arrangeMode}
                 onClick={onToggleArrangeMode}
-                className="app-control block w-full rounded px-2 py-1 text-left text-xs"
+                className="app-control block min-h-11 w-full rounded px-2 py-1 text-left text-xs md:min-h-0"
               >
                 {arrangeMode ? "Exit Arrange mode" : "Arrange mode"}
               </button>
               {arrangeMode && (
-                <button type="button" role="menuitem" onClick={onResetLayout} className="app-control block w-full rounded px-2 py-1 text-left text-xs text-[var(--color-text-muted)]">
-                  Reset layout
-                </button>
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={pinUnpinDisabled}
+                    onClick={isSelectedPinned ? onUnpinSelected : onPinSelected}
+                    className="app-control block min-h-11 w-full rounded px-2 py-1 text-left text-xs disabled:opacity-40 md:min-h-0"
+                  >
+                    {isSelectedPinned ? "Unpin selected node" : "Pin selected node"}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onResetLayout}
+                    className="app-control block min-h-11 w-full rounded px-2 py-1 text-left text-xs text-[var(--color-text-muted)] md:min-h-0"
+                  >
+                    Reset layout
+                  </button>
+                </>
               )}
             </div>
 
@@ -193,11 +234,24 @@ export function KnowledgeMapToolbar({
                   type="button"
                   role="menuitem"
                   onClick={() => onOrientationPreset(preset)}
-                  className="app-control block w-full rounded px-2 py-1 text-left text-xs capitalize"
+                  className="app-control block min-h-11 w-full rounded px-2 py-1 text-left text-xs capitalize md:min-h-0"
                 >
                   {preset} view
                 </button>
               ))}
+            </div>
+
+            <div className="border-b border-[var(--color-border)] py-2">
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={showLayerGuide}
+                onClick={onToggleLayerGuide}
+                className="app-control block min-h-11 w-full rounded px-2 py-1 text-left text-xs md:min-h-0"
+              >
+                {showLayerGuide ? "Hide layer guide" : "Show layer guide"}
+              </button>
+              <p className="px-2 pt-0.5 text-[10px] text-[var(--color-text-muted)]">Restrained reference planes and a legend naming each depth band — never scholarly data.</p>
             </div>
 
             <div className="py-2 text-xs text-[var(--color-text-muted)]">
@@ -216,7 +270,7 @@ export function KnowledgeMapToolbar({
         )}
       </div>
 
-      <button type="button" onClick={onOpenHelp} className="app-control rounded px-2 py-1 text-xs" aria-label="Help">
+      <button type="button" onClick={onOpenHelp} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs md:min-h-0" aria-label="Help">
         Help
       </button>
     </div>

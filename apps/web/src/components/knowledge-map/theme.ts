@@ -16,7 +16,8 @@
  * desaturation) — see this step's report for the full list of what's new
  * here vs. what's a direct port.
  */
-import type { DisplayEdgeFamily, DisplayKind } from "@ice/graph-display";
+import type { DisplayEdgeFamily, DisplayKind, Layer } from "@ice/graph-display";
+import { LAYER_ORDER } from "@ice/graph-display";
 import type { NodeType } from "../graph/types";
 
 export const BACKDROP_COLOR = "#0B1020";
@@ -33,6 +34,34 @@ export const PALETTE = {
   blue: "#8DB3C4",
   burgundy: "#E0A3AC",
 } as const;
+
+/**
+ * Layer-reference planes/legend (charter §8: "Provide restrained
+ * layer-reference labels or planes at no more than 6% opacity when the
+ * layer guide is enabled. They must make the band structure legible
+ * without becoming decorative scenery"). Off by default — a toolbar
+ * secondary-menu toggle (`KnowledgeMapToolbar.tsx`'s "More" menu), never
+ * shown automatically.
+ */
+export const LAYER_GUIDE_OPACITY = 0.06; // charter: "no more than 6% opacity"
+/** A neutral reference tone (the same slate used for structural/display-only
+ *  desaturation below), deliberately never a kind/edge color, so the guide
+ *  never reads as "another data layer" of its own. */
+export const LAYER_GUIDE_PLANE_COLOR = PALETTE.slate;
+
+/** Stable, ordered reading of the six charter §8 band names — reused by
+ *  both the 3D reference planes and the on-screen legend so the two never
+ *  drift out of sync with each other. */
+export const LAYER_LABEL: Readonly<Record<Layer, string>> = {
+  evidence: "Evidence",
+  intellectual: "Intellectual",
+  claim: "Claims",
+  debate: "Debates",
+  learning: "Learning",
+  research: "Research",
+};
+
+export const LAYER_GUIDE_ORDER: readonly Layer[] = LAYER_ORDER;
 
 /**
  * At most six base silhouettes (charter §10). Every `DisplayKind` maps to

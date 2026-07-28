@@ -35,7 +35,7 @@ import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphF
 import { PERMISSIVE_RECONSTRUCTION_VALIDATORS, useGraphUrlState } from "./useGraphUrlState";
 import { useLegacyGraphUrlRedirect } from "./useLegacyGraphUrlRedirect";
 import { browserStorage, recordRecentContext, readRecentContexts, type RecentContextEntry } from "./recentContexts";
-import { resetLayout as resetArrangeLayout } from "./arrangeStore";
+import { getPinnedPositions, pinPosition, resetLayout as resetArrangeLayout, unpinPosition, type PinnedPositionsByNode } from "./arrangeStore";
 import { claimRoot, debateRoot, passageRoot, questionRoot } from "./resolveContextRoot";
 import { topmostTransientUiKind } from "./escapeStack";
 import { useDialogEscape } from "@/components/primitives/useDialogEscape";
@@ -481,7 +481,26 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
   const [arrangeMode, setArrangeMode] = useState(false);
+  const [showLayerGuide, setShowLayerGuide] = useState(false);
   const [clearArmed, setClearArmed] = useState(false);
+
+  // --- Arrange mode's own pinned-position state (charter §11 "Arrange
+  // mode" / spec §4.3). `arrangeStore.ts` is the durable (localStorage)
+  // source of truth; this is the in-session mirror so the toolbar's
+  // Pin/Unpin controls and the scene's initial layout both see the SAME
+  // pins within one render without re-reading localStorage on every
+  // keystroke. Reloaded from storage whenever the context itself changes
+  // (a fresh `(userId, contextKind, contextId)` triple has its own,
+  // independent pin set — arrangeStore.ts's own scoping). ---
+  const [pinnedPositions, setPinnedPositions] = useState<PinnedPositionsByNode>({});
+  useEffect(() => {
+    if (!context) return;
+    const storage = browserStorage();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPinnedPositions(storage ? getPinnedPositions(userId, context.context.kind, context.context.id, storage) : {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, context?.context.kind, context?.context.id]);
+  const pinnedPositionsMap = useMemo(() => new Map(Object.entries(pinnedPositions)), [pinnedPositions]);
 
   const openChooser = useCallback(() => {
     router.replace(pathname);
@@ -549,6 +568,54 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
     );
   }
 
+  // --- Arrange mode handlers (charter §11/spec §4.3). All three read/write
+  // BOTH the durable store (`arrangeStore.ts`, so a pin survives a fresh
+  // mount) and this session's live scene (`sceneApiRef`, so a pin/unpin
+  // takes visible effect immediately without waiting for a remount) — the
+  // two must never drift, so every handler below touches both in the same
+  // call rather than relying on a later effect to reconcile them.
+  //
+  // `activeContext` re-captures `context` as a fresh `const` right after
+  // the `!context.contextValid` early-return above — TypeScript's
+  // control-flow narrowing of `context` (non-null, `contextValid`) does not
+  // propagate into the separately-declared handler functions below, even
+  // though they're recreated (and so re-close over the correctly-narrowed
+  // value) every render; this is a closure-narrowing limitation, not a
+  // real possible-null case. ---
+  const activeContext = context;
+  function withStorage(fn: (storage: import("./arrangeStore").StorageLike) => void) {
+    const storage = browserStorage();
+    if (storage) fn(storage);
+  }
+
+  function handleArrangeNodeDragEnd(nodeId: string, position: { x: number; y: number }) {
+    withStorage((storage) => setPinnedPositions(pinPosition(userId, activeContext.context.kind, activeContext.context.id, nodeId, position, storage)));
+  }
+
+  function handlePinSelected() {
+    const selectedId = activeContext.selectedId;
+    if (!selectedId) return;
+    const position = sceneApiRef.current?.getNodePosition(selectedId);
+    if (!position) return;
+    sceneApiRef.current?.pinNode(selectedId, position);
+    withStorage((storage) => setPinnedPositions(pinPosition(userId, activeContext.context.kind, activeContext.context.id, selectedId, position, storage)));
+  }
+
+  function handleUnpinSelected() {
+    const selectedId = activeContext.selectedId;
+    if (!selectedId) return;
+    sceneApiRef.current?.unpinNode(selectedId);
+    withStorage((storage) => setPinnedPositions(unpinPosition(userId, activeContext.context.kind, activeContext.context.id, selectedId, storage)));
+  }
+
+  function handleResetLayout() {
+    for (const nodeId of Object.keys(pinnedPositions)) sceneApiRef.current?.unpinNode(nodeId);
+    withStorage((storage) => resetArrangeLayout(userId, activeContext.context.kind, activeContext.context.id, storage));
+    setPinnedPositions({});
+  }
+
+  const isSelectedPinned = Boolean(context.selectedId && pinnedPositions[context.selectedId]);
+
   return (
     <div className="knowledge-map-workspace flex flex-col" data-testid="knowledge-map-workspace">
       <KnowledgeMapToolbar
@@ -573,7 +640,13 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
         onOpenHelp={() => setHelpOpen(true)}
         arrangeMode={arrangeMode}
         onToggleArrangeMode={() => setArrangeMode((v) => !v)}
-        onResetLayout={() => resetArrangeLayout(userId, context.context.kind, context.context.id, browserStorage() ?? { getItem: () => null, setItem: () => {}, removeItem: () => {} })}
+        onResetLayout={handleResetLayout}
+        isSelectedPinned={isSelectedPinned}
+        onPinSelected={handlePinSelected}
+        onUnpinSelected={handleUnpinSelected}
+        pinUnpinDisabled={!context.selectedId || context.view !== "3d" || !sceneActive}
+        showLayerGuide={showLayerGuide}
+        onToggleLayerGuide={() => setShowLayerGuide((v) => !v)}
         onOrientationPreset={(preset) => sceneApiRef.current?.applyOrientationPreset(preset)}
         diagnostics={{
           structuralIssueCount: effectiveContextData?.structuralIssueCount ?? 0,
@@ -648,6 +721,10 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
                       onContextRestored={sceneHandlers.onContextRestored}
                       onInteractive={sceneHandlers.onInteractive}
                       apiRef={sceneApiRef}
+                      arrangeMode={arrangeMode}
+                      pinnedPositions={pinnedPositionsMap}
+                      onArrangeNodeDragEnd={handleArrangeNodeDragEnd}
+                      showLayerGuide={showLayerGuide}
                     />
                   )}
                 </KnowledgeMapFallbackBoundary>
@@ -688,11 +765,34 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
               </div>
               <p className="text-[var(--color-text-muted)]">
                 The Knowledge Map opens one context at a time — a work, passage, research question, claim, or debate — and grows outward as
-                you explore. Depth (front-to-back) is meaningful: evidence sits closest, then intellectual context, claims, debates, learning,
-                and research. Left-to-right position and spacing are layout aids only, not a similarity measurement.
+                you explore.
               </p>
+              <div className="text-[var(--color-text-muted)]">
+                <p className="font-medium text-[var(--color-text)]">Depth (front-to-back) is meaningful</p>
+                <p>
+                  Each of the six bands — Evidence, Intellectual, Claims, Debates, Learning, Research — has a fixed index (&minus;2 through 3).
+                  A node&rsquo;s depth is that index multiplied by a fixed gap distance, not a literal, independently-measured world-unit
+                  separation — the bands are evenly spaced by construction, not by how &ldquo;close&rdquo; any two items actually are.
+                </p>
+              </div>
+              <div className="text-[var(--color-text-muted)]">
+                <p className="font-medium text-[var(--color-text)]">Left-to-right position is a layout aid, not similarity</p>
+                <p>
+                  X/Y position and the spacing between nodes make the map readable — they are never a measurement of how alike or related two
+                  items are. Two nodes drawn near each other are not thereby claimed to be similar.
+                </p>
+              </div>
+              <div className="text-[var(--color-text-muted)]">
+                <p className="font-medium text-[var(--color-text)]">This map does not offer algorithmic similarity clusters</p>
+                <p>
+                  &ldquo;N more…&rdquo; nodes summarize connections not shown yet (use the filter rail&rsquo;s Expand action to reveal them) —
+                  they are plain counts of hidden connections, not a claim that the summarized items are alike. If a future version groups
+                  nodes exploratively, that grouping will be labeled exploratory and will never be presented as scholarly classification.
+                </p>
+              </div>
               <p className="text-[var(--color-text-muted)]">
-                &ldquo;N more…&rdquo; nodes summarize connections not shown yet — use the filter rail&rsquo;s Expand action to reveal them.
+                The toolbar&rsquo;s &ldquo;More…&rdquo; menu has an optional, off-by-default &ldquo;Show layer guide&rdquo; toggle — restrained
+                reference planes and a legend naming each band, to make the depth structure easier to read without adding any new data.
               </p>
             </div>
           )}
