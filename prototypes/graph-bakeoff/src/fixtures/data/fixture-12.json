@@ -1,0 +1,297 @@
+{
+  "name": "fixture-12",
+  "seed": 40466,
+  "nodeCount": 12,
+  "linkCount": 14,
+  "contentHash": "134251cc583dd6c042a2858061dcde83d4c4df577582cd90ee2b69008b11c3aa",
+  "nodes": [
+    {
+      "id": "n0",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Root Work",
+      "isRoot": true,
+      "isHub": false,
+      "degree": 10,
+      "unavailableReason": null
+    },
+    {
+      "id": "n1",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 1 (hub)",
+      "isRoot": false,
+      "isHub": true,
+      "degree": 5,
+      "unavailableReason": null
+    },
+    {
+      "id": "n2",
+      "displayKind": "person",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "A deliberately long fixture label used to exercise label truncation, collision avoidance, and two-line wrapping in the screen-space label layer: “On the Disputed Attribution of the Fragmentary Commentary Tradition Surrounding Book Delta of the Nicomachean Ethics”",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n3",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 2",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 2,
+      "unavailableReason": null
+    },
+    {
+      "id": "n4",
+      "displayKind": "evidence",
+      "layer": "evidence",
+      "bandIndex": -2,
+      "label": "Evidence 3",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n5",
+      "displayKind": "concept",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Concept 4",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n6",
+      "displayKind": "claim",
+      "layer": "claim",
+      "bandIndex": 0,
+      "label": "Claim 5",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n7",
+      "displayKind": "claim",
+      "layer": "claim",
+      "bandIndex": 0,
+      "label": "Claim 6",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n8",
+      "displayKind": "evidence",
+      "layer": "evidence",
+      "bandIndex": -2,
+      "label": "Evidence 7",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n9",
+      "displayKind": "person",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Person 8",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n10",
+      "displayKind": "reference",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Cited Reference 9",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n11",
+      "displayKind": "person",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Person 10",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 2,
+      "unavailableReason": null
+    }
+  ],
+  "links": [
+    {
+      "id": "e0",
+      "source": "n0",
+      "target": "n1",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e1",
+      "source": "n0",
+      "target": "n2",
+      "displayFamily": "influence",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e2",
+      "source": "n1",
+      "target": "n3",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e3",
+      "source": "n0",
+      "target": "n4",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e4",
+      "source": "n0",
+      "target": "n5",
+      "displayFamily": "qualification",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e5",
+      "source": "n0",
+      "target": "n6",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e6",
+      "source": "n0",
+      "target": "n7",
+      "displayFamily": "opposition",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e7",
+      "source": "n0",
+      "target": "n8",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e8",
+      "source": "n0",
+      "target": "n9",
+      "displayFamily": "influence",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e9",
+      "source": "n1",
+      "target": "n10",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e10",
+      "source": "n1",
+      "target": "n11",
+      "displayFamily": "qualification",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e11",
+      "source": "n0",
+      "target": "n3",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e12",
+      "source": "n11",
+      "target": "n11",
+      "displayFamily": "structural",
+      "directed": false,
+      "isSelfLink": true,
+      "parallelOf": null
+    },
+    {
+      "id": "e13",
+      "source": "n0",
+      "target": "n1",
+      "displayFamily": "influence",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": "e0"
+    }
+  ],
+  "meta": {
+    "hubIds": [
+      "n1"
+    ],
+    "selfLinkId": "e12",
+    "parallelLinkIds": [
+      "e0",
+      "e13"
+    ],
+    "longLabelNodeId": "n2",
+    "bandCounts": {
+      "intellectual": 8,
+      "evidence": 2,
+      "claim": 2
+    },
+    "familyCounts": {
+      "reference": 6,
+      "influence": 3,
+      "qualification": 2,
+      "structural": 2,
+      "opposition": 1
+    },
+    "degreeHistogram": {
+      "1": 8,
+      "2": 2
+    },
+    "maxDegree": 2
+  }
+}

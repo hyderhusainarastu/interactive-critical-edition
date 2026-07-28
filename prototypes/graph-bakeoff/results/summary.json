@@ -1,0 +1,262 @@
+{
+  "protocolVersion": "1.0.0",
+  "recordedAtIso": "2026-07-28T02:03:21.204Z",
+  "headedBrowserUsed": true,
+  "machineState": {
+    "preflightWaited": false,
+    "finalLoadAvg": 2.41162109375
+  },
+  "environmentSample": {
+    "machineModel": "Mac15,12",
+    "os": "macOS 26.6",
+    "browser": "chromium",
+    "browserVersion": "151.0.7922.34",
+    "powerMode": "unknown",
+    "viewportWidth": 1440,
+    "viewportHeight": 900,
+    "devicePixelRatio": 1,
+    "fixtureName": "fixture-12",
+    "fixtureContentHash": "134251cc583dd6c042a2858061dcde83d4c4df577582cd90ee2b69008b11c3aa",
+    "rendererBuild": "prototype-a@react-force-graph-3d@1.29.1",
+    "cacheState": "warm"
+  },
+  "floors": {
+    "MIN_MEDIAN_FPS": 50,
+    "MAX_P95_FRAME_TIME_MS": 33,
+    "MAX_P95_POINTER_LATENCY_MS": 100,
+    "MAX_PAYLOAD_TO_INTERACTIVE_MS": 2000,
+    "MAX_WARM_NAV_TO_INTERACTIVE_MS": 3500,
+    "MAX_COLD_NAV_TO_INTERACTIVE_MS": 5000,
+    "MAX_API_REQUEST_P95_MS": 1500
+  },
+  "perPrototype": [
+    {
+      "prototypeId": "a",
+      "fixtures": [
+        {
+          "fixtureName": "fixture-12",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 17.5,
+          "p95PointerLatencyMs": 43.90000003576279,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-24",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 18.30000000000109,
+          "p95PointerLatencyMs": 31.5,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-60",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 18.30000000000109,
+          "p95PointerLatencyMs": 33,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-120",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 18.299999999999272,
+          "p95PointerLatencyMs": 31.399999976158142,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-500",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 17.5,
+          "p95PointerLatencyMs": 34.19999998807907,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-1000",
+          "isMandatory": false,
+          "trialCount": 1,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 17.600000000000364,
+          "p95PointerLatencyMs": 43.10000002384186,
+          "p95PayloadToInteractiveMs": 0,
+          "floorsPass": "diagnostic-only",
+          "violations": [],
+          "crashedOrBlank": false
+        }
+      ],
+      "navigation": {
+        "coldTrialCount": 3,
+        "warmTrialCount": 5,
+        "p95ColdInteractiveMs": 115.89999997615814,
+        "p95WarmInteractiveMs": 89.40000003576279,
+        "coldFloorMs": 5000,
+        "warmFloorMs": 3500,
+        "coldPass": true,
+        "warmPass": true
+      },
+      "lifecycle": {
+        "withinPlateauTolerance": false,
+        "monotonicGrowthDetected": false,
+        "pass": false,
+        "violations": [
+          "resource counts did not return to baseline within the 5% plateau tolerance"
+        ],
+        "baseline": {
+          "cycle": 0,
+          "geometries": 24,
+          "textures": 0,
+          "programs": 4,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        },
+        "finalCycle": {
+          "cycle": 20,
+          "geometries": 0,
+          "textures": 0,
+          "programs": 0,
+          "activeWorkers": 0,
+          "activeObservers": 1,
+          "activeTimers": 1,
+          "registeredListeners": 2
+        }
+      }
+    },
+    {
+      "prototypeId": "b",
+      "fixtures": [
+        {
+          "fixtureName": "fixture-12",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 18.399999999999636,
+          "p95PointerLatencyMs": 11.600000023841858,
+          "p95PayloadToInteractiveMs": 0.5,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-24",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 18.299999999999272,
+          "p95PointerLatencyMs": 12.5,
+          "p95PayloadToInteractiveMs": 0.699999988079071,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-60",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 18.399999999999636,
+          "p95PointerLatencyMs": 12.300000011920929,
+          "p95PayloadToInteractiveMs": 1,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-120",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 18.299999999999272,
+          "p95PointerLatencyMs": 11.399999976158142,
+          "p95PayloadToInteractiveMs": 0.8999999761581421,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-500",
+          "isMandatory": true,
+          "trialCount": 5,
+          "medianFps": 59.880239520962,
+          "p95FrameTimeMs": 18.300000000000182,
+          "p95PointerLatencyMs": 11.600000023841858,
+          "p95PayloadToInteractiveMs": 2,
+          "floorsPass": true,
+          "violations": [],
+          "crashedOrBlank": false
+        },
+        {
+          "fixtureName": "fixture-1000",
+          "isMandatory": false,
+          "trialCount": 1,
+          "medianFps": 59.88023952095874,
+          "p95FrameTimeMs": 18.199999999999818,
+          "p95PointerLatencyMs": 11.899999976158142,
+          "p95PayloadToInteractiveMs": 1.899999976158142,
+          "floorsPass": "diagnostic-only",
+          "violations": [],
+          "crashedOrBlank": false
+        }
+      ],
+      "navigation": {
+        "coldTrialCount": 3,
+        "warmTrialCount": 5,
+        "p95ColdInteractiveMs": 257.19999998807907,
+        "p95WarmInteractiveMs": 239.10000002384186,
+        "coldFloorMs": 5000,
+        "warmFloorMs": 3500,
+        "coldPass": true,
+        "warmPass": true
+      },
+      "lifecycle": {
+        "withinPlateauTolerance": true,
+        "monotonicGrowthDetected": false,
+        "pass": true,
+        "violations": [],
+        "baseline": {
+          "cycle": 0,
+          "geometries": 8,
+          "textures": 1,
+          "programs": 3,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 2
+        },
+        "finalCycle": {
+          "cycle": 20,
+          "geometries": 8,
+          "textures": 1,
+          "programs": 3,
+          "activeWorkers": 0,
+          "activeObservers": 0,
+          "activeTimers": 0,
+          "registeredListeners": 2
+        }
+      }
+    }
+  ]
+}

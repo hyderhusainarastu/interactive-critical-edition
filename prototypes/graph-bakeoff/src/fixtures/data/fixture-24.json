@@ -1,0 +1,540 @@
+{
+  "name": "fixture-24",
+  "seed": 40484,
+  "nodeCount": 24,
+  "linkCount": 26,
+  "contentHash": "39dd86c9cd845374f9b8ca724e3efb5391e1e528f51de25887d1a11e23bb738f",
+  "nodes": [
+    {
+      "id": "n0",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Root Work",
+      "isRoot": true,
+      "isHub": false,
+      "degree": 18,
+      "unavailableReason": null
+    },
+    {
+      "id": "n1",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 1 (hub)",
+      "isRoot": false,
+      "isHub": true,
+      "degree": 9,
+      "unavailableReason": null
+    },
+    {
+      "id": "n2",
+      "displayKind": "passage",
+      "layer": "evidence",
+      "bandIndex": -2,
+      "label": "A deliberately long fixture label used to exercise label truncation, collision avoidance, and two-line wrapping in the screen-space label layer: “On the Disputed Attribution of the Fragmentary Commentary Tradition Surrounding Book Delta of the Nicomachean Ethics”",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n3",
+      "displayKind": "person",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Person 2",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n4",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 3",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n5",
+      "displayKind": "question",
+      "layer": "debate",
+      "bandIndex": 1,
+      "label": "Research Question 4",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n6",
+      "displayKind": "online_source",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Online Source 5",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n7",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 6",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n8",
+      "displayKind": "gap",
+      "layer": "research",
+      "bandIndex": 3,
+      "label": "Research Gap 7",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n9",
+      "displayKind": "online_source",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Online Source 8",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n10",
+      "displayKind": "position",
+      "layer": "debate",
+      "bandIndex": 1,
+      "label": "Position 9",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n11",
+      "displayKind": "hypothesis",
+      "layer": "research",
+      "bandIndex": 3,
+      "label": "Hypothesis 10",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n12",
+      "displayKind": "learning_step",
+      "layer": "learning",
+      "bandIndex": 2,
+      "label": "Learning Step 11",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n13",
+      "displayKind": "concept",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Concept 12",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n14",
+      "displayKind": "online_source",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Online Source 13",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 2,
+      "unavailableReason": "cited, not yet acquired"
+    },
+    {
+      "id": "n15",
+      "displayKind": "claim",
+      "layer": "claim",
+      "bandIndex": 0,
+      "label": "Claim 14",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n16",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 15",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n17",
+      "displayKind": "gap",
+      "layer": "research",
+      "bandIndex": 3,
+      "label": "Research Gap 16",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n18",
+      "displayKind": "work",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Uploaded Work 17",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n19",
+      "displayKind": "claim",
+      "layer": "claim",
+      "bandIndex": 0,
+      "label": "Claim 18",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n20",
+      "displayKind": "question",
+      "layer": "debate",
+      "bandIndex": 1,
+      "label": "Research Question 19",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n21",
+      "displayKind": "question",
+      "layer": "debate",
+      "bandIndex": 1,
+      "label": "Research Question 20",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n22",
+      "displayKind": "claim",
+      "layer": "claim",
+      "bandIndex": 0,
+      "label": "Claim 21",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 1,
+      "unavailableReason": null
+    },
+    {
+      "id": "n23",
+      "displayKind": "concept",
+      "layer": "intellectual",
+      "bandIndex": -1,
+      "label": "Concept 22",
+      "isRoot": false,
+      "isHub": false,
+      "degree": 2,
+      "unavailableReason": null
+    }
+  ],
+  "links": [
+    {
+      "id": "e0",
+      "source": "n0",
+      "target": "n1",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e1",
+      "source": "n0",
+      "target": "n2",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e2",
+      "source": "n0",
+      "target": "n3",
+      "displayFamily": "opposition",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e3",
+      "source": "n0",
+      "target": "n4",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e4",
+      "source": "n0",
+      "target": "n5",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e5",
+      "source": "n1",
+      "target": "n6",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e6",
+      "source": "n0",
+      "target": "n7",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e7",
+      "source": "n0",
+      "target": "n8",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e8",
+      "source": "n0",
+      "target": "n9",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e9",
+      "source": "n1",
+      "target": "n10",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e10",
+      "source": "n1",
+      "target": "n11",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e11",
+      "source": "n0",
+      "target": "n12",
+      "displayFamily": "prerequisite",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e12",
+      "source": "n0",
+      "target": "n13",
+      "displayFamily": "opposition",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e13",
+      "source": "n1",
+      "target": "n14",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e14",
+      "source": "n1",
+      "target": "n15",
+      "displayFamily": "opposition",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e15",
+      "source": "n1",
+      "target": "n16",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e16",
+      "source": "n0",
+      "target": "n17",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e17",
+      "source": "n0",
+      "target": "n18",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e18",
+      "source": "n0",
+      "target": "n19",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e19",
+      "source": "n0",
+      "target": "n20",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e20",
+      "source": "n1",
+      "target": "n21",
+      "displayFamily": "structural",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e21",
+      "source": "n0",
+      "target": "n22",
+      "displayFamily": "influence",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e22",
+      "source": "n0",
+      "target": "n23",
+      "displayFamily": "opposition",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e23",
+      "source": "n0",
+      "target": "n14",
+      "displayFamily": "reference",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": null
+    },
+    {
+      "id": "e24",
+      "source": "n23",
+      "target": "n23",
+      "displayFamily": "structural",
+      "directed": false,
+      "isSelfLink": true,
+      "parallelOf": null
+    },
+    {
+      "id": "e25",
+      "source": "n0",
+      "target": "n1",
+      "displayFamily": "influence",
+      "directed": true,
+      "isSelfLink": false,
+      "parallelOf": "e0"
+    }
+  ],
+  "meta": {
+    "hubIds": [
+      "n1"
+    ],
+    "selfLinkId": "e24",
+    "parallelLinkIds": [
+      "e0",
+      "e25"
+    ],
+    "longLabelNodeId": "n2",
+    "bandCounts": {
+      "intellectual": 12,
+      "evidence": 1,
+      "debate": 4,
+      "research": 3,
+      "learning": 1,
+      "claim": 3
+    },
+    "familyCounts": {
+      "reference": 11,
+      "opposition": 4,
+      "structural": 8,
+      "prerequisite": 1,
+      "influence": 2
+    },
+    "degreeHistogram": {
+      "1": 20,
+      "2": 2
+    },
+    "maxDegree": 2
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "generatedBy": "src/fixtures/generate.ts",
+  "fixtures": [
+    {
+      "name": "fixture-12",
+      "nodeCount": 12,
+      "linkCount": 14,
+      "contentHash": "134251cc583dd6c042a2858061dcde83d4c4df577582cd90ee2b69008b11c3aa"
+    },
+    {
+      "name": "fixture-24",
+      "nodeCount": 24,
+      "linkCount": 26,
+      "contentHash": "39dd86c9cd845374f9b8ca724e3efb5391e1e528f51de25887d1a11e23bb738f"
+    },
+    {
+      "name": "fixture-60",
+      "nodeCount": 60,
+      "linkCount": 65,
+      "contentHash": "4b6fb310535c635c5e4fe5e2286ed5ec9498b6b93181aa68fc3439e60c0ae38e"
+    },
+    {
+      "name": "fixture-120",
+      "nodeCount": 120,
+      "linkCount": 128,
+      "contentHash": "eb452a501241a0520f8c06e4f66e04bf7f6e81c47643fea98b415ae59c5ba6f6"
+    },
+    {
+      "name": "fixture-500",
+      "nodeCount": 500,
+      "linkCount": 2000,
+      "contentHash": "333a1352d99eab61d4eed162e78800c1f9ad014f401588cef544d0b0639adcce"
+    },
+    {
+      "name": "fixture-1000",
+      "nodeCount": 1000,
+      "linkCount": 4000,
+      "contentHash": "974e122e3a2135c4e895557158aa65a338551fffd07e65e6b5615b603eef796a"
+    }
+  ]
+}
