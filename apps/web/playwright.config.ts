@@ -34,7 +34,19 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /knowledge-map-touch\.spec\.ts$/ },
+    {
+      name: "chromium",
+      use: { browserName: "chromium" },
+      // Stage 7 journey matrix (docs/design/stage7-journey-matrix.md) owns
+      // its own viewport parameterization below — every journeys/*.spec.ts
+      // file already runs under "journeys-desktop" plus a guided-mobile and
+      // (for the four cross-workflow journeys) 1024/768 project, so letting
+      // this default project ALSO pick them up at Playwright's own default
+      // 1280x720 viewport would just be a fifth, uncontrolled-viewport run
+      // of the same file with no charter rationale behind that specific
+      // size — excluded here, not because the journeys are out of scope.
+      testIgnore: [/knowledge-map-touch\.spec\.ts$/, /journeys\//],
+    },
     // Touch-capable mobile project (Stage 3 Knowledge Map rebuild, spec
     // §7.3 "Touch tap/orbit/pinch/pan (mobile project)") — `devices["Pixel
     // 7"]` ships as part of the already-installed `@playwright/test`
@@ -47,6 +59,45 @@ export default defineConfig({
       name: "mobile-chromium",
       use: { ...devices["Pixel 7"] },
       testMatch: /knowledge-map-touch\.spec\.ts$/,
+    },
+    // --- Stage 7 journey matrix (charter §16 "Signed-in journey tests" +
+    // its risk-based-matrix bullets: "Run every journey end to end in
+    // desktop Chromium at 1440px and in one appropriate guided-mobile
+    // viewport, alternating 375px and 320px so both are covered" plus "Run
+    // the Reader, Research, Writer, and Knowledge Map cross-workflow
+    // journeys additionally at 1024px and 768px"). Every journey file is
+    // matched by "journeys-desktop"; the guided-mobile pair is split by
+    // `testMatch` so each journey lands on exactly one of 375/320 (odd
+    // journeys 375, even journeys 320 — an arbitrary but fixed and
+    // documented alternation, see the matrix doc); the two cross-workflow
+    // projects are scoped to only the Reader/Research/Knowledge-Map/Writer
+    // journey files (j02/j04/j05/j07). See docs/design/stage7-journey-matrix.md
+    // for the full rationale and which viewport(s) were actually executed
+    // this session vs. configured-for-a-future-run.
+    {
+      name: "journeys-desktop",
+      use: { browserName: "chromium", viewport: { width: 1440, height: 900 } },
+      testMatch: /journeys\/.*\.spec\.ts$/,
+    },
+    {
+      name: "journeys-guided-mobile-375",
+      use: { browserName: "chromium", viewport: { width: 375, height: 812 }, hasTouch: true, isMobile: true },
+      testMatch: /journeys\/j0[1357]-.*\.spec\.ts$/,
+    },
+    {
+      name: "journeys-guided-mobile-320",
+      use: { browserName: "chromium", viewport: { width: 320, height: 690 }, hasTouch: true, isMobile: true },
+      testMatch: /journeys\/(j0[2468]|j10)-.*\.spec\.ts$/,
+    },
+    {
+      name: "journeys-crossworkflow-1024",
+      use: { browserName: "chromium", viewport: { width: 1024, height: 900 } },
+      testMatch: /journeys\/(j02|j04|j05|j07)-.*\.spec\.ts$/,
+    },
+    {
+      name: "journeys-crossworkflow-768",
+      use: { browserName: "chromium", viewport: { width: 768, height: 1024 } },
+      testMatch: /journeys\/(j02|j04|j05|j07)-.*\.spec\.ts$/,
     },
   ],
 });
