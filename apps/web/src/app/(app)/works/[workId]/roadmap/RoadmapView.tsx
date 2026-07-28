@@ -13,7 +13,7 @@ import {
   type RoadmapMode,
 } from "@ice/roadmap";
 import { TIER_COLOR, TierDot } from "@/components/shared/roadmapPrimitives";
-import { RoadmapConstellation } from "./RoadmapConstellation";
+import { RoadmapStageColumns } from "@/components/roadmap2d/RoadmapStageColumns";
 
 interface RoadmapResponse {
   title: string;
@@ -328,11 +328,13 @@ export function RoadmapView({
         </p>
       )}
 
-      {/* The one functional addition (feature spec §4): a small, restrained
-          companion map of the SAME items the tier list below already
-          renders — never a second data source. The tier list stays the
+      {/* Stage 4 read spec §6: a flat 2D stage-column companion map of the
+          SAME items the tier list below already renders — never a second
+          data source, and never a rotatable pseudo-3D view (that was
+          `RoadmapConstellation`'s defect against the charter, not a style
+          choice — see the spec's own §6.1). The tier list stays the
           always-visible, never-collapsed accessible default. */}
-      {data && visible.length > 0 && <RoadmapConstellation rootTitle={title} items={visible} />}
+      {data && visible.length > 0 && <RoadmapStageColumns rootTitle={title} items={visible} onMutate={mutate} />}
 
       {byTier.map(({ tier, items }) => (
         <section key={tier} className="app-reveal mb-6">

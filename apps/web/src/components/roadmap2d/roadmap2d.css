@@ -1,0 +1,25 @@
+/**
+ * Stage 4 read spec §6.5: a new stylesheet for the 2D stage-column Roadmap,
+ * since `globals.css` is out of this lane's file ownership. Only the rules
+ * that plain Tailwind utility classes can't cleanly express (absolute
+ * positioning driven by JS-computed coordinates, and a focus-visible ring
+ * that needs to sit above the SVG edge layer) live here — everything else
+ * uses the existing utility classes and CSS custom properties, same as the
+ * rest of this codebase.
+ */
+
+.roadmap-stage-canvas {
+  position: relative;
+}
+
+.roadmap-stage-node,
+.roadmap-stage-root {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.roadmap-stage-node:focus-visible,
+.roadmap-stage-root:focus-visible {
+  outline: 2px solid var(--color-accent-ink);
+  outline-offset: 3px;
+}
