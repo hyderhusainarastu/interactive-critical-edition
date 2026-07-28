@@ -142,6 +142,15 @@ function WriterEditorSession({
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [status, setStatus] = useState<SaveState>("Saved");
+  // Autosave can be requested again while the previous PATCH is still in
+  // flight (for example, a late input event arriving during the debounce
+  // hand-off). Both requests would otherwise carry the same
+  // `expectedUpdatedAt`: the first correctly advances the row, while the
+  // second falsely looks like a different-device edit and receives 409.
+  // Serialize local saves and schedule one follow-up after a successful
+  // response; genuine remote writes still produce the existing 409 state.
+  const saveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef(false);
   // §4.3's now-implemented 409 contract: the last known-good `updated_at`
   // for the active document, sent as `expectedUpdatedAt` on every save.
   // Reset whenever the active document changes (the effect below, keyed on
@@ -321,6 +330,11 @@ function WriterEditorSession({
   // since the failure.
   async function saveNow() {
     if (!activeDocumentId) return;
+    if (saveInFlightRef.current) {
+      saveQueuedRef.current = true;
+      return;
+    }
+    saveInFlightRef.current = true;
     setStatus("Saving…");
     // A network-level failure (offline, DNS, an aborted request) makes
     // `fetch` itself reject rather than resolve with a non-ok response —
@@ -370,6 +384,16 @@ function WriterEditorSession({
       postSaved(activeDocumentId, savedUpdatedAt);
     } else if (result === "conflict" && conflictLatestUpdatedAt) {
       setPendingConflictUpdatedAt(conflictLatestUpdatedAt);
+    }
+    saveInFlightRef.current = false;
+    // Only replay a locally queued autosave after a confirmed local write.
+    // Retrying after a real 409 would weaken the cross-device conflict
+    // boundary by silently overwriting the other device's work.
+    if (saveQueuedRef.current && result === "ok") {
+      saveQueuedRef.current = false;
+      setStatus("Editing");
+    } else {
+      saveQueuedRef.current = false;
     }
   }
   useEffect(() => {
