@@ -9,6 +9,22 @@ JSON files alongside it, and one additional real `vite build` pass per
 prototype run specifically for this report's bundle-size section (method
 documented in that section).
 
+> **⚠️ Superseded headline conclusion.** The original decision below (§7:
+> "Chosen: Prototype B") was reached from an unsound lifecycle
+> measurement. A correction lane found the original 20x mount/unmount
+> protocol's per-cycle snapshot was ambiguous (it read the *previous*
+> cycle's mount, with no guarantee a frame had actually rendered before
+> the read), which is what produced Prototype A's apparent "fail." A
+> corrected, phase-consistent protocol was implemented and re-run for
+> real; **both prototypes now measure a clean pass**, and the charter §13
+> decision rule, re-applied mechanically to the corrected data, selects
+> **Prototype A**, not B. Prototype A's implementation has been restored;
+> Prototype B's has been removed per rule 9. See the **"Correction
+> addendum"** section at the end of this document for the full diagnosis,
+> corrected measurements, contamination screen, and final decision. Every
+> section below this point is left exactly as originally written, for the
+> historical record — do not read §7's "Chosen: Prototype B" as current.
+
 ## 1. Fixture and machine details
 
 Recorded protocol metadata (`summary.json.environmentSample` /
@@ -523,3 +539,352 @@ rather than silently left for someone to discover as a broken build.
 Stage 3 ("Knowledge Map rebuild") is where the winning renderer's
 approach gets integrated into the real `apps/web` production code — this
 harness does not need to build cleanly for that to happen.
+
+---
+
+## Correction addendum (2026-07-27/28)
+
+A separate correction lane reviewed the decision above at the moderator's
+request, on the grounds that the lifecycle "failure" driving the entire
+outcome looked like a measurement-phase artifact rather than a real
+defect. This addendum documents that review end to end: the original
+verdict, the diagnosis, the corrected protocol, the corrected
+measurements, a screen for the owner's documented physical interaction
+with the browser during the run, and the final, mechanically re-applied
+decision. Nothing above this line was edited or deleted.
+
+### C.1 The original verdict, restated
+
+§7 above selected Prototype B solely because Prototype A measured
+`pass: false` on the mandatory 20x mount/unmount lifecycle gate: baseline
+`geometries: 24, programs: 4` vs. cycle-20 `geometries: 0, programs: 0`,
+outside the charter's 5% return-to-baseline tolerance. Every other
+mandatory gate (12/24/60/120/500 fixture floors, no stress-fixture
+crash/blank) passed for both prototypes; the lifecycle gate was the sole
+deciding fact, exactly as §7 says.
+
+### C.2 Diagnosis: the raw data proves a measurement-phase artifact, not a leak
+
+The full 20-cycle raw record (`results/a--lifecycle--fixture-24.json`):
+
+```
+cycle  geometries  programs  activeObservers  activeTimers  registeredListeners
+base        24         4           1               1                2
+ 1           0         0           1               1                2
+ 2           0         0           1               1                2
+ 3           0         0           1               1                2
+ 4          24         4           1               1                2
+ 5           0         0           1               1                2
+ 6           0         0           1               1                2
+ 7          24         4           1               1                2
+ 8           0         0           1               1                2
+ 9          24         4           1               1                2
+10           0         0           1               1                2
+11          24         4           1               1                2
+12           0         0           1               1                2
+13          24         4           1               1                2
+14           0         0           1               1                2
+15          24         4           1               1                2
+16           0         0           1               1                2
+17          24         4           1               1                2
+18           0         0           1               1                2
+19           0         0           1               1                2
+20           0         0           1               1                2
+```
+
+The decisive fact is in the four right-hand columns, not the two the
+original report focused on: **`activeObservers`/`activeTimers`/
+`registeredListeners` are bit-for-bit constant (`1`/`1`/`2`) across every
+one of the 20 cycles, including every cycle where `geometries`/`programs`
+read `0`.** These three counts come from `ResourceTracker`
+(`src/protoA/lifecycle.ts`), and a *real* unmount disposes that same
+tracker in the identical cleanup effect that nulls the renderer ref
+(`GraphScene.tsx`'s mount-effect cleanup calls `tracker.disposeAll()` and
+`trackerRef.current = null` back to back with `fgRef.current = undefined`
+— see `GraphScene.tsx` lines ~443-476). If the component had actually
+been unmounted at any of the `0`-reading cycles, the tracker-backed
+counts would have read `0` too, at exactly those same cycles. They never
+did, on any of the 20 cycles. **This is direct, in-the-data proof that
+the "0" readings were never a real unmount** — the component was still
+mounted, with its listeners/observers/timers all live, at every single
+one of those reads.
+
+**Root cause, read from the code (`src/App.tsx`'s old `remountCycle` +
+`scripts/run-bench.ts`'s old `runLifecycleCycle`):**
+
+1. **Wrong mount, wrong instant.** Each cycle's snapshot was taken via
+   `readLifecycleSnapshot()` on whatever handle `handleRef.current`
+   pointed to *before* that cycle's own `unmount()` call — i.e. it read
+   the **previous** cycle's mount, at whatever exact JS-execution instant
+   `remountCycle(cycle)` happened to run, with no explicit wait for that
+   mount to have settled beyond the "interactive" callback having fired.
+2. **No guarantee a frame had rendered.** Prototype A's
+   `readLifecycleSnapshot(cycle)` reads `fgRef.current?.renderer().info`
+   live, at call time. `renderer.info.memory.geometries`/`.programs` are
+   only populated once `three-forcegraph`'s own internal
+   `requestAnimationFrame`-driven loop has actually called
+   `renderer.render()` at least once — a fact that is asynchronous
+   relative to the synchronous `useEffect` that fires "interactive"/
+   "onReady". Nothing in the old protocol inserted an explicit settle
+   wait (real rendered frames, or even a fixed delay) between "interactive
+   reported" and "snapshot read." Under the old protocol's fast,
+   unthrottled cadence (no explicit per-cycle delay at all), whether a
+   given read landed before or after that mount's first actual draw call
+   was a race — explaining the alternation exactly, and explaining why it
+   was **non-monotonic** (never trending upward, correctly noted as odd
+   for a "leak" by the original report's own honest caveat in §3) rather
+   than accumulating.
+
+Both of these are structural bugs in the shared driver code
+(`App.tsx`/`run-bench.ts`), not in either prototype's own renderer — which
+is exactly why fixing the protocol, not either prototype's disposal code,
+resolved it (§C.4).
+
+### C.3 Corrected protocol
+
+Implemented in `prototypes/graph-bakeoff/src/App.tsx` (new
+`window.__graphBakeoffLifecycleV2.runCorrectedCycle()`),
+`src/protoA/lifecycle.ts` (new `readLifecycleAccessor()`),
+`src/prototypes/protoB/GraphSceneB.tsx`/`index.tsx` (new
+`captureLifecycleAccessor()`), and `src/bench/runner.ts`/`types.ts` (new
+`runLifecycleBenchmarkV2`/`evaluateLifecycleV2`/`LifecycleCycleResultV2`).
+Full inline documentation lives at each of those sites; summarized here:
+
+Each of the 20 measured cycles (plus 2 discarded warm-up cycles) is now
+**fully self-contained** — it never reads a different cycle's mount — and
+takes **two** live, non-cached snapshots per cycle:
+
+1. Mount a fresh handle, wait for "interactive".
+2. **Settle**: wait 5 real `requestAnimationFrame` callbacks (guarantees
+   actual `renderer.render()` calls have happened, not just that the
+   scene *reported* ready) plus a fixed 50ms buffer.
+3. Capture `mountedSettled` via a **live accessor bound to this mount's
+   concrete renderer/tracker objects** (`captureLifecycleAccessor()`) —
+   deliberately not going through `fgRef.current`/`trackerRef.current`
+   (the refs), since re-invoking the accessor later still reads real
+   values off the same retained JS objects even after those *other* refs
+   get nulled by unrelated cleanup code.
+4. Unmount.
+5. **Settle**: wait 150ms for any deferred/async teardown to finish.
+6. Re-invoke the **same** accessor (not a fresh one) to capture
+   `postUnmount` — a genuine "did this mount's resources actually return
+   to rest" reading.
+
+The gate (`evaluateLifecycleV2`) requires **both** series (mounted-settled
+and post-unmount) to independently plateau within the charter's existing
+5% tolerance and show no monotonic growth across the final 5 cycles — a
+leak visible only post-unmount (mounted numbers fine, disposal
+incomplete) is just as real a finding as one visible only mounted-settled
+(e.g. growing per-mount cost), so neither series alone is sufficient.
+
+### C.4 Corrected measurements — real, executed, all 20 cycles
+
+Re-run three times for reproducibility (final authoritative files:
+`results/a--lifecycle--fixture-24--v2.json`,
+`results/b--lifecycle--fixture-24--v2.json`; same production build (`vite
+build` + `vite preview`), same headed Chromium, same machine/environment
+as the original run — `Mac15,12`, macOS 26.6, Chromium 151.0.7922.34,
+1440×900, DPR 1). `fixtureContentHash` on both v2 files
+(`39dd86c9cd845374f9b8ca724e3efb5391e1e528f51de25887d1a11e23bb738f`)
+matches the original v1 lifecycle files exactly, confirming byte-identical
+fixture data.
+
+**Prototype A — both series identical, every single cycle, zero drift:**
+
+| Series | Cycle 0 (baseline) | Cycles 1–20 | Plateau? | Monotonic growth? |
+|---|---|---|---|---|
+| mountedSettled | `geometries:24, textures:0, programs:4, observers:1, timers:1, listeners:2` | identical, all 20 cycles | **true** | **false** |
+| postUnmount | `geometries:0, textures:0, programs:0, observers:0, timers:0, listeners:0` | identical, all 20 cycles | **true** | **false** |
+
+**Result: `pass: true` on both series.** A never leaked anything — the
+mounted numbers are rock-steady at their real value every cycle, and the
+post-unmount numbers are rock-steady at genuine zero every cycle. The
+original protocol's ambiguous single-snapshot read was the entire reason
+it ever looked otherwise.
+
+**Prototype B — both series identical, every single cycle, zero drift:**
+
+| Series | Cycle 0 (baseline) | Cycles 1–20 | Plateau? | Monotonic growth? |
+|---|---|---|---|---|
+| mountedSettled | `geometries:8, textures:1, programs:3, observers:0, timers:0, listeners:2` | identical, all 20 cycles | **true** | **false** |
+| postUnmount | `geometries:0, textures:1, programs:0, observers:0, timers:0, listeners:0` | identical, all 20 cycles | **true** | **false** |
+
+**Result: `pass: true` on both series.** Note `textures:1` persists in
+B's post-unmount reading at both baseline and every later cycle — a
+stable, non-growing plateau (exactly the charter's own permitted
+"documented cache plateau" language, §13 step 9), not a leak: it never
+grows, so `isWithinPlateau`'s ratio check (`|value - baseline| / baseline
+<= 5%`) is trivially satisfied at 0% drift.
+
+**A real, live mechanism difference, captured directly from the browser
+console during this run (not inferred):** every one of Prototype B's 20+
+unmount cycles logged a genuine
+`THREE.WebGLRenderer: Context Lost.` message from three.js itself — React
+Three Fiber's `<Canvas>` forces a real WebGL context loss on unmount to
+release GPU memory promptly. Prototype A's unmount produced **no** such
+console message on any cycle across any of the three re-runs —
+`react-force-graph-3d`/`three-forcegraph` release resources via plain
+`renderer.dispose()`, without forcing context loss. Both are legitimate,
+complete disposal strategies; this is a real, observed difference in
+*how* the two libraries release GPU resources, not a defect in either,
+and it is the most likely proximate explanation for why the old,
+un-throttled, rapid-cycling v1 protocol's snapshot timing happened to
+expose A's read/render race and not B's — B's disposal event is a
+synchronous, unambiguous signal; A's is not. This is recorded as a
+finding for whoever inherits the winning prototype in Stage 3, not as a
+decision input.
+
+### C.5 Contamination screen
+
+The owner physically clicked the headed browser at least once, at an
+unknown time, during the original measurement window (2026-07-27/28
+23:45:19–02:03:21 UTC). Screened all 50 mandatory trial JSONs (a/b ×
+fixtures 12/24/60/120/500 × 5 trials each): for each of the 10 fixture ×
+prototype groups, compared the 5 trials' median FPS, p95 frame time, and
+p95 pointer latency against that group's own median, flagging any trial
+deviating by more than 25% relative **or** more than 3× the group's
+interquartile range on any of the three metrics.
+
+**6 (metric, trial) combinations flagged, across 6 unique trials — all
+via the 3×-IQR leg only; the 25%-relative leg never triggered** (largest
+relative deviation observed: 9.63%, well under the 25% threshold):
+
+| Trial | Metric | Value | Group median | Relative dev | IQR multiple |
+|---|---|---|---|---|---|
+| a/fixture-12/trial4 | p95 pointer latency | 43.1ms | 43.8ms | 1.6% | 3.5× |
+| a/fixture-60/trial1 | p95 pointer latency | 33.0ms | 30.1ms | 9.63% | 4.1× |
+| a/fixture-60/trial2 | p95 frame time | 18.1ms | 18.3ms | 1.09% | (IQR ≈ 0) |
+| a/fixture-120/trial5 | p95 frame time | 17.5ms | 18.2ms | 3.85% | 7.0× |
+| b/fixture-12/trial5 | p95 frame time | 18.4ms | 17.5ms | 5.14% | 9.0× |
+| b/fixture-500/trial5 | p95 frame time | 17.5ms | 18.3ms | 4.37% | 8.0× |
+
+This is a known statistical artifact of applying a Tukey-style IQR fence
+to near-quantized, sub-millisecond timing data: when 4–5 of a group's 5
+trials sit within 0.1–0.2ms of each other, the group's own IQR shrinks
+toward zero, so even a trivial sub-millisecond difference on the
+remaining trial computes as "many multiples of IQR." Every flagged raw
+value already sat inside the min/max range this report's own §2.1 tables
+already published — nothing here is a value the original report hid or
+missed; the mechanical rule simply flagged ordinary jitter.
+
+**All 6 flagged trials were re-run cleanly** (`scripts/rerun-flagged-trials.ts`
+— fresh isolated browser, fresh navigation, one full warm-up cycle, one
+measured trial, same production build/protocol; result files suffixed
+`--rerun.json`, originals untouched):
+
+| Trial | Metric | Original | Rerun |
+|---|---|---|---|
+| a/fixture-12/trial4 | fps / p95 frame / p95 pointer | 59.88 / 17.50ms / 43.10ms | 59.88 / 18.30ms / 42.10ms |
+| a/fixture-60/trial1 | fps / p95 frame / p95 pointer | 59.88 / 18.30ms / 33.00ms | 59.88 / 18.20ms / 29.90ms |
+| a/fixture-60/trial2 | fps / p95 frame / p95 pointer | 59.88 / 18.10ms / 30.10ms | 59.88 / 18.70ms / 30.20ms |
+| a/fixture-120/trial5 | fps / p95 frame / p95 pointer | 59.88 / 17.50ms / 29.40ms | 59.88 / 17.90ms / 28.70ms |
+| b/fixture-12/trial5 | fps / p95 frame / p95 pointer | 59.88 / 18.40ms / 11.40ms | 59.88 / 18.20ms / 11.10ms |
+| b/fixture-500/trial5 | fps / p95 frame / p95 pointer | 59.88 / 17.50ms / 11.40ms | 59.88 / 18.20ms / 9.80ms |
+
+**Every re-run lands in the same tight noise band as its original — no
+group median materially shifts, and every single value (original and
+rerun alike) remains 3–5× inside its respective floor at minimum** (worst
+case across all 12 numbers: p95 pointer latency 43.1ms, still 2.3× inside
+the 100ms floor; p95 frame time 18.7ms, still 1.8× inside the 33ms
+floor). **No floor verdict changes for any fixture × prototype
+combination.** Verdict: the owner's documented click did not measurably
+contaminate the mandatory-floor dataset; §2.1's original numbers stand as
+measured, and the lifecycle gate (§C.4, entirely separate data) is
+unaffected by this screen either way.
+
+### C.6 Charter §13 decision rule, re-applied mechanically to the corrected data
+
+1. Correctness and lifecycle reliability are mandatory. (rule 1)
+2. Both prototypes clear every numeric floor on the 12/24/60/120
+   production-context fixtures and the 500/2,000 headroom fixture, on
+   every trial (including all 6 contamination-screen re-runs), with wide
+   margins. (rule 2 — satisfied by both, unchanged from the original
+   report, confirmed unaffected by §C.5)
+3. Neither prototype crashed or went blank on the diagnostic stress
+   fixture. (rule 3 — satisfied by both, unchanged)
+4. **Rule 4 now applies directly: "If Prototype A meets every mandatory
+   gate, select it."** Under the corrected lifecycle measurement (§C.4),
+   Prototype A passes both series (mounted-settled and post-unmount),
+   with `pass: true` and zero drift on every tracked resource across all
+   20 cycles. Combined with (2) and (3), **Prototype A now meets every
+   mandatory gate** — the sole disqualifying fact from the original
+   decision (§7's rule-4 rejection) no longer holds under the corrected
+   measurement. Rule 4's own text is explicit that this selects A
+   **"regardless of B's better secondary numbers"** — B's pointer-latency
+   and bundle-size advantages (§2.1, §5 above) are real and are recorded
+   below as secondary findings, but per the rule's own wording they are
+   not decision drivers once A clears every mandatory gate.
+5. Rule 5 (select B only if A fails a mandatory gate and B materially
+   resolves it) does not apply — its precondition (A failing a mandatory
+   gate) is no longer true.
+
+### Chosen: Prototype A (clean `react-force-graph-3d@1.29.1`)
+
+**Exact reasons:**
+
+- It clears the mandatory 20× mount/unmount lifecycle gate cleanly under
+  the corrected, phase-consistent protocol (§C.4) — both the
+  mounted-settled and post-unmount series plateau exactly at baseline,
+  every cycle, with zero drift and no monotonic growth. The original
+  measured "failure" is conclusively explained (§C.2) as an artifact of
+  an ambiguous, unthrottled single-snapshot protocol, not a real resource
+  leak.
+- It independently clears every other mandatory floor with wide margin,
+  unchanged from the original report and reconfirmed unaffected by the
+  contamination screen (§C.5): median FPS 59.88 on every mandatory
+  fixture (floor ≥50), p95 frame time 17.1–18.4ms (floor ≤33ms), p95
+  pointer latency 28.4–44.0ms (floor ≤100ms), payload→interactive
+  0.0–2.0ms (floor ≤2000ms), warm/cold navigation 89.4–115.9ms (floors
+  3500ms/5000ms — the fastest of the two prototypes on this metric), no
+  crash/blank at the diagnostic stress tier.
+- Per rule 4's own explicit wording, this selection holds regardless of
+  Prototype B's better secondary numbers, recorded honestly below rather
+  than omitted.
+
+**Secondary findings (recorded, not decision-driving, per rule 4):**
+
+- Prototype B's p95 pointer→highlight latency remains a real, repeated
+  3–4× lower than Prototype A's across every mandatory fixture (§2.1) —
+  both comfortably clear the 100ms floor by a wide margin either way.
+- Prototype B's isolated production bundle remains ~28% smaller gzipped
+  (319.96 kB vs. 442.34 kB, §5).
+- Prototype A remains faster on cold/warm client navigation (§2.1/§7
+  above: 89.4–115.9ms vs. B's 239.1–257.2ms) — a genuine Prototype A
+  advantage the original report already recorded but which was never the
+  deciding factor either way.
+
+Whoever integrates the winning renderer in Stage 3 should weigh B's
+pointer-latency and bundle-size advantages as real, worth investigating
+as future optimization targets for Prototype A's implementation (e.g. its
+own picking throttle, §3 above) — but they do not change today's
+mandatory-gate decision.
+
+### C.7 Rule 9 enforcement (final)
+
+Per charter §13 rule 9 ("keep one production 3D renderer, not two") and
+the decision above, **Prototype B's implementation
+(`src/prototypes/protoB/`) is removed** from this branch in the same
+commit as this addendum. Prototype A's implementation
+(`src/protoA/` + `src/prototypes/protoA/`) — restored by this correction
+lane at the start of this review, after the original decision lane had
+removed it — is kept as the winner. Unlike the original decision lane's
+removal of A (§9 above, which left `App.tsx`, `src/types/prototype.ts`,
+`src/bench/runner.ts`, `e2e/bench.spec.ts`, and `scripts/run-bench.ts` all
+still structurally referencing the removed prototype, with typecheck
+correspondingly left broken for anything trying to construct it), this
+removal keeps `pnpm typecheck` clean: `App.tsx`'s `createHandle()` no
+longer imports `createProtoBHandle` at the module level, and constructing
+prototype `"b"` now throws a clear, documented error pointing at this
+addendum instead of silently importing a module that no longer exists.
+The shared `PrototypeId = "a" | "b"` type, `src/bench/runner.ts`,
+`e2e/bench.spec.ts`, and `scripts/run-bench.ts`/`run-lifecycle-v2.ts` are
+left otherwise unchanged (still structurally aware of both ids, e.g. for
+iterating fixtures) — this bakeoff harness's job is done, per the same
+"isolated, throwaway workspace, not production code" reasoning §9 above
+already gives; Stage 3 integrates Prototype A into the real `apps/web`
+production code, not this harness.
+
+**Prototype B remains fully recoverable from git history** — it was
+implemented in commit `1f26096` (`feat(bakeoff): Prototype A and
+Prototype B implementations + smoke screenshots`) and is unmodified on
+this branch up to the commit immediately preceding its removal.
