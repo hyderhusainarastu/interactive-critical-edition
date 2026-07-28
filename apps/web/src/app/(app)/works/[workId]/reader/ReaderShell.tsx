@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { matchesReaderLevel, type ReaderLevelFilter } from "@ice/roadmap";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
+import { useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import {
   type AnnotationRecord,
@@ -19,6 +20,7 @@ import { WorkPicker } from "./WorkPicker";
 import { EditionReader, computeOutline, type EditionPayload } from "./EditionReader";
 import { EditionAnnotationsPanel, type EditionReaderFilters } from "./EditionAnnotationsPanel";
 import { ReaderOutlineSidebar } from "./ReaderOutlineSidebar";
+import { parseReaderBlockHash } from "./readerBlockHash";
 import { RagChatPanel } from "./RagChatPanel";
 import type { ResearchClaimSummary } from "./researchClaims";
 import { useNarrowViewport } from "@/hooks/useNarrowViewport";
@@ -96,8 +98,40 @@ export function ReaderShell({
   const [editionReaderLevel, setEditionReaderLevel] = useState<ReaderLevelFilter>(initialReaderLevel);
   const [editionFilters, setEditionFilters] = useState<EditionReaderFilters>({ annotationType: "all", relationship: "all", provenance: "all", apparatusKind: "all" });
   const [pendingNoteHighlightIds, setPendingNoteHighlightIds] = useState<string[]>([]);
-  const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(null);
-  const [showRagChat, setShowRagChat] = useState(false);
+  // Passage-to-claim/evidence/map continuity (charter §16 journey 5):
+  // reversible navigation back to the EXACT reader position, not just this
+  // work's Reader in general. `#block-<id>` is already a real, load-bearing
+  // anchor format (`packages/rag/src/index.ts` builds Ask Library citation
+  // hrefs this exact way; `EditionReader`'s blocks already render
+  // `id="block-<id>"`) — what was missing is the Reader actually ACTING on
+  // that fragment for a fresh navigation (a client-rendered page fetches its
+  // data async, so the block doesn't exist yet at the moment a browser
+  // would otherwise try a native fragment scroll, and silently does
+  // nothing). This reuses the SAME `activeReaderBlockId`/`activeBlockId`
+  // mechanism `onLocatePassage` (the Claims/Sources tabs' "Locate passage")
+  // already drives — `EditionReader`'s own effect re-fires once
+  // `edition.blocks` finishes loading, so seeding this before the fetch
+  // resolves is not a race. A lazy `useState` initializer (not an effect +
+  // setState, same precedent as `GlobalRagSidebar`'s stored-width read)
+  // reads the fragment exactly once, synchronously, before first paint.
+  // `!embedded`: a split-view's second pane reads a different work, and the
+  // fragment (if present at all) names a block in the PRIMARY pane's work,
+  // never this one.
+  const [activeReaderBlockId, setActiveReaderBlockId] = useState<string | null>(() =>
+    embedded || typeof window === "undefined" ? null : parseReaderBlockHash(window.location.hash),
+  );
+  // Ask Library single-controller enforcement (stage4-read-spec.md §9 item
+  // 3): this Reader panel and the shell-level `GlobalRagSidebar` used to
+  // each own an independent boolean, so both could be open — and mounted —
+  // at once on a Reader route (the confirmed baseline defect: two live,
+  // independent conversation controllers). Both surfaces now read/write the
+  // SAME shared `useSecondaryPanel("rag")` slot `ContextBar`'s global
+  // trigger already used, so there is exactly one "is Ask Library open"
+  // boolean regardless of which trigger changed it. `AppShellRoot` pairs
+  // this with a route check that suppresses its own `GlobalRagSidebar`
+  // render while on this route, so this component is the only one that
+  // ever actually mounts a `RagChatPanel` here.
+  const ragPanel = useSecondaryPanel("rag");
   const [claims, setClaims] = useState<ResearchClaimSummary[]>([]);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -188,24 +222,25 @@ export function ReaderShell({
   const openDrawer = useCallback((tab?: "annotations" | "my-notes") => {
     if (tab) setPendingDrawerTab(tab);
     setShowDrawer(true);
-    setShowRagChat(false);
-  }, []);
+    ragPanel.close();
+  }, [ragPanel]);
 
   const toggleDrawer = useCallback(() => {
     setShowDrawer((current) => {
       const next = !current;
-      if (next) setShowRagChat(false);
+      if (next) ragPanel.close();
       return next;
     });
-  }, []);
+  }, [ragPanel]);
 
   const toggleRagChat = useCallback(() => {
-    setShowRagChat((current) => {
-      const next = !current;
-      if (next) setShowDrawer(false);
-      return next;
-    });
-  }, []);
+    if (ragPanel.isOpen) {
+      ragPanel.close();
+      return;
+    }
+    setShowDrawer(false);
+    ragPanel.open();
+  }, [ragPanel]);
 
   const closeDrawer = useCallback(() => {
     setShowDrawer(false);
@@ -404,9 +439,9 @@ export function ReaderShell({
   }, []);
 
   const closeRagChat = useCallback(() => {
-    setShowRagChat(false);
+    ragPanel.close();
     window.requestAnimationFrame(() => ragTriggerRef.current?.focus());
-  }, []);
+  }, [ragPanel]);
 
   const closeOutline = useCallback(() => {
     setShowOutline(false);
@@ -633,7 +668,7 @@ export function ReaderShell({
                 ref={ragTriggerRef}
                 type="button"
                 className="app-control"
-                aria-expanded={showRagChat}
+                aria-expanded={ragPanel.isOpen}
                 aria-controls={ragPanelId}
                 onClick={toggleRagChat}
               >
@@ -804,7 +839,7 @@ export function ReaderShell({
 
       {activeFootnote && <FootnoteModal footnote={activeFootnote} onClose={closeFootnote} />}
 
-      {showRagChat && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" enableResearchModes={enableAskResearchModes} />}
+      {ragPanel.isOpen && enablePhase18Rag && !embedded && <RagChatPanel id={ragPanelId} contextWorkId={workId} onClose={closeRagChat} dialogLabel="Ask Library — Reader panel" enableResearchModes={enableAskResearchModes} />}
     </div>
   );
 }

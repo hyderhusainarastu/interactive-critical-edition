@@ -804,13 +804,17 @@ test.describe("Phase 12 workspace foundation", () => {
       await expect(dialog.getByText("Scope: Current work")).toBeVisible();
     });
 
-    // D-22-20: the Reader's own contextual drawer and this shell-level global
-    // sidebar both render the shared `RagChatPanel` as a `dialog`, and both
-    // are reachable independently on the same Reader route — before the fix
-    // they shared one accessible name ("Library-grounded Socratic chat"), so
-    // opening both left two dialogs indistinguishable to assistive tech. Each
-    // now gets its own name (`getByRole` with `exact` resolves uniquely).
-    test("names the Reader's contextual drawer and the global sidebar distinctly when both are open", async ({ page }) => {
+    // D-22-20 (superseded, see below): originally the Reader's own
+    // contextual drawer and this shell-level global sidebar rendered two
+    // fully independent `RagChatPanel` instances, distinguishable only by
+    // accessible name — both could be, and this test used to assert both
+    // WERE, open at once. That was the confirmed baseline defect (charter's
+    // Stage 4 "exactly one mounted assistant/conversation controller at a
+    // time"), not a feature to keep proving. Both surfaces now share ONE
+    // `useSecondaryPanel("rag")` slot and `AppShellRoot` suppresses its own
+    // `GlobalRagSidebar` render on a Reader route, so exactly one
+    // `RagChatPanel` — the Reader's own — can ever be mounted there.
+    test("single-controller enforcement: the Reader panel and the global sidebar never mount at once", async ({ page }) => {
       const { workId } = await seedPublishedEdition(userId);
       await page.goto("/login");
       await page.getByLabel("Email").fill(EMAIL);
@@ -818,14 +822,86 @@ test.describe("Phase 12 workspace foundation", () => {
       await page.getByRole("button", { name: "Log in" }).click();
       await page.waitForURL("/dashboard");
 
-      await page.goto(`/works/${workId}/reader`);
-      await page.getByRole("button", { name: "Ask Library", exact: true }).click();
-      await page.getByRole("button", { name: "Library chat sidebar" }).click();
-
       const readerDrawer = page.getByRole("dialog", { name: "Ask Library — Reader panel", exact: true });
       const globalSidebar = page.getByRole("dialog", { name: "Ask Library — global sidebar", exact: true });
-      await expect(readerDrawer).toBeVisible();
+      const anyAskLibraryDialog = page.getByRole("dialog", { name: /^Ask Library/ });
+
+      // `page.goto` is a real browser navigation and resets every piece of
+      // in-memory React state, `SecondaryPanelProvider`'s "rag" slot
+      // included — same as a user hard-reloading or opening a fresh tab.
+      // Land on `/works` (a plain client route, no navigation needed yet)
+      // BEFORE opening the sidebar, so every navigation from here on is a
+      // real Next.js client-side transition (a `<Link>` click) that keeps
+      // the shell — and its state — mounted, the same continuity
+      // `AppShellRoot`'s "keeps the sidebar open across a route
+      // navigation" test above already exercises.
+      await page.goto("/works");
+
+      // Open the shell-level global sidebar on a non-Reader route first —
+      // continuity across navigation is the point: the underlying "is Ask
+      // Library open" state is shared, not reset by the route change.
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
       await expect(globalSidebar).toBeVisible();
+
+      // Client-side navigate into the work's Reader via its own Reading
+      // Queue link (a real `<Link>`, not `page.goto`). The global sidebar's
+      // own render is route-suppressed here, but the shared state stays
+      // open across this in-app transition, so the Reader's own contextual
+      // panel picks it straight up — exactly one live `RagChatPanel`, never
+      // zero and never two.
+      // Scoped by this test's OWN seeded work id, not by title text — the
+      // shared `userId` this describe block reuses across tests can carry
+      // more than one "Vice and Reason" fixture work at once.
+      await page.locator(`a[href="/works/${workId}/reader"]`).click();
+      await page.waitForURL(`**/works/${workId}/reader`);
+      await expect(readerDrawer).toBeVisible();
+      await expect(globalSidebar).toHaveCount(0);
+      await expect(anyAskLibraryDialog).toHaveCount(1);
+
+      // The shell's own trigger is still reachable on a Reader route (it's
+      // just another control over the same shared slot) — clicking it while
+      // the Reader panel is already open must close the ONE shared
+      // controller, never open a second, independent one.
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
+      await expect(anyAskLibraryDialog).toHaveCount(0);
+
+      // And the reverse direction: opening from the Reader's own toggle
+      // while starting closed also yields exactly one controller, with the
+      // global sidebar never rendered alongside it.
+      await page.getByRole("button", { name: "Ask Library", exact: true }).click();
+      await expect(readerDrawer).toBeVisible();
+      await expect(globalSidebar).toHaveCount(0);
+      await expect(anyAskLibraryDialog).toHaveCount(1);
+    });
+
+    // Third leg of the same single-controller enforcement: the dedicated
+    // full-page `/ask-library` destination mounts its own unconditional
+    // `RagChatPanel` (`presentation="page"`, rendered as a `region`, not a
+    // `dialog`) regardless of the shared `useSecondaryPanel("rag")` slot. The
+    // shell's own trigger is omitted on this route entirely — a second,
+    // sidebar-shaped conversation here would be the baseline's "confirmed
+    // THREE distinct mounts" defect, and a visible-but-inert trigger would
+    // be its own kind of broken control.
+    test("omits the shell's global-sidebar trigger on the full-page Ask Library destination", async ({ page }) => {
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(EMAIL);
+      await page.getByLabel("Password").fill(PASSWORD);
+      await page.getByRole("button", { name: "Log in" }).click();
+      await page.waitForURL("/dashboard");
+
+      // Open the global sidebar first — `page.goto` below is a real
+      // navigation (no in-app `<Link>` to `/ask-library` exists outside the
+      // command palette), which resets `SecondaryPanelProvider`'s state same
+      // as a hard reload would; what this proves is that landing on
+      // `/ask-library` from ANY prior state — sidebar open or not — never
+      // leaves two Ask Library surfaces reachable at once on that route.
+      await page.getByRole("button", { name: "Library chat sidebar" }).click();
+      await expect(page.getByRole("dialog", { name: "Ask Library — global sidebar" })).toBeVisible();
+
+      await page.goto("/ask-library");
+      await expect(page.getByRole("region", { name: "Library-grounded Socratic chat" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Library chat sidebar" })).toHaveCount(0);
+      await expect(page.getByRole("dialog", { name: /^Ask Library/ })).toHaveCount(0);
     });
 
     test("renders as a bottom sheet on mobile, reachable from its own visible trigger", async ({ page }) => {

@@ -13,7 +13,7 @@ import { SecondaryPanelProvider, useSecondaryPanel } from "@/components/primitiv
 import { PageTransition } from "@/components/shared/PageTransition";
 import { ContextBar, RAG_SIDEBAR_ID } from "./ContextBar";
 import { ContextBarProvider } from "./ContextBarProvider";
-import { isImmersiveRoute } from "./immersive";
+import { isAskLibraryRoute, isImmersiveRoute, isReaderRoute } from "./immersive";
 import { MobileBottomNav } from "./MobileBottomNav";
 import { buildCommandPaletteNavItems } from "./navItems";
 import { WorkspaceRail } from "./WorkspaceRail";
@@ -89,6 +89,16 @@ function AppShellLayout({
   const focusMode = preferences.focusMode;
   const immersive = isImmersiveRoute(pathname);
   const routeWorkId = WORK_ROUTE_PATTERN.exec(pathname)?.[1] ?? null;
+  // Ask Library single-controller enforcement (stage4-read-spec.md §9 item
+  // 3): both the Reader's own contextual panel (`ReaderShell`) and the
+  // dedicated `/ask-library` page mount their own unconditional/local
+  // `RagChatPanel`. On either route, the shell must not ALSO render
+  // `GlobalRagSidebar` — the two surfaces already share one
+  // `useSecondaryPanel("rag")` slot (see `ContextBar`'s trigger and
+  // `ReaderShell`'s own toggle), so suppressing the render here is what
+  // actually makes "exactly one mounted controller" true, rather than
+  // leaving two components both willing to render off the same boolean.
+  const suppressGlobalRagSidebar = isReaderRoute(pathname) || isAskLibraryRoute(pathname);
 
   // Entering focus mode moves focus to the Exit control — split from the
   // pre-Stage-1 single `focusModeFocusRequestRef` (which also handled the
@@ -170,7 +180,7 @@ function AppShellLayout({
       </div>
       {!focusMode && <MobileBottomNav writerEnabled={writerEnabled} researchEnabled={researchEnabled} />}
       <CommandPalette items={paletteItems} />
-      {ragEnabled && ragPanel.isOpen && (
+      {ragEnabled && ragPanel.isOpen && !suppressGlobalRagSidebar && (
         <GlobalRagSidebar
           id={RAG_SIDEBAR_ID}
           contextWorkId={routeWorkId}

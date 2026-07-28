@@ -22,3 +22,33 @@ export function isImmersiveRoute(pathname: string): boolean {
   if (/^\/writer\/[^/]+(?:\/|$)/.test(pathname)) return true;
   return false;
 }
+
+/**
+ * Matches only a work-scoped Reader route (`/works/[workId]/reader`, not
+ * `/works/[workId]/graph` or any other work-scoped tab) — the one route
+ * where `ReaderShell` mounts its own contextual Ask Library panel.
+ *
+ * Used by the Ask Library single-controller enforcement
+ * (redesign-shell-spec.md / stage4-read-spec.md §9 item 3): on this route,
+ * `AppShellRoot` must not ALSO render the shell-level `GlobalRagSidebar`,
+ * since both would otherwise mount independent `RagChatPanel` instances —
+ * the exact "confirmed THREE distinct mounts" baseline defect. Both surfaces
+ * read/write the SAME shared `useSecondaryPanel("rag")` slot, so exactly one
+ * physical `RagChatPanel` is ever mounted: `ReaderShell`'s own contextual
+ * panel here, the shell's fixed sidebar everywhere else.
+ */
+export function isReaderRoute(pathname: string): boolean {
+  return /^\/works\/[^/]+\/reader(?:\/|$)/.test(pathname);
+}
+
+/**
+ * Matches the dedicated full-page Ask Library destination (`/ask-library`),
+ * which mounts its own unconditional `RagChatPanel` (`presentation="page"`)
+ * regardless of the shared `useSecondaryPanel("rag")` slot. Same
+ * single-controller reasoning as `isReaderRoute` above: the shell must not
+ * also render `GlobalRagSidebar` here, or the page would show two live,
+ * independent conversation controllers at once.
+ */
+export function isAskLibraryRoute(pathname: string): boolean {
+  return pathname === "/ask-library";
+}

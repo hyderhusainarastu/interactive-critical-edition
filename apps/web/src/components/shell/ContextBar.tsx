@@ -13,6 +13,7 @@ import { SoundToggle } from "@/components/site/SoundToggle";
 import { useOutsideMenuClose } from "@/hooks/useOutsideMenuClose";
 import { useReopenGuard } from "@/hooks/useReopenGuard";
 import { useContextBarState } from "./ContextBarProvider";
+import { isAskLibraryRoute } from "./immersive";
 import { buildWorkspaceNavItems, isNavItemActive, isReadSectionActive } from "./navItems";
 import { ReadManagementSheet } from "./ReadManagementSheet";
 import { UploadAction } from "./UploadAction";
@@ -160,7 +161,17 @@ export function ContextBar({
             <button ref={preferencesTriggerRef} type="button" className="app-control app-icon-button" data-tooltip="Workspace preferences" aria-label="Workspace preferences" aria-expanded={preferencesPanel.isOpen} aria-controls={preferencesMenuId} onClick={(event) => { if (preferencesPanel.isOpen) { if (event.detail === 0) closePreferences(); return; } preferencesPanel.open(); }}>⚙</button>
             {preferencesPanel.isOpen && <PreferencesMenu id={preferencesMenuId} preferences={preferences} onUpdate={updatePreferences} onFocusModeChange={onFocusModeChange} readerLevel={readerLevel} onReaderLevelChange={onReaderLevelChange} onClose={closePreferences} />}
           </div>
-          {ragEnabled && (
+          {/* Ask Library single-controller enforcement (stage4-read-spec.md
+              §9 item 3): on `/ask-library` itself, the page already mounts
+              its own full-page `RagChatPanel` unconditionally — a second
+              trigger here would either open a redundant sidebar instance
+              (the confirmed baseline defect: two live independent
+              conversations at once) or, since `AppShellRoot` now suppresses
+              `GlobalRagSidebar`'s render on this route, silently do nothing
+              visible at all. Omitted entirely rather than shown disabled,
+              matching this codebase's existing "absent, not inert" pattern
+              for a control with nothing to do on the current route. */}
+          {ragEnabled && !isAskLibraryRoute(pathname) && (
             <button
               ref={ragTriggerRef}
               type="button"
