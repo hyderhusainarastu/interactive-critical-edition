@@ -361,3 +361,66 @@ verifying against a production build when one is available.
 
 **gatePassed = true**, with §9's documented environment exceptions and
 §10's one open finding carried forward rather than hidden.
+
+---
+
+## 13. Independent re-verification (round 3 — audit pass, this session)
+
+A separate verification session re-checked round 2's claims from scratch
+rather than trusting the committed report at face value, per this program's
+own standing "verify via git diff/direct test runs, don't trust repeated
+claims" discipline. Confirmed independently, not re-derived from the
+report's own text:
+
+- **Static gates**: `pnpm --filter web typecheck` and `pnpm --filter web
+  lint` both re-run clean from a cold state.
+- **The three code fixes (§3.1–3.3)** are real: read the actual diffs in
+  `git show 406deb5` line by line against the report's description (default
+  `"research"` → `"all"` in both `RoadmapView.tsx`/`page.tsx`; the padding
+  moved off `.reader-content-container` onto an inner wrapper in
+  `ReaderShell.tsx`; the `useEffect` sync added to
+  `EditionAnnotationsPanel.tsx`'s `tab` state) — all three match exactly,
+  not just in comment text but in the actual behavior changed.
+- **The six stale-test fixes (§3.4)** are real, scoped locator corrections
+  (strict-mode-violation fixes and a genuine terminology update), not
+  weakened assertions — confirmed by reading each diff hunk directly.
+- **Environment state**: `palimnote-s4-pg` running and empty (0 `user`/
+  `work` rows) as claimed; port 3240 not listening; 30/30 screenshots
+  present on disk matching the filenames cited in §7.
+- **Test claims, with one important refinement.** Batching all four
+  "affected" spec files (`stage4-home`, `roadmap2d`, `stage4-reader-
+  position`, `work-status`) into a single `playwright test a b c d`
+  invocation reproduced 9 failures identically across two independent
+  clean-restart attempts (`roadmap2d` 0/2, `stage4-reader-position` 0/2,
+  5 of `work-status`'s tests) — every failure traced to the exact
+  `` `headers` was called outside a request scope `` Next.js/Turbopack
+  dev-server error this report's own §11 already documents, confirmed via
+  server log inspection at the moment of each failure. Running each of
+  those same four files **individually** (one `playwright test <file>`
+  invocation per file — matching how this report's own §2 table is broken
+  out, one row per file) reproduced the claimed results exactly:
+  `roadmap2d.spec.ts` 2/2, `stage4-reader-position.spec.ts` 2/2,
+  `work-status.spec.ts` 14/14 (the report's §2 table says 13/13 — the spec
+  file actually contains 14 `test(...)` blocks; a minor miscount in the
+  original tally, not a coverage gap, since all 14 pass). **Refinement to
+  §11's characterization**: the `` headers `` dev-server corruption isn't
+  only the rare, session-length-dependent artifact §11 describes — it
+  reproduced within minutes on a *fresh* `next dev` process under the
+  combined load of running multiple spec files back-to-back in one
+  Playwright invocation, and did so identically on two separate clean
+  restarts. It did not reproduce at all across three separate single-file
+  invocations. Practical implication for any future round: run each
+  "affected spec" file as its own Playwright invocation (as this report's
+  own methodology already did, per its file-by-file table), not batched
+  together in one command — batching is what triggers the corruption here,
+  not elapsed session time alone.
+- **Cleanup after this pass**: killed the dev server, deleted `.next` and
+  `test-results` rebuilds this session created, removed every scratch log,
+  and re-verified zero `user`/`work` rows in `palimnote-s4-pg` (each
+  spec's own `afterAll` hook cleaned its accounts as it went — no manual
+  deletion needed). No code changes made this round; no new defects found.
+  `palimnote-s4-pg` left running for reuse, per standing instruction.
+
+**Conclusion: GATE PASSED is confirmed**, not merely repeated. The one
+addition is the batching/refinement note above, which sharpens §11 rather
+than contradicting it.
