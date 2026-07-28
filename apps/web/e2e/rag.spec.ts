@@ -70,6 +70,27 @@ test.describe("Phase 18 Library-grounded Socratic RAG", () => {
     await expect(chat).toContainText(/couldn't find support/i);
   });
 
+  // Stage 4 read spec §4.2: exactly one right-side surface — the merged
+  // notes/analysis drawer, or Ask Library — is ever mounted at once, the
+  // reader-local half of "exactly one mounted assistant/conversation
+  // controller at a time." Opening one closes the other.
+  test("opening Ask Library closes the notes drawer, and reopening the notes drawer closes Ask Library", async ({ page }) => {
+    const notesToggle = page.getByRole("button", { name: /^(Notes|Hide notes)/ });
+    const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+    // The drawer defaults open at this (wide) viewport.
+    await expect(sidebar).toBeVisible();
+
+    await page.getByRole("button", { name: "Ask Library" }).click();
+    const chat = page.getByRole("dialog", { name: "Ask Library — Reader panel" });
+    await expect(chat).toBeVisible();
+    await expect(sidebar).toHaveCount(0);
+    await expect(notesToggle).toHaveAttribute("aria-pressed", "false");
+
+    await notesToggle.click();
+    await expect(sidebar).toBeVisible();
+    await expect(chat).toHaveCount(0);
+  });
+
   // Workstream E (plan §1): the greeting card is client-side-only and never
   // persisted — it's the very first thing a reader sees in a fresh
   // conversation and disappears the moment a real message exists.

@@ -454,21 +454,25 @@ test("highlight creation honors the chosen color and survives reload, in the int
 });
 
 test("a bookmark and a standalone note persist from the reader sidebar (Phase 19 D-19 audit)", async ({ page }) => {
-  // The user-notes rail now defaults collapsed at every viewport width
-  // (Phase 23 Lane D) — open it before interacting with anything inside.
-  await page.getByRole("button", { name: "My notes" }).click();
-  const notesSidebar = page.getByRole("complementary", { name: /my notes and highlights/i });
+  // Stage 4 read spec §4.2: "My notes" is now a tab of the one merged
+  // drawer (`EditionAnnotationsPanel`), not a second, separately-toggled
+  // sidebar — the drawer itself defaults open at this (wide) viewport.
+  // Bookmarking switches the drawer to the "My notes" tab automatically
+  // (ReaderShell's `addBookmark` calls `openDrawer("my-notes")`), so no
+  // separate "open My notes" click is needed first.
+  const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
 
   await page.getByRole("button", { name: "+ Bookmark" }).click();
+  await expect(sidebar.getByRole("button", { name: /^My notes/ })).toHaveAttribute("aria-pressed", "true");
   // Tightened (Phase 23 Lane D, bookmark route fix): before the fix, the
   // bookmarks POST route rejected the interactive reader's "processed"
   // position kind with a silent 400, so no bookmark row was ever created —
   // yet an unscoped `getByText(/Processed page 1/)` still passed, because
-  // NotesSidebar renders the identical "Processed page 1" label for a
+  // the "My notes" tab renders the identical "Processed page 1" label for a
   // "processed" HIGHLIGHT anchor too. Scoping to the Bookmarks section's
   // own count heading makes this assertion fail again if the route breaks.
-  await expect(notesSidebar.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
-  await expect(notesSidebar).toContainText(/Processed page 1/);
+  await expect(sidebar.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
+  await expect(sidebar).toContainText(/Processed page 1/);
 
   await page.getByPlaceholder("Write a note about this work…").fill("A standalone note, not linked to any highlight.");
   await page.getByRole("button", { name: "Save note" }).click();
@@ -476,22 +480,27 @@ test("a bookmark and a standalone note persist from the reader sidebar (Phase 19
 
   await page.reload();
   await expect(page.getByRole("region", { name: /interactive reader.*processed text/i })).toBeVisible();
-  await page.getByRole("button", { name: "My notes" }).click();
-  const notesSidebarAfter = page.getByRole("complementary", { name: /my notes and highlights/i });
-  await expect(notesSidebarAfter.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
-  await expect(notesSidebarAfter).toContainText(/Processed page 1/);
+  const sidebarAfter = page.getByRole("complementary", { name: /edition sidebar/i });
+  // A fresh mount after reload resets the drawer to its "Annotations"
+  // default tab — switch back to "My notes" to check persistence.
+  await sidebarAfter.getByRole("button", { name: /^My notes/ }).click();
+  await expect(sidebarAfter.getByRole("heading", { name: /Bookmarks \(1\)/ })).toBeVisible();
+  await expect(sidebarAfter).toContainText(/Processed page 1/);
   await expect(page.getByText("A standalone note, not linked to any highlight.")).toBeVisible();
 });
 
-test("the reader analysis toggle hides and restores the edition sidebar (Phase 19 D-19 audit)", async ({ page }) => {
+test("the reader notes toggle hides and restores the edition sidebar (Phase 19 D-19 audit)", async ({ page }) => {
+  // Stage 4 read spec §4.2: the toolbar's toggle for this drawer is now
+  // "Notes" (was "Analysis" — the drawer merges Analysis and My notes into
+  // one set of tabs, so one toggle governs all of them).
   const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
   await expect(sidebar).toBeVisible();
-  const toggle = page.getByRole("button", { name: /^Hide analysis/ });
+  const toggle = page.getByRole("button", { name: /^Hide notes/ });
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
 
   await toggle.click();
   await expect(sidebar).toHaveCount(0);
-  const reopenToggle = page.getByRole("button", { name: /^Analysis/ });
+  const reopenToggle = page.getByRole("button", { name: /^Notes/ });
   await expect(reopenToggle).toHaveAttribute("aria-pressed", "false");
 
   await reopenToggle.click();
@@ -614,8 +623,17 @@ test("the passage-annotation correction route is owner-scoped: 401 anonymous, 40
  * before commit — not repeatable. Covers both states, both themes, since
  * neither adds real cost (no upload, no live API call — same seeded
  * fixture every other test in this file already uses).
+ *
+ * Stage 4 read spec §4.2 update: "My notes" is no longer a separate rail
+ * with its own always-collapsed default — it's a tab of the one merged
+ * drawer, which now shares the drawer's single `!narrow`-seeded open state
+ * (open by default at this file's default wide viewport). The
+ * Notes-specifically-starts-collapsed scenario this test used to cover no
+ * longer exists by design (see ReaderShell.tsx's own doc comment); this
+ * scans the drawer's real default-open state instead, plus the merged "My
+ * notes" tab specifically, since that's the genuinely new surface.
  */
-test("the collapsed-default notes rail and the open selection popover with color swatches have zero axe violations, in both themes", async ({ page }) => {
+test("the default-open notes drawer, its My notes tab, and the open selection popover with color swatches have zero axe violations, in both themes", async ({ page }) => {
   for (const themeButton of ["Light", "Dark"] as const) {
     await page.getByRole("button", { name: themeButton, exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", themeButton.toLowerCase());
@@ -628,11 +646,19 @@ test("the collapsed-default notes rail and the open selection popover with color
     // 1.5:1, which cleared to a real pass once settled).
     await page.waitForTimeout(300);
 
-    // 1. Collapsed-default state: the "My notes" rail starts closed.
-    await expect(page.getByRole("button", { name: "My notes" })).toBeVisible();
-    await expect(page.getByRole("complementary", { name: /my notes and highlights/i })).toHaveCount(0);
+    // 1. Default-open state at this (wide) viewport: the merged drawer is
+    // open (on whichever tab was last active — the Annotations tab on the
+    // very first iteration, since the drawer mounts fresh at load).
+    const sidebar = page.getByRole("complementary", { name: /edition sidebar/i });
+    await expect(sidebar).toBeVisible();
     let results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
-    expect(results.violations, `${themeButton} theme, collapsed default`).toEqual([]);
+    expect(results.violations, `${themeButton} theme, default-open drawer`).toEqual([]);
+
+    // 1b. The merged "My notes" tab (highlights/notes/bookmarks, formerly
+    // NotesSidebar's own always-separate rail).
+    await sidebar.getByRole("button", { name: /^My notes/ }).click();
+    results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(results.violations, `${themeButton} theme, My notes tab`).toEqual([]);
 
     // 2. The text-selection popover, with the color swatches mounted.
     const edition = page.getByRole("region", { name: /interactive reader.*processed text/i });

@@ -137,10 +137,14 @@ test.describe("Reader (Phase 3)", () => {
     await page.getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(contentParagraph.locator("mark[data-highlight-id]")).toBeVisible();
 
-    // The user-notes rail now defaults collapsed at every viewport width
-    // (Phase 23 Lane D) — open it before interacting with the note/bookmark
-    // UI it contains.
-    await page.getByRole("button", { name: "My notes" }).click();
+    // Stage 4 read spec §4.2: Analysis and My notes are merged into one
+    // right drawer's tabs (no more separate "Analysis"/"My notes" toggle
+    // buttons). The drawer defaults open at this (wide) viewport — ensure
+    // it's open, then switch to the "My notes" tab to reach the
+    // highlight/note/bookmark UI.
+    const notesToggle = page.getByRole("button", { name: /^(Notes|Hide notes)/ });
+    if ((await notesToggle.getAttribute("aria-pressed")) !== "true") await notesToggle.click();
+    await page.getByRole("button", { name: /^My notes/ }).click();
 
     // Add a standalone note via the sidebar.
     await page.getByPlaceholder("Write a note about this work…").fill("Test note from Playwright");
