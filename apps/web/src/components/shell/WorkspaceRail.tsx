@@ -123,7 +123,7 @@ export function WorkspaceRail({
         {hasReadItem && (
           <button
             type="button"
-            className="rail-label app-control self-end px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            className="rail-label app-control flex min-h-11 items-center self-end px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
             aria-expanded={readOpen}
             aria-controls={readSubnavId}
             onClick={() => setReadOpen((open) => !open)}
