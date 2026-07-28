@@ -103,6 +103,13 @@ test.describe("Knowledge Map — touch tap, orbit, pinch, pan (mobile)", () => {
     // condition where a tap at the satellite's own projected point chose
     // the nearer, oversized root hub instead.
     for (let pass = 0; pass < 2; pass += 1) {
+      // The first successful tap intentionally opens the mobile inspector
+      // sheet. Dismiss it before the next independent tap: otherwise that
+      // correctly modal-like sheet, rather than the canvas, receives input.
+      if (pass > 0) {
+        await page.getByRole("button", { name: "Close inspector" }).click();
+        await expect(page.getByTestId("knowledge-map-inspector")).toHaveCount(0);
+      }
       await page.getByRole("button", { name: "Home", exact: true }).click();
       await waitForLayoutFrozen(page);
       const point = await page.evaluate((id) => window.__knowledgeMapTestHook__?.getNodeScreenPosition(id) ?? null, targetId);
