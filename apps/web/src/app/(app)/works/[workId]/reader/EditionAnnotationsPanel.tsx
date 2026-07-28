@@ -24,9 +24,9 @@ import { ClaimsTab } from "./ClaimsTab";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
 import { readerScrollBehavior } from "./readerMotion";
 import type { ResearchClaimSummary } from "./researchClaims";
-import type { RelationshipCategory, VerificationStatus } from "./types";
+import type { BookmarkRecord, HighlightRecord, NoteRecord, RelationshipCategory, VerificationStatus } from "./types";
 
-type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources" | "claims";
+export type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources" | "claims" | "my-notes";
 
 /**
  * Passage annotations carry a reader-correction state (D-22-1) at parity with
@@ -84,6 +84,16 @@ export function EditionAnnotationsPanel({
   enableReaderClaimLayer = false,
   enableEvidenceChips = false,
   onLocatePassage,
+  initialTab = "annotations",
+  highlights,
+  notes,
+  bookmarks,
+  onDeleteHighlight,
+  onAddNote,
+  onDeleteNote,
+  onDeleteBookmark,
+  onSelectBookmark,
+  pendingNoteHighlightIds = [],
 }: {
   edition: EditionWithReview;
   activeId: string | null;
@@ -127,8 +137,29 @@ export function EditionAnnotationsPanel({
    *  card affordance, reusing the same `activeReaderBlockId` mechanism the
    *  outline rail and bookmark selection already use. */
   onLocatePassage?: (textBlockId: string) => void;
+  /** Stage 4 read spec §4.2: which tab this mount should open on. Read only
+   *  once, as this state's initial value — the parent (`ReaderShell`)
+   *  conditionally mounts/unmounts this whole panel rather than hiding it,
+   *  so a fresh mount happens every time the drawer opens, making a plain
+   *  initial value sufficient (no external-signal effect needed the way
+   *  `activeId` below needs one, since `activeId` can change while this
+   *  panel stays mounted). */
+  initialTab?: Tab;
+  /** Stage 4 read spec §4.2: `NotesSidebar`'s content, merged in as the
+   *  "My notes" tab — same data/handlers `ReaderShell` already owned and
+   *  passed to that now-retired component. */
+  highlights: HighlightRecord[];
+  notes: NoteRecord[];
+  bookmarks: BookmarkRecord[];
+  onDeleteHighlight: (id: string) => void;
+  onAddNote: (body: string, highlightIds?: string[]) => void;
+  onDeleteNote: (id: string) => void;
+  onDeleteBookmark: (id: string) => void;
+  onSelectBookmark?: (bookmark: BookmarkRecord) => void;
+  pendingNoteHighlightIds?: string[];
 }) {
-  const [tab, setTab] = useState<Tab>("annotations");
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const myNotesCount = highlights.length + notes.length + bookmarks.length;
   const resourceById = new Map(edition.resources.map((r) => [r.id, r]));
   const anchoredNotes = edition.passageAnnotations.filter((a) => a.textBlockId !== null);
   const annotationCount = anchoredNotes.length + edition.wholeWorkGuidance.length;
@@ -219,6 +250,18 @@ export function EditionAnnotationsPanel({
         >
           Sources{edition.works.length > 0 ? ` (${edition.works.length})` : ""}
         </button>
+        <button
+          type="button"
+          aria-pressed={tab === "my-notes"}
+          onClick={() => setTab("my-notes")}
+          className="app-control border-b-2 px-2.5 py-2 font-medium"
+          style={{
+            borderColor: tab === "my-notes" ? "var(--color-accent-ink)" : "transparent",
+            color: tab === "my-notes" ? "var(--color-text)" : "var(--color-text-muted)",
+          }}
+        >
+          My notes{myNotesCount > 0 ? ` (${myNotesCount})` : ""}
+        </button>
       </div>
 
       {enableLevelFilter && tab === "annotations" && (
@@ -281,6 +324,18 @@ export function EditionAnnotationsPanel({
           <TermsTab terms={edition.terms} onApproveTerm={onApproveTerm} />
         ) : tab === "claims" ? (
           <ClaimsTab claims={claims} blocks={edition.blocks} activeId={activeId} onSelectClaim={onSelectAnnotation} onLocatePassage={onLocatePassage} />
+        ) : tab === "my-notes" ? (
+          <MyNotesTab
+            highlights={highlights}
+            notes={notes}
+            bookmarks={bookmarks}
+            onDeleteHighlight={onDeleteHighlight}
+            onAddNote={onAddNote}
+            onDeleteNote={onDeleteNote}
+            onDeleteBookmark={onDeleteBookmark}
+            onSelectBookmark={onSelectBookmark}
+            pendingHighlightIds={pendingNoteHighlightIds}
+          />
         ) : (
           <SourcesTab edition={edition} />
         )}
@@ -355,6 +410,143 @@ function NotesTab({
           </ol>
         </section>
       )}
+    </div>
+  );
+}
+
+function positionLabel(p: BookmarkRecord["position"]) {
+  return p.kind === "pdf" ? `Page ${p.page}` : p.kind === "processed" ? `Processed page ${p.pageIndex + 1}` : `Paragraph ${p.paragraphIndex + 1}`;
+}
+
+/**
+ * "My notes" tab (Stage 4 read spec §4.2) — `NotesSidebar.tsx`'s former
+ * content, ported verbatim (same three sections, same handlers) as a tab of
+ * this one drawer instead of a second independently-toggleable sidebar.
+ * No `ReaderSidebarFrame`/outer `<aside>` here — the parent panel already
+ * provides that chrome once for every tab.
+ */
+function MyNotesTab({
+  highlights,
+  notes,
+  bookmarks,
+  onDeleteHighlight,
+  onAddNote,
+  onDeleteNote,
+  onDeleteBookmark,
+  onSelectBookmark,
+  pendingHighlightIds = [],
+}: {
+  highlights: HighlightRecord[];
+  notes: NoteRecord[];
+  bookmarks: BookmarkRecord[];
+  onDeleteHighlight: (id: string) => void;
+  onAddNote: (body: string, highlightIds?: string[]) => void;
+  onDeleteNote: (id: string) => void;
+  onDeleteBookmark: (id: string) => void;
+  onSelectBookmark?: (bookmark: BookmarkRecord) => void;
+  pendingHighlightIds?: string[];
+}) {
+  const [draft, setDraft] = useState("");
+
+  return (
+    <div className="px-3 py-3 text-sm">
+      <section className="mb-6">
+        <h2 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Add a note</h2>
+        {pendingHighlightIds.length > 0 && (
+          <p className="mb-2 rounded border border-[var(--color-border)] px-2 py-1 text-xs text-[var(--color-text-muted)]">
+            This note will link to {pendingHighlightIds.length} selected passage{pendingHighlightIds.length === 1 ? "" : "s"}.
+          </p>
+        )}
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={3}
+          className="app-control w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm"
+          placeholder="Write a note about this work…"
+        />
+        <button
+          type="button"
+          disabled={!draft.trim()}
+          onClick={() => {
+            onAddNote(draft.trim(), pendingHighlightIds);
+            setDraft("");
+          }}
+          className="app-control mt-2 rounded-md bg-[var(--color-accent-ink)] px-3 py-1 text-xs text-[var(--color-background)] disabled:opacity-40"
+        >
+          Save note
+        </button>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Highlights <span>({highlights.length})</span>
+        </h2>
+        <ul className="flex flex-col gap-2">
+          {highlights.map((h) => (
+            <li key={h.id} className="rounded-md border border-[var(--color-border)] p-2">
+              <p className="reader-highlight line-clamp-2 text-xs" style={{ background: "transparent" }}>
+                <mark className={`reader-highlight-${h.color}`}>&ldquo;{h.anchor.quote}&rdquo;</mark>
+              </p>
+              <div className="mt-1 flex items-center justify-between text-[var(--color-text-muted)]">
+                <span>
+                  {h.anchor.kind === "pdf" ? `Page ${h.anchor.page}` : h.anchor.kind === "processed" ? `Processed page ${h.anchor.pageIndex + 1}` : `¶${h.anchor.paragraphIndex + 1}`}
+                </span>
+                <button type="button" onClick={() => onDeleteHighlight(h.id)} className="app-control underline">
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
+          {highlights.length === 0 && (
+            <li className="text-[var(--color-text-muted)]">Select text in the reader to highlight it.</li>
+          )}
+        </ul>
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Notes <span>({notes.length})</span>
+        </h2>
+        <ul className="flex flex-col gap-2">
+          {notes.map((n) => (
+            <li key={n.id} className="rounded-md border border-[var(--color-border)] p-2">
+              <p className="whitespace-pre-wrap text-[var(--color-text)]">{n.body}</p>
+              {n.highlightIds.length > 0 && (
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  Linked to {n.highlightIds.length} highlight{n.highlightIds.length === 1 ? "" : "s"}
+                </p>
+              )}
+              <button type="button" onClick={() => onDeleteNote(n.id)} className="app-control mt-1 text-[var(--color-text-muted)] underline">
+                Delete
+              </button>
+            </li>
+          ))}
+          {notes.length === 0 && <li className="text-[var(--color-text-muted)]">No notes yet.</li>}
+        </ul>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+          Bookmarks <span>({bookmarks.length})</span>
+        </h2>
+        <ul className="flex flex-col gap-2">
+          {bookmarks.map((b) => (
+            <li key={b.id} className="flex items-center justify-between rounded-md border border-[var(--color-border)] p-2">
+              {b.position.kind === "processed" && onSelectBookmark ? (
+                <button type="button" onClick={() => onSelectBookmark(b)} className="app-control text-start">
+                  {b.label || positionLabel(b.position)}
+                </button>
+              ) : (
+                <span>{b.label || positionLabel(b.position)}</span>
+              )}
+              <button type="button" onClick={() => onDeleteBookmark(b.id)} className="app-control text-[var(--color-text-muted)] underline">
+                Remove
+              </button>
+            </li>
+          ))}
+          {bookmarks.length === 0 && <li className="text-[var(--color-text-muted)]">No bookmarks yet.</li>}
+        </ul>
+      </section>
     </div>
   );
 }
