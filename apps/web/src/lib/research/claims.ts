@@ -230,6 +230,52 @@ export async function listResearchClaimNaturesInUse(userId: string, projectId: s
   return rows.map((r) => r.claimNature);
 }
 
+/**
+ * Cross-project recent claims (Knowledge Map rebuild, spec §2.1's "Claim"
+ * entry context). `listResearchClaims` above REQUIRES a `projectId` — it is
+ * a per-project listing, not the flat, owner-scoped-across-every-project
+ * recency list the context chooser's "Claim" tab needs. This is a
+ * correction to `docs/design/knowledge-map-spec.md` §2.1's own assumption
+ * ("GET /api/research/claims (existing) — reused as-is"): reading that
+ * route's actual handler at implementation time (as the spec's own
+ * methodology requires) shows it is not reusable for this purpose, so a
+ * third genuinely-additive, owner-scoped, no-new-table read is added here —
+ * same charter §3 allowance the spec's own §2.3 already uses for
+ * `/api/passages/recent`/`/api/research/debates`. `research_claim.user_id`
+ * is direct (no project join needed to prove ownership, same as
+ * `getResearchClaimDetail` above), so this is a simple owner-scoped scan. */
+export interface RecentResearchClaimRow {
+  id: string;
+  claimText: string;
+  claimNature: string;
+  workId: string | null;
+  workTitle: string | null;
+  corpusItemId: string | null;
+  corpusItemTitle: string | null;
+  updatedAt: Date;
+}
+
+export async function listRecentResearchClaims(userId: string, limit = 20): Promise<RecentResearchClaimRow[]> {
+  const cappedLimit = Math.min(50, Math.max(1, limit));
+  return db
+    .select({
+      id: researchClaims.id,
+      claimText: researchClaims.claimText,
+      claimNature: researchClaims.claimNature,
+      workId: researchClaims.workId,
+      workTitle: works.title,
+      corpusItemId: researchClaims.corpusItemId,
+      corpusItemTitle: researchCorpusItems.title,
+      updatedAt: researchClaims.updatedAt,
+    })
+    .from(researchClaims)
+    .leftJoin(works, eq(works.id, researchClaims.workId))
+    .leftJoin(researchCorpusItems, eq(researchCorpusItems.id, researchClaims.corpusItemId))
+    .where(and(eq(researchClaims.userId, userId), eq(researchClaims.status, "active")))
+    .orderBy(desc(researchClaims.updatedAt))
+    .limit(cappedLimit);
+}
+
 /** Used by the claims-permalink page to know which project(s) a claim's
  *  owning work belongs to (for the breadcrumb strip's "back to Claims"
  *  crumb, Item 2 of the fix lane — this used to return bare ids only, before
