@@ -318,11 +318,7 @@ export function ResearchProjectOverview({
         {project.summary ? <p className="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">{project.summary}</p> : null}
       </div>
 
-      <ResearchPipelineStepper
-        result={pipelineResult}
-        onDispatch={dispatchPipelineAction}
-        actionState={pipelineResult.nextAction?.action ? pipelineActionState(pipelineResult.nextAction.action) : undefined}
-      />
+      <ResearchPipelineStepper result={pipelineResult} />
 
       {/* Insight feed — zero-LLM, pure DB reads (see lib/research/feed.ts). */}
       <section className="app-card app-panel-enter mt-6 rounded-lg p-4" aria-labelledby="research-feed-title">
