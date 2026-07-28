@@ -96,9 +96,11 @@ export function ResearchProjectOverview({
   const [announcement, setAnnouncement] = useState("");
   const [newQuestion, setNewQuestion] = useState("");
   const [addingQuestion, setAddingQuestion] = useState(false);
+  const [questionError, setQuestionError] = useState<string | null>(null);
   const [workToAdd, setWorkToAdd] = useState("");
   const [roleToAdd, setRoleToAdd] = useState<"central" | "supporting" | "background">("supporting");
   const [addingMember, setAddingMember] = useState(false);
+  const [memberError, setMemberError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<Record<string, { reason: string; estimatedUnits: number }>>({});
   const [dispatching, setDispatching] = useState<Record<string, boolean>>({});
   const [dispatchError, setDispatchError] = useState<Record<string, string>>({});
@@ -173,6 +175,7 @@ export function ResearchProjectOverview({
     const question = newQuestion.trim();
     if (!question) return;
     setAddingQuestion(true);
+    setQuestionError(null);
     try {
       const response = await fetch(`/api/research/projects/${project.id}/questions`, {
         method: "POST",
@@ -185,7 +188,7 @@ export function ResearchProjectOverview({
       setNewQuestion("");
       router.refresh();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not add question.");
+      setQuestionError(error instanceof Error ? error.message : "Could not add question.");
     } finally {
       setAddingQuestion(false);
     }
@@ -206,6 +209,7 @@ export function ResearchProjectOverview({
   async function addMember() {
     if (!workToAdd) return;
     setAddingMember(true);
+    setMemberError(null);
     try {
       const response = await fetch(`/api/research/projects/${project.id}/members`, {
         method: "POST",
@@ -218,7 +222,7 @@ export function ResearchProjectOverview({
       setWorkToAdd("");
       router.refresh();
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Could not add work to this project.");
+      setMemberError(error instanceof Error ? error.message : "Could not add work to this project.");
     } finally {
       setAddingMember(false);
     }
@@ -377,6 +381,7 @@ export function ResearchProjectOverview({
             {addingQuestion ? "Adding…" : "Add"}
           </button>
         </div>
+        {questionError && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{questionError}</p>}
       </section>
 
       {/* Members */}
@@ -440,6 +445,7 @@ export function ResearchProjectOverview({
             {addingMember ? "Adding…" : "Add to project"}
           </button>
         </div>
+        {memberError && <p className="mt-2 text-sm text-[var(--color-error,#b3261e)]">{memberError}</p>}
       </section>
 
       {/* Jobs panel — status/stage/progress/coverage only, deliberately no
