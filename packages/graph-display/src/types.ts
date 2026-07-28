@@ -120,4 +120,14 @@ export interface DisplayLink {
    *  own shape. */
   evidence: unknown;
   provenance: DisplayLinkProvenance | null;
+  /** Charter §9/§10: `ai_inferred` "is not primarily a member of any [edge]
+   *  family — it is a PROVENANCE marker... not a tenth semantic line family
+   *  ... preserve the mapped semantic family plus a provenance overlay
+   *  flag." `families.ts`'s `classifyEdgeFamily` already computes this
+   *  boolean (`EdgeFamilyClassification.aiInferred`) from the canonical
+   *  `edgeType`/`category`; carried here so a renderer/inspector can apply
+   *  the required treatment (70% opacity, inspector "AI-inferred" badge,
+   *  subtle outer dash at selected/near-detail LOD) without re-classifying
+   *  the edge a second time. */
+  aiInferred: boolean;
 }

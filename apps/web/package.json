@@ -18,6 +18,7 @@
     "@ice/curriculum": "workspace:*",
     "@ice/db": "workspace:*",
     "@ice/deletion": "workspace:*",
+    "@ice/graph-display": "workspace:*",
     "@ice/ingestion": "workspace:*",
     "@ice/observability": "workspace:*",
     "@ice/rag": "workspace:*",

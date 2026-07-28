@@ -58,6 +58,7 @@ export function makeLink(
     directed: true,
     evidence: null,
     provenance: null,
+    aiInferred: false,
     ...overrides,
   };
 }

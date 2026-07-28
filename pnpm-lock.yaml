@@ -34,6 +34,9 @@ importers:
       '@ice/deletion':
         specifier: workspace:*
         version: link:../../packages/deletion
+      '@ice/graph-display':
+        specifier: workspace:*
+        version: link:../../packages/graph-display
       '@ice/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion

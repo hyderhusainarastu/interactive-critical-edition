@@ -16,6 +16,7 @@ export * from "./layers";
 export * from "./state";
 export * from "./types";
 export * from "./bands";
+export * from "./camera";
 export * from "./families";
 export * from "./disclosure";
 export * from "./validate";
