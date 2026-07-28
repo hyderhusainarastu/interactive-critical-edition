@@ -6,7 +6,6 @@ import type { PrototypeId } from "./types/prototype";
 import { clearHarnessBridge, registerHarnessBridge } from "./bench/harnessBridge";
 import { BENCH_PROTOCOL, type LifecycleSnapshot, type LifecycleSnapshotPair } from "./bench/types";
 import { createProtoAHandle } from "./prototypes/protoA";
-import { createProtoBHandle } from "./prototypes/protoB";
 
 /**
  * `GraphPrototypeHandle` (the frozen shared bench contract) has no slot for
@@ -47,8 +46,29 @@ function isPrototypeId(value: string | null): value is PrototypeId {
   return value === "a" || value === "b";
 }
 
+/**
+ * Stage 2 CORRECTION lane, rule 9 enforcement: the corrected bakeoff
+ * decision (see docs/audits/graph-renderer-bakeoff.md's Correction
+ * addendum) selected Prototype A; Prototype B's implementation
+ * (`src/prototypes/protoB/`) has been removed from this branch (still
+ * recoverable from git history, commit `1f26096`). `PrototypeId` itself
+ * is left as `"a" | "b"` (still used structurally by
+ * `src/bench/runner.ts`/`scripts/run-bench.ts`/`e2e/bench.spec.ts` — see
+ * the addendum's §C.7 scope note), so this throws a clear, documented
+ * error instead of either silently importing a module that no longer
+ * exists (which would break typecheck) or silently falling back to
+ * Prototype A for a `"b"` request (which would misreport what was
+ * actually mounted).
+ */
 function createHandle(id: PrototypeId): GraphPrototypeHandle {
-  return id === "a" ? createProtoAHandle() : createProtoBHandle();
+  if (id === "b") {
+    throw new Error(
+      "Prototype B was removed per charter §13 rule 9 after the Stage 2 correction lane's re-decision " +
+        "(docs/audits/graph-renderer-bakeoff.md's Correction addendum selected Prototype A). " +
+        "Prototype B remains recoverable from git history (commit 1f26096).",
+    );
+  }
+  return createProtoAHandle();
 }
 
 const EMPTY_LIFECYCLE_SNAPSHOT_FOR = (cycle: number): LifecycleSnapshot => ({
