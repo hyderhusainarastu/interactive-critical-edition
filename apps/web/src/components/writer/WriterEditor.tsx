@@ -156,7 +156,15 @@ function WriterEditorSession({
   // Reset whenever the active document changes (the effect below, keyed on
   // `activeDocumentId`) and advanced to the server's own confirmed value on
   // every successful save (`saveNow`) — never a client-generated timestamp.
-  const [activeUpdatedAt, setActiveUpdatedAt] = useState<string | undefined>(active ? documentTimeKey(active.updatedAt) : undefined);
+  // State updates do not change this render's `saveNow` closure. A locally
+  // queued follow-up must therefore read the server-confirmed revision from a
+  // ref, rather than sending the preceding request's `expectedUpdatedAt` and
+  // mistaking its own successful save for a remote conflict.
+  // Match the established state lifecycle: the first autosave is
+  // unconditional until the active-document effect has confirmed the server
+  // timestamp. This avoids treating a timestamp that crossed the server
+  // component boundary before that effect as an optimistic-lock token.
+  const activeUpdatedAtRef = useRef<string | undefined>(undefined);
   // Stashed the moment either conflict variant (same-tab broadcast or
   // cross-device 409) first surfaces — the one piece of information
   // "Keep editing here" needs to make the very next save succeed instead of
@@ -287,7 +295,8 @@ function WriterEditorSession({
       // correct starting point for the next save's `expectedUpdatedAt` —
       // never the previous document's value, and never stale across a
       // conflict banner this switch just silently left behind.
-      setActiveUpdatedAt(documentTimeKey(active.updatedAt));
+      const updatedAt = documentTimeKey(active.updatedAt);
+      activeUpdatedAtRef.current = updatedAt;
       setPendingConflictUpdatedAt(null);
     });
     fetch(`/api/writer/projects/${project.id}/documents/${active.id}/revisions`).then((response) => response.ok ? response.json() : { revisions: [] }).then((data) => setRevisions(data.revisions ?? []));
@@ -353,7 +362,7 @@ function WriterEditorSession({
         // (a document just switched to, before its own effect has run) is
         // fine — the route treats an absent field exactly like an older
         // client that never sends it, i.e. unconditional last-write-wins.
-        body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave", expectedUpdatedAt: activeUpdatedAt }),
+        body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave", expectedUpdatedAt: activeUpdatedAtRef.current }),
       });
       if (response.status === 409) {
         const body = await response.json().catch(() => null) as { latest?: { updatedAt?: unknown } } | null;
@@ -380,7 +389,7 @@ function WriterEditorSession({
       return result === "ok" ? "Saved" : "Save failed";
     });
     if (result === "ok" && savedUpdatedAt) {
-      setActiveUpdatedAt(savedUpdatedAt);
+      activeUpdatedAtRef.current = savedUpdatedAt;
       postSaved(activeDocumentId, savedUpdatedAt);
     } else if (result === "conflict" && conflictLatestUpdatedAt) {
       setPendingConflictUpdatedAt(conflictLatestUpdatedAt);
@@ -391,7 +400,7 @@ function WriterEditorSession({
     // boundary by silently overwriting the other device's work.
     if (saveQueuedRef.current && result === "ok") {
       saveQueuedRef.current = false;
-      setStatus("Editing");
+      setStatus((current) => current === "Edited in another tab" || current === "Edited elsewhere" ? current : "Editing");
     } else {
       saveQueuedRef.current = false;
     }
@@ -430,7 +439,7 @@ function WriterEditorSession({
   function keepEditingHere() {
     setStatus("Editing");
     if (pendingConflictUpdatedAt) {
-      setActiveUpdatedAt(pendingConflictUpdatedAt);
+      activeUpdatedAtRef.current = pendingConflictUpdatedAt;
       setPendingConflictUpdatedAt(null);
     }
   }
