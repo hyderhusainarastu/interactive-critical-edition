@@ -780,6 +780,14 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Knowledge Map mobile inspector bottom sheet (charter §10 Mobile
+     bullet, `InspectorDrawer.tsx`): animate the height snap on release,
+     but never while a live drag is updating it frame-by-frame (that class
+     is intentionally omitted during a drag — see the component). Motion-
+     safe only, per this file's own convention of adding animation inside
+     `no-preference` rather than removing it inside `reduce`. */
+  .app-sheet-snap { transition: height 220ms var(--spring-fast); }
+
   .app-reveal[data-reveal-ready="true"] { opacity: 0; transform: translateY(10px); }
   .app-reveal[data-revealed="true"] { animation: app-scroll-reveal .36s var(--spring-gentle) both; animation-delay: calc(var(--reveal-index, 0) * 45ms); }
   .app-reveal-stagger > .app-reveal[data-revealed="true"] { animation-delay: calc(var(--reveal-index, 0) * 60ms); }

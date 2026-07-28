@@ -667,6 +667,8 @@ export function KnowledgeMapWorkspace({ userId, initialContext }: KnowledgeMapWo
                 rootWorkId={rootWorkId}
                 anchorScreenX={anchorScreenX}
                 viewportWidth={viewport.width}
+                device={viewport.device}
+                viewportHeight={viewport.height}
                 onClose={() => handleSelect(null)}
               />
             </>

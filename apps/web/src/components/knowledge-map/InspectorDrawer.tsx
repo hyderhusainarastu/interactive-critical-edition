@@ -5,7 +5,12 @@
  * §12 "Inspector and scholarly actions", spec §1.1's `InspectorDrawer.tsx`
  * row / spec §3's full action map). 360px wide on desktop, opens on the
  * side OPPOSITE the selected node's projected X position so selection
- * never hides the node that was just clicked; a bottom sheet on mobile.
+ * never hides the node that was just clicked; a bottom sheet on mobile
+ * (charter §10 Mobile bullet: "Inspector bottom sheet with snap points near
+ * 28%, 70%, and 95%") — the same field-grouping/action content, rendered
+ * inside one of two wrappers chosen by `device`. The mobile wrapper's own
+ * drag-to-resize/snap arithmetic lives in `./inspectorSheet.ts` (pure,
+ * unit-tested); this file only binds pointer events to it.
  *
  * Renders every charter §12 group from real data (identity/type, held/
  * uploaded/access state, authorship/venue/DOI/destination, incoming and
@@ -31,6 +36,7 @@
  */
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useDialogEscape } from "@/components/primitives/useDialogEscape";
 import type { CredibilityDimension } from "../graph/types";
 import { CREDIBILITY_DIMENSIONS, CREDIBILITY_DIMENSION_LABEL, STATE_META, TYPE_LABEL, type GraphNode, type NodeState, type NodeType } from "../graph/types";
@@ -44,6 +50,14 @@ import {
   type ScholarlyAction,
   type ScholarlyActionRequest,
 } from "./inspectorActions";
+import {
+  dragFractionFromDelta,
+  INSPECTOR_SHEET_DEFAULT_SNAP_INDEX,
+  INSPECTOR_SHEET_SNAP_FRACTIONS,
+  nearestSnapIndex,
+  sheetHeightPx,
+  type InspectorSheetSnapIndex,
+} from "./inspectorSheet";
 
 export interface InspectorDrawerProps {
   /** `null` closes the drawer entirely (nothing selected). */
@@ -73,6 +87,15 @@ export interface InspectorDrawerProps {
    *  rendered a frame), in which case the drawer defaults to the right. */
   anchorScreenX: number | null;
   viewportWidth: number;
+  /** `"mobile"` renders the bottom sheet (charter §10 Mobile bullet);
+   *  `"desktop"` renders the existing 360px side overlay. Supplied by the
+   *  caller's own `useViewport()`-style breakpoint (`KnowledgeMapWorkspace`)
+   *  rather than re-derived here, so there is exactly one width breakpoint
+   *  definition for the whole workspace. */
+  device: "mobile" | "desktop";
+  /** Needed only by the mobile sheet, to convert a snap fraction into a
+   *  concrete pixel height (`./inspectorSheet.ts`'s `sheetHeightPx`). */
+  viewportHeight: number;
   onClose: () => void;
 }
 
@@ -105,6 +128,8 @@ export function InspectorDrawer({
   rootWorkId,
   anchorScreenX,
   viewportWidth,
+  device,
+  viewportHeight,
   onClose,
 }: InspectorDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -127,11 +152,34 @@ export function InspectorDrawer({
     setOpenField(null);
   }, [displayNode?.id]);
 
+  // --- Mobile bottom-sheet snap state (charter §10 Mobile bullet). Ignored
+  // entirely on desktop — kept in this same component (rather than a
+  // separate stateful child) so a fresh selection resets BOTH the action
+  // state above and the sheet's snap position in one effect, and so the
+  // sheet's drag handlers have direct access to the same `displayNode`
+  // identity check without re-deriving it. ---
+  const [snapIndex, setSnapIndex] = useState<InspectorSheetSnapIndex>(INSPECTOR_SHEET_DEFAULT_SNAP_INDEX);
+  const [dragFraction, setDragFraction] = useState<number | null>(null); // non-null only while a pointer drag is live
+  const dragStartRef = useRef<{ pointerId: number; startY: number; startFraction: number } | null>(null);
+  /** Distinguishes a real drag from a tap — a `pointerdown`/`pointerup` pair
+   *  with no meaningful movement between them still fires a native `click`
+   *  afterward, which must cycle the snap point (the tap affordance); a
+   *  `pointerup` that ends a genuine drag must NOT also cycle on top of
+   *  whatever the drag itself just snapped to. */
+  const draggedRef = useRef(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSnapIndex(INSPECTOR_SHEET_DEFAULT_SNAP_INDEX);
+    setDragFraction(null);
+    dragStartRef.current = null;
+  }, [displayNode?.id]);
+
   if (!displayNode) return null;
 
   // Opens opposite the selected node's projected X — a node clicked on the
   // right half of the viewport gets a LEFT-side drawer, and vice versa, so
   // the drawer never overlaps the very node the user just selected.
+  // (Desktop only — the mobile sheet is always bottom-anchored, full width.)
   const openOnLeft = anchorScreenX !== null && anchorScreenX > viewportWidth / 2;
 
   const canonicalType = canonicalNode?.type as NodeType | undefined;
@@ -147,12 +195,49 @@ export function InspectorDrawer({
     if (result.status === "done") setOpenField(null);
   }
 
-  return (
-    <aside
-      data-testid="knowledge-map-inspector"
-      aria-label={`Inspector: ${displayNode.label}`}
-      className={`app-reveal absolute top-2 z-30 flex max-h-[calc(100%-1rem)] w-[360px] max-w-[92vw] flex-col gap-3 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-4 text-sm shadow-xl ${openOnLeft ? "left-2" : "right-2"}`}
-    >
+  const DRAG_MOVE_THRESHOLD_PX = 4;
+
+  function handleHandlePointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    draggedRef.current = false;
+    dragStartRef.current = { pointerId: event.pointerId, startY: event.clientY, startFraction: INSPECTOR_SHEET_SNAP_FRACTIONS[snapIndex] };
+  }
+  function handleHandlePointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragStartRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.abs(deltaY) >= DRAG_MOVE_THRESHOLD_PX) draggedRef.current = true;
+    if (draggedRef.current) setDragFraction(dragFractionFromDelta(drag.startFraction, deltaY, viewportHeight));
+  }
+  function endDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+    const drag = dragStartRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragStartRef.current = null;
+    if (draggedRef.current) {
+      const finalFraction = dragFraction ?? INSPECTOR_SHEET_SNAP_FRACTIONS[snapIndex];
+      setSnapIndex(nearestSnapIndex(finalFraction));
+      setDragFraction(null);
+    }
+    // A tap (draggedRef.current still false here) falls through to the
+    // native `click` event next, handled by `cycleSnap` below — deliberately
+    // NOT handled here, so a real click/keyboard activation (Enter/Space,
+    // which never fires pointer events at all) still works identically.
+  }
+  /** Non-drag accessible affordance for the same three snap points — a tap
+   *  or Enter/Space on the handle (it's a real `<button>`) cycles forward
+   *  through 28% → 70% → 95% → 28%, so resizing the sheet never requires a
+   *  drag gesture. Skipped when this click is the tail end of a genuine
+   *  drag (see `draggedRef`'s doc comment). */
+  function cycleSnap() {
+    if (draggedRef.current) {
+      draggedRef.current = false;
+      return;
+    }
+    setSnapIndex(((snapIndex + 1) % INSPECTOR_SHEET_SNAP_FRACTIONS.length) as InspectorSheetSnapIndex);
+  }
+
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
@@ -160,7 +245,7 @@ export function InspectorDrawer({
           </p>
           <h2 className="break-words text-base font-semibold text-[var(--color-text)]">{displayNode.label}</h2>
         </div>
-        <button ref={closeButtonRef} type="button" onClick={onClose} className="app-control shrink-0 rounded px-2 py-1 text-xs" aria-label="Close inspector">
+        <button ref={closeButtonRef} type="button" onClick={onClose} className="app-control min-h-11 shrink-0 rounded px-2 py-1 text-xs md:min-h-0" aria-label="Close inspector">
           Close
         </button>
       </div>
@@ -300,6 +385,44 @@ export function InspectorDrawer({
           ))}
         </div>
       </div>
+    </>
+  );
+
+  if (device === "mobile") {
+    const currentFraction = dragFraction ?? INSPECTOR_SHEET_SNAP_FRACTIONS[snapIndex];
+    const heightPx = sheetHeightPx(currentFraction, viewportHeight);
+    const isDragging = dragFraction !== null;
+    return (
+      <section
+        data-testid="knowledge-map-inspector"
+        aria-label={`Inspector: ${displayNode.label}`}
+        className={`app-reveal fixed inset-x-0 bottom-0 z-30 flex flex-col gap-3 overflow-hidden rounded-t-2xl border-t border-[var(--color-border)] bg-[var(--color-background)] p-4 pt-2 text-sm shadow-2xl ${isDragging ? "" : "app-sheet-snap"}`}
+        style={{ height: `${heightPx}px`, paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+      >
+        <button
+          type="button"
+          onPointerDown={handleHandlePointerDown}
+          onPointerMove={handleHandlePointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onClick={cycleSnap}
+          aria-label={`Resize inspector panel. Currently ${Math.round(INSPECTOR_SHEET_SNAP_FRACTIONS[snapIndex] * 100)}% of the screen. Tap to resize, or drag.`}
+          className="app-control -mx-2 flex min-h-11 shrink-0 touch-none items-center justify-center"
+        >
+          <span aria-hidden="true" className="h-1.5 w-10 rounded-full bg-[var(--color-border)]" />
+        </button>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">{content}</div>
+      </section>
+    );
+  }
+
+  return (
+    <aside
+      data-testid="knowledge-map-inspector"
+      aria-label={`Inspector: ${displayNode.label}`}
+      className={`app-reveal absolute top-2 z-30 flex max-h-[calc(100%-1rem)] w-[360px] max-w-[92vw] flex-col gap-3 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-4 text-sm shadow-xl ${openOnLeft ? "left-2" : "right-2"}`}
+    >
+      {content}
     </aside>
   );
 }
