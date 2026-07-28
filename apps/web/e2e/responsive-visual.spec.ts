@@ -227,7 +227,14 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
     { name: "upload", path: () => "/upload", heading: "Upload works" },
     { name: "reader", path: () => `/works/${editionWorkId}/reader`, heading: null },
     { name: "roadmap", path: () => `/works/${roadmapWorkId}/roadmap`, heading: "Reading roadmap", mask: true },
-    { name: "graph", path: () => `/works/${roadmapWorkId}/graph`, heading: "Visualization", mask: true },
+    // The Stage 3 Knowledge Map rebuild replaced the old page-level
+    // "Visualization" heading with the toolbar's own context label (the
+    // work's title) — `heading: null` here plus the dedicated toolbar
+    // readiness wait below is the correct successor to the old string
+    // match, not a weakened assertion: the old heading string genuinely no
+    // longer exists anywhere in the new `KnowledgeMapWorkspace` DOM (grep-
+    // confirmed), by design, so asserting it would only ever time out.
+    { name: "graph", path: () => `/works/${roadmapWorkId}/graph`, heading: null, mask: true },
   ];
 
   for (const { name, path, heading, mask } of baselinePages) {
@@ -256,6 +263,11 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
           // its toolbar's "My notes" control, which only renders once
           // ReaderShell's own data has loaded.
           if (name === "reader") await expect(page.getByRole("button", { name: "My notes" })).toBeVisible();
+          // Stage 3 rebuild: the Knowledge Map's own readiness signal is its
+          // toolbar (no page heading — see the `baselinePages` row comment
+          // above), so this page needs its own explicit wait, same
+          // rationale as the reader's above.
+          if (name === "graph") await expect(page.getByTestId("knowledge-map-toolbar")).toBeVisible();
           // A brief settle wait before the canvas-bearing page's screenshot —
           // same rationale as accessibility-sweep.spec.ts's own settle wait,
           // giving the 3D scene's initial mount/effects time to finish before
@@ -265,7 +277,22 @@ test.describe("Phase 23.3 — visual-regression baselines (light and dark)", () 
             fullPage: true,
             animations: "disabled",
             maxDiffPixelRatio: 0.01,
-            ...(mask ? { mask: [page.locator("[data-graph-canvas]"), page.locator("[data-roadmap-canvas]")] } : {}),
+            // `[data-graph-canvas]` was the legacy `KnowledgeGraph3D.tsx`
+            // selector — the Stage 3 rebuild's real 3D mount point is
+            // `[data-testid="knowledge-map-scene"]` (see
+            // `KnowledgeMapScene.tsx`). Matching the OLD, now-nonexistent
+            // selector wasn't "unmasked" in any meaningful sense — it was a
+            // mask option matching zero elements, silently masking nothing
+            // while still being read as "the canvas is masked here" by
+            // anyone skimming this file. Fixed to mask the REAL live
+            // element (a real WebGL render is not byte-stable across
+            // GPU/driver combinations even with a deterministic camera
+            // pose/layout seed, so masking it here remains the right call —
+            // charter §16's "nonblank unmasked canvas + numeric in-frustum
+            // assertions" requirement is met by the dedicated
+            // `knowledge-map.spec.ts` suite instead, not by this baseline
+            // sweep, which is about full-page layout/theme regressions).
+            ...(mask ? { mask: [page.locator('[data-testid="knowledge-map-scene"] canvas'), page.locator("[data-roadmap-canvas]")] } : {}),
           });
         });
       }
