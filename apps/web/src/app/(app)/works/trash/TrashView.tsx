@@ -134,7 +134,7 @@ export function TrashView() {
       {items && items.length > 0 && (
         <ul ref={listRevealRef} className="app-reveal-stagger flex flex-col gap-3">
           {items.map((item) => (
-            <li key={item.workId} data-trash-item={item.workId} className="app-card app-lift flex items-center justify-between gap-4 rounded-lg px-4 py-3">
+            <li key={item.workId} data-trash-item={item.workId} className="app-card flex items-center justify-between gap-4 rounded-lg px-4 py-3">
               <div>
                 <p className="font-medium text-[var(--color-text)]">
                   {item.title}
