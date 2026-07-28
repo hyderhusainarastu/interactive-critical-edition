@@ -417,6 +417,33 @@ function WriterEditorSession({
     if (isNarrow) { if (citationsSecondaryPanel.isOpen) citationsSecondaryPanel.close(); else citationsSecondaryPanel.open(); }
     else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "citations")));
   }
+  // Stage 6 verification round 1 §4.2 fix: on wide (>=1024px) viewports the
+  // Sources panel is an inline `<aside>` rendered as a flex sibling of
+  // `<main>`, positioned before it in the DOM so it appears visually to the
+  // left — but both toggle buttons live inside `<main>`'s own toolbar row,
+  // which is later in DOM/tab order than the aside. A plain forward Tab from
+  // the (focused, open) Sources toggle therefore lands on the very next
+  // toolbar control (the Citations toggle) instead of the Sources panel's
+  // own content, which is unreachable by forward-tabbing once you're past
+  // it. Rather than restructure the panel/toolbar DOM layout (risking the
+  // §2.5 resize/collapse mechanics and the narrow-viewport sheet, both of
+  // which already work correctly), this redirects a plain Tab press on the
+  // toggle straight into the panel's own first focusable control — the
+  // same "disclosure trigger hands off to its own disclosed content" pattern
+  // already used by the narrow-viewport sheet (which auto-focuses its own
+  // close button on open). Only intercepts a plain forward Tab (not
+  // Shift+Tab) while wide and the panel is actually open; narrow mode is
+  // untouched (its sheet already traps focus correctly via `useFocusTrap`).
+  function handleSourcesToggleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "Tab" || event.shiftKey || isNarrow || !sourcesOpen) return;
+    const panel = document.getElementById(SOURCES_PANEL_ID);
+    const firstFocusable = panel?.querySelector<HTMLElement>(
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    );
+    if (!firstFocusable) return;
+    event.preventDefault();
+    firstFocusable.focus();
+  }
   if (!active) {
     return (
       <div className="app-mount p-6">
@@ -474,30 +501,72 @@ function WriterEditorSession({
           {/* §2.5's "freed-space rule": the draft only widens when both
               panels are collapsed AND the viewport is wide — a narrow
               viewport's single-sheet-at-a-time layout has no inline panels
-              to free space from, so it never applies there. */}
+              to free space from, so it never applies there.
+
+              Deliberately NOT `app-mount` (Stage 6 verification round 1
+              §4.1 fix, second half): `.app-mount`'s keyframes only define a
+              `from` step, so once its one-shot entrance animation settles
+              browsers report the completed `transform` as the identity
+              matrix (`matrix(1,0,0,1,0,0)`), not the literal keyword
+              `none` — and per the CSS stacking spec, ANY non-`none`
+              transform value (identity or not) makes the element establish
+              its own stacking context permanently, forever after the
+              animation ends. That silently traps the toolbar's own
+              `z-50` toggle buttons (below) one level too deep: their
+              elevated z-index only ever gets to outrank siblings *within*
+              this div's own stacking context, never the narrow-viewport
+              sheet's `z-40` backdrop, which is a sibling of `<main>` two
+              levels up — confirmed by walking `getComputedStyle` up the
+              real ancestor chain in a live repro. Dropping `app-mount` here
+              removes that intermediate stacking context so the buttons'
+              own z-index is compared directly against the backdrop's,
+              which is what actually lets the fix below work; the entrance
+              animation this card loses is cosmetic (a one-time fade/slide
+              on first mount) and asserted by no test. */}
           <div
             data-panels-collapsed={bothWideCollapsed || undefined}
-            className={`app-card app-mount mx-auto rounded-xl p-4 sm:p-6 ${bothWideCollapsed ? "max-w-4xl" : "max-w-3xl"}`}
+            className={`app-card mx-auto rounded-xl p-4 sm:p-6 ${bothWideCollapsed ? "max-w-4xl" : "max-w-3xl"}`}
           >
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select>
               <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button>
               <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button>
               <button type="button" className="app-control app-press text-sm underline" onClick={newDocument}>New document</button>
+              {/* Stage 6 verification round 1 §4.1 fix: on narrow (<1024px)
+                  viewports, `WriterPanelSheet`'s full-screen `fixed inset-0
+                  z-40` backdrop sits above this toolbar (neither button had
+                  a stacking context of its own, so both painted below any
+                  `fixed`+`z-index` sibling regardless of DOM order). A tap
+                  on the OTHER toggle while a sheet was open therefore hit
+                  the backdrop instead of the button, closing the current
+                  sheet without opening the other one — the spec's §2.1
+                  "opening Citations closes Sources first" single-action
+                  promise was unreachable. `relative z-50` lifts just these
+                  two trigger buttons above the backdrop (z-40) so a tap
+                  always reaches the intended button; the backdrop still
+                  blocks every other click on the page behind it, which is
+                  the correct modal behavior everywhere except this one
+                  documented cross-toggle affordance. This alone wasn't
+                  enough, though — see the `app-mount`-removal comment on
+                  this card's wrapping `<div>` above for the second half of
+                  this same fix (an intermediate ancestor's stacking context
+                  was silently trapping these buttons' z-index below the
+                  backdrop no matter how high it was set). */}
               <button
                 ref={sourcesToggleRef}
                 type="button"
-                className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                className="app-control app-press relative z-50 min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
                 aria-expanded={sourcesOpen}
                 aria-controls={SOURCES_PANEL_ID}
                 onClick={toggleSourcesPanel}
+                onKeyDown={handleSourcesToggleKeyDown}
               >
                 Sources and evidence
               </button>
               <button
                 ref={citationsToggleRef}
                 type="button"
-                className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                className="app-control app-press relative z-50 min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
                 aria-expanded={citationsOpen}
                 aria-controls={CITATIONS_PANEL_ID}
                 onClick={toggleCitationsPanel}
