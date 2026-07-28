@@ -66,8 +66,8 @@ test.describe("Writer mode", () => {
     await page.getByRole("button", { name: "New project" }).click();
     await page.waitForURL("**/writer/*");
 
-    const sidebar = page.getByRole("complementary", { name: "Library source sidebar" });
-    const resizer = page.getByRole("separator", { name: "Resize Library source sidebar" });
+    const sidebar = page.getByRole("complementary", { name: "Sources and evidence panel" });
+    const resizer = page.getByRole("separator", { name: "Resize Sources and evidence panel" });
     await expect(resizer).toHaveAttribute("aria-orientation", "vertical");
     await expect(resizer).toHaveAttribute("aria-valuenow", "280");
 
@@ -129,7 +129,7 @@ test.describe("Writer mode", () => {
 
     const sourceItem = page.getByRole("listitem").filter({ hasText: "Writer-cited source" });
     await expect(sourceItem).toBeVisible();
-    const citationsAside = page.getByRole("complementary", { name: "Citations and revision recovery" });
+    const citationsAside = page.getByRole("complementary", { name: "Citations and revision history panel" });
     await expect(citationsAside.getByText("Writer-cited source")).not.toBeVisible();
     await sourceItem.getByRole("button", { name: "Cite" }).click();
     await expect(citationsAside.getByText("Writer-cited source")).toBeVisible();

@@ -1,36 +1,49 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { mlaParenthetical, mlaWorksCited, plainTextToProseMirror, proseMirrorToPlainText, sortMlaCitations, type CslJson } from "@/lib/writer";
-
-type Document = { id: string; title: string; content: unknown; sortOrder: number };
-type Citation = { id: string; cslJson: unknown; source: string };
-type Source = { id: string; title: string; workId: string; workTitle: string; url: string | null; doi: string | null };
-type Revision = { id: string; revision: number; reason: string; createdAt: string };
-
-// Phase 28.5 (Writer evidence insertion).
-type ResearchProjectOption = { id: string; title: string };
-type EvidenceClaim = {
-  id: string;
-  workId: string | null;
-  workTitle: string | null;
-  claimText: string;
-  claimNature: string;
-  confidence: string;
-  section: string;
-  anchorState: string;
-  sourceScope: string;
-  verificationStatus: string;
-  supportingExcerpt: string;
-};
-type EvidenceCluster = { id: string; name: string; researchQuestion: string | null; verificationStatus: string; latestChamberId: string | null };
-type EvidenceChamberSummary = { id: string; clusterId: string; clusterName: string; question: string; verificationStatus: string };
-type EvidenceView = { researchProject: ResearchProjectOption; claims: EvidenceClaim[]; debateClusters: EvidenceCluster[]; chambers: EvidenceChamberSummary[] };
+import { useEffect, useMemo, useRef, useState } from "react";
+import { mlaParenthetical, plainTextToProseMirror, proseMirrorToPlainText, type CslJson } from "@/lib/writer";
+import { useRegisterContextBar } from "@/components/shell/ContextBarProvider";
+import { useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
+import { ExportLinks } from "./ExportLinks";
+import { CitationsHistoryPanel, type CitationExportFormat } from "./panels/CitationsHistoryPanel";
+import { DEFAULT_WIDE_PANEL_STATE, toggleWidePanel, type WidePanelState } from "./panels/panelState";
+import { SourcesEvidencePanel, type CitationImportKind } from "./panels/SourcesEvidencePanel";
+import { useIsNarrowViewport } from "./panels/useIsNarrowViewport";
+import { ProjectTitleField } from "./ProjectTitleField";
+import type {
+  EvidenceClaim,
+  EvidenceView,
+  ResearchProjectOption,
+  WriterCitation as Citation,
+  WriterDocument as Document,
+  WriterRevision as Revision,
+  WriterSource as Source,
+} from "./writerTypes";
 
 const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 460;
 const SIDEBAR_WIDTH_STEP = 20;
+
+// Stage 6 layout spec §2.3: `localStorage`-only (not `WorkspacePreferences`)
+// — viewport-chrome density, same precedent as `GlobalRagSidebar`'s stored
+// width and `WorkspaceRail`'s stored collapse state.
+const WIDE_PANELS_STORAGE_KEY = "palimnote:writer-panels";
+const SOURCES_PANEL_ID = "writer-sources-panel";
+const CITATIONS_PANEL_ID = "writer-citations-panel";
+
+function readStoredWidePanels(): WidePanelState {
+  try {
+    const raw = window.localStorage.getItem(WIDE_PANELS_STORAGE_KEY);
+    if (!raw) return DEFAULT_WIDE_PANEL_STATE;
+    const parsed = JSON.parse(raw) as Partial<WidePanelState>;
+    return {
+      sources: typeof parsed.sources === "boolean" ? parsed.sources : true,
+      citations: typeof parsed.citations === "boolean" ? parsed.citations : true,
+    };
+  } catch {
+    return DEFAULT_WIDE_PANEL_STATE;
+  }
+}
 
 export function WriterEditor({
   project,
@@ -55,8 +68,8 @@ export function WriterEditor({
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [status, setStatus] = useState("Saved");
   const [importValue, setImportValue] = useState("");
-  const [importKind, setImportKind] = useState<"doi" | "isbn" | "title" | "bibtex" | "ris">("doi");
-  const [citationExportFormat, setCitationExportFormat] = useState<"bibtex" | "ris" | "apa" | "chicago">("bibtex");
+  const [importKind, setImportKind] = useState<CitationImportKind>("doi");
+  const [citationExportFormat, setCitationExportFormat] = useState<CitationExportFormat>("bibtex");
   const citationList = useMemo(() => citations.map((citation) => citation.cslJson as CslJson), [citations]);
   const activeDocumentId = active?.id;
 
@@ -69,6 +82,36 @@ export function WriterEditor({
   const [evidenceNatureFilter, setEvidenceNatureFilter] = useState("");
   const [linkingResearch, setLinkingResearch] = useState(false);
   const [insertingClaimId, setInsertingClaimId] = useState<string | null>(null);
+
+  // Stage 6 layout spec §2.2/§2.3: wide-mode panel state is independent
+  // per panel and persists across reloads; narrow-mode state is the shell's
+  // shared `SecondaryPanelProvider` singleton and never persists (§2.1 —
+  // both default closed on a fresh narrow mount).
+  const [widePanels, setWidePanels] = useState<WidePanelState>(() => (typeof window === "undefined" ? DEFAULT_WIDE_PANEL_STATE : readStoredWidePanels()));
+  const isNarrow = useIsNarrowViewport();
+  const sourcesSecondaryPanel = useSecondaryPanel("writer-sources");
+  const citationsSecondaryPanel = useSecondaryPanel("writer-citations");
+  const sourcesToggleRef = useRef<HTMLButtonElement>(null);
+  const citationsToggleRef = useRef<HTMLButtonElement>(null);
+
+  const sourcesOpen = isNarrow ? sourcesSecondaryPanel.isOpen : widePanels.sources;
+  const citationsOpen = isNarrow ? citationsSecondaryPanel.isOpen : widePanels.citations;
+  const bothWideCollapsed = !isNarrow && !widePanels.sources && !widePanels.citations;
+
+  // Memoized on `projectTitle` alone (not a fresh `<ProjectTitleField>`
+  // element every render): `useRegisterContextBar`'s own effect keys off
+  // `state.title`'s referential identity, and a JSX element is a brand-new
+  // object on every render — without this memo, the effect would re-fire on
+  // every WriterEditor render, which re-triggers `ContextBarProvider`'s
+  // state (a new `title`), which re-renders every context consumer
+  // (WriterEditor included, since `useRegisterContextBar` itself reads the
+  // context) — an infinite loop. `setProjectTitle` is the `useState` setter
+  // (referentially stable by React's own guarantee); `saveProjectTitle` is
+  // recreated each render but is only ever captured here when `projectTitle`
+  // itself changes, which is exactly when its closure needs to be fresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const titleField = useMemo(() => <ProjectTitleField value={projectTitle} onChange={setProjectTitle} onBlur={saveProjectTitle} />, [projectTitle]);
+  useRegisterContextBar({ title: titleField });
 
   useEffect(() => {
     if (!active) return;
@@ -223,108 +266,121 @@ export function WriterEditor({
       setSidebarWidth(boundedSidebarWidth(next));
     }
   }
+  function persistWidePanels(next: WidePanelState) {
+    try { window.localStorage.setItem(WIDE_PANELS_STORAGE_KEY, JSON.stringify(next)); } catch { /* won't survive a reload in this browser */ }
+    return next;
+  }
+  function toggleSourcesPanel() {
+    if (isNarrow) { if (sourcesSecondaryPanel.isOpen) sourcesSecondaryPanel.close(); else sourcesSecondaryPanel.open(); }
+    else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "sources")));
+  }
+  function toggleCitationsPanel() {
+    if (isNarrow) { if (citationsSecondaryPanel.isOpen) citationsSecondaryPanel.close(); else citationsSecondaryPanel.open(); }
+    else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "citations")));
+  }
   if (!active) return <p className="p-6">This project has no active documents.</p>;
   return (
     <section className="app-mount min-h-[calc(100vh-3.5rem)]" aria-label="Writer workspace">
-      <header className="app-card flex flex-wrap items-center gap-3 border-x-0 border-t-0 px-4 py-3"><Link href="/writer" className="app-control app-press text-sm text-[var(--color-text-muted)] hover:underline">← Projects</Link><input aria-label="Project title" value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} onBlur={saveProjectTitle} className="app-control min-w-0 flex-1 bg-transparent font-serif text-lg font-semibold" /><span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span><button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=docx`}>DOCX</a><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=pdf`}>PDF</a></header>
+      {/* Stage 6 layout spec §3: the project title itself now lives in
+          ContextBar's title slot (registered above via
+          `useRegisterContextBar`), so this row carries only what cannot yet
+          move there (the `actions` slot exists but isn't rendered by
+          ContextBar.tsx, a file this lane doesn't own) — save status and
+          Archive, nothing else. DOCX/PDF export moved to the central
+          document toolbar below (document-scoped, not project-scoped). */}
+      <div className="app-card flex flex-wrap items-center justify-end gap-3 border-x-0 border-t-0 px-4 py-3">
+        <span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span>
+        <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button>
+      </div>
       <div className="flex flex-col lg:flex-row">
-        <aside className="relative shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:border-b-0 lg:border-r" style={{ width: `${sidebarWidth}px` }} aria-label="Library source sidebar">
-          <h2 className="font-medium">Library sources</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
-          <ul className="app-reveal-stagger mt-3 max-h-52 space-y-2 overflow-auto">{sources.map((source) => <li key={source.id} className="app-card app-lift app-mount rounded p-2 text-sm"><strong className="block">{source.title}</strong><span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span><div className="mt-1 flex gap-2"><button type="button" className="app-control app-press underline" onClick={() => importCitation("library", "", source.id)}>Cite</button><Link className="app-control app-press underline" href={`/works/${source.workId}/reader`}>Read</Link></div></li>)}</ul>
-          <div className="mt-5 border-t border-[var(--color-border)] pt-3"><h3 className="text-sm font-medium">Add citation</h3><div className="mt-2 flex gap-1"><select aria-label="Citation import format" className="app-control" value={importKind} onChange={(event) => setImportKind(event.target.value as typeof importKind)}><option value="doi">DOI</option><option value="isbn">ISBN</option><option value="title">Title</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select><button type="button" className="app-control rounded border px-2 text-sm" onClick={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}>Add</button></div><textarea aria-label="Citation metadata" value={importValue} onChange={(event) => setImportValue(event.target.value)} className="app-control mt-2 min-h-20 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm" placeholder="DOI, ISBN, title, BibTeX, or RIS" /></div>
-          {evidenceEnabled && (
-            <section className="mt-5 border-t border-[var(--color-border)] pt-3" aria-label="Research evidence">
-              <h3 className="text-sm font-medium">Research evidence</h3>
-              {!researchLink ? (
-                <div className="mt-2">
-                  <p className="text-xs text-[var(--color-text-muted)]">Link a research project to bring in its claims, debates, and evidence chambers.</p>
-                  {researchOptions.length ? (
-                    <div className="mt-2 flex gap-1">
-                      <label htmlFor="research-link-select" className="sr-only">Research project to link</label>
-                      {/* `min-w-0` is load-bearing, not decorative: a plain
-                          `<select>` sizes itself to its selected option's
-                          text, and a user-authored research-project title
-                          has no length limit. Without `min-w-0` (which lets
-                          a flex item shrink below its content's intrinsic
-                          width) a long title pushed the sibling "Link"
-                          button outside this fixed-width sidebar's flex row
-                          entirely, landing it over the document editor card
-                          at real screen coordinates and silently eating
-                          every click — caught by this lane's own e2e run,
-                          not a cosmetic nit. */}
-                      <select id="research-link-select" aria-label="Research project to link" className="app-control min-w-0 flex-1" value={selectedResearchProjectId} onChange={(event) => setSelectedResearchProjectId(event.target.value)}>
-                        <option value="">Select a research project…</option>
-                        {researchOptions.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}
-                      </select>
-                      <button type="button" className="app-control app-press shrink-0 rounded border px-2 text-sm disabled:opacity-50" onClick={linkResearchProject} disabled={!selectedResearchProjectId || linkingResearch}>{linkingResearch ? "Linking…" : "Link"}</button>
-                    </div>
-                  ) : (
-                    <p className="app-empty mt-2 rounded p-2 text-xs text-[var(--color-text-muted)]">No research projects yet. Create one in the Research workspace first.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between gap-2 text-sm"><span>Linked: <strong>{researchLink.title}</strong></span><button type="button" className="app-control app-press text-xs underline" onClick={unlinkResearchProject}>Unlink</button></div>
-                  {evidence && (
-                    <>
-                      <div className="mt-2 flex gap-1">
-                        <label htmlFor="evidence-work-filter" className="sr-only">Filter evidence by work</label>
-                        <select id="evidence-work-filter" aria-label="Filter evidence by work" className="app-control min-w-0 flex-1 text-xs" value={evidenceWorkFilter} onChange={(event) => setEvidenceWorkFilter(event.target.value)}>
-                          <option value="">All works</option>
-                          {[...new Map(evidence.claims.filter((claim) => claim.workId).map((claim) => [claim.workId as string, claim.workTitle ?? "Untitled work"])).entries()].map(([workId, workTitle]) => <option key={workId} value={workId}>{workTitle}</option>)}
-                        </select>
-                        <label htmlFor="evidence-nature-filter" className="sr-only">Filter evidence by claim nature</label>
-                        <select id="evidence-nature-filter" aria-label="Filter evidence by claim nature" className="app-control min-w-0 flex-1 text-xs" value={evidenceNatureFilter} onChange={(event) => setEvidenceNatureFilter(event.target.value)}>
-                          <option value="">All natures</option>
-                          {[...new Set(evidence.claims.map((claim) => claim.claimNature))].map((nature) => <option key={nature} value={nature}>{nature}</option>)}
-                        </select>
-                      </div>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Claims</h4>
-                      <ul className="app-reveal-stagger mt-1 max-h-64 space-y-2 overflow-auto">
-                        {evidence.claims.map((claim) => (
-                          <li key={claim.id} className="app-card app-mount rounded p-2 text-sm">
-                            <p className="text-xs text-[var(--color-text-muted)]">{claim.workTitle ?? "Untitled source"} · {claim.claimNature} · {claim.verificationStatus}{claim.anchorState === "unanchored" ? " · unanchored" : ""}</p>
-                            <p className="mt-1">“{claim.supportingExcerpt}”</p>
-                            <button type="button" className="app-control app-press mt-1 rounded border px-2 py-1 text-xs disabled:opacity-50" onClick={() => insertEvidence(claim)} disabled={insertingClaimId === claim.id}>{insertingClaimId === claim.id ? "Inserting…" : "Insert"}</button>
-                          </li>
-                        ))}
-                        {!evidence.claims.length && <li className="app-empty rounded p-2 text-xs text-[var(--color-text-muted)]">No claims match the current filters.</li>}
-                      </ul>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Debates</h4>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        {evidence.debateClusters.map((cluster) => <li key={cluster.id}><Link className="underline" href={`/research/${researchLink.id}/debates/${cluster.id}`}>{cluster.name}</Link></li>)}
-                        {!evidence.debateClusters.length && <li className="text-[var(--color-text-muted)]">No debates yet.</li>}
-                      </ul>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Evidence chambers</h4>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        {evidence.chambers.map((chamber) => <li key={chamber.id}><Link className="underline" href={`/research/chambers/${chamber.id}`}>{chamber.question}</Link></li>)}
-                        {!evidence.chambers.length && <li className="text-[var(--color-text-muted)]">No evidence chambers yet.</li>}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
+        <SourcesEvidencePanel
+          mode={isNarrow ? "sheet" : "inline"}
+          open={sourcesOpen}
+          onCloseSheet={sourcesSecondaryPanel.close}
+          triggerRef={sourcesToggleRef}
+          panelId={SOURCES_PANEL_ID}
+          sidebarWidth={sidebarWidth}
+          onResizeStart={startResize}
+          onResizeKeyDown={resizeWithKeyboard}
+          sources={sources}
+          onCite={(resourceId) => importCitation("library", "", resourceId)}
+          importKind={importKind}
+          onImportKindChange={setImportKind}
+          importValue={importValue}
+          onImportValueChange={setImportValue}
+          onAddCitation={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}
+          evidenceEnabled={evidenceEnabled}
+          researchLink={researchLink}
+          researchOptions={researchOptions}
+          selectedResearchProjectId={selectedResearchProjectId}
+          onSelectedResearchProjectIdChange={setSelectedResearchProjectId}
+          onLinkResearchProject={linkResearchProject}
+          linkingResearch={linkingResearch}
+          onUnlinkResearchProject={unlinkResearchProject}
+          evidence={evidence}
+          evidenceWorkFilter={evidenceWorkFilter}
+          onEvidenceWorkFilterChange={setEvidenceWorkFilter}
+          evidenceNatureFilter={evidenceNatureFilter}
+          onEvidenceNatureFilterChange={setEvidenceNatureFilter}
+          insertingClaimId={insertingClaimId}
+          onInsertEvidence={insertEvidence}
+        />
+        <main className="min-w-0 flex-1 p-4 sm:p-6">
+          {/* §2.5's "freed-space rule": the draft only widens when both
+              panels are collapsed AND the viewport is wide — a narrow
+              viewport's single-sheet-at-a-time layout has no inline panels
+              to free space from, so it never applies there. */}
           <div
-            role="separator"
-            aria-label="Resize Library source sidebar"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_SIDEBAR_WIDTH}
-            aria-valuemax={MAX_SIDEBAR_WIDTH}
-            aria-valuenow={sidebarWidth}
-            aria-valuetext={`${sidebarWidth} pixels wide`}
-            tabIndex={0}
-            onPointerDown={startResize}
-            onKeyDown={resizeWithKeyboard}
-            className="absolute right-0 top-0 hidden h-full w-2 cursor-col-resize lg:block focus-visible:bg-[var(--color-accent-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]"
-          />
-        </aside>
-        <main className="min-w-0 flex-1 p-4 sm:p-6"><div className="app-card app-mount mx-auto max-w-3xl rounded-xl p-4 sm:p-6"><div className="mb-4 flex flex-wrap items-center gap-2"><select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select><button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button><button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button><button type="button" className="app-control app-press text-sm underline" onClick={newDocument}>New document</button></div><input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="app-control w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" /><p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p><textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="app-control mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8 shadow-inner" /></div></main>
-        <aside className="w-full border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:w-80 lg:border-l lg:border-t-0" aria-label="Citations and revision recovery"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium">Citations</h2><div className="flex items-center gap-1"><label htmlFor="citation-export-format" className="sr-only">Citation export format</label><select id="citation-export-format" aria-label="Citation export format" className="app-control app-select text-xs" value={citationExportFormat} onChange={(event) => setCitationExportFormat(event.target.value as typeof citationExportFormat)}><option value="bibtex">BibTeX</option><option value="ris">RIS</option><option value="apa">APA</option><option value="chicago">Chicago</option></select><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs" href={`/api/writer/projects/${project.id}/citations/export?format=${citationExportFormat}`}>Export</a></div></div><ul className="mt-2 space-y-3">{sortMlaCitations(citationList).map((citation, index) => <li key={`${citationKey(citation)}-${index}`} className="text-sm"><button type="button" className="app-control mr-1 underline" onClick={() => insertCitation(citation)}>Insert</button>{mlaWorksCited(citation)}</li>)}</ul><h2 className="mt-6 font-medium">Revision recovery</h2><ul className="mt-2 space-y-2 text-sm">{revisions.slice(0, 8).map((revision) => <li key={revision.id} className="flex items-center justify-between gap-2"><span>v{revision.revision} · {revision.reason}</span><button type="button" className="app-control underline" onClick={() => restore(revision.id)}>Restore</button></li>)}</ul></aside>
+            data-panels-collapsed={bothWideCollapsed || undefined}
+            className={`app-card app-mount mx-auto rounded-xl p-4 sm:p-6 ${bothWideCollapsed ? "max-w-4xl" : "max-w-3xl"}`}
+          >
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select>
+              <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button>
+              <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button>
+              <button type="button" className="app-control app-press text-sm underline" onClick={newDocument}>New document</button>
+              <button
+                ref={sourcesToggleRef}
+                type="button"
+                className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                aria-expanded={sourcesOpen}
+                aria-controls={SOURCES_PANEL_ID}
+                onClick={toggleSourcesPanel}
+              >
+                Sources and evidence
+              </button>
+              <button
+                ref={citationsToggleRef}
+                type="button"
+                className="app-control app-press min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                aria-expanded={citationsOpen}
+                aria-controls={CITATIONS_PANEL_ID}
+                onClick={toggleCitationsPanel}
+              >
+                Citations and history
+              </button>
+              <ExportLinks projectId={project.id} documentId={active.id} />
+            </div>
+            <input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="app-control w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" />
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p>
+            <textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="app-control mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8 shadow-inner" />
+          </div>
+        </main>
+        <CitationsHistoryPanel
+          mode={isNarrow ? "sheet" : "inline"}
+          open={citationsOpen}
+          onCloseSheet={citationsSecondaryPanel.close}
+          triggerRef={citationsToggleRef}
+          panelId={CITATIONS_PANEL_ID}
+          projectId={project.id}
+          citationList={citationList}
+          onInsertCitation={insertCitation}
+          citationExportFormat={citationExportFormat}
+          onCitationExportFormatChange={setCitationExportFormat}
+          revisions={revisions}
+          onRestore={restore}
+        />
       </div>
     </section>
   );
 }
-
-function citationKey(citation: CslJson) { return citation.DOI ?? citation.ISBN ?? `${citation.title}-${citation.author?.[0]?.family ?? ""}`; }
