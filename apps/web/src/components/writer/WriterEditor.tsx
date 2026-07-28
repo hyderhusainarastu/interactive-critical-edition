@@ -1,37 +1,78 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { mlaParenthetical, mlaWorksCited, plainTextToProseMirror, proseMirrorToPlainText, sortMlaCitations, type CslJson } from "@/lib/writer";
-
-type Document = { id: string; title: string; content: unknown; sortOrder: number };
-type Citation = { id: string; cslJson: unknown; source: string };
-type Source = { id: string; title: string; workId: string; workTitle: string; url: string | null; doi: string | null };
-type Revision = { id: string; revision: number; reason: string; createdAt: string };
-
-// Phase 28.5 (Writer evidence insertion).
-type ResearchProjectOption = { id: string; title: string };
-type EvidenceClaim = {
-  id: string;
-  workId: string | null;
-  workTitle: string | null;
-  claimText: string;
-  claimNature: string;
-  confidence: string;
-  section: string;
-  anchorState: string;
-  sourceScope: string;
-  verificationStatus: string;
-  supportingExcerpt: string;
-};
-type EvidenceCluster = { id: string; name: string; researchQuestion: string | null; verificationStatus: string; latestChamberId: string | null };
-type EvidenceChamberSummary = { id: string; clusterId: string; clusterName: string; question: string; verificationStatus: string };
-type EvidenceView = { researchProject: ResearchProjectOption; claims: EvidenceClaim[]; debateClusters: EvidenceCluster[]; chambers: EvidenceChamberSummary[] };
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { mlaParenthetical, plainTextToProseMirror, proseMirrorToPlainText, type CslJson } from "@/lib/writer";
+import { useRegisterContextBar } from "@/components/shell/ContextBarProvider";
+import { useSecondaryPanel } from "@/components/primitives/useSecondaryPanel";
+import { useToast } from "@/components/app/ToastProvider";
+import { EmptyState } from "@/components/primitives/EmptyState";
+import { ExportLinks } from "./ExportLinks";
+import { CitationsHistoryPanel, type CitationExportFormat } from "./panels/CitationsHistoryPanel";
+import { DEFAULT_WIDE_PANEL_STATE, toggleWidePanel, type WidePanelState } from "./panels/panelState";
+import { SourcesEvidencePanel, type CitationImportKind } from "./panels/SourcesEvidencePanel";
+import { useIsNarrowViewport } from "./panels/useIsNarrowViewport";
+import { ProjectTitleField } from "./ProjectTitleField";
+import { SaveStatus, type SaveState } from "./SaveStatus";
+import { useDocumentBroadcast, type DocumentSavedMessage } from "./useDocumentBroadcast";
+import type {
+  EvidenceClaim,
+  EvidenceView,
+  ResearchProjectOption,
+  WriterCitation as Citation,
+  WriterDocument as Document,
+  WriterRevision as Revision,
+  WriterSource as Source,
+} from "./writerTypes";
 
 const MIN_SIDEBAR_WIDTH = 220;
 const MAX_SIDEBAR_WIDTH = 460;
 const SIDEBAR_WIDTH_STEP = 20;
 
+// Stage 6 layout spec §2.3: `localStorage`-only (not `WorkspacePreferences`)
+// — viewport-chrome density, same precedent as `GlobalRagSidebar`'s stored
+// width and `WorkspaceRail`'s stored collapse state.
+const WIDE_PANELS_STORAGE_KEY = "palimnote:writer-panels";
+const SOURCES_PANEL_ID = "writer-sources-panel";
+const CITATIONS_PANEL_ID = "writer-citations-panel";
+
+function readStoredWidePanels(): WidePanelState {
+  try {
+    const raw = window.localStorage.getItem(WIDE_PANELS_STORAGE_KEY);
+    if (!raw) return DEFAULT_WIDE_PANEL_STATE;
+    const parsed = JSON.parse(raw) as Partial<WidePanelState>;
+    return {
+      sources: typeof parsed.sources === "boolean" ? parsed.sources : true,
+      citations: typeof parsed.citations === "boolean" ? parsed.citations : true,
+    };
+  } catch {
+    return DEFAULT_WIDE_PANEL_STATE;
+  }
+}
+
+function documentTimeKey(value: string | Date): string {
+  return typeof value === "string" ? value : value.toISOString();
+}
+
+/**
+ * Stage 6 spec §4.3's "Reload this document" needs a real remount so the
+ * inner session below re-initializes its `useState(initialDocuments)` from
+ * fresh server data, not the stale in-memory draft — a plain prop update
+ * alone would leave that existing state untouched (React only re-derives
+ * state from new props across a `key` change, never automatically).
+ *
+ * This outer component is a thin wrapper for exactly that reason. Its own
+ * `documentsFingerprint` (id + `updatedAt` per document) changes only when
+ * `router.refresh()` (called from inside the session, on "Reload this
+ * document") actually pulls fresher data from the server component this
+ * page renders under (`(app)/writer/[projectId]/page.tsx` — untouched by
+ * this stage). When the fingerprint changes, using it as `key` forces a
+ * full remount of `WriterEditorSession` with the new `initialDocuments` as
+ * its fresh starting state. Ordinary same-tab autosave never calls
+ * `router.refresh()`, so this never remounts the session out from under a
+ * normal editing session — only an explicit "Reload this document" click
+ * can trigger it.
+ */
 export function WriterEditor({
   project,
   initialDocuments,
@@ -43,9 +84,54 @@ export function WriterEditor({
   initialCitations: Citation[];
   evidenceEnabled?: boolean;
 }) {
+  const documentsFingerprint = initialDocuments.map((document) => `${document.id}:${documentTimeKey(document.updatedAt)}`).join("|");
+  return (
+    <WriterEditorSession
+      key={documentsFingerprint}
+      project={project}
+      initialDocuments={initialDocuments}
+      initialCitations={initialCitations}
+      evidenceEnabled={evidenceEnabled}
+    />
+  );
+}
+
+function WriterEditorSession({
+  project,
+  initialDocuments,
+  initialCitations,
+  evidenceEnabled,
+}: {
+  project: { id: string; title: string };
+  initialDocuments: Document[];
+  initialCitations: Citation[];
+  evidenceEnabled: boolean;
+}) {
+  const router = useRouter();
+  const { toast } = useToast();
+  // Stage 6 spec §4.3: when "Reload this document" remounts this session
+  // (via the outer wrapper's `key` change), the fresh `initialDocuments[0]`
+  // is not necessarily the document the user was actually looking at —
+  // stash which one that was here, right before triggering the reload, and
+  // consume it once on the way back in. Self-cleaning (removed as soon as
+  // it's read) so a later, unrelated remount never picks up a stale value.
+  const activeDocSessionKey = `palimnote:writer-active-document:${project.id}`;
   const [documents, setDocuments] = useState(initialDocuments);
   const [projectTitle, setProjectTitle] = useState(project.title);
-  const [activeId, setActiveId] = useState(initialDocuments[0]?.id ?? "");
+  const [activeId, setActiveId] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.sessionStorage.getItem(activeDocSessionKey);
+        if (stored) {
+          window.sessionStorage.removeItem(activeDocSessionKey);
+          if (initialDocuments.some((document) => document.id === stored)) return stored;
+        }
+      } catch {
+        /* sessionStorage unavailable — fall through to the default below */
+      }
+    }
+    return initialDocuments[0]?.id ?? "";
+  });
   const active = documents.find((document) => document.id === activeId) ?? documents[0];
   const [title, setTitle] = useState(active?.title ?? "Untitled document");
   const [text, setText] = useState(active ? proseMirrorToPlainText(active.content) : "");
@@ -53,10 +139,10 @@ export function WriterEditor({
   const [sources, setSources] = useState<Source[]>([]);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [status, setStatus] = useState("Saved");
+  const [status, setStatus] = useState<SaveState>("Saved");
   const [importValue, setImportValue] = useState("");
-  const [importKind, setImportKind] = useState<"doi" | "isbn" | "title" | "bibtex" | "ris">("doi");
-  const [citationExportFormat, setCitationExportFormat] = useState<"bibtex" | "ris" | "apa" | "chicago">("bibtex");
+  const [importKind, setImportKind] = useState<CitationImportKind>("doi");
+  const [citationExportFormat, setCitationExportFormat] = useState<CitationExportFormat>("bibtex");
   const citationList = useMemo(() => citations.map((citation) => citation.cslJson as CslJson), [citations]);
   const activeDocumentId = active?.id;
 
@@ -69,6 +155,47 @@ export function WriterEditor({
   const [evidenceNatureFilter, setEvidenceNatureFilter] = useState("");
   const [linkingResearch, setLinkingResearch] = useState(false);
   const [insertingClaimId, setInsertingClaimId] = useState<string | null>(null);
+
+  // Stage 6 layout spec §2.2/§2.3: wide-mode panel state is independent
+  // per panel and persists across reloads; narrow-mode state is the shell's
+  // shared `SecondaryPanelProvider` singleton and never persists (§2.1 —
+  // both default closed on a fresh narrow mount).
+  const [widePanels, setWidePanels] = useState<WidePanelState>(() => (typeof window === "undefined" ? DEFAULT_WIDE_PANEL_STATE : readStoredWidePanels()));
+  const isNarrow = useIsNarrowViewport();
+  const sourcesSecondaryPanel = useSecondaryPanel("writer-sources");
+  const citationsSecondaryPanel = useSecondaryPanel("writer-citations");
+  const sourcesToggleRef = useRef<HTMLButtonElement>(null);
+  const citationsToggleRef = useRef<HTMLButtonElement>(null);
+
+  const sourcesOpen = isNarrow ? sourcesSecondaryPanel.isOpen : widePanels.sources;
+  const citationsOpen = isNarrow ? citationsSecondaryPanel.isOpen : widePanels.citations;
+  const bothWideCollapsed = !isNarrow && !widePanels.sources && !widePanels.citations;
+
+  // Memoized on `projectTitle` alone (not a fresh `<ProjectTitleField>`
+  // element every render): `useRegisterContextBar`'s own effect keys off
+  // `state.title`'s referential identity, and a JSX element is a brand-new
+  // object on every render — without this memo, the effect would re-fire on
+  // every WriterEditor render, which re-triggers `ContextBarProvider`'s
+  // state (a new `title`), which re-renders every context consumer
+  // (WriterEditor included, since `useRegisterContextBar` itself reads the
+  // context) — an infinite loop. `setProjectTitle` is the `useState` setter
+  // (referentially stable by React's own guarantee); `saveProjectTitle` is
+  // recreated each render but is only ever captured here when `projectTitle`
+  // itself changes, which is exactly when its closure needs to be fresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const titleField = useMemo(() => <ProjectTitleField value={projectTitle} onChange={setProjectTitle} onBlur={saveProjectTitle} />, [projectTitle]);
+  useRegisterContextBar({ title: titleField });
+
+  // Stage 6 spec §4.3: a same-browser, cross-tab conflict signal. `postSaved`
+  // is called from `saveNow()` below on every successful save; `onConflict`
+  // shows the "Edited in another tab" status variant instead of continuing
+  // the normal Saving/Saved cycle, but only while this tab itself has
+  // unsaved-or-unconfirmed local edits (the hook's own predicate).
+  const { postSaved } = useDocumentBroadcast({
+    activeDocumentId,
+    status,
+    onConflict: (_message: DocumentSavedMessage) => setStatus("Edited in another tab"),
+  });
 
   useEffect(() => {
     if (!active) return;
@@ -104,33 +231,88 @@ export function WriterEditor({
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => setEvidence(data && data.researchProject ? data : null));
   }, [project.id, evidenceEnabled, researchLink, evidenceWorkFilter, evidenceNatureFilter]);
+  // Stage 6 spec §4.2: `saveNow()` is the one save path both the debounce
+  // timer below AND the "Retry" control call — no duplicated fetch logic.
+  // It reads `title`/`text` from this render's own closure, which is always
+  // the draft's current content (not a stale snapshot from a past failure):
+  // every keystroke re-renders the component, so by the time a user clicks
+  // Retry the in-scope `saveNow` already closes over whatever they typed
+  // since the failure.
+  async function saveNow() {
+    if (!activeDocumentId) return;
+    setStatus("Saving…");
+    // A network-level failure (offline, DNS, an aborted request) makes
+    // `fetch` itself reject rather than resolve with a non-ok response —
+    // the pre-Stage-6 code had no `catch` here, so that case left `status`
+    // stuck at "Saving…" forever with no Retry ever offered, which is
+    // exactly the kind of dishonest failure state §4 exists to fix.
+    let ok = false;
+    try {
+      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave" }) });
+      ok = response.ok;
+    } catch {
+      ok = false;
+    }
+    // A functional update, not a plain `setStatus(...)`: a fresher cross-tab
+    // conflict can arrive from `useDocumentBroadcast` while this fetch is
+    // still in flight, and this save's own (now-stale) result must not
+    // clobber that just-shown "Edited in another tab" banner.
+    setStatus((current) => (current === "Edited in another tab" ? current : ok ? "Saved" : "Save failed"));
+    if (ok) postSaved(activeDocumentId);
+  }
   useEffect(() => {
     if (!activeDocumentId || status !== "Editing") return;
-    const timeout = window.setTimeout(async () => {
-      setStatus("Saving…");
-      const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, content: plainTextToProseMirror(text), reason: "autosave" }) });
-      setStatus(response.ok ? "Saved" : "Save failed");
-    }, 750);
+    const timeout = window.setTimeout(() => { saveNow(); }, 750);
     return () => window.clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, text, activeDocumentId, project.id, status]);
+  // Stage 6 spec §4.2: warn on tab close/navigation only while there is real
+  // unsaved-or-unconfirmed content — never while settled ("Saved") or during
+  // the cross-tab conflict banner, where a native "leave site?" prompt would
+  // be redundant or actively misleading.
+  useEffect(() => {
+    const hasUnconfirmedContent = status === "Editing" || status === "Saving…" || status === "Save failed";
+    if (!hasUnconfirmedContent) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [status]);
   function updateDraft(next: string) { setText(next); setStatus("Editing"); }
+  // Stage 6 spec §4.3: "Keep editing here" dismisses the conflict banner and
+  // resumes plain last-write-wins — identical to today's behavior, no
+  // capability regresses. Flipping to "Editing" (rather than leaving the
+  // banner up) both clears the variant and, since the debounce effect above
+  // depends on `status`, immediately schedules a fresh save of whatever this
+  // tab already has, with no further keystroke required.
+  function keepEditingHere() { setStatus("Editing"); }
+  // Stage 6 spec §4.3: "Reload this document" discards local edits and
+  // picks up the other tab's saved content. `router.refresh()` re-runs this
+  // route's server component with fresh data; the outer `WriterEditor`
+  // wrapper's `documentsFingerprint`-keyed remount (see its own comment)
+  // is what actually re-initializes state from that fresh data once it
+  // arrives — this handler's job is only to request it and remember which
+  // document to land back on.
+  function reloadDocument() {
+    try { window.sessionStorage.setItem(activeDocSessionKey, activeDocumentId ?? ""); } catch { /* best-effort only */ }
+    router.refresh();
+  }
   async function newDocument() {
     const nextTitle = window.prompt("Document title", "Untitled document"); if (!nextTitle?.trim()) return;
     const response = await fetch(`/api/writer/projects/${project.id}/documents`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: nextTitle }) });
-    const document = await response.json(); if (!response.ok) return window.alert(document.error ?? "Could not create document.");
+    const document = await response.json(); if (!response.ok) return toast(document.error ?? "Could not create document.", "error");
     setDocuments((items) => [...items, document]); setActiveId(document.id);
   }
   async function saveProjectTitle() {
     const next = projectTitle.trim();
     if (!next || next === project.title) return;
     const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: next }) });
-    if (!response.ok) { setProjectTitle(project.title); window.alert("Could not rename project."); }
+    if (!response.ok) { setProjectTitle(project.title); toast("Could not rename project.", "error"); }
   }
   async function archiveProject() {
     if (!window.confirm("Archive this private project? You can restore it later from the archived-projects API.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ archived: true, confirmArchive: true }) });
     if (response.ok) window.location.assign("/writer");
-    else window.alert("Could not archive project.");
+    else toast("Could not archive project.", "error");
   }
   async function moveDocument(direction: -1 | 1) {
     const index = documents.findIndex((document) => document.id === activeId);
@@ -151,13 +333,13 @@ export function WriterEditor({
   async function importCitation(kind: "library" | "identifier" | "bibtex" | "ris", value: string, resourceId?: string) {
     const body = kind === "library" ? { kind, resourceId } : kind === "identifier" ? { kind, identifierType: importKind, value } : { kind, value };
     const response = await fetch(`/api/writer/projects/${project.id}/citations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const data = await response.json(); if (!response.ok) return window.alert(data.error ?? "Could not import citation.");
+    const data = await response.json(); if (!response.ok) return toast(data.error ?? "Could not import citation.", "error");
     setCitations((items) => [...items, ...data.citations.filter((candidate: Citation) => !items.some((item) => item.id === candidate.id))]); setImportValue("");
   }
   async function restore(revisionId: string) {
     if (!active || !window.confirm("Restore this revision? Your current draft will be saved as a new recoverable revision.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}/documents/${active.id}/revisions/${revisionId}/restore`, { method: "POST" });
-    const document = await response.json(); if (!response.ok) return window.alert(document.error ?? "Could not restore revision.");
+    const document = await response.json(); if (!response.ok) return toast(document.error ?? "Could not restore revision.", "error");
     setText(proseMirrorToPlainText(document.content)); setStatus("Saved");
   }
   function insertCitation(citation: CslJson) { updateDraft(`${text}${text && !text.endsWith(" ") ? " " : ""}${mlaParenthetical(citation)} `); }
@@ -168,7 +350,7 @@ export function WriterEditor({
     try {
       const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ researchProjectId: selectedResearchProjectId }) });
       const data = await response.json();
-      if (!response.ok) return window.alert(data.error ?? "Could not link that research project.");
+      if (!response.ok) return toast(data.error ?? "Could not link that research project.", "error");
       setResearchLink(data.linked);
     } finally { setLinkingResearch(false); }
   }
@@ -176,7 +358,7 @@ export function WriterEditor({
     if (!window.confirm("Unlink this research project? The Evidence panel will hide its claims until you link a project again.")) return;
     const response = await fetch(`/api/writer/projects/${project.id}/research-link`, { method: "DELETE" });
     if (response.ok) { setResearchLink(null); setEvidence(null); }
-    else window.alert("Could not unlink the research project.");
+    else toast("Could not unlink the research project.", "error");
   }
   async function insertEvidence(claim: EvidenceClaim) {
     if (!activeDocumentId) return;
@@ -184,7 +366,7 @@ export function WriterEditor({
     try {
       const response = await fetch(`/api/writer/projects/${project.id}/documents/${activeDocumentId}/evidence`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ claimId: claim.id }) });
       const data = await response.json();
-      if (!response.ok) return window.alert(data.error ?? "Could not insert this evidence.");
+      if (!response.ok) return toast(data.error ?? "Could not insert this evidence.", "error");
       setDocuments((items) => items.map((document) => (document.id === data.document.id ? { ...document, content: data.document.content } : document)));
       if (data.document.id === activeDocumentId) {
         // Rehydrate the visible draft from the server's authoritative
@@ -223,108 +405,196 @@ export function WriterEditor({
       setSidebarWidth(boundedSidebarWidth(next));
     }
   }
-  if (!active) return <p className="p-6">This project has no active documents.</p>;
+  function persistWidePanels(next: WidePanelState) {
+    try { window.localStorage.setItem(WIDE_PANELS_STORAGE_KEY, JSON.stringify(next)); } catch { /* won't survive a reload in this browser */ }
+    return next;
+  }
+  function toggleSourcesPanel() {
+    if (isNarrow) { if (sourcesSecondaryPanel.isOpen) sourcesSecondaryPanel.close(); else sourcesSecondaryPanel.open(); }
+    else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "sources")));
+  }
+  function toggleCitationsPanel() {
+    if (isNarrow) { if (citationsSecondaryPanel.isOpen) citationsSecondaryPanel.close(); else citationsSecondaryPanel.open(); }
+    else setWidePanels((current) => persistWidePanels(toggleWidePanel(current, "citations")));
+  }
+  // Stage 6 verification round 1 §4.2 fix: on wide (>=1024px) viewports the
+  // Sources panel is an inline `<aside>` rendered as a flex sibling of
+  // `<main>`, positioned before it in the DOM so it appears visually to the
+  // left — but both toggle buttons live inside `<main>`'s own toolbar row,
+  // which is later in DOM/tab order than the aside. A plain forward Tab from
+  // the (focused, open) Sources toggle therefore lands on the very next
+  // toolbar control (the Citations toggle) instead of the Sources panel's
+  // own content, which is unreachable by forward-tabbing once you're past
+  // it. Rather than restructure the panel/toolbar DOM layout (risking the
+  // §2.5 resize/collapse mechanics and the narrow-viewport sheet, both of
+  // which already work correctly), this redirects a plain Tab press on the
+  // toggle straight into the panel's own first focusable control — the
+  // same "disclosure trigger hands off to its own disclosed content" pattern
+  // already used by the narrow-viewport sheet (which auto-focuses its own
+  // close button on open). Only intercepts a plain forward Tab (not
+  // Shift+Tab) while wide and the panel is actually open; narrow mode is
+  // untouched (its sheet already traps focus correctly via `useFocusTrap`).
+  function handleSourcesToggleKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "Tab" || event.shiftKey || isNarrow || !sourcesOpen) return;
+    const panel = document.getElementById(SOURCES_PANEL_ID);
+    const firstFocusable = panel?.querySelector<HTMLElement>(
+      "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    );
+    if (!firstFocusable) return;
+    event.preventDefault();
+    firstFocusable.focus();
+  }
+  if (!active) {
+    return (
+      <div className="app-mount p-6">
+        <EmptyState heading="No documents in this project" body="This project has no active documents to display." />
+      </div>
+    );
+  }
   return (
     <section className="app-mount min-h-[calc(100vh-3.5rem)]" aria-label="Writer workspace">
-      <header className="app-card flex flex-wrap items-center gap-3 border-x-0 border-t-0 px-4 py-3"><Link href="/writer" className="app-control app-press text-sm text-[var(--color-text-muted)] hover:underline">← Projects</Link><input aria-label="Project title" value={projectTitle} onChange={(event) => setProjectTitle(event.target.value)} onBlur={saveProjectTitle} className="app-control min-w-0 flex-1 bg-transparent font-serif text-lg font-semibold" /><span className="text-xs text-[var(--color-text-muted)]" role="status">{status}</span><button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=docx`}>DOCX</a><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-sm" href={`/api/writer/projects/${project.id}/export?documentId=${active.id}&format=pdf`}>PDF</a></header>
+      {/* Stage 6 layout spec §3: the project title itself now lives in
+          ContextBar's title slot (registered above via
+          `useRegisterContextBar`), so this row carries only what cannot yet
+          move there (the `actions` slot exists but isn't rendered by
+          ContextBar.tsx, a file this lane doesn't own) — save status and
+          Archive, nothing else. DOCX/PDF export moved to the central
+          document toolbar below (document-scoped, not project-scoped). */}
+      <div className="app-card flex flex-wrap items-center justify-end gap-3 border-x-0 border-t-0 px-4 py-3">
+        <SaveStatus status={status} onRetry={saveNow} onKeepEditingHere={keepEditingHere} onReloadDocument={reloadDocument} />
+        <button type="button" className="app-control app-press text-sm text-[var(--color-text-muted)] underline" onClick={archiveProject}>Archive</button>
+      </div>
       <div className="flex flex-col lg:flex-row">
-        <aside className="relative shrink-0 border-b border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:border-b-0 lg:border-r" style={{ width: `${sidebarWidth}px` }} aria-label="Library source sidebar">
-          <h2 className="font-medium">Library sources</h2><p className="mt-1 text-xs text-[var(--color-text-muted)]">Only sources connected to your own uploaded works appear here.</p>
-          <ul className="app-reveal-stagger mt-3 max-h-52 space-y-2 overflow-auto">{sources.map((source) => <li key={source.id} className="app-card app-lift app-mount rounded p-2 text-sm"><strong className="block">{source.title}</strong><span className="block text-xs text-[var(--color-text-muted)]">for {source.workTitle}</span><div className="mt-1 flex gap-2"><button type="button" className="app-control app-press underline" onClick={() => importCitation("library", "", source.id)}>Cite</button><Link className="app-control app-press underline" href={`/works/${source.workId}/reader`}>Read</Link></div></li>)}</ul>
-          <div className="mt-5 border-t border-[var(--color-border)] pt-3"><h3 className="text-sm font-medium">Add citation</h3><div className="mt-2 flex gap-1"><select aria-label="Citation import format" className="app-control" value={importKind} onChange={(event) => setImportKind(event.target.value as typeof importKind)}><option value="doi">DOI</option><option value="isbn">ISBN</option><option value="title">Title</option><option value="bibtex">BibTeX</option><option value="ris">RIS</option></select><button type="button" className="app-control rounded border px-2 text-sm" onClick={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}>Add</button></div><textarea aria-label="Citation metadata" value={importValue} onChange={(event) => setImportValue(event.target.value)} className="app-control mt-2 min-h-20 w-full rounded border border-[var(--color-border)] bg-[var(--color-background)] p-2 text-sm" placeholder="DOI, ISBN, title, BibTeX, or RIS" /></div>
-          {evidenceEnabled && (
-            <section className="mt-5 border-t border-[var(--color-border)] pt-3" aria-label="Research evidence">
-              <h3 className="text-sm font-medium">Research evidence</h3>
-              {!researchLink ? (
-                <div className="mt-2">
-                  <p className="text-xs text-[var(--color-text-muted)]">Link a research project to bring in its claims, debates, and evidence chambers.</p>
-                  {researchOptions.length ? (
-                    <div className="mt-2 flex gap-1">
-                      <label htmlFor="research-link-select" className="sr-only">Research project to link</label>
-                      {/* `min-w-0` is load-bearing, not decorative: a plain
-                          `<select>` sizes itself to its selected option's
-                          text, and a user-authored research-project title
-                          has no length limit. Without `min-w-0` (which lets
-                          a flex item shrink below its content's intrinsic
-                          width) a long title pushed the sibling "Link"
-                          button outside this fixed-width sidebar's flex row
-                          entirely, landing it over the document editor card
-                          at real screen coordinates and silently eating
-                          every click — caught by this lane's own e2e run,
-                          not a cosmetic nit. */}
-                      <select id="research-link-select" aria-label="Research project to link" className="app-control min-w-0 flex-1" value={selectedResearchProjectId} onChange={(event) => setSelectedResearchProjectId(event.target.value)}>
-                        <option value="">Select a research project…</option>
-                        {researchOptions.map((option) => <option key={option.id} value={option.id}>{option.title}</option>)}
-                      </select>
-                      <button type="button" className="app-control app-press shrink-0 rounded border px-2 text-sm disabled:opacity-50" onClick={linkResearchProject} disabled={!selectedResearchProjectId || linkingResearch}>{linkingResearch ? "Linking…" : "Link"}</button>
-                    </div>
-                  ) : (
-                    <p className="app-empty mt-2 rounded p-2 text-xs text-[var(--color-text-muted)]">No research projects yet. Create one in the Research workspace first.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between gap-2 text-sm"><span>Linked: <strong>{researchLink.title}</strong></span><button type="button" className="app-control app-press text-xs underline" onClick={unlinkResearchProject}>Unlink</button></div>
-                  {evidence && (
-                    <>
-                      <div className="mt-2 flex gap-1">
-                        <label htmlFor="evidence-work-filter" className="sr-only">Filter evidence by work</label>
-                        <select id="evidence-work-filter" aria-label="Filter evidence by work" className="app-control min-w-0 flex-1 text-xs" value={evidenceWorkFilter} onChange={(event) => setEvidenceWorkFilter(event.target.value)}>
-                          <option value="">All works</option>
-                          {[...new Map(evidence.claims.filter((claim) => claim.workId).map((claim) => [claim.workId as string, claim.workTitle ?? "Untitled work"])).entries()].map(([workId, workTitle]) => <option key={workId} value={workId}>{workTitle}</option>)}
-                        </select>
-                        <label htmlFor="evidence-nature-filter" className="sr-only">Filter evidence by claim nature</label>
-                        <select id="evidence-nature-filter" aria-label="Filter evidence by claim nature" className="app-control min-w-0 flex-1 text-xs" value={evidenceNatureFilter} onChange={(event) => setEvidenceNatureFilter(event.target.value)}>
-                          <option value="">All natures</option>
-                          {[...new Set(evidence.claims.map((claim) => claim.claimNature))].map((nature) => <option key={nature} value={nature}>{nature}</option>)}
-                        </select>
-                      </div>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Claims</h4>
-                      <ul className="app-reveal-stagger mt-1 max-h-64 space-y-2 overflow-auto">
-                        {evidence.claims.map((claim) => (
-                          <li key={claim.id} className="app-card app-mount rounded p-2 text-sm">
-                            <p className="text-xs text-[var(--color-text-muted)]">{claim.workTitle ?? "Untitled source"} · {claim.claimNature} · {claim.verificationStatus}{claim.anchorState === "unanchored" ? " · unanchored" : ""}</p>
-                            <p className="mt-1">“{claim.supportingExcerpt}”</p>
-                            <button type="button" className="app-control app-press mt-1 rounded border px-2 py-1 text-xs disabled:opacity-50" onClick={() => insertEvidence(claim)} disabled={insertingClaimId === claim.id}>{insertingClaimId === claim.id ? "Inserting…" : "Insert"}</button>
-                          </li>
-                        ))}
-                        {!evidence.claims.length && <li className="app-empty rounded p-2 text-xs text-[var(--color-text-muted)]">No claims match the current filters.</li>}
-                      </ul>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Debates</h4>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        {evidence.debateClusters.map((cluster) => <li key={cluster.id}><Link className="underline" href={`/research/${researchLink.id}/debates/${cluster.id}`}>{cluster.name}</Link></li>)}
-                        {!evidence.debateClusters.length && <li className="text-[var(--color-text-muted)]">No debates yet.</li>}
-                      </ul>
-                      <h4 className="mt-3 text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">Evidence chambers</h4>
-                      <ul className="mt-1 space-y-1 text-xs">
-                        {evidence.chambers.map((chamber) => <li key={chamber.id}><Link className="underline" href={`/research/chambers/${chamber.id}`}>{chamber.question}</Link></li>)}
-                        {!evidence.chambers.length && <li className="text-[var(--color-text-muted)]">No evidence chambers yet.</li>}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              )}
-            </section>
-          )}
+        <SourcesEvidencePanel
+          mode={isNarrow ? "sheet" : "inline"}
+          open={sourcesOpen}
+          onCloseSheet={sourcesSecondaryPanel.close}
+          triggerRef={sourcesToggleRef}
+          panelId={SOURCES_PANEL_ID}
+          sidebarWidth={sidebarWidth}
+          onResizeStart={startResize}
+          onResizeKeyDown={resizeWithKeyboard}
+          sources={sources}
+          onCite={(resourceId) => importCitation("library", "", resourceId)}
+          importKind={importKind}
+          onImportKindChange={setImportKind}
+          importValue={importValue}
+          onImportValueChange={setImportValue}
+          onAddCitation={() => importCitation(importKind === "bibtex" ? "bibtex" : importKind === "ris" ? "ris" : "identifier", importValue)}
+          evidenceEnabled={evidenceEnabled}
+          researchLink={researchLink}
+          researchOptions={researchOptions}
+          selectedResearchProjectId={selectedResearchProjectId}
+          onSelectedResearchProjectIdChange={setSelectedResearchProjectId}
+          onLinkResearchProject={linkResearchProject}
+          linkingResearch={linkingResearch}
+          onUnlinkResearchProject={unlinkResearchProject}
+          evidence={evidence}
+          evidenceWorkFilter={evidenceWorkFilter}
+          onEvidenceWorkFilterChange={setEvidenceWorkFilter}
+          evidenceNatureFilter={evidenceNatureFilter}
+          onEvidenceNatureFilterChange={setEvidenceNatureFilter}
+          insertingClaimId={insertingClaimId}
+          onInsertEvidence={insertEvidence}
+        />
+        <main className="min-w-0 flex-1 p-4 sm:p-6">
+          {/* §2.5's "freed-space rule": the draft only widens when both
+              panels are collapsed AND the viewport is wide — a narrow
+              viewport's single-sheet-at-a-time layout has no inline panels
+              to free space from, so it never applies there.
+
+              Deliberately NOT `app-mount` (Stage 6 verification round 1
+              §4.1 fix, second half): `.app-mount`'s keyframes only define a
+              `from` step, so once its one-shot entrance animation settles
+              browsers report the completed `transform` as the identity
+              matrix (`matrix(1,0,0,1,0,0)`), not the literal keyword
+              `none` — and per the CSS stacking spec, ANY non-`none`
+              transform value (identity or not) makes the element establish
+              its own stacking context permanently, forever after the
+              animation ends. That silently traps the toolbar's own
+              `z-50` toggle buttons (below) one level too deep: their
+              elevated z-index only ever gets to outrank siblings *within*
+              this div's own stacking context, never the narrow-viewport
+              sheet's `z-40` backdrop, which is a sibling of `<main>` two
+              levels up — confirmed by walking `getComputedStyle` up the
+              real ancestor chain in a live repro. Dropping `app-mount` here
+              removes that intermediate stacking context so the buttons'
+              own z-index is compared directly against the backdrop's,
+              which is what actually lets the fix below work; the entrance
+              animation this card loses is cosmetic (a one-time fade/slide
+              on first mount) and asserted by no test. */}
           <div
-            role="separator"
-            aria-label="Resize Library source sidebar"
-            aria-orientation="vertical"
-            aria-valuemin={MIN_SIDEBAR_WIDTH}
-            aria-valuemax={MAX_SIDEBAR_WIDTH}
-            aria-valuenow={sidebarWidth}
-            aria-valuetext={`${sidebarWidth} pixels wide`}
-            tabIndex={0}
-            onPointerDown={startResize}
-            onKeyDown={resizeWithKeyboard}
-            className="absolute right-0 top-0 hidden h-full w-2 cursor-col-resize lg:block focus-visible:bg-[var(--color-accent-ink)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-accent-ink)]"
-          />
-        </aside>
-        <main className="min-w-0 flex-1 p-4 sm:p-6"><div className="app-card app-mount mx-auto max-w-3xl rounded-xl p-4 sm:p-6"><div className="mb-4 flex flex-wrap items-center gap-2"><select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select><button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button><button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button><button type="button" className="app-control app-press text-sm underline" onClick={newDocument}>New document</button></div><input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="app-control w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" /><p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p><textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="app-control mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8 shadow-inner" /></div></main>
-        <aside className="w-full border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 lg:w-80 lg:border-l lg:border-t-0" aria-label="Citations and revision recovery"><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-medium">Citations</h2><div className="flex items-center gap-1"><label htmlFor="citation-export-format" className="sr-only">Citation export format</label><select id="citation-export-format" aria-label="Citation export format" className="app-control app-select text-xs" value={citationExportFormat} onChange={(event) => setCitationExportFormat(event.target.value as typeof citationExportFormat)}><option value="bibtex">BibTeX</option><option value="ris">RIS</option><option value="apa">APA</option><option value="chicago">Chicago</option></select><a className="app-control app-press rounded border border-[var(--color-border)] px-2 py-1 text-xs" href={`/api/writer/projects/${project.id}/citations/export?format=${citationExportFormat}`}>Export</a></div></div><ul className="mt-2 space-y-3">{sortMlaCitations(citationList).map((citation, index) => <li key={`${citationKey(citation)}-${index}`} className="text-sm"><button type="button" className="app-control mr-1 underline" onClick={() => insertCitation(citation)}>Insert</button>{mlaWorksCited(citation)}</li>)}</ul><h2 className="mt-6 font-medium">Revision recovery</h2><ul className="mt-2 space-y-2 text-sm">{revisions.slice(0, 8).map((revision) => <li key={revision.id} className="flex items-center justify-between gap-2"><span>v{revision.revision} · {revision.reason}</span><button type="button" className="app-control underline" onClick={() => restore(revision.id)}>Restore</button></li>)}</ul></aside>
+            data-panels-collapsed={bothWideCollapsed || undefined}
+            className={`app-card mx-auto rounded-xl p-4 sm:p-6 ${bothWideCollapsed ? "max-w-4xl" : "max-w-3xl"}`}
+          >
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <select aria-label="Active document" className="app-control app-select" value={active.id} onChange={(event) => setActiveId(event.target.value)}>{documents.map((document) => <option key={document.id} value={document.id}>{document.title}</option>)}</select>
+              <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(-1)} disabled={documents[0]?.id === active.id}>Move earlier</button>
+              <button type="button" className="app-control app-press text-sm underline" onClick={() => moveDocument(1)} disabled={documents.at(-1)?.id === active.id}>Move later</button>
+              <button type="button" className="app-control app-press text-sm underline" onClick={newDocument}>New document</button>
+              {/* Stage 6 verification round 1 §4.1 fix: on narrow (<1024px)
+                  viewports, `WriterPanelSheet`'s full-screen `fixed inset-0
+                  z-40` backdrop sits above this toolbar (neither button had
+                  a stacking context of its own, so both painted below any
+                  `fixed`+`z-index` sibling regardless of DOM order). A tap
+                  on the OTHER toggle while a sheet was open therefore hit
+                  the backdrop instead of the button, closing the current
+                  sheet without opening the other one — the spec's §2.1
+                  "opening Citations closes Sources first" single-action
+                  promise was unreachable. `relative z-50` lifts just these
+                  two trigger buttons above the backdrop (z-40) so a tap
+                  always reaches the intended button; the backdrop still
+                  blocks every other click on the page behind it, which is
+                  the correct modal behavior everywhere except this one
+                  documented cross-toggle affordance. This alone wasn't
+                  enough, though — see the `app-mount`-removal comment on
+                  this card's wrapping `<div>` above for the second half of
+                  this same fix (an intermediate ancestor's stacking context
+                  was silently trapping these buttons' z-index below the
+                  backdrop no matter how high it was set). */}
+              <button
+                ref={sourcesToggleRef}
+                type="button"
+                className="app-control app-press relative z-50 min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                aria-expanded={sourcesOpen}
+                aria-controls={SOURCES_PANEL_ID}
+                onClick={toggleSourcesPanel}
+                onKeyDown={handleSourcesToggleKeyDown}
+              >
+                Sources and evidence
+              </button>
+              <button
+                ref={citationsToggleRef}
+                type="button"
+                className="app-control app-press relative z-50 min-h-11 rounded border border-[var(--color-border)] px-3 text-sm"
+                aria-expanded={citationsOpen}
+                aria-controls={CITATIONS_PANEL_ID}
+                onClick={toggleCitationsPanel}
+              >
+                Citations and history
+              </button>
+              <ExportLinks projectId={project.id} documentId={active.id} />
+            </div>
+            <input aria-label="Document title" value={title} onChange={(event) => { setTitle(event.target.value); setStatus("Editing"); }} className="app-control w-full border-b border-[var(--color-border)] bg-transparent pb-2 font-serif text-2xl font-semibold" />
+            <p className="mt-3 text-xs text-[var(--color-text-muted)]">MLA 9 layout: one-inch export margins, double-spaced body, and hanging Works Cited entries.</p>
+            <textarea aria-label="Draft" value={text} onChange={(event) => updateDraft(event.target.value)} className="app-control mt-5 min-h-[50vh] w-full resize-y rounded border border-[var(--color-border)] bg-[var(--color-background)] p-4 font-serif leading-8 shadow-inner" />
+          </div>
+        </main>
+        <CitationsHistoryPanel
+          mode={isNarrow ? "sheet" : "inline"}
+          open={citationsOpen}
+          onCloseSheet={citationsSecondaryPanel.close}
+          triggerRef={citationsToggleRef}
+          panelId={CITATIONS_PANEL_ID}
+          projectId={project.id}
+          citationList={citationList}
+          onInsertCitation={insertCitation}
+          citationExportFormat={citationExportFormat}
+          onCitationExportFormatChange={setCitationExportFormat}
+          revisions={revisions}
+          onRestore={restore}
+        />
       </div>
     </section>
   );
 }
-
-function citationKey(citation: CslJson) { return citation.DOI ?? citation.ISBN ?? `${citation.title}-${citation.author?.[0]?.family ?? ""}`; }
