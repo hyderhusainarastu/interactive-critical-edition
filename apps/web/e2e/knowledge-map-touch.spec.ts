@@ -112,6 +112,10 @@ test.describe("Knowledge Map — touch tap, orbit, pinch, pan (mobile)", () => {
       }
       await page.getByRole("button", { name: "Home", exact: true }).click();
       await waitForLayoutFrozen(page);
+      // `isLayoutFrozen` covers force layout, while Home's camera tween is
+      // a separate motion. Read the projected target only after that real
+      // transition has settled; this is still one tap, never a retry.
+      await page.waitForTimeout(450);
       const point = await page.evaluate((id) => window.__knowledgeMapTestHook__?.getNodeScreenPosition(id) ?? null, targetId);
       expect(point).not.toBeNull();
       await canvas.tap({ position: point! });
