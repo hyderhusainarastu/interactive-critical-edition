@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CANONICAL_NODE_STATES } from "./kinds";
+import { CANONICAL_NODE_STATES } from "../core/kinds";
 import { DEFAULT_STATE_UNAVAILABLE_REASON, isKnownCanonicalNodeState, unavailableReasonForState } from "./state";
 
 describe("state", () => {

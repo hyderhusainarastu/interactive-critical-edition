@@ -44,9 +44,9 @@
  * malformed input, needs the same graceful chooser landing.
  */
 
-import { toDisplayNodeId, type DisplayNodeId } from "./ids";
-import type { Layer } from "./layers";
-import type { OmittedEntry, OmittedReason, ValidityCheck } from "./omission";
+import { toDisplayNodeId, type DisplayNodeId } from "../core/ids";
+import type { Layer } from "../core/layers";
+import type { OmittedEntry, OmittedReason, ValidityCheck } from "../state/omission";
 import { extractGraphUrlFilters } from "./urlStateCodec";
 import {
   DEFAULT_GRAPH_FOCUS,

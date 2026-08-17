@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { toDisplayNodeId } from "./ids";
-import { mulberry32, randomGraphUrlState } from "./testFixtures";
+import { toDisplayNodeId } from "../core/ids";
+import { mulberry32, randomGraphUrlState } from "../testFixtures";
 import { GraphUrlStateParseError, extractGraphUrlFilters, parseGraphUrlState, serializeGraphUrlState } from "./urlStateCodec";
-import { EXPANSION_CAP } from "./disclosure";
+import { EXPANSION_CAP } from "../state/disclosure";
 import type { GraphUrlState } from "./urlState";
 
 const MINIMAL_STATE: GraphUrlState = {

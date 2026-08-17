@@ -7,10 +7,10 @@
  * expands.
  */
 
-import { toDisplayNodeId, type DisplayNodeId } from "./ids";
-import type { CanonicalNodeTypeMirror, DisplayOnlyKind } from "./kinds";
-import type { Layer } from "./layers";
-import type { DisplayNode, DisplayProjection } from "./types";
+import { toDisplayNodeId, type DisplayNodeId } from "../core/ids";
+import type { CanonicalNodeTypeMirror, DisplayOnlyKind } from "../core/kinds";
+import type { Layer } from "../core/layers";
+import type { DisplayNode, DisplayProjection } from "../core/types";
 
 export type DeviceClass = "desktop" | "mobile";
 

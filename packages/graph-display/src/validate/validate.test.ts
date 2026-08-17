@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assertNotMutated, CanonicalMutationError, deepFreeze, validateDisplayGraph } from "./validate";
-import { toDisplayNodeId } from "./ids";
-import { makeLink, makeNode } from "./testFixtures";
+import { toDisplayNodeId } from "../core/ids";
+import { makeLink, makeNode } from "../testFixtures";
 
 describe("validateDisplayGraph — structural invariants", () => {
   it("returns no diagnostics for a well-formed graph", () => {

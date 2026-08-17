@@ -17,13 +17,13 @@
  * thrown error and never a silently-dropped-without-explanation id.
  */
 
-import { buildAggregateNodes, EXPANSION_CAP, type AggregationOptions, type AggregationResult } from "./disclosure";
-import type { DisplayNodeId } from "./ids";
-import type { CanonicalNodeTypeMirror } from "./kinds";
-import type { OmittedEntry, ValidityCheck } from "./omission";
-import type { DisplayNode } from "./types";
-import type { GraphUrlContext, GraphUrlFilters, GraphFocusState, GraphUrlState } from "./urlState";
-import type { Layer } from "./layers";
+import { buildAggregateNodes, EXPANSION_CAP, type AggregationOptions, type AggregationResult } from "../state/disclosure";
+import type { DisplayNodeId } from "../core/ids";
+import type { CanonicalNodeTypeMirror } from "../core/kinds";
+import type { OmittedEntry, ValidityCheck } from "../state/omission";
+import type { DisplayNode } from "../core/types";
+import type { GraphUrlContext, GraphUrlFilters, GraphFocusState, GraphUrlState } from "../url/urlState";
+import type { Layer } from "../core/layers";
 
 /**
  * "Rebuild the base context deterministically." A context is either still

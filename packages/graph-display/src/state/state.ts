@@ -19,7 +19,7 @@
  * `CanonicalNodeStateMirror`, from `kinds.ts`).
  */
 
-import { CANONICAL_NODE_STATES, type CanonicalNodeStateMirror } from "./kinds";
+import { CANONICAL_NODE_STATES, type CanonicalNodeStateMirror } from "../core/kinds";
 
 export const DEFAULT_STATE_UNAVAILABLE_REASON: Record<CanonicalNodeStateMirror, string | null> = {
   primary: null,

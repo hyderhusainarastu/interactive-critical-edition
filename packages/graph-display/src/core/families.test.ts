@@ -8,7 +8,7 @@ import {
   validateLinkDirection,
 } from "./families";
 import { DISPLAY_EDGE_FAMILIES } from "./types";
-import { ALL_EMITTED_EDGE_VALUES } from "./testFixtures";
+import { ALL_EMITTED_EDGE_VALUES } from "../testFixtures";
 
 describe("classifyEdgeFamily — exhaustiveness over the audited emitted set", () => {
   it("classifies every currently-emitted edgeType value into a real family, never unclassified", () => {

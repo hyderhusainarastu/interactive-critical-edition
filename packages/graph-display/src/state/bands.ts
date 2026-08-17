@@ -3,8 +3,8 @@
  * `BAND_GAP` formula, and world-Z placement with bounded jitter.
  */
 
-import { isDisplayOnlyKind, type CanonicalNodeTypeMirror, type DisplayKind, type DisplayOnlyKind } from "./kinds";
-import { LAYER_BAND_INDEX, type Layer } from "./layers";
+import { isDisplayOnlyKind, type CanonicalNodeTypeMirror, type DisplayKind, type DisplayOnlyKind } from "../core/kinds";
+import { LAYER_BAND_INDEX, type Layer } from "../core/layers";
 
 /**
  * `computeBandGap(medianXYLinkDistance) = min(120, max(48, 1.25 × median))`

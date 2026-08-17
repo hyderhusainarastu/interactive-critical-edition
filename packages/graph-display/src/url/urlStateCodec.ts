@@ -23,9 +23,9 @@
  *    "absent", and this codec preserves that distinction both ways).
  */
 
-import { EXPANSION_CAP } from "./disclosure";
-import { toDisplayNodeId, unwrapId, type DisplayNodeId } from "./ids";
-import { isLayer, type Layer } from "./layers";
+import { EXPANSION_CAP } from "../state/disclosure";
+import { toDisplayNodeId, unwrapId, type DisplayNodeId } from "../core/ids";
+import { isLayer, type Layer } from "../core/layers";
 import {
   GRAPH_FILTER_KEYS,
   DEFAULT_GRAPH_FOCUS,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { EXPANSION_CAP } from "./disclosure";
-import { toDisplayNodeId, type DisplayNodeId } from "./ids";
-import type { OmittedReason, ValidityCheck } from "./omission";
+import { EXPANSION_CAP } from "../state/disclosure";
+import { toDisplayNodeId, type DisplayNodeId } from "../core/ids";
+import type { OmittedReason, ValidityCheck } from "../state/omission";
 import {
   reconcileSelectedId,
   reconstructGraphUrlState,
@@ -9,9 +9,9 @@ import {
   replayExpansionTrail,
   rebuildContext,
 } from "./reconstruct";
-import { parseGraphUrlState, serializeGraphUrlState } from "./urlStateCodec";
-import type { GraphUrlContext, GraphUrlState } from "./urlState";
-import { makeNode } from "./testFixtures";
+import { parseGraphUrlState, serializeGraphUrlState } from "../url/urlStateCodec";
+import type { GraphUrlContext, GraphUrlState } from "../url/urlState";
+import { makeNode } from "../testFixtures";
 
 const allowAll: ValidityCheck<unknown> = () => null;
 const rejectAll = (reason: OmittedReason): ValidityCheck<unknown> => () => reason;

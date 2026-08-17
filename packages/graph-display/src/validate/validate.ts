@@ -14,7 +14,7 @@
  *     renderer, inspector, and accessible table all still expect to read.
  */
 
-import type { DisplayLink, DisplayNode } from "./types";
+import type { DisplayLink, DisplayNode } from "../core/types";
 
 export type GraphDiagnosticSeverity = "error" | "warning";
 

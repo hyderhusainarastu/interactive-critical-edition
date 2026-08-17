@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toDisplayNodeId } from "./ids";
+import { toDisplayNodeId } from "../core/ids";
 import type { LegacyTranslationValidators } from "./legacyGraphUrl";
 import { translateLegacyGraphUrl } from "./legacyGraphUrl";
 

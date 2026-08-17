@@ -9,8 +9,8 @@ import {
   maxJitter,
   zForLayer,
 } from "./bands";
-import { CANONICAL_NODE_TYPES, DISPLAY_ONLY_KINDS } from "./kinds";
-import { LAYER_BAND_INDEX, LAYER_ORDER } from "./layers";
+import { CANONICAL_NODE_TYPES, DISPLAY_ONLY_KINDS } from "../core/kinds";
+import { LAYER_BAND_INDEX, LAYER_ORDER } from "../core/layers";
 
 describe("computeBandGap", () => {
   it("clamps to a floor of 48", () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { classifyEdgeFamily } from "./families";
 import { toCanonicalNodeId, toDisplayNodeId, unwrapId } from "./ids";
-import { layerForDisplayKind } from "./bands";
-import { buildAggregateNodes, initialNeighborhood, selectPrioritized } from "./disclosure";
-import { deepFreeze, validateDisplayGraph } from "./validate";
+import { layerForDisplayKind } from "../state/bands";
+import { buildAggregateNodes, initialNeighborhood, selectPrioritized } from "../state/disclosure";
+import { deepFreeze, validateDisplayGraph } from "../validate/validate";
 import { CANONICAL_EDGE_FAMILIES, DISPLAY_EDGE_FAMILIES } from "./types";
-import { makeLink, makeNode } from "./testFixtures";
+import { makeLink, makeNode } from "../testFixtures";
 
 describe("CANONICAL_EDGE_FAMILIES / DISPLAY_EDGE_FAMILIES", () => {
   it("DISPLAY_EDGE_FAMILIES is exactly the 5 canonical families plus 'qualification'", () => {

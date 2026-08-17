@@ -4,11 +4,11 @@
  * include glob, so this file is never run as a test itself.
  */
 
-import { toDisplayLinkId, toDisplayNodeId, type DisplayLinkId, type DisplayNodeId } from "./ids";
-import type { CanonicalNodeTypeMirror } from "./kinds";
-import { DEFAULT_CANONICAL_NODE_TYPE_LAYER } from "./bands";
-import { LAYER_ORDER, type Layer } from "./layers";
-import type { DisplayEdgeFamily, DisplayLink, DisplayNode } from "./types";
+import { toDisplayLinkId, toDisplayNodeId, type DisplayLinkId, type DisplayNodeId } from "./core/ids";
+import type { CanonicalNodeTypeMirror } from "./core/kinds";
+import { DEFAULT_CANONICAL_NODE_TYPE_LAYER } from "./state/bands";
+import { LAYER_ORDER, type Layer } from "./core/layers";
+import type { DisplayEdgeFamily, DisplayLink, DisplayNode } from "./core/types";
 import {
   GRAPH_CONTEXT_KINDS,
   GRAPH_FILTER_KEYS,
@@ -17,7 +17,7 @@ import {
   type GraphUrlContext,
   type GraphUrlFilters,
   type GraphUrlState,
-} from "./urlState";
+} from "./url/urlState";
 
 export function makeNode(
   id: string,

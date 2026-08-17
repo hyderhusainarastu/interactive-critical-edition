@@ -10,7 +10,7 @@ import {
   selectPrioritized,
   type DisclosureCandidate,
 } from "./disclosure";
-import { makeNode } from "./testFixtures";
+import { makeNode } from "../testFixtures";
 
 function candidate(
   id: string,

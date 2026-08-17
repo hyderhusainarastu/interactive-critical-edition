@@ -18,8 +18,8 @@
  * "Home" framing rather than restoring a prior camera pose.
  */
 
-import type { DisplayNodeId } from "./ids";
-import type { Layer } from "./layers";
+import type { DisplayNodeId } from "../core/ids";
+import type { Layer } from "../core/layers";
 
 /** Charter §9's five context kinds ("Context kind and ID"). A "question"
  *  context is a Research question/debate-adjacent entry point distinct
