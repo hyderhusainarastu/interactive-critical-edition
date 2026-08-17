@@ -72,3 +72,12 @@ baseline-test/
 # `supabase db query --linked`, never committed — see docs/PROJECT-LOG.md's
 # migration-application recipe).
 /prod-migration-*.sql
+
+# Local scratch/output directories. Neither has ever held tracked files;
+# they exist only so ad-hoc scripts have somewhere to write.
+/tmp/
+/output/
+
+# Pasted terminal transcripts. These land at the repo root when a session
+# log is copied into a file; they are never project content.
+/*-local-command-caveat*.txt
