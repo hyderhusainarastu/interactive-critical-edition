@@ -10,7 +10,8 @@
  * drifting the two shapes apart.
  */
 import { GRAPH_FILTER_KEYS, type GraphUrlFilters } from "@ice/graph-display";
-import { DEFAULT_GRAPH_FILTERS, type GraphFilters } from "../graph/types";
+import { DEFAULT_GRAPH_FILTERS } from "../graph/filterGraphData";
+import type { GraphFilters } from "../graph/types";
 
 export function graphFiltersFromUrlFilters(urlFilters: GraphUrlFilters): GraphFilters {
   const filters = { ...DEFAULT_GRAPH_FILTERS };

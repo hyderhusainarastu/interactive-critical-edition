@@ -20,7 +20,8 @@
  * against — never punish missing data, the same house rule
  * `matchesAnyReaderLevel`/D-21-10 already use elsewhere in this app.
  */
-import { credibilityBandFor, type GraphFilters, type GraphNode } from "../graph/types";
+import { credibilityBandFor } from "../graph/filterGraphData";
+import type { GraphFilters, GraphNode } from "../graph/types";
 import { LAYER_ORDER, type Layer } from "@ice/graph-display";
 import type { KnowledgeMapDisplayNode } from "./adapter";
 

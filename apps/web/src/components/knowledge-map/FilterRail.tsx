@@ -16,14 +16,18 @@
  * more of that exact group into view.
  */
 import {
-  CREDIBILITY_BAND_META,
   EDGE_FAMILY_META,
   EDGE_FAMILY_ORDER,
+} from "../graph/edgeTypeForRelationshipCategory";
+import {
+  CREDIBILITY_BAND_META,
+  isDefaultFilters,
+  type CredibilityBand,
+} from "../graph/filterGraphData";
+import {
   STATE_META,
   STATE_ORDER,
   TYPE_LABEL,
-  isDefaultFilters,
-  type CredibilityBand,
   type GraphFilters,
   type NodeState,
   type NodeType,

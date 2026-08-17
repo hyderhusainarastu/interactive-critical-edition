@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { DEFAULT_GRAPH_FILTERS, filterGraphData, isDefaultFilters, roadmapSubset, type GraphData, type GraphFilters, type GraphNode, type RoadmapAnnotation } from "./types";
+import { DEFAULT_GRAPH_FILTERS, filterGraphData, isDefaultFilters, roadmapSubset } from "./filterGraphData";
+import type { GraphData, GraphFilters, GraphNode, RoadmapAnnotation } from "./types";
 
 /**
  * Phase 21.3 regression coverage for `filterGraphData` — the ONE filtering

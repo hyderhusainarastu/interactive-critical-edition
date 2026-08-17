@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { edgeFamilyFor, edgeTypeForRelationshipCategory } from "./types";
+import { edgeFamilyFor, edgeTypeForRelationshipCategory } from "./edgeTypeForRelationshipCategory";
 
 /**
  * D-21-7 regression: every one of the 10 `relationship_category` values that

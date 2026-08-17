@@ -2,7 +2,8 @@ import { conceptMastery, db, readingRecords, understandingRatings, workRelations
 import { phase25FeatureEnabled } from "@ice/config";
 import { KNOWN_THRESHOLD, READER_LEVELS } from "@ice/roadmap";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { edgeTypeForRelationshipCategory, isDirectedEdgeType, type GraphLink, type GraphNode, type GraphPayload, type NodeState, type NodeType } from "@/components/graph/types";
+import { edgeTypeForRelationshipCategory, isDirectedEdgeType } from "@/components/graph/edgeTypeForRelationshipCategory";
+import type { GraphLink, GraphNode, GraphPayload, NodeState, NodeType } from "@/components/graph/types";
 import { deriveEdgeCategory } from "@/lib/graphEdgeCategory";
 import { mapConceptConceptEdges, selectVisualNodes } from "@/lib/graphConnectivity";
 import { loadDebateGraphAdditions } from "@/lib/graphDebate";

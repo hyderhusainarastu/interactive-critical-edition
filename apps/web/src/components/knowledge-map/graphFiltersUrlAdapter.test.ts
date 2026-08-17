@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphFiltersUrlAdapter";
-import { DEFAULT_GRAPH_FILTERS } from "../graph/types";
+import { DEFAULT_GRAPH_FILTERS } from "../graph/filterGraphData";
 
 /** `npx tsx apps/web/src/components/knowledge-map/graphFiltersUrlAdapter.test.ts` */
 

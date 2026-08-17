@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { LAYER_ORDER, toDisplayNodeId } from "@ice/graph-display";
 import { computeVisibleNodeIds, toggleLayer } from "./attributeVisibility";
-import { DEFAULT_GRAPH_FILTERS, type GraphNode } from "../graph/types";
+import { DEFAULT_GRAPH_FILTERS } from "../graph/filterGraphData";
+import type { GraphNode } from "../graph/types";
 import type { KnowledgeMapDisplayNode } from "./adapter";
 
 /** `npx tsx apps/web/src/components/knowledge-map/attributeVisibility.test.ts` */
