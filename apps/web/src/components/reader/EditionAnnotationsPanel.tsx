@@ -7,10 +7,9 @@ import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, VERIFICATION_LABELS } from "./annotationMeta";
+import { AuthorityBadge, ClaimView } from "./EditionBadges";
 import {
   AGREEMENT_LABEL,
-  AuthorityBadge,
-  ClaimView,
   type EditionGeneratedNote,
   PASSAGE_TYPE_LABEL,
   READER_LEVEL_LABEL,
@@ -18,7 +17,7 @@ import {
   type EditionPayload,
   type EditionResource,
   type PassageAnnotationType,
-} from "./EditionReader";
+} from "./editionTypes";
 import { matchNoteToBlock } from "./matchNoteToBlock";
 import { ClaimsTab } from "./ClaimsTab";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";

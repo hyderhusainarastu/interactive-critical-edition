@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { RagChatPanel } from "@/app/(app)/works/[workId]/reader/RagChatPanel";
+import { RagChatPanel } from "@/components/reader/RagChatPanel";
 
 const WIDTH_STORAGE_KEY = "palimnote:rag-sidebar-width";
 const MIN_WIDTH = 320;

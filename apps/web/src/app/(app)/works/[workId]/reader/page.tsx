@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/auth";
 import { getUserReaderLevel } from "@/lib/readerLevel";
 import { getOwnedDocument } from "@/lib/works";
 import { tabDisabledReason } from "@/components/read/workAttention";
-import { ReaderShell } from "./ReaderShell";
+import { ReaderShell } from "@/components/reader/ReaderShell";
 
 export default async function ReaderPage({
   params,

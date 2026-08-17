@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { InsertIntoWriterButton } from "@/components/writer/insertion/InsertIntoWriterButton";
 import { VERIFICATION_LABELS } from "./annotationMeta";
-import type { EditionPayload } from "./EditionReader";
+import type { EditionPayload } from "./editionTypes";
 import { readerScrollBehavior } from "./readerMotion";
 import {
   CLAIM_MARKER_GLYPH,

@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { LibraryItem } from "@/lib/library";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { CATEGORY_META } from "@/components/shared/annotationMeta";
-import { AuthorityBadge, type Authority } from "../reader/EditionReader";
+import { AuthorityBadge } from "@/components/reader/EditionBadges";
+import type { Authority } from "@/components/reader/editionTypes";
 
 /**
  * One work's own resolved sources (Stage 4 read spec §3.4) — unfiltered,

@@ -4,7 +4,7 @@
  * showcases and the authenticated Reader/Annotations surfaces draw the
  * category label/glyph/color vocabulary from ONE module instead of
  * duplicating it. Moved verbatim from
- * `apps/web/src/app/(app)/works/[workId]/reader/annotationMeta.ts`,
+ * `apps/web/src/components/reader/annotationMeta.ts`,
  * which now re-exports from here for its existing importers.
  *
  * Each category has a distinct label, a short glyph, AND a color token —

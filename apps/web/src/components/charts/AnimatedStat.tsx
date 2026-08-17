@@ -48,7 +48,7 @@ function prefersReducedMotionNow(): boolean {
 /**
  * A count-up number, respecting BOTH the OS `prefers-reduced-motion`
  * setting and the in-app motion toggle (same combined check as
- * `apps/web/src/app/(app)/works/[workId]/reader/readerMotion.ts`'s
+ * `apps/web/src/components/reader/readerMotion.ts`'s
  * `readerScrollBehavior`) — this one has to run in JS, unlike the CSS-only
  * chart draw-in animations elsewhere in this folder, because a changing
  * NUMBER needs a value driver, not just a visual transition. `tabular-nums`

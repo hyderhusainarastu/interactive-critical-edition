@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ReaderSidebarFrame } from "./ReaderSidebarFrame";
-import type { OutlineItem } from "./EditionReader";
+import type { OutlineItem } from "./editionOutline";
 
 /**
  * Persistent left outline rail (D-23-51 — owner feedback: the outline

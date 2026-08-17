@@ -3,7 +3,7 @@ import { phase18RagEnabled, phase25FeatureEnabled } from "@ice/config";
 import { isResearchMode } from "@ice/rag";
 import { PageHeader } from "@/components/app/PageHeader";
 import { requireSession } from "@/lib/auth";
-import { RagChatPanel } from "../works/[workId]/reader/RagChatPanel";
+import { RagChatPanel } from "@/components/reader/RagChatPanel";
 
 /**
  * The dedicated Phase 18 destination makes the owner-scoped Library chat
