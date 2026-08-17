@@ -9,6 +9,7 @@
     "@ice/roadmap": "workspace:*"
   },
   "scripts": {
+    "lint": "eslint --config ../../eslint.config.packages.mjs src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

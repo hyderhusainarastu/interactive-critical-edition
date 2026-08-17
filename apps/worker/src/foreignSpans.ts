@@ -12,7 +12,7 @@ import {
 // re-exported from `@ice/ingestion`'s barrel (commit 5d91981, "keep PDF probe
 // out of web bundle") so `apps/web` never pulls unpdf's PDF probe machinery
 // into the client bundle. Only the worker needs it.
-import { inspectPdfGlyphRecoveryCandidates } from "@ice/ingestion/src/pdfGlyphRecovery";
+import { inspectPdfGlyphRecoveryCandidates } from "@ice/ingestion";
 import { reportError } from "@ice/observability";
 
 /**

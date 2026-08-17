@@ -15,5 +15,9 @@
     "generate:project-status": "node scripts/generate-progress-checklist.mjs",
     "check:project-status": "node scripts/generate-progress-checklist.mjs --check",
     "check:migration-ledger": "node scripts/check-migration-ledger.mjs"
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^9.39.5"
   }
 }

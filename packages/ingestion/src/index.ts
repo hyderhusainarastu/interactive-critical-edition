@@ -53,6 +53,10 @@ export {
 } from "./parsers/apparatus";
 export { collectBoilerplateLines, isEntirelyBoilerplate } from "./parsers/boilerplate";
 export { validateUploadContent, scanWithOptionalClamAv } from "./validation";
+export {
+  inspectPdfGlyphRecoveryCandidates,
+  type PdfGlyphRecoveryCandidate,
+} from "./pdfGlyphRecovery";
 export * from "./storage";
 
 export async function parseDocument(
