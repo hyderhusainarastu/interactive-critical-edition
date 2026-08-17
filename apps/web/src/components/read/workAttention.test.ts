@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { queueGroupFor, tabDisabledReason } from "./workAttention";
 
 /**
@@ -9,31 +9,56 @@ import { queueGroupFor, tabDisabledReason } from "./workAttention";
  */
 
 // queueGroupFor
-assert.equal(queueGroupFor({ status: "needs_review" }), "attention");
-assert.equal(queueGroupFor({ status: "failed" }), "attention");
-assert.equal(queueGroupFor({ status: "processing", stalled: true }), "attention");
-assert.equal(queueGroupFor({ status: "uploaded" }), "in_progress");
-assert.equal(queueGroupFor({ status: "processing" }), "in_progress");
-assert.equal(queueGroupFor({ status: "processing", stalled: false }), "in_progress");
-assert.equal(queueGroupFor({ status: "ready" }), "ready");
-// A ready work is never "attention" even if a stale stalled flag lingers —
-// stalled only means anything for a still-processing document.
-assert.equal(queueGroupFor({ status: "ready", stalled: true }), "ready");
+describe("queueGroupFor", () => {
+  it("groups needs_review, failed, and stalled processing as \"attention\"", () => {
+    expect(queueGroupFor({ status: "needs_review" })).toBe("attention");
+    expect(queueGroupFor({ status: "failed" })).toBe("attention");
+    expect(queueGroupFor({ status: "processing", stalled: true })).toBe("attention");
+  });
+
+  it("groups uploaded and (non-stalled) processing as \"in_progress\"", () => {
+    expect(queueGroupFor({ status: "uploaded" })).toBe("in_progress");
+    expect(queueGroupFor({ status: "processing" })).toBe("in_progress");
+    expect(queueGroupFor({ status: "processing", stalled: false })).toBe("in_progress");
+  });
+
+  it("groups ready as \"ready\"", () => {
+    expect(queueGroupFor({ status: "ready" })).toBe("ready");
+  });
+
+  // A ready work is never "attention" even if a stale stalled flag lingers —
+  // stalled only means anything for a still-processing document.
+  it("a ready work is never \"attention\" even if a stale stalled flag lingers", () => {
+    expect(queueGroupFor({ status: "ready", stalled: true })).toBe("ready");
+  });
+});
 
 // tabDisabledReason
-assert.equal(tabDisabledReason({ status: "ready", deletedAt: null }), null);
-assert.equal(
-  tabDisabledReason({ status: "ready", deletedAt: new Date().toISOString() }),
-  "This work is in Trash — restore it to continue.",
-);
-assert.equal(tabDisabledReason({ status: "failed", deletedAt: null }), "Unavailable — processing failed.");
-for (const status of ["uploaded", "processing", "needs_review"] as const) {
-  assert.equal(tabDisabledReason({ status, deletedAt: null }), "Available once processing finishes.");
-}
-// Trashed always wins over the underlying status, even "ready".
-assert.equal(
-  tabDisabledReason({ status: "failed", deletedAt: new Date() }),
-  "This work is in Trash — restore it to continue.",
-);
+describe("tabDisabledReason", () => {
+  it("a ready, untrashed work has no disabled reason", () => {
+    expect(tabDisabledReason({ status: "ready", deletedAt: null })).toBe(null);
+  });
 
-console.log("workAttention.test.ts: all assertions passed");
+  it("a trashed work reports the restore-it reason", () => {
+    expect(tabDisabledReason({ status: "ready", deletedAt: new Date().toISOString() })).toBe(
+      "This work is in Trash — restore it to continue.",
+    );
+  });
+
+  it("a failed work reports the processing-failed reason", () => {
+    expect(tabDisabledReason({ status: "failed", deletedAt: null })).toBe("Unavailable — processing failed.");
+  });
+
+  it("an in-flight work reports the available-once-processing-finishes reason", () => {
+    for (const status of ["uploaded", "processing", "needs_review"] as const) {
+      expect(tabDisabledReason({ status, deletedAt: null })).toBe("Available once processing finishes.");
+    }
+  });
+
+  // Trashed always wins over the underlying status, even "ready".
+  it("trashed always wins over the underlying status, even \"ready\"", () => {
+    expect(tabDisabledReason({ status: "failed", deletedAt: new Date() })).toBe(
+      "This work is in Trash — restore it to continue.",
+    );
+  });
+});

@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_WIDE_PANEL_STATE, toggleWidePanel } from "./panelState";
 
 /**
@@ -8,23 +8,30 @@ import { DEFAULT_WIDE_PANEL_STATE, toggleWidePanel } from "./panelState";
  * function).
  */
 
-// --- toggling one panel never touches the other ---------------------------
-assert.deepEqual(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources"), { sources: false, citations: true });
-assert.deepEqual(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "citations"), { sources: true, citations: false });
+describe("toggleWidePanel", () => {
+  // --- toggling one panel never touches the other ---------------------------
+  it("toggling one panel never touches the other", () => {
+    expect(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources")).toEqual({ sources: false, citations: true });
+    expect(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "citations")).toEqual({ sources: true, citations: false });
+  });
 
-// --- toggling twice returns to the original state --------------------------
-assert.deepEqual(
-  toggleWidePanel(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources"), "sources"),
-  DEFAULT_WIDE_PANEL_STATE,
-);
+  // --- toggling twice returns to the original state --------------------------
+  it("toggling twice returns to the original state", () => {
+    expect(toggleWidePanel(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources"), "sources")).toEqual(
+      DEFAULT_WIDE_PANEL_STATE,
+    );
+  });
 
-// --- both collapsed is reachable and independent ---------------------------
-const bothCollapsed = toggleWidePanel(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources"), "citations");
-assert.deepEqual(bothCollapsed, { sources: false, citations: false });
+  // --- both collapsed is reachable and independent ---------------------------
+  it("both collapsed is reachable and independent", () => {
+    const bothCollapsed = toggleWidePanel(toggleWidePanel(DEFAULT_WIDE_PANEL_STATE, "sources"), "citations");
+    expect(bothCollapsed).toEqual({ sources: false, citations: false });
+  });
 
-// --- the input object is never mutated in place -----------------------------
-const input = { sources: true, citations: true };
-toggleWidePanel(input, "sources");
-assert.deepEqual(input, { sources: true, citations: true });
-
-console.log("panelState.test.ts: all assertions passed");
+  // --- the input object is never mutated in place -----------------------------
+  it("the input object is never mutated in place", () => {
+    const input = { sources: true, citations: true };
+    toggleWidePanel(input, "sources");
+    expect(input).toEqual({ sources: true, citations: true });
+  });
+});

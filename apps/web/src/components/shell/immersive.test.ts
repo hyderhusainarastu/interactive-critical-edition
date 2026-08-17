@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { isAskLibraryRoute, isImmersiveRoute, isReaderRoute } from "./immersive";
 
 /**
@@ -7,50 +7,64 @@ import { isAskLibraryRoute, isImmersiveRoute, isReaderRoute } from "./immersive"
  * runner wired, so these are plain node:assert scripts).
  */
 
-// --- immersive routes ---------------------------------------------------
-assert.equal(isImmersiveRoute("/graph"), true);
-assert.equal(isImmersiveRoute("/works/abc-123/reader"), true);
-assert.equal(isImmersiveRoute("/works/abc-123/reader/"), true);
-assert.equal(isImmersiveRoute("/works/abc-123/reader/notes"), true);
-assert.equal(isImmersiveRoute("/works/abc-123/graph"), true);
-assert.equal(isImmersiveRoute("/works/abc-123/graph?layout=explore".split("?")[0]), true);
-assert.equal(isImmersiveRoute("/writer/proj-1"), true);
-assert.equal(isImmersiveRoute("/writer/proj-1/"), true);
+describe("isImmersiveRoute", () => {
+  // --- immersive routes ---------------------------------------------------
+  it("treats the knowledge map, work-scoped reader/graph, and writer documents as immersive", () => {
+    expect(isImmersiveRoute("/graph")).toBe(true);
+    expect(isImmersiveRoute("/works/abc-123/reader")).toBe(true);
+    expect(isImmersiveRoute("/works/abc-123/reader/")).toBe(true);
+    expect(isImmersiveRoute("/works/abc-123/reader/notes")).toBe(true);
+    expect(isImmersiveRoute("/works/abc-123/graph")).toBe(true);
+    expect(isImmersiveRoute("/works/abc-123/graph?layout=explore".split("?")[0])).toBe(true);
+    expect(isImmersiveRoute("/writer/proj-1")).toBe(true);
+    expect(isImmersiveRoute("/writer/proj-1/")).toBe(true);
+  });
 
-// --- the redesign-shell-spec.md §4 compatibility check: work-scoped but
-// NOT one of Reader/Knowledge-Map must stay non-immersive -----------------
-assert.equal(isImmersiveRoute("/works/abc-123/roadmap"), false);
-assert.equal(isImmersiveRoute("/works/abc-123/curriculum"), false);
-assert.equal(isImmersiveRoute("/works/abc-123/diagnostic"), false);
+  // --- the redesign-shell-spec.md §4 compatibility check: work-scoped but
+  // NOT one of Reader/Knowledge-Map must stay non-immersive -----------------
+  it("redesign-shell-spec.md §4: work-scoped but NOT Reader/Knowledge-Map stays non-immersive", () => {
+    expect(isImmersiveRoute("/works/abc-123/roadmap")).toBe(false);
+    expect(isImmersiveRoute("/works/abc-123/curriculum")).toBe(false);
+    expect(isImmersiveRoute("/works/abc-123/diagnostic")).toBe(false);
+  });
 
-// --- non-immersive routes ------------------------------------------------
-assert.equal(isImmersiveRoute("/dashboard"), false);
-assert.equal(isImmersiveRoute("/works"), false);
-assert.equal(isImmersiveRoute("/works/trash"), false);
-assert.equal(isImmersiveRoute("/library"), false);
-assert.equal(isImmersiveRoute("/writer"), false);
-assert.equal(isImmersiveRoute("/research"), false);
-assert.equal(isImmersiveRoute("/ask-library"), false);
-assert.equal(isImmersiveRoute("/account/profile"), false);
+  // --- non-immersive routes ------------------------------------------------
+  it("treats the ordinary workspace destinations as non-immersive", () => {
+    expect(isImmersiveRoute("/dashboard")).toBe(false);
+    expect(isImmersiveRoute("/works")).toBe(false);
+    expect(isImmersiveRoute("/works/trash")).toBe(false);
+    expect(isImmersiveRoute("/library")).toBe(false);
+    expect(isImmersiveRoute("/writer")).toBe(false);
+    expect(isImmersiveRoute("/research")).toBe(false);
+    expect(isImmersiveRoute("/ask-library")).toBe(false);
+    expect(isImmersiveRoute("/account/profile")).toBe(false);
+  });
+});
 
 // --- isReaderRoute: Ask Library single-controller enforcement -----------
 // (stage4-read-spec.md §9 item 3) — must match only the Reader route, not
 // the Knowledge Map or any other work-scoped tab, since `AppShellRoot` uses
 // this to decide when to suppress its own `GlobalRagSidebar` render.
-assert.equal(isReaderRoute("/works/abc-123/reader"), true);
-assert.equal(isReaderRoute("/works/abc-123/reader/"), true);
-assert.equal(isReaderRoute("/works/abc-123/reader/notes"), true);
-assert.equal(isReaderRoute("/works/abc-123/graph"), false);
-assert.equal(isReaderRoute("/works/abc-123/roadmap"), false);
-assert.equal(isReaderRoute("/works"), false);
-assert.equal(isReaderRoute("/works/trash"), false);
-assert.equal(isReaderRoute("/dashboard"), false);
-assert.equal(isReaderRoute("/ask-library"), false);
+describe("isReaderRoute", () => {
+  it("Ask Library single-controller enforcement: matches only the Reader route, not the Knowledge Map or any other work-scoped tab", () => {
+    expect(isReaderRoute("/works/abc-123/reader")).toBe(true);
+    expect(isReaderRoute("/works/abc-123/reader/")).toBe(true);
+    expect(isReaderRoute("/works/abc-123/reader/notes")).toBe(true);
+    expect(isReaderRoute("/works/abc-123/graph")).toBe(false);
+    expect(isReaderRoute("/works/abc-123/roadmap")).toBe(false);
+    expect(isReaderRoute("/works")).toBe(false);
+    expect(isReaderRoute("/works/trash")).toBe(false);
+    expect(isReaderRoute("/dashboard")).toBe(false);
+    expect(isReaderRoute("/ask-library")).toBe(false);
+  });
+});
 
 // --- isAskLibraryRoute: same enforcement, the full-page destination ------
-assert.equal(isAskLibraryRoute("/ask-library"), true);
-assert.equal(isAskLibraryRoute("/ask-library/"), false);
-assert.equal(isAskLibraryRoute("/works/abc-123/reader"), false);
-assert.equal(isAskLibraryRoute("/dashboard"), false);
-
-console.log("immersive.test.ts: all assertions passed");
+describe("isAskLibraryRoute", () => {
+  it("same enforcement, the full-page destination", () => {
+    expect(isAskLibraryRoute("/ask-library")).toBe(true);
+    expect(isAskLibraryRoute("/ask-library/")).toBe(false);
+    expect(isAskLibraryRoute("/works/abc-123/reader")).toBe(false);
+    expect(isAskLibraryRoute("/dashboard")).toBe(false);
+  });
+});

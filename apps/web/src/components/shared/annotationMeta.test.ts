@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { CATEGORY_META, categoryMetaFor, confidenceLabel } from "./annotationMeta";
 
 /**
@@ -14,32 +14,42 @@ import { CATEGORY_META, categoryMetaFor, confidenceLabel } from "./annotationMet
  * other `apps/web/src/components/graph/*.test.ts` files).
  */
 
-// A known category resolves to its shared meta, matching what the
-// annotation sidebars (`CATEGORY_META[relationshipCategory]`) already show
-// for the same category — the parity this fix exists to establish.
-assert.equal(categoryMetaFor("explicit_reference"), CATEGORY_META.explicit_reference, "a known category returns the exact shared meta object");
-assert.equal(categoryMetaFor("explicit_reference")?.label, "Explicit reference");
-assert.equal(categoryMetaFor("disagreement_polemical_target")?.label, "Disagreement");
+describe("categoryMetaFor", () => {
+  // A known category resolves to its shared meta, matching what the
+  // annotation sidebars (`CATEGORY_META[relationshipCategory]`) already show
+  // for the same category — the parity this fix exists to establish.
+  it("a known category returns the exact shared meta object", () => {
+    expect(categoryMetaFor("explicit_reference")).toBe(CATEGORY_META.explicit_reference);
+    expect(categoryMetaFor("explicit_reference")?.label).toBe("Explicit reference");
+    expect(categoryMetaFor("disagreement_polemical_target")?.label).toBe("Disagreement");
+  });
 
-// null/undefined — the honest "no category recorded" case (most edges
-// today, per D-21-9) — must not throw and must not fabricate a label.
-assert.equal(categoryMetaFor(null), undefined, "null category has no meta");
-assert.equal(categoryMetaFor(undefined), undefined, "undefined category has no meta");
+  // null/undefined — the honest "no category recorded" case (most edges
+  // today, per D-21-9) — must not throw and must not fabricate a label.
+  it("null/undefined — the honest \"no category recorded\" case — must not throw and must not fabricate a label", () => {
+    expect(categoryMetaFor(null)).toBe(undefined);
+    expect(categoryMetaFor(undefined)).toBe(undefined);
+  });
 
-// A real, non-relationship-category string `graph.ts` legitimately writes
-// for other edge kinds (source-relation judgments, cross-library review
-// links) must fall back honestly rather than guessing or throwing on an
-// unrecognized key.
-assert.equal(categoryMetaFor("source_provenance"), undefined, "a non-category evidence string has no meta");
-assert.equal(categoryMetaFor("cross_library"), undefined, "another non-category evidence string has no meta");
-assert.equal(categoryMetaFor(""), undefined, "an empty string has no meta");
+  // A real, non-relationship-category string `graph.ts` legitimately writes
+  // for other edge kinds (source-relation judgments, cross-library review
+  // links) must fall back honestly rather than guessing or throwing on an
+  // unrecognized key.
+  it("a non-relationship-category evidence string falls back honestly rather than guessing or throwing", () => {
+    expect(categoryMetaFor("source_provenance")).toBe(undefined);
+    expect(categoryMetaFor("cross_library")).toBe(undefined);
+    expect(categoryMetaFor("")).toBe(undefined);
+  });
+});
 
 // confidenceLabel is the other half of the same shared vocabulary the
 // inspector reuses (glyph + label + confidence band, never a bare percent
 // alone, matching AnnotationCard/PassageAnnotationCard's existing pattern).
-assert.equal(confidenceLabel(0.85), "High");
-assert.equal(confidenceLabel(0.5), "Moderate");
-assert.equal(confidenceLabel(0.3), "Low");
-assert.equal(confidenceLabel(0.1), "Very low");
-
-console.log("annotationMeta.test.ts: all assertions passed");
+describe("confidenceLabel", () => {
+  it("bands a confidence into the shared vocabulary the inspector reuses", () => {
+    expect(confidenceLabel(0.85)).toBe("High");
+    expect(confidenceLabel(0.5)).toBe("Moderate");
+    expect(confidenceLabel(0.3)).toBe("Low");
+    expect(confidenceLabel(0.1)).toBe("Very low");
+  });
+});

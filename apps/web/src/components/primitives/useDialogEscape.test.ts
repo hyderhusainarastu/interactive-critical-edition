@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { shouldHandleEscape } from "./useDialogEscape";
 
 /**
@@ -6,11 +6,13 @@ import { shouldHandleEscape } from "./useDialogEscape";
  * as `useFocusTrap.test.ts`).
  */
 
-// --- only Escape closes, and only while the surface is active ------------
-assert.equal(shouldHandleEscape("Escape", true), true);
-assert.equal(shouldHandleEscape("Escape", false), false);
-assert.equal(shouldHandleEscape("Enter", true), false);
-assert.equal(shouldHandleEscape("Tab", true), false);
-assert.equal(shouldHandleEscape("Escape", false), false);
-
-console.log("useDialogEscape.test.ts: all assertions passed");
+describe("shouldHandleEscape", () => {
+  // --- only Escape closes, and only while the surface is active ------------
+  it("closes only on Escape, and only while the surface is active", () => {
+    expect(shouldHandleEscape("Escape", true)).toBe(true);
+    expect(shouldHandleEscape("Escape", false)).toBe(false);
+    expect(shouldHandleEscape("Enter", true)).toBe(false);
+    expect(shouldHandleEscape("Tab", true)).toBe(false);
+    expect(shouldHandleEscape("Escape", false)).toBe(false);
+  });
+});

@@ -1,26 +1,36 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import {
   EMPTY_FOREIGN_SPAN_INTERACTION,
   foreignSpanTooltipIsOpen,
   updateForeignSpanInteraction,
 } from "./foreignSpanInteraction";
 
-let interaction = EMPTY_FOREIGN_SPAN_INTERACTION;
+describe("foreignSpanInteraction", () => {
+  // One sequential scenario: each step builds on the interaction state the
+  // previous step produced, so these assertions must stay in this order and
+  // in a single block.
+  it("opens and closes the tooltip across a hover/focus/blur sequence", () => {
+    let interaction = EMPTY_FOREIGN_SPAN_INTERACTION;
 
-interaction = updateForeignSpanInteraction(interaction, "pointer-enter");
-assert.equal(foreignSpanTooltipIsOpen(interaction), true, "hover opens the tooltip");
+    interaction = updateForeignSpanInteraction(interaction, "pointer-enter");
+    // "hover opens the tooltip"
+    expect(foreignSpanTooltipIsOpen(interaction)).toBe(true);
 
-interaction = updateForeignSpanInteraction(interaction, "pointer-leave");
-assert.equal(foreignSpanTooltipIsOpen(interaction), false, "mouse leave closes an unfocused tooltip");
+    interaction = updateForeignSpanInteraction(interaction, "pointer-leave");
+    // "mouse leave closes an unfocused tooltip"
+    expect(foreignSpanTooltipIsOpen(interaction)).toBe(false);
 
-interaction = updateForeignSpanInteraction(interaction, "focus");
-assert.equal(foreignSpanTooltipIsOpen(interaction), true, "keyboard focus opens the tooltip");
+    interaction = updateForeignSpanInteraction(interaction, "focus");
+    // "keyboard focus opens the tooltip"
+    expect(foreignSpanTooltipIsOpen(interaction)).toBe(true);
 
-interaction = updateForeignSpanInteraction(interaction, "pointer-enter");
-interaction = updateForeignSpanInteraction(interaction, "pointer-leave");
-assert.equal(foreignSpanTooltipIsOpen(interaction), true, "mouse leave does not close while focus remains");
+    interaction = updateForeignSpanInteraction(interaction, "pointer-enter");
+    interaction = updateForeignSpanInteraction(interaction, "pointer-leave");
+    // "mouse leave does not close while focus remains"
+    expect(foreignSpanTooltipIsOpen(interaction)).toBe(true);
 
-interaction = updateForeignSpanInteraction(interaction, "blur");
-assert.equal(foreignSpanTooltipIsOpen(interaction), false, "blur closes after hover has also ended");
-
-console.log("foreignSpanInteraction.test.ts: all assertions passed");
+    interaction = updateForeignSpanInteraction(interaction, "blur");
+    // "blur closes after hover has also ended"
+    expect(foreignSpanTooltipIsOpen(interaction)).toBe(false);
+  });
+});

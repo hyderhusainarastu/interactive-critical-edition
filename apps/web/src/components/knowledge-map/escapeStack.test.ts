@@ -1,12 +1,20 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { topmostTransientUiKind } from "./escapeStack";
 
-/** `npx tsx apps/web/src/components/knowledge-map/escapeStack.test.ts` */
+describe("topmostTransientUiKind", () => {
+  it("returns null when nothing transient is open", () => {
+    expect(topmostTransientUiKind({ filtersOpen: false, helpOpen: false, inspectorOpen: false })).toBe(null);
+  });
 
-assert.equal(topmostTransientUiKind({ filtersOpen: false, helpOpen: false, inspectorOpen: false }), null);
-assert.equal(topmostTransientUiKind({ filtersOpen: true, helpOpen: true, inspectorOpen: true }), "filters", "filters wins over everything");
-assert.equal(topmostTransientUiKind({ filtersOpen: false, helpOpen: true, inspectorOpen: true }), "help", "help wins over inspector");
-assert.equal(topmostTransientUiKind({ filtersOpen: false, helpOpen: false, inspectorOpen: true }), "inspector", "inspector is the last resort");
+  it("filters wins over everything", () => {
+    expect(topmostTransientUiKind({ filtersOpen: true, helpOpen: true, inspectorOpen: true })).toBe("filters");
+  });
 
-console.log("topmostTransientUiKind: OK");
-console.log("escapeStack.test.ts: all assertions passed");
+  it("help wins over inspector", () => {
+    expect(topmostTransientUiKind({ filtersOpen: false, helpOpen: true, inspectorOpen: true })).toBe("help");
+  });
+
+  it("inspector is the last resort", () => {
+    expect(topmostTransientUiKind({ filtersOpen: false, helpOpen: false, inspectorOpen: true })).toBe("inspector");
+  });
+});

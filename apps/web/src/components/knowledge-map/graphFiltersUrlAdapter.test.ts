@@ -1,34 +1,38 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { graphFiltersFromUrlFilters, urlFiltersFromGraphFilters } from "./graphFiltersUrlAdapter";
 import { DEFAULT_GRAPH_FILTERS } from "../graph/filterGraphData";
 
-/** `npx tsx apps/web/src/components/knowledge-map/graphFiltersUrlAdapter.test.ts` */
+describe("graphFiltersFromUrlFilters", () => {
+  it("empty URL filters -> all defaults", () => {
+    expect(graphFiltersFromUrlFilters({})).toEqual(DEFAULT_GRAPH_FILTERS);
+  });
 
-// --- graphFiltersFromUrlFilters ---
-assert.deepEqual(graphFiltersFromUrlFilters({}), DEFAULT_GRAPH_FILTERS, "empty URL filters -> all defaults");
-{
-  const result = graphFiltersFromUrlFilters({ search: "aristotle", type: "work" });
-  assert.equal(result.search, "aristotle");
-  assert.equal(result.type, "work");
-  assert.equal(result.state, "all", "unset keys keep their default");
-}
-console.log("graphFiltersFromUrlFilters: OK");
+  it("unset keys keep their default", () => {
+    const result = graphFiltersFromUrlFilters({ search: "aristotle", type: "work" });
+    expect(result.search).toBe("aristotle");
+    expect(result.type).toBe("work");
+    // unset keys keep their default
+    expect(result.state).toBe("all");
+  });
+});
 
-// --- urlFiltersFromGraphFilters ---
-assert.deepEqual(urlFiltersFromGraphFilters(DEFAULT_GRAPH_FILTERS), {}, "all-default GraphFilters -> empty URL filters");
-{
-  const filters = { ...DEFAULT_GRAPH_FILTERS, search: "aristotle", credibilityBand: "high" as const };
-  const urlFilters = urlFiltersFromGraphFilters(filters);
-  assert.deepEqual(urlFilters, { search: "aristotle", credibilityBand: "high" }, "only non-default keys are written");
-}
-console.log("urlFiltersFromGraphFilters: OK");
+describe("urlFiltersFromGraphFilters", () => {
+  it("all-default GraphFilters -> empty URL filters", () => {
+    expect(urlFiltersFromGraphFilters(DEFAULT_GRAPH_FILTERS)).toEqual({});
+  });
 
-// --- round-trip ---
-{
-  const original = { ...DEFAULT_GRAPH_FILTERS, search: "hylomorphism", type: "concept" as const, relation: "opposition" };
-  const roundTripped = graphFiltersFromUrlFilters(urlFiltersFromGraphFilters(original));
-  assert.deepEqual(roundTripped, original);
-}
-console.log("round-trip: OK");
+  it("only non-default keys are written", () => {
+    const filters = { ...DEFAULT_GRAPH_FILTERS, search: "aristotle", credibilityBand: "high" as const };
+    const urlFilters = urlFiltersFromGraphFilters(filters);
+    expect(urlFilters).toEqual({ search: "aristotle", credibilityBand: "high" });
+  });
+});
 
-console.log("graphFiltersUrlAdapter.test.ts: all assertions passed");
+describe("graphFiltersUrlAdapter round-trip", () => {
+  // --- round-trip ---
+  it("round-trips a non-default filter set unchanged", () => {
+    const original = { ...DEFAULT_GRAPH_FILTERS, search: "hylomorphism", type: "concept" as const, relation: "opposition" };
+    const roundTripped = graphFiltersFromUrlFilters(urlFiltersFromGraphFilters(original));
+    expect(roundTripped).toEqual(original);
+  });
+});

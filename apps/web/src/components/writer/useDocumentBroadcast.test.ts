@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { shouldShowCrossTabConflict } from "./useDocumentBroadcast";
 
 /**
@@ -10,21 +10,31 @@ import { shouldShowCrossTabConflict } from "./useDocumentBroadcast";
 
 const message = { documentId: "doc-1", updatedAt: "2026-07-28T00:00:00.000Z" };
 
-// --- a broadcast for a different document is never a conflict here -------
-assert.equal(shouldShowCrossTabConflict(message, "doc-2", "Editing"), false);
+describe("shouldShowCrossTabConflict", () => {
+  // --- a broadcast for a different document is never a conflict here -------
+  it("a broadcast for a different document is never a conflict here", () => {
+    expect(shouldShowCrossTabConflict(message, "doc-2", "Editing")).toBe(false);
+  });
 
-// --- no document open in this tab at all: never a conflict ---------------
-assert.equal(shouldShowCrossTabConflict(message, undefined, "Editing"), false);
+  // --- no document open in this tab at all: never a conflict ---------------
+  it("no document open in this tab at all: never a conflict", () => {
+    expect(shouldShowCrossTabConflict(message, undefined, "Editing")).toBe(false);
+  });
 
-// --- same document, but this tab has nothing unsaved: no conflict --------
-assert.equal(shouldShowCrossTabConflict(message, "doc-1", "Saved"), false);
+  // --- same document, but this tab has nothing unsaved: no conflict --------
+  it("same document, but this tab has nothing unsaved: no conflict", () => {
+    expect(shouldShowCrossTabConflict(message, "doc-1", "Saved")).toBe(false);
+  });
 
-// --- same document, with unsaved-or-unconfirmed local edits: a conflict --
-assert.equal(shouldShowCrossTabConflict(message, "doc-1", "Editing"), true);
-assert.equal(shouldShowCrossTabConflict(message, "doc-1", "Saving…"), true);
-assert.equal(shouldShowCrossTabConflict(message, "doc-1", "Save failed"), true);
+  // --- same document, with unsaved-or-unconfirmed local edits: a conflict --
+  it("same document, with unsaved-or-unconfirmed local edits: a conflict", () => {
+    expect(shouldShowCrossTabConflict(message, "doc-1", "Editing")).toBe(true);
+    expect(shouldShowCrossTabConflict(message, "doc-1", "Saving…")).toBe(true);
+    expect(shouldShowCrossTabConflict(message, "doc-1", "Save failed")).toBe(true);
+  });
 
-// --- an existing conflict banner still counts as "unsaved" ---------------
-assert.equal(shouldShowCrossTabConflict(message, "doc-1", "Edited in another tab"), true);
-
-console.log("useDocumentBroadcast.test.ts: all assertions passed");
+  // --- an existing conflict banner still counts as "unsaved" ---------------
+  it("an existing conflict banner still counts as \"unsaved\"", () => {
+    expect(shouldShowCrossTabConflict(message, "doc-1", "Edited in another tab")).toBe(true);
+  });
+});

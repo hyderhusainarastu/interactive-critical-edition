@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { matchClaimToBlock } from "./researchClaims";
 
 const claim = (quote: string | null, prefix: string | null = null, suffix: string | null = null) => ({
@@ -8,24 +8,33 @@ const claim = (quote: string | null, prefix: string | null = null, suffix: strin
   suffix,
 });
 
-assert.deepEqual(
-  matchClaimToBlock(claim("reason subordinated"), [
-    { id: "a", text: "No match here." },
-    { id: "b", text: "Irwin reads vice as reason subordinated to antecedent inclination." },
-  ]),
-  { claimId: "claim-1", blockId: "b", offset: 20 },
-);
+describe("matchClaimToBlock", () => {
+  it("anchors a claim to the one block whose text contains its quote", () => {
+    expect(
+      matchClaimToBlock(claim("reason subordinated"), [
+        { id: "a", text: "No match here." },
+        { id: "b", text: "Irwin reads vice as reason subordinated to antecedent inclination." },
+      ]),
+    ).toEqual({ claimId: "claim-1", blockId: "b", offset: 20 });
+  });
 
-// Exactly one matching block is required — two or more equally plausible
-// matches must stay sidebar-only rather than guessing between them.
-assert.equal(
-  matchClaimToBlock(claim("same phrase"), [
-    { id: "a", text: "The same phrase appears here." },
-    { id: "b", text: "The same phrase appears there." },
-    { id: "c", text: "Unrelated text with no match." },
-  ]),
-  null,
-);
+  // Exactly one matching block is required — two or more equally plausible
+  // matches must stay sidebar-only rather than guessing between them.
+  it("returns null when two or more blocks match equally plausibly, rather than guessing between them", () => {
+    expect(
+      matchClaimToBlock(claim("same phrase"), [
+        { id: "a", text: "The same phrase appears here." },
+        { id: "b", text: "The same phrase appears there." },
+        { id: "c", text: "Unrelated text with no match." },
+      ]),
+    ).toBe(null);
+  });
 
-assert.equal(matchClaimToBlock(claim("missing"), [{ id: "a", text: "Different text." }]), null);
-assert.equal(matchClaimToBlock(claim(null), [{ id: "a", text: "Any text." }]), null);
+  it("returns null when no block contains the quote", () => {
+    expect(matchClaimToBlock(claim("missing"), [{ id: "a", text: "Different text." }])).toBe(null);
+  });
+
+  it("returns null when the claim has no quote at all", () => {
+    expect(matchClaimToBlock(claim(null), [{ id: "a", text: "Any text." }])).toBe(null);
+  });
+});
