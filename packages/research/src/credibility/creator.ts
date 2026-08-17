@@ -1,5 +1,5 @@
-import type { RawResource } from "./types";
-import { canonicalizeUrl } from "./normalize";
+import type { RawResource } from "../types";
+import { canonicalizeUrl } from "../normalize";
 
 /**
  * Creator identity (plan §34.2, Phase 9.2).

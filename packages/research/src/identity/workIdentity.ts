@@ -1,5 +1,5 @@
-import { canonicalizeDoi, canonicalizeIsbn, titleKey } from "./normalize";
-import type { RawResource } from "./types";
+import { canonicalizeDoi, canonicalizeIsbn, titleKey } from "../normalize";
+import type { RawResource } from "../types";
 
 /**
  * Canonical work identity — the difference between a *record* and a *work*.

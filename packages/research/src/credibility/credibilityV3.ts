@@ -1,8 +1,8 @@
 import type { CreatorIdentity, CreatorVerification } from "./creator";
 import { identifyCreator } from "./creator";
-import { canonicalizeUrl } from "./normalize";
+import { canonicalizeUrl } from "../normalize";
 import { classifyAuthority } from "./credibility";
-import type { RawResource, SourceAuthority } from "./types";
+import type { RawResource, SourceAuthority } from "../types";
 
 /**
  * Credibility as separated dimensions (plan §34.2, Phase 9.2).

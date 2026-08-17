@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canAfford, charge, makeBudget, overSoftCap, perProviderLimit, providersForLane, publicProviderCoverageRounds, runDiscovery } from "./discover";
-import type { AdapterResult, AdapterSearchOptions, ProviderName, RawResource, SourceAdapter } from "./types";
+import type { AdapterResult, AdapterSearchOptions, ProviderName, RawResource, SourceAdapter } from "../types";
 
 function res(i: number, provider: ProviderName = "crossref"): RawResource {
   return {

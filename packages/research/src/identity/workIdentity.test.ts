@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveWorkIdentity, groupByWork, isReviewTitle, stripEditionMarkers, stripReviewFraming } from "./workIdentity";
-import type { RawResource } from "./types";
+import type { RawResource } from "../types";
 
 /**
  * Every title below is one a real production run actually accepted (canary 10,

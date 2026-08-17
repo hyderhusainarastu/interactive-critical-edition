@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { corroborateCreator, identifyCreator } from "./creator";
-import type { RawResource } from "./types";
+import type { RawResource } from "../types";
 
 function resource(patch: Partial<RawResource> = {}): RawResource {
   return {

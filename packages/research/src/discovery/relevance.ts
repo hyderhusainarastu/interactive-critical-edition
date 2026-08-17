@@ -1,5 +1,5 @@
-import { canonicalizeDoi, canonicalizeUrl, normalizedKey, titleKey } from "./normalize";
-import type { RawResource } from "./types";
+import { canonicalizeDoi, canonicalizeUrl, normalizedKey, titleKey } from "../normalize";
+import type { RawResource } from "../types";
 
 /**
  * Relevance gate (Phase 8 closeout). Runs BEFORE authority scoring, because

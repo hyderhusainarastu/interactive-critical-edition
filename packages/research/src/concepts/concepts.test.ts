@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { synthesizeConcepts } from "./concepts";
-import type { StructuredCaller } from "./synthesize";
+import type { StructuredCaller } from "../synthesis/synthesize";
 
 const TEXT_SAMPLE =
   "Aristotle discusses akrasia, weakness of will, in the Nicomachean Ethics, contrasting it with " +

@@ -1,7 +1,7 @@
-import { RESEARCH_LIMITS } from "./config";
-import type { LaneRound } from "./discover";
-import { QUERY_LANES, type QueryLane } from "./relevance";
-import type { RawResource } from "./types";
+import { RESEARCH_LIMITS } from "../config";
+import type { LaneRound } from "../discovery/discover";
+import { QUERY_LANES, type QueryLane } from "../discovery/relevance";
+import type { RawResource } from "../types";
 
 /** Per-lane query cap for everything OTHER than the document's own explicit
  *  citations, where a generous ceiling is deliberately not extended — those

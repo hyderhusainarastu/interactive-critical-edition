@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalizeDoi, canonicalizeUrl, dedupeResources, normalizedKey } from "./normalize";
-import { classifyAuthority, computeAgreement, meetsFactualBar } from "./credibility";
+import { classifyAuthority, computeAgreement, meetsFactualBar } from "./credibility/credibility";
 import type { RawResource } from "./types";
 
 function resource(over: Partial<RawResource>): RawResource {

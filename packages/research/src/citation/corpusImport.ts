@@ -1,7 +1,7 @@
-import { ArxivAdapter, lookupArxivById } from "./adapters/arxiv";
-import { OpenAlexAdapter, SemanticScholarAdapter, lookupOpenAlexById, lookupSemanticScholarById } from "./adapters/scholarly";
-import { dedupeResources, normalizedKey } from "./normalize";
-import type { AdapterSearchOptions, ProviderAttempt, RawResource, SourceAdapter } from "./types";
+import { ArxivAdapter, lookupArxivById } from "../adapters/arxiv";
+import { OpenAlexAdapter, SemanticScholarAdapter, lookupOpenAlexById, lookupSemanticScholarById } from "../adapters/scholarly";
+import { dedupeResources, normalizedKey } from "../normalize";
+import type { AdapterSearchOptions, ProviderAttempt, RawResource, SourceAdapter } from "../types";
 
 /**
  * Corpus import (Phase 28.2, plan §Schema `research_corpus_item` /

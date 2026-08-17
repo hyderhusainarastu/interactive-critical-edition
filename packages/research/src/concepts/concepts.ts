@@ -1,4 +1,4 @@
-import type { PrimaryWork, StructuredCaller } from "./synthesize";
+import type { PrimaryWork, StructuredCaller } from "../synthesis/synthesize";
 
 /**
  * Phase 9.4 (plan §34.4): real extraction for the v3 sequence's

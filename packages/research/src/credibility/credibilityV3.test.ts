@@ -8,7 +8,7 @@ import {
   publicationRigor,
   structuralEvidenceStrength,
 } from "./credibilityV3";
-import type { RawResource } from "./types";
+import type { RawResource } from "../types";
 
 function resource(patch: Partial<RawResource> = {}): RawResource {
   return {

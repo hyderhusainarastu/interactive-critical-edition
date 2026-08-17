@@ -1,4 +1,4 @@
-import { canonicalizeDoi, canonicalizeUrl, normalizedKey } from "./normalize";
+import { canonicalizeDoi, canonicalizeUrl, normalizedKey } from "../normalize";
 
 /**
  * The citation-resolution → `research_resource` bridge (floors-capability-

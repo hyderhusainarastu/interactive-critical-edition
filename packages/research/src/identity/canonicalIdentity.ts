@@ -1,4 +1,4 @@
-import { canonicalizeDoi, canonicalizeIsbn, titleKey } from "./normalize";
+import { canonicalizeDoi, canonicalizeIsbn, titleKey } from "../normalize";
 import { stripEditionMarkers, stripReviewFraming } from "./workIdentity";
 
 /**

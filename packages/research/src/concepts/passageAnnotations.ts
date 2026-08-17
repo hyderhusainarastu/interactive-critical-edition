@@ -1,5 +1,5 @@
-import type { PrimaryWork, StructuredCaller } from "./synthesize";
-import { quoteIsGrounded } from "./synthesize";
+import type { PrimaryWork, StructuredCaller } from "../synthesis/synthesize";
+import { quoteIsGrounded } from "../synthesis/synthesize";
 
 /**
  * Phase 9.3 (plan §34.4): explanatory notes anchored to a specific block of the

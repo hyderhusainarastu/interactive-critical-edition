@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCorpusProvider, lookupCorpusItemById, normalizeCorpusItem, searchCorpusCandidates, type CorpusProvider } from "./corpusImport";
-import type { AdapterResult, ProviderAttempt, RawResource, SourceAdapter } from "./types";
+import type { AdapterResult, ProviderAttempt, RawResource, SourceAdapter } from "../types";
 
 function attempt(provider: ProviderAttempt["provider"], resultCount: number): ProviderAttempt {
   return { provider, status: "queried", queries: ["q"], resultCount, inspectionDepth: 0, latencyMs: 1 };

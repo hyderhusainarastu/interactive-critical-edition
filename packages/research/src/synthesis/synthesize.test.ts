@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { RESEARCH_LIMITS } from "./config";
+import { RESEARCH_LIMITS } from "../config";
 import { generateLaneQueries, gradeClaims, heuristicLaneQueries, heuristicNote, quoteIsGrounded, synthesizeNote, type StructuredCaller } from "./synthesize";
-import type { RawResource } from "./types";
+import type { RawResource } from "../types";
 
 function sampleResource(over: Partial<RawResource> = {}): RawResource {
   return {

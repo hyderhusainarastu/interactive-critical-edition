@@ -1,5 +1,5 @@
-import type { AgreementState, CredibilityComponents, RawResource, SourceAuthority } from "./types";
-import { canonicalizeUrl } from "./normalize";
+import type { AgreementState, CredibilityComponents, RawResource, SourceAuthority } from "../types";
+import { canonicalizeUrl } from "../normalize";
 
 /**
  * Credibility scoring (plan §33). Authority is a deterministic function of the

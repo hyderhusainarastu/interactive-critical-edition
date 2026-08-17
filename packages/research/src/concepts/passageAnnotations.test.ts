@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { MAX_SUMMARY_LENGTH, synthesizePassageAnnotations, type PassageBlockInput } from "./passageAnnotations";
-import type { StructuredCaller } from "./synthesize";
+import type { StructuredCaller } from "../synthesis/synthesize";
 
 const RELATIONSHIPS = [
   "explicit_reference",

@@ -1,7 +1,7 @@
-import { RESEARCH_LIMITS } from "./config";
-import { dedupeResources, normalizedKey } from "./normalize";
+import { RESEARCH_LIMITS } from "../config";
+import { dedupeResources, normalizedKey } from "../normalize";
 import type { QueryLane } from "./relevance";
-import type { ProviderAttempt, ProviderName, ProviderStatus, RawResource, SourceAdapter } from "./types";
+import type { ProviderAttempt, ProviderName, ProviderStatus, RawResource, SourceAdapter } from "../types";
 
 export const PROVIDER_NOT_SELECTED_ERROR = "No generated discovery lane selected this provider.";
 

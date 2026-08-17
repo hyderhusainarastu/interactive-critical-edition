@@ -12,7 +12,7 @@ import {
   type QueryLane,
   type WorkIdentity,
 } from "./relevance";
-import type { RawResource } from "./types";
+import type { RawResource } from "../types";
 
 /**
  * Relevance-gate tests built from the Irwin gold-eval fixture
