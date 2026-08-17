@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, users } from "@ice/db";
 import { registerUser } from "@/lib/auth/auth-service";
@@ -31,39 +31,35 @@ async function cleanup(email: string) {
   await db.delete(users).where(eq(users.email, email));
 }
 
-async function main() {
-  try {
-    await registerUser({ name: "Consent Tester", email: EMAIL_ACCEPTED, password: "password123", policyAccepted: true, dataSharingEnabled: false });
-    const [accepted] = await db.select().from(users).where(eq(users.email, EMAIL_ACCEPTED)).limit(1);
-    assert.ok(accepted, "user row should exist");
-    assert.ok(accepted!.policyAcceptedAt !== null, "policyAcceptedAt must be stamped when policyAccepted is true");
-    assert.equal(accepted!.dataSharingEnabled, false, "data sharing stays off when not opted in");
+describe("registerUser consent contract", () => {
+  it("records consent truthfully: stamps acceptance, honours the sharing opt-in, and never backdates an acceptance that never happened", async () => {
+    try {
+      await registerUser({ name: "Consent Tester", email: EMAIL_ACCEPTED, password: "password123", policyAccepted: true, dataSharingEnabled: false });
+      const [accepted] = await db.select().from(users).where(eq(users.email, EMAIL_ACCEPTED)).limit(1);
+      expect(accepted, "user row should exist").toBeTruthy();
+      expect(accepted!.policyAcceptedAt !== null, "policyAcceptedAt must be stamped when policyAccepted is true").toBeTruthy();
+      // "data sharing stays off when not opted in"
+      expect(accepted!.dataSharingEnabled).toBe(false);
 
-    await registerUser({ name: "Sharing Tester", email: EMAIL_SHARING, password: "password123", policyAccepted: true, dataSharingEnabled: true });
-    const [sharing] = await db.select().from(users).where(eq(users.email, EMAIL_SHARING)).limit(1);
-    assert.equal(sharing!.dataSharingEnabled, true, "data sharing persists true when explicitly opted in");
-    assert.ok(sharing!.policyAcceptedAt !== null);
+      await registerUser({ name: "Sharing Tester", email: EMAIL_SHARING, password: "password123", policyAccepted: true, dataSharingEnabled: true });
+      const [sharing] = await db.select().from(users).where(eq(users.email, EMAIL_SHARING)).limit(1);
+      // "data sharing persists true when explicitly opted in"
+      expect(sharing!.dataSharingEnabled).toBe(true);
+      expect(sharing!.policyAcceptedAt !== null).toBeTruthy();
 
-    // A caller that never passes consent (e.g. a stale internal call site)
-    // must never silently backdate an acceptance that didn't happen —
-    // policyAcceptedAt stays null and dataSharingEnabled defaults to the
-    // schema's own off default, exactly like a pre-checkbox account.
-    await registerUser({ name: "Default Tester", email: EMAIL_DEFAULT, password: "password123" });
-    const [defaulted] = await db.select().from(users).where(eq(users.email, EMAIL_DEFAULT)).limit(1);
-    assert.equal(defaulted!.policyAcceptedAt, null, "no consent passed means no acceptance is recorded");
-    assert.equal(defaulted!.dataSharingEnabled, false);
-
-    console.log("auth-service.consent.test.ts: all assertions passed");
-  } finally {
-    await cleanup(EMAIL_ACCEPTED);
-    await cleanup(EMAIL_SHARING);
-    await cleanup(EMAIL_DEFAULT);
-  }
-}
-
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
+      // A caller that never passes consent (e.g. a stale internal call site)
+      // must never silently backdate an acceptance that didn't happen —
+      // policyAcceptedAt stays null and dataSharingEnabled defaults to the
+      // schema's own off default, exactly like a pre-checkbox account.
+      await registerUser({ name: "Default Tester", email: EMAIL_DEFAULT, password: "password123" });
+      const [defaulted] = await db.select().from(users).where(eq(users.email, EMAIL_DEFAULT)).limit(1);
+      // "no consent passed means no acceptance is recorded"
+      expect(defaulted!.policyAcceptedAt).toBe(null);
+      expect(defaulted!.dataSharingEnabled).toBe(false);
+    } finally {
+      await cleanup(EMAIL_ACCEPTED);
+      await cleanup(EMAIL_SHARING);
+      await cleanup(EMAIL_DEFAULT);
+    }
   });
+});

@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { hasReaderLevelSignal, rolesHaveReaderLevelSignal } from "@/lib/library/librarySearch";
 
 /**
@@ -35,44 +35,63 @@ function itemWithRoles(readerLevels: Array<string | null>) {
   };
 }
 
-// The exact production shape (2026-07-23): every role on every item is
-// null-level. No signal — the filter must not be offered.
-assert.equal(hasReaderLevelSignal([itemWithRoles([null]), itemWithRoles([null, null])]), false);
+const role = (readerLevel: string | null) => ({ readerLevel });
 
-// No items at all — vacuously no signal, not a crash.
-assert.equal(hasReaderLevelSignal([]), false);
+describe("hasReaderLevelSignal", () => {
+  // The exact production shape (2026-07-23): every role on every item is
+  // null-level. No signal — the filter must not be offered.
+  it("reports no signal for the exact production shape, where every role on every item is null-level", () => {
+    expect(hasReaderLevelSignal([itemWithRoles([null]), itemWithRoles([null, null])])).toBe(false);
+  });
 
-// An item with no roles at all (shouldn't happen in practice, but must not
-// throw) still yields no signal.
-assert.equal(hasReaderLevelSignal([{ roles: [] }]), false);
+  // No items at all — vacuously no signal, not a crash.
+  it("reports no signal for no items at all, vacuously rather than crashing", () => {
+    expect(hasReaderLevelSignal([])).toBe(false);
+  });
 
-// The moment even ONE role anywhere carries a real level, the signal must
-// flip true — this is what lets the filter reappear automatically the day a
-// write path actually classifies by level, with no code change here.
-assert.equal(hasReaderLevelSignal([itemWithRoles([null]), itemWithRoles(["undergraduate"])]), true);
+  // An item with no roles at all (shouldn't happen in practice, but must not
+  // throw) still yields no signal.
+  it("still yields no signal for an item with no roles at all, without throwing", () => {
+    expect(hasReaderLevelSignal([{ roles: [] }])).toBe(false);
+  });
 
-// A single item mixing a universal role with a level-tagged one still
-// counts as a signal.
-assert.equal(hasReaderLevelSignal([itemWithRoles([null, "advanced"])]), true);
+  // The moment even ONE role anywhere carries a real level, the signal must
+  // flip true — this is what lets the filter reappear automatically the day a
+  // write path actually classifies by level, with no code change here.
+  it("flips true the moment even one role anywhere carries a real level", () => {
+    expect(hasReaderLevelSignal([itemWithRoles([null]), itemWithRoles(["undergraduate"])])).toBe(true);
+  });
+
+  // A single item mixing a universal role with a level-tagged one still
+  // counts as a signal.
+  it("counts a single item mixing a universal role with a level-tagged one as a signal", () => {
+    expect(hasReaderLevelSignal([itemWithRoles([null, "advanced"])])).toBe(true);
+  });
+});
 
 // --- rolesHaveReaderLevelSignal (D-23-8, Curriculum twin of D-23-12) ---
 // The flat-roles sibling `computeCurriculum` uses over one work's
 // `resource_role` rows directly. Mirrors the item-shaped cases above.
+describe("rolesHaveReaderLevelSignal", () => {
+  // The exact production shape: every role is null-level. No signal — the
+  // Curriculum page must show the honest note, not the filter.
+  it("reports no signal for the exact production shape, where every role is null-level", () => {
+    expect(rolesHaveReaderLevelSignal([role(null), role(null)])).toBe(false);
+  });
 
-const role = (readerLevel: string | null) => ({ readerLevel });
+  // No roles at all — vacuously no signal, not a crash.
+  it("reports no signal for no roles at all, vacuously rather than crashing", () => {
+    expect(rolesHaveReaderLevelSignal([])).toBe(false);
+  });
 
-// The exact production shape: every role is null-level. No signal — the
-// Curriculum page must show the honest note, not the filter.
-assert.equal(rolesHaveReaderLevelSignal([role(null), role(null)]), false);
+  // One real level anywhere flips the signal true, so the filter reappears
+  // automatically the day a write path classifies by level.
+  it("flips true when one real level appears anywhere", () => {
+    expect(rolesHaveReaderLevelSignal([role(null), role("undergraduate")])).toBe(true);
+  });
 
-// No roles at all — vacuously no signal, not a crash.
-assert.equal(rolesHaveReaderLevelSignal([]), false);
-
-// One real level anywhere flips the signal true, so the filter reappears
-// automatically the day a write path classifies by level.
-assert.equal(rolesHaveReaderLevelSignal([role(null), role("undergraduate")]), true);
-
-// Mixed universal + level-tagged roles still count as a signal.
-assert.equal(rolesHaveReaderLevelSignal([role(null), role("advanced"), role(null)]), true);
-
-console.log("librarySearch.test.ts: all assertions passed");
+  // Mixed universal + level-tagged roles still count as a signal.
+  it("counts mixed universal and level-tagged roles as a signal", () => {
+    expect(rolesHaveReaderLevelSignal([role(null), role("advanced"), role(null)])).toBe(true);
+  });
+});

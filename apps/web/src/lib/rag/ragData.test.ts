@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { estimateEmbeddingCostUsd } from "@ice/ai-adapters";
 import { aiUsageLogs, db, ragChunks } from "@ice/db";
@@ -152,81 +152,76 @@ async function queryEmbeddingLogRows(documentId: string) {
     .where(and(eq(aiUsageLogs.documentId, documentId), eq(aiUsageLogs.task, EMBEDDING_TASK)));
 }
 
-// ---------------------------------------------------------------------------
-// (a) RAG_HYBRID_RETRIEVAL=true: the embeddings endpoint is actually called,
-// and exactly one usage row with real token counts/model/cost is written.
-// ---------------------------------------------------------------------------
-async function testHybridOnLogsQueryEmbeddingUsage() {
-  const seed = await seedConversation("on");
-  try {
-    process.env.RAG_HYBRID_RETRIEVAL = "true";
-    const getCalls = installEmbeddingFetch(11);
+describe("answerRagConversation query-embedding usage logging", () => {
+  // -------------------------------------------------------------------------
+  // (a) RAG_HYBRID_RETRIEVAL=true: the embeddings endpoint is actually called,
+  // and exactly one usage row with real token counts/model/cost is written.
+  // -------------------------------------------------------------------------
+  it("(a) RAG_HYBRID_RETRIEVAL=true calls the embeddings endpoint and writes exactly one usage row with real tokens/model/cost", async () => {
+    const seed = await seedConversation("on");
+    try {
+      process.env.RAG_HYBRID_RETRIEVAL = "true";
+      const getCalls = installEmbeddingFetch(11);
 
-    const result = await answerRagConversation({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      question: "How does passion relate to decision?",
-    });
-    assert.ok(result, "the conversation exists and produces an answer");
-    assert.ok(getCalls() >= 1, "the hybrid path called the embeddings endpoint at least once");
+      const result = await answerRagConversation({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        question: "How does passion relate to decision?",
+      });
+      expect(result, "the conversation exists and produces an answer").toBeTruthy();
+      expect(getCalls() >= 1, "the hybrid path called the embeddings endpoint at least once").toBeTruthy();
 
-    const rows = await queryEmbeddingLogRows(seed.documentId);
-    assert.equal(rows.length, 1, "exactly one query-embedding usage row is written per hybrid-enabled call");
-    const row = rows[0]!;
-    assert.equal(row.stage, "socratic-rag", "shares the completion call's stage, so it falls inside the same daily cost pool");
-    assert.equal(row.provider, "openai");
-    assert.equal(row.model, EMBEDDING_MODEL, "the real model the embeddings client reported, not a hardcoded guess");
-    assert.equal(row.promptTokens, 11, "the real token count from the (mocked) provider response");
-    assert.equal(row.completionTokens, 0, "an embedding call has no completion tokens");
-    const expectedCost = estimateEmbeddingCostUsd(EMBEDDING_MODEL, 11);
-    assert.ok(
-      Math.abs(row.estimatedCostUsd - expectedCost) < 1e-9,
-      `estimatedCostUsd (${row.estimatedCostUsd}) should equal estimateEmbeddingCostUsd(model, tokens) (${expectedCost})`,
-    );
-  } finally {
-    globalThis.fetch = realFetch;
-    delete process.env.RAG_HYBRID_RETRIEVAL;
-    await deleteTestUser(seed.email);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// (b) Flag off (the default): the embeddings endpoint is never called, and
-// no query-embedding usage row is written — flag-off behavior stays exactly
-// as it was before this change.
-// ---------------------------------------------------------------------------
-async function testHybridOffWritesNoQueryEmbeddingUsage() {
-  const seed = await seedConversation("off");
-  try {
-    delete process.env.RAG_HYBRID_RETRIEVAL;
-    const getCalls = installEmbeddingFetch(11);
-
-    const result = await answerRagConversation({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      question: "How does passion relate to decision?",
-    });
-    assert.ok(result, "the conversation exists and produces an answer");
-    assert.equal(getCalls(), 0, "the flag-off (lexical-only) path never calls the embeddings endpoint");
-
-    const rows = await queryEmbeddingLogRows(seed.documentId);
-    assert.equal(rows.length, 0, "no query-embedding usage row is written when the flag is off");
-  } finally {
-    globalThis.fetch = realFetch;
-    await deleteTestUser(seed.email);
-  }
-}
-
-async function main() {
-  await testHybridOnLogsQueryEmbeddingUsage();
-  await testHybridOffWritesNoQueryEmbeddingUsage();
-  console.log("ragData.test.ts: all assertions passed");
-}
-
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    globalThis.fetch = realFetch;
-    console.error(err);
-    process.exit(1);
+      const rows = await queryEmbeddingLogRows(seed.documentId);
+      // "exactly one query-embedding usage row is written per hybrid-enabled call"
+      expect(rows.length).toBe(1);
+      const row = rows[0]!;
+      // "shares the completion call's stage, so it falls inside the same daily cost pool"
+      expect(row.stage).toBe("socratic-rag");
+      expect(row.provider).toBe("openai");
+      // "the real model the embeddings client reported, not a hardcoded guess"
+      expect(row.model).toBe(EMBEDDING_MODEL);
+      // "the real token count from the (mocked) provider response"
+      expect(row.promptTokens).toBe(11);
+      // "an embedding call has no completion tokens"
+      expect(row.completionTokens).toBe(0);
+      const expectedCost = estimateEmbeddingCostUsd(EMBEDDING_MODEL, 11);
+      expect(
+        Math.abs(row.estimatedCostUsd - expectedCost) < 1e-9,
+        `estimatedCostUsd (${row.estimatedCostUsd}) should equal estimateEmbeddingCostUsd(model, tokens) (${expectedCost})`,
+      ).toBeTruthy();
+    } finally {
+      globalThis.fetch = realFetch;
+      delete process.env.RAG_HYBRID_RETRIEVAL;
+      await deleteTestUser(seed.email);
+    }
   });
+
+  // -------------------------------------------------------------------------
+  // (b) Flag off (the default): the embeddings endpoint is never called, and
+  // no query-embedding usage row is written — flag-off behavior stays exactly
+  // as it was before this change.
+  // -------------------------------------------------------------------------
+  it("(b) with the flag off (the default) the embeddings endpoint is never called and no usage row is written", async () => {
+    const seed = await seedConversation("off");
+    try {
+      delete process.env.RAG_HYBRID_RETRIEVAL;
+      const getCalls = installEmbeddingFetch(11);
+
+      const result = await answerRagConversation({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        question: "How does passion relate to decision?",
+      });
+      expect(result, "the conversation exists and produces an answer").toBeTruthy();
+      // "the flag-off (lexical-only) path never calls the embeddings endpoint"
+      expect(getCalls()).toBe(0);
+
+      const rows = await queryEmbeddingLogRows(seed.documentId);
+      // "no query-embedding usage row is written when the flag is off"
+      expect(rows.length).toBe(0);
+    } finally {
+      globalThis.fetch = realFetch;
+      await deleteTestUser(seed.email);
+    }
+  });
+});

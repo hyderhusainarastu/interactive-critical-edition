@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { cslToAPA, cslToBibTeX, cslToChicago, cslToRIS, formatCitationList } from "./citationFormats";
 import type { CslJson } from "@/lib/writer";
 
@@ -94,223 +94,185 @@ const doiWithPrefix: CslJson = {
 
 // --- BibTeX --------------------------------------------------------------
 
-{
-  assert.equal(
-    cslToBibTeX(book),
-    "@book{Aristotle1999Nicomachean,\n" +
-      "  title = {Nicomachean Ethics},\n" +
-      "  author = {Aristotle},\n" +
-      "  publisher = {Hackett Publishing},\n" +
-      "  year = {1999},\n" +
-      "  isbn = {978-0-87220-464-5},\n" +
-      "}",
-    "book: no missing-field comment, correct @book entry",
-  );
-}
+describe("cslToBibTeX", () => {
+  it("book: no missing-field comment, correct @book entry", () => {
+    expect(cslToBibTeX(book)).toBe(
+      "@book{Aristotle1999Nicomachean,\n" +
+        "  title = {Nicomachean Ethics},\n" +
+        "  author = {Aristotle},\n" +
+        "  publisher = {Hackett Publishing},\n" +
+        "  year = {1999},\n" +
+        "  isbn = {978-0-87220-464-5},\n" +
+        "}",
+    );
+  });
 
-{
-  assert.equal(
-    cslToBibTeX(article),
-    "@article{Roochnik2007Vice,\n" +
-      "  title = {Vice and the Voluntary},\n" +
-      "  author = {Roochnik, David},\n" +
-      "  journal = {The Review of Metaphysics},\n" +
-      "  year = {2007},\n" +
-      "  volume = {60},\n" +
-      "  number = {3},\n" +
-      "  pages = {537--561},\n" +
-      "  doi = {10.2307/20130382},\n" +
-      "}",
-    "journal article: single-hyphen page range becomes BibTeX's double-hyphen range",
-  );
-}
+  it("journal article: single-hyphen page range becomes BibTeX's double-hyphen range", () => {
+    expect(cslToBibTeX(article)).toBe(
+      "@article{Roochnik2007Vice,\n" +
+        "  title = {Vice and the Voluntary},\n" +
+        "  author = {Roochnik, David},\n" +
+        "  journal = {The Review of Metaphysics},\n" +
+        "  year = {2007},\n" +
+        "  volume = {60},\n" +
+        "  number = {3},\n" +
+        "  pages = {537--561},\n" +
+        "  doi = {10.2307/20130382},\n" +
+        "}",
+    );
+  });
 
-{
-  assert.equal(
-    cslToBibTeX(chapter),
-    "% Missing required BibTeX field(s) for this incollection entry: publisher\n" +
-      "@incollection{Kosman1980Akrasia,\n" +
-      "  title = {Akrasia and the Structure of the Soul},\n" +
-      "  author = {Kosman, L. A.},\n" +
-      "  booktitle = {Essays on Aristotle's Ethics},\n" +
-      "  year = {1980},\n" +
-      "  pages = {103--116},\n" +
-      "}",
-    "chapter missing publisher: honest missing-field comment, entry still emitted with what's present",
-  );
-}
+  it("chapter missing publisher: honest missing-field comment, entry still emitted with what's present", () => {
+    expect(cslToBibTeX(chapter)).toBe(
+      "% Missing required BibTeX field(s) for this incollection entry: publisher\n" +
+        "@incollection{Kosman1980Akrasia,\n" +
+        "  title = {Akrasia and the Structure of the Soul},\n" +
+        "  author = {Kosman, L. A.},\n" +
+        "  booktitle = {Essays on Aristotle's Ethics},\n" +
+        "  year = {1980},\n" +
+        "  pages = {103--116},\n" +
+        "}",
+    );
+  });
 
-{
-  assert.equal(
-    cslToBibTeX(barebones),
-    "% Missing required BibTeX field(s) for this book entry: author, publisher, year\n" +
-      "@book{Untitled,\n" +
-      "  title = {Untitled Treatise},\n" +
-      "}",
-    "book with only a title: multiple missing fields named honestly, key falls back to the title alone",
-  );
-}
+  it("book with only a title: multiple missing fields named honestly, key falls back to the title alone", () => {
+    expect(cslToBibTeX(barebones)).toBe(
+      "% Missing required BibTeX field(s) for this book entry: author, publisher, year\n" +
+        "@book{Untitled,\n" +
+        "  title = {Untitled Treatise},\n" +
+        "}",
+    );
+  });
 
-{
-  assert.equal(
-    cslToBibTeX(specialChars),
-    "@article{AnonymousCollective2020Cost,\n" +
-      "  title = {Cost \\& Benefit: A Study of 50\\% Efficiency \\#1},\n" +
-      "  author = {Anonymous Collective},\n" +
-      "  journal = {Journal of Odd Symbols},\n" +
-      "  year = {2020},\n" +
-      "}",
-    "LaTeX special characters (&, %, #) are escaped; a literal (organization) author name is used as-is",
-  );
-}
+  it("LaTeX special characters (&, %, #) are escaped; a literal (organization) author name is used as-is", () => {
+    expect(cslToBibTeX(specialChars)).toBe(
+      "@article{AnonymousCollective2020Cost,\n" +
+        "  title = {Cost \\& Benefit: A Study of 50\\% Efficiency \\#1},\n" +
+        "  author = {Anonymous Collective},\n" +
+        "  journal = {Journal of Odd Symbols},\n" +
+        "  year = {2020},\n" +
+        "}",
+    );
+  });
+});
 
 // --- RIS -------------------------------------------------------------------
 
-{
-  assert.equal(
-    cslToRIS(book),
-    ["TY  - BOOK", "TI  - Nicomachean Ethics", "AU  - Aristotle", "PY  - 1999", "PB  - Hackett Publishing", "SN  - 978-0-87220-464-5", "ER  - "].join("\n"),
-  );
-}
+describe("cslToRIS", () => {
+  it("emits a BOOK entry with its publisher and ISBN", () => {
+    expect(cslToRIS(book)).toBe(
+      ["TY  - BOOK", "TI  - Nicomachean Ethics", "AU  - Aristotle", "PY  - 1999", "PB  - Hackett Publishing", "SN  - 978-0-87220-464-5", "ER  - "].join("\n"),
+    );
+  });
 
-{
-  assert.equal(
-    cslToRIS(article),
-    [
-      "TY  - JOUR",
-      "TI  - Vice and the Voluntary",
-      "AU  - Roochnik, David",
-      "PY  - 2007",
-      "JO  - The Review of Metaphysics",
-      "VL  - 60",
-      "IS  - 3",
-      "SP  - 537",
-      "EP  - 561",
-      "DO  - 10.2307/20130382",
-      "ER  - ",
-    ].join("\n"),
-  );
-}
+  it("emits a JOUR entry splitting the page range into SP/EP", () => {
+    expect(cslToRIS(article)).toBe(
+      [
+        "TY  - JOUR",
+        "TI  - Vice and the Voluntary",
+        "AU  - Roochnik, David",
+        "PY  - 2007",
+        "JO  - The Review of Metaphysics",
+        "VL  - 60",
+        "IS  - 3",
+        "SP  - 537",
+        "EP  - 561",
+        "DO  - 10.2307/20130382",
+        "ER  - ",
+      ].join("\n"),
+    );
+  });
 
-{
-  assert.equal(
-    cslToRIS(webpage),
-    ["TY  - ELEC", "TI  - Aristotle's Ethics", "AU  - Kraut, Richard", "UR  - https://plato.stanford.edu/entries/aristotle-ethics/", "ER  - "].join("\n"),
-    "no year: PY line omitted entirely, not emitted empty",
-  );
-}
+  it("no year: PY line omitted entirely, not emitted empty", () => {
+    expect(cslToRIS(webpage)).toBe(
+      ["TY  - ELEC", "TI  - Aristotle's Ethics", "AU  - Kraut, Richard", "UR  - https://plato.stanford.edu/entries/aristotle-ethics/", "ER  - "].join("\n"),
+    );
+  });
 
-{
-  assert.equal(
-    cslToRIS(unicodeAuthors),
-    [
-      "TY  - JOUR",
-      "TI  - Über die Tugendlehre",
-      "AU  - Müller, Anne-Kathrin",
-      "AU  - Søndergaard, Bjørn",
-      "PY  - 2015",
-      "JO  - Zeitschrift für Philosophie",
-      "VL  - 12",
-      "ER  - ",
-    ].join("\n"),
-    "one AU line per author, unicode passed through untouched",
-  );
-}
+  it("one AU line per author, unicode passed through untouched", () => {
+    expect(cslToRIS(unicodeAuthors)).toBe(
+      [
+        "TY  - JOUR",
+        "TI  - Über die Tugendlehre",
+        "AU  - Müller, Anne-Kathrin",
+        "AU  - Søndergaard, Bjørn",
+        "PY  - 2015",
+        "JO  - Zeitschrift für Philosophie",
+        "VL  - 12",
+        "ER  - ",
+      ].join("\n"),
+    );
+  });
+});
 
 // --- APA ---------------------------------------------------------------
 
-{
-  assert.equal(cslToAPA(book), "Aristotle (1999). Nicomachean Ethics. Hackett Publishing.");
-}
+describe("cslToAPA", () => {
+  it("formats a book", () => {
+    expect(cslToAPA(book)).toBe("Aristotle (1999). Nicomachean Ethics. Hackett Publishing.");
+  });
 
-{
-  assert.equal(
-    cslToAPA(article),
-    "Roochnik, D. (2007). Vice and the Voluntary. The Review of Metaphysics, 60(3), 537-561. https://doi.org/10.2307/20130382",
-  );
-}
+  it("formats a journal article with volume, issue, pages and DOI", () => {
+    expect(cslToAPA(article)).toBe(
+      "Roochnik, D. (2007). Vice and the Voluntary. The Review of Metaphysics, 60(3), 537-561. https://doi.org/10.2307/20130382",
+    );
+  });
 
-{
-  assert.equal(cslToAPA(chapter), "Kosman, L. A. (1980). Akrasia and the Structure of the Soul. Essays on Aristotle's Ethics, 103-116.");
-}
+  it("formats a chapter", () => {
+    expect(cslToAPA(chapter)).toBe("Kosman, L. A. (1980). Akrasia and the Structure of the Soul. Essays on Aristotle's Ethics, 103-116.");
+  });
 
-{
-  assert.equal(
-    cslToAPA(webpage),
-    "Kraut, R. Aristotle's Ethics. https://plato.stanford.edu/entries/aristotle-ethics/",
-    "no year and no publisher/container: both omitted rather than a fabricated '(n.d.)' or empty container",
-  );
-}
+  it("no year and no publisher/container: both omitted rather than a fabricated '(n.d.)' or empty container", () => {
+    expect(cslToAPA(webpage)).toBe("Kraut, R. Aristotle's Ethics. https://plato.stanford.edu/entries/aristotle-ethics/");
+  });
 
-{
-  assert.equal(
-    cslToAPA(unicodeAuthors),
-    "Müller, A.-K., & Søndergaard, B. (2015). Über die Tugendlehre. Zeitschrift für Philosophie, 12.",
-    "hyphenated given name keeps its hyphen across the two initials",
-  );
-}
+  it("hyphenated given name keeps its hyphen across the two initials", () => {
+    expect(cslToAPA(unicodeAuthors)).toBe("Müller, A.-K., & Søndergaard, B. (2015). Über die Tugendlehre. Zeitschrift für Philosophie, 12.");
+  });
 
-{
-  assert.equal(
-    cslToAPA(doiWithPrefix),
-    "Prefix Handling Test. https://doi.org/10.1000/xyz123",
-    "no author and no year: both omitted (never 'Unknown Author' / '(n.d.)'); an already-prefixed DOI is not double-prefixed",
-  );
-}
+  it("no author and no year: both omitted (never 'Unknown Author' / '(n.d.)'); an already-prefixed DOI is not double-prefixed", () => {
+    expect(cslToAPA(doiWithPrefix)).toBe("Prefix Handling Test. https://doi.org/10.1000/xyz123");
+  });
+});
 
 // --- Chicago (author-date) ----------------------------------------------
 
-{
-  assert.equal(
-    cslToChicago(book),
-    "Aristotle 1999. “Nicomachean Ethics.” Hackett Publishing.",
-    "a family-only author (no given name) never leaves a dangling comma",
-  );
-}
+describe("cslToChicago", () => {
+  it("a family-only author (no given name) never leaves a dangling comma", () => {
+    expect(cslToChicago(book)).toBe("Aristotle 1999. “Nicomachean Ethics.” Hackett Publishing.");
+  });
 
-{
-  assert.equal(
-    cslToChicago(article),
-    "Roochnik, David 2007. “Vice and the Voluntary.” The Review of Metaphysics 60 (3): 537-561. https://doi.org/10.2307/20130382.",
-  );
-}
+  it("formats a journal article with volume, issue, pages and DOI", () => {
+    expect(cslToChicago(article)).toBe(
+      "Roochnik, David 2007. “Vice and the Voluntary.” The Review of Metaphysics 60 (3): 537-561. https://doi.org/10.2307/20130382.",
+    );
+  });
 
-{
-  assert.equal(
-    cslToChicago(chapter),
-    "Kosman, L. A. 1980. “Akrasia and the Structure of the Soul.” In Essays on Aristotle's Ethics: 103-116.",
-    "a chapter's container is prefixed with 'In '",
-  );
-}
+  it("a chapter's container is prefixed with 'In '", () => {
+    expect(cslToChicago(chapter)).toBe("Kosman, L. A. 1980. “Akrasia and the Structure of the Soul.” In Essays on Aristotle's Ethics: 103-116.");
+  });
 
-{
-  assert.equal(
-    cslToChicago(webpage),
-    "Kraut, Richard “Aristotle's Ethics.” https://plato.stanford.edu/entries/aristotle-ethics/.",
-    "no year: omitted, not '(n.d.)'",
-  );
-}
+  it("no year: omitted, not '(n.d.)'", () => {
+    expect(cslToChicago(webpage)).toBe("Kraut, Richard “Aristotle's Ethics.” https://plato.stanford.edu/entries/aristotle-ethics/.");
+  });
 
-{
-  assert.equal(
-    cslToChicago(unicodeAuthors),
-    "Müller, Anne-Kathrin, and Bjørn Søndergaard 2015. “Über die Tugendlehre.” Zeitschrift für Philosophie 12.",
-    "two authors: first family-first, second given-first, joined by ', and '",
-  );
-}
+  it("two authors: first family-first, second given-first, joined by ', and '", () => {
+    expect(cslToChicago(unicodeAuthors)).toBe("Müller, Anne-Kathrin, and Bjørn Søndergaard 2015. “Über die Tugendlehre.” Zeitschrift für Philosophie 12.");
+  });
+});
 
 // --- formatCitationList (combining / empty-list edge) ---------------------
 
-{
-  assert.equal(formatCitationList([], "bibtex"), "", "empty citation list produces an empty string, not a malformed entry");
-  assert.equal(formatCitationList([], "ris"), "");
-  assert.equal(formatCitationList([], "apa"), "");
-  assert.equal(formatCitationList([], "chicago"), "");
-}
+describe("formatCitationList", () => {
+  it("empty citation list produces an empty string, not a malformed entry", () => {
+    expect(formatCitationList([], "bibtex")).toBe("");
+    expect(formatCitationList([], "ris")).toBe("");
+    expect(formatCitationList([], "apa")).toBe("");
+    expect(formatCitationList([], "chicago")).toBe("");
+  });
 
-{
-  const combined = formatCitationList([book, article], "bibtex");
-  assert.equal(combined, `${cslToBibTeX(book)}\n\n${cslToBibTeX(article)}`, "multiple citations are double-newline separated, in input order");
-}
-
-console.log("citationFormats.test.ts: all assertions passed");
+  it("multiple citations are double-newline separated, in input order", () => {
+    const combined = formatCitationList([book, article], "bibtex");
+    expect(combined).toBe(`${cslToBibTeX(book)}\n\n${cslToBibTeX(article)}`);
+  });
+});

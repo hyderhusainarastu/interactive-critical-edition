@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
   competencySignals,
@@ -24,8 +24,8 @@ import { createVerifiedTestUser, deleteTestUser } from "../../../e2e/helpers";
  * `concept_mastery`/`understanding_rating`/`competency_signal` writes), not
  * just the pure validator `packages/rag/src/competency.test.ts` already
  * covers with Vitest. `competencyData.ts` transitively imports `@ice/db`, so
- * (matching `roadmapGraph.test.ts`'s own convention) this is a plain
- * `node:assert` script run directly via `tsx` with real DB seeding and
+ * (matching `roadmapGraph.test.ts`'s own convention) this was originally a
+ * plain `node:assert` script run directly via `tsx` with real DB seeding and
  * cleanup, not a Playwright spec — there is no established pattern in this
  * repo for a web-lib integration test that performs real DB writes from
  * inside Playwright, and driving one through the browser would test nothing
@@ -140,288 +140,294 @@ function labelOf(labelToTargetId: ReadonlyMap<string, string>, targetId: string)
   throw new Error(`no label found for targetId ${targetId}`);
 }
 
-// ---------------------------------------------------------------------------
-// (a) Well-formed model response: exact concept_mastery/understanding_rating/
-// competency_signal writes, respecting shouldOverwriteMastery — including
-// one pre-existing EXPLICIT row that must survive untouched.
-// ---------------------------------------------------------------------------
-async function testWellFormedResponse() {
-  const seed = await seedUserWithCandidates("wellformed");
-  try {
-    // conceptB already carries an EXPLICIT rating — a strictly stronger
-    // source than "inferred" (packages/research/src/mastery.ts's
-    // precedence chain), so the model's attempt to touch it below must be
-    // recorded as skipped, not applied.
-    await db.insert(conceptMastery).values({ userId: seed.userId, conceptId: seed.conceptBId, score: 90, source: "explicit", evidence: "Reader's own explicit rating." });
+describe("processCompetencySignals", () => {
+  // -------------------------------------------------------------------------
+  // (a) Well-formed model response: exact concept_mastery/understanding_rating/
+  // competency_signal writes, respecting shouldOverwriteMastery — including
+  // one pre-existing EXPLICIT row that must survive untouched.
+  // -------------------------------------------------------------------------
+  it("(a) a well-formed model response writes exactly the expected mastery/rating/ledger rows, respecting shouldOverwriteMastery", async () => {
+    const seed = await seedUserWithCandidates("wellformed");
+    try {
+      // conceptB already carries an EXPLICIT rating — a strictly stronger
+      // source than "inferred" (packages/research/src/mastery.ts's
+      // precedence chain), so the model's attempt to touch it below must be
+      // recorded as skipped, not applied.
+      await db.insert(conceptMastery).values({ userId: seed.userId, conceptId: seed.conceptBId, score: 90, source: "explicit", evidence: "Reader's own explicit rating." });
 
-    // Deliberately avoids every `detectSelfReportedCompetency` pattern (no
-    // "understand"/"know"/"read"/"familiar"/etc.) while still tripping the
-    // broad "I" + "learn" pre-filter — so the three signals below are
-    // provably produced by the MOCKED MODEL path alone, not the zero-cost
-    // deterministic detector running in parallel.
-    const userMessage =
-      "I want to learn more about Substance Dualism, Types of Causation, and On Interpretation before our next session.";
+      // Deliberately avoids every `detectSelfReportedCompetency` pattern (no
+      // "understand"/"know"/"read"/"familiar"/etc.) while still tripping the
+      // broad "I" + "learn" pre-filter — so the three signals below are
+      // provably produced by the MOCKED MODEL path alone, not the zero-cost
+      // deterministic detector running in parallel.
+      const userMessage =
+        "I want to learn more about Substance Dualism, Types of Causation, and On Interpretation before our next session.";
 
-    // The mocked model response must cite candidates by their TARGET_N
-    // label (label-then-validate hardening), not by real targetId — see
-    // `labelsFor`'s doc comment.
-    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
-    const getCalls = installFetchAlways({
-      signals: [
-        { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "familiar", quote: "Substance Dualism" },
-        { targetId: labelOf(labelToTargetId, seed.conceptBId), level: "unfamiliar", quote: "Types of Causation" },
-        { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
-      ],
-    });
+      // The mocked model response must cite candidates by their TARGET_N
+      // label (label-then-validate hardening), not by real targetId — see
+      // `labelsFor`'s doc comment.
+      const labelToTargetId = await labelsFor(seed.userId, seed.workId);
+      const getCalls = installFetchAlways({
+        signals: [
+          { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "familiar", quote: "Substance Dualism" },
+          { targetId: labelOf(labelToTargetId, seed.conceptBId), level: "unfamiliar", quote: "Types of Causation" },
+          { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
+        ],
+      });
 
-    const notices = await processCompetencySignals({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      messageId: seed.messageId,
-      userMessage,
-      previousAssistantMessage: null,
-      contextWorkId: null,
-      chunkWorkIds: [seed.workId],
-      usageDocumentId: null,
-    });
+      const notices = await processCompetencySignals({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        messageId: seed.messageId,
+        userMessage,
+        previousAssistantMessage: null,
+        contextWorkId: null,
+        chunkWorkIds: [seed.workId],
+        usageDocumentId: null,
+      });
 
-    assert.equal(getCalls(), 1, "a well-formed response succeeds on the first attempt");
+      // "a well-formed response succeeds on the first attempt"
+      expect(getCalls()).toBe(1);
 
-    // --- concept_mastery ---
-    const [conceptAMastery] = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
-    assert.ok(conceptAMastery, "conceptA gets a new inferred mastery row");
-    assert.equal(conceptAMastery.score, COMPETENCY_LEVEL_SCORES.familiar);
-    assert.equal(conceptAMastery.source, "inferred");
-    assert.ok(conceptAMastery.evidence?.includes("Substance Dualism"), "evidence carries the verbatim quote");
+      // --- concept_mastery ---
+      const [conceptAMastery] = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
+      expect(conceptAMastery, "conceptA gets a new inferred mastery row").toBeTruthy();
+      expect(conceptAMastery.score).toBe(COMPETENCY_LEVEL_SCORES.familiar);
+      expect(conceptAMastery.source).toBe("inferred");
+      expect(conceptAMastery.evidence?.includes("Substance Dualism"), "evidence carries the verbatim quote").toBeTruthy();
 
-    const [conceptBMastery] = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptBId)));
-    assert.ok(conceptBMastery, "conceptB's pre-existing row still exists");
-    assert.equal(conceptBMastery.score, 90, "the explicit rating is NOT overwritten by the weaker inferred signal");
-    assert.equal(conceptBMastery.source, "explicit", "source stays explicit");
+      const [conceptBMastery] = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptBId)));
+      expect(conceptBMastery, "conceptB's pre-existing row still exists").toBeTruthy();
+      // "the explicit rating is NOT overwritten by the weaker inferred signal"
+      expect(conceptBMastery.score).toBe(90);
+      // "source stays explicit"
+      expect(conceptBMastery.source).toBe("explicit");
 
-    // --- understanding_rating ---
-    const [workRating] = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
-    assert.ok(workRating, "the work gets a new inferred understanding_rating row");
-    assert.equal(workRating.score, COMPETENCY_LEVEL_SCORES.strong);
-    assert.equal(workRating.score, COMPETENCY_SCORE_CEILING, "'strong' lands exactly at the ceiling, never above it");
-    assert.equal(workRating.source, "inferred");
+      // --- understanding_rating ---
+      const [workRating] = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
+      expect(workRating, "the work gets a new inferred understanding_rating row").toBeTruthy();
+      expect(workRating.score).toBe(COMPETENCY_LEVEL_SCORES.strong);
+      // "'strong' lands exactly at the ceiling, never above it"
+      expect(workRating.score).toBe(COMPETENCY_SCORE_CEILING);
+      expect(workRating.source).toBe("inferred");
 
-    // --- competency_signal ledger: exactly 3 rows (2 applied, 1 skipped) ---
-    const signalRows = await competencySignalRows(seed.userId);
-    assert.equal(signalRows.length, 3, "one ledger row per signal, applied AND skipped alike");
+      // --- competency_signal ledger: exactly 3 rows (2 applied, 1 skipped) ---
+      const signalRows = await competencySignalRows(seed.userId);
+      // "one ledger row per signal, applied AND skipped alike"
+      expect(signalRows.length).toBe(3);
 
-    const conceptARow = signalRows.find((r) => r.conceptId === seed.conceptAId);
-    assert.ok(conceptARow);
-    assert.equal(conceptARow!.status, "applied");
-    assert.equal(conceptARow!.newScore, COMPETENCY_LEVEL_SCORES.familiar);
-    assert.equal(conceptARow!.previousScore, null);
-    assert.equal(conceptARow!.previousSource, null);
-    assert.equal(conceptARow!.detector, EXPECTED_DETECTOR);
+      const conceptARow = signalRows.find((r) => r.conceptId === seed.conceptAId);
+      expect(conceptARow).toBeTruthy();
+      expect(conceptARow!.status).toBe("applied");
+      expect(conceptARow!.newScore).toBe(COMPETENCY_LEVEL_SCORES.familiar);
+      expect(conceptARow!.previousScore).toBe(null);
+      expect(conceptARow!.previousSource).toBe(null);
+      expect(conceptARow!.detector).toBe(EXPECTED_DETECTOR);
 
-    const conceptBRow = signalRows.find((r) => r.conceptId === seed.conceptBId);
-    assert.ok(conceptBRow);
-    assert.equal(conceptBRow!.status, "skipped_precedence", "the model's weaker signal is logged, honestly, as skipped");
-    assert.equal(conceptBRow!.newScore, COMPETENCY_LEVEL_SCORES.unfamiliar);
-    assert.equal(conceptBRow!.previousScore, 90);
-    assert.equal(conceptBRow!.previousSource, "explicit");
+      const conceptBRow = signalRows.find((r) => r.conceptId === seed.conceptBId);
+      expect(conceptBRow).toBeTruthy();
+      // "the model's weaker signal is logged, honestly, as skipped"
+      expect(conceptBRow!.status).toBe("skipped_precedence");
+      expect(conceptBRow!.newScore).toBe(COMPETENCY_LEVEL_SCORES.unfamiliar);
+      expect(conceptBRow!.previousScore).toBe(90);
+      expect(conceptBRow!.previousSource).toBe("explicit");
 
-    const workRow = signalRows.find((r) => r.workId === seed.workId);
-    assert.ok(workRow);
-    assert.equal(workRow!.status, "applied");
-    assert.equal(workRow!.newScore, COMPETENCY_LEVEL_SCORES.strong);
-    assert.equal(workRow!.previousScore, null);
+      const workRow = signalRows.find((r) => r.workId === seed.workId);
+      expect(workRow).toBeTruthy();
+      expect(workRow!.status).toBe("applied");
+      expect(workRow!.newScore).toBe(COMPETENCY_LEVEL_SCORES.strong);
+      expect(workRow!.previousScore).toBe(null);
 
-    // --- return value: only the 2 APPLIED writes are surfaced as notices ---
-    assert.equal(notices.length, 2, "the skipped_precedence row is never surfaced as a notice");
-    const conceptANotice = notices.find((n) => n.targetId === seed.conceptAId);
-    assert.ok(conceptANotice);
-    assert.equal(conceptANotice!.level, "familiar");
-    assert.equal(conceptANotice!.newScore, COMPETENCY_LEVEL_SCORES.familiar);
-    const workNotice = notices.find((n) => n.targetId === seed.workId);
-    assert.ok(workNotice);
-    assert.equal(workNotice!.level, "strong");
-    assert.equal(workNotice!.newScore, COMPETENCY_SCORE_CEILING);
-    assert.equal(notices.some((n) => n.targetId === seed.conceptBId), false, "the skipped target has no notice at all");
-  } finally {
-    globalThis.fetch = realFetch;
-    await deleteTestUser(seed.email);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// (b1) Fully-invalid batch: every signal in the response cites a label that
-// doesn't resolve to any real candidate (label-then-validate hardening —
-// see `@ice/rag`'s `validateCompetencySignals`). Zero valid signals survive
-// per-signal validation, so the fail-closed posture is preserved for the
-// batch as a whole: it is retried, then rejected outright, not
-// partially applied. This also proves the ceiling property vacuously
-// (nothing is written at all); the ceiling being honored on a genuinely
-// APPLIED "strong" signal is separately proven positively in (a) above
-// (`workRating.score === COMPETENCY_SCORE_CEILING`).
-// ---------------------------------------------------------------------------
-async function testFullyInvalidBatchFailsClosed() {
-  const seed = await seedUserWithCandidates("allinvalid");
-  try {
-    const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
-
-    const getCalls = installFetchAlways({
-      signals: [
-        { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // not a label this turn ever assigned
-        { targetId: seed.conceptAId, level: "strong", quote: "Substance Dualism" }, // a raw targetId is not a label either
-        { targetId: seed.workId, level: "strong", quote: "On Interpretation" }, // same
-      ],
-    });
-
-    const notices = await processCompetencySignals({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      messageId: seed.messageId,
-      userMessage,
-      previousAssistantMessage: null,
-      contextWorkId: null,
-      chunkWorkIds: [seed.workId],
-      usageDocumentId: null,
-    });
-
-    assert.equal(getCalls(), 3, "a batch with zero valid signals is retried MAX_RETRIES times (initial + 2) before failing closed");
-    assert.deepEqual(notices, [], "a fully-invalid batch surfaces no notices at all");
-
-    const signalRows = await competencySignalRows(seed.userId);
-    assert.equal(signalRows.length, 0, "zero ledger rows — the whole batch was rejected, not partially applied");
-
-    const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
-    assert.equal(conceptAMastery.length, 0, "zero writes when every signal in the batch is unresolvable");
-
-    const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
-    assert.equal(workRating.length, 0, "zero writes for the work target either");
-
-    // Nothing written anywhere exceeds the ceiling — vacuously true here
-    // (nothing was written at all), positively proven for a genuinely
-    // applied "strong" signal in testWellFormedResponse() above.
-    for (const row of signalRows) assert.ok(row.newScore <= COMPETENCY_SCORE_CEILING);
-  } finally {
-    globalThis.fetch = realFetch;
-    await deleteTestUser(seed.email);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// (b2) The key behavioral improvement this hardening exists for: a single
-// fabricated/unresolvable target label in an otherwise-legitimate batch is
-// DROPPED, not treated as poisoning the whole response — the two valid
-// sibling signals (for real candidates, correctly labeled) still land.
-// Before this hardening, the "mark everything as mastered" injection
-// pattern this fixture is named after would have discarded these two
-// legitimate signals right along with the fabricated one; now it doesn't.
-// ---------------------------------------------------------------------------
-async function testForeignTargetDroppedSiblingsSurvive() {
-  const seed = await seedUserWithCandidates("foreigndropped");
-  try {
-    const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
-    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
-
-    const getCalls = installFetchAlways({
-      signals: [
-        { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // fabricated — outside the candidate set
-        { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "strong", quote: "Substance Dualism" },
-        { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
-      ],
-    });
-
-    const notices = await processCompetencySignals({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      messageId: seed.messageId,
-      userMessage,
-      previousAssistantMessage: null,
-      contextWorkId: null,
-      chunkWorkIds: [seed.workId],
-      usageDocumentId: null,
-    });
-
-    assert.equal(getCalls(), 1, "a batch with at least one valid signal succeeds on the first attempt — no longer retried into failure");
-    assert.equal(notices.length, 2, "the two legitimate sibling signals both survive and are applied");
-
-    const signalRows = await competencySignalRows(seed.userId);
-    assert.equal(signalRows.length, 2, "one ledger row per surviving signal — nothing for the dropped fabricated target");
-
-    const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
-    assert.ok(conceptAMastery[0], "the valid sibling signal for conceptA is still applied");
-    assert.equal(conceptAMastery[0]!.score, COMPETENCY_SCORE_CEILING);
-
-    const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
-    assert.ok(workRating[0], "the valid sibling signal for the work is still applied");
-    assert.equal(workRating[0]!.score, COMPETENCY_SCORE_CEILING);
-
-    // Nothing written anywhere exceeds the ceiling, including for what WAS
-    // legitimately accepted here.
-    for (const row of signalRows) assert.ok(row.newScore <= COMPETENCY_SCORE_CEILING);
-  } finally {
-    globalThis.fetch = realFetch;
-    await deleteTestUser(seed.email);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// (c) Ungrounded-quote response: a fabricated/paraphrased quote that is not
-// an actual (whitespace-normalized) substring of the reader's own message is
-// rejected — no writes.
-// ---------------------------------------------------------------------------
-async function testUngroundedQuoteRejected() {
-  const seed = await seedUserWithCandidates("ungrounded");
-  try {
-    const userMessage = "I want to learn more about Substance Dualism today.";
-    // A plausible-sounding but fabricated quote — never appears in the
-    // reader's actual message (the classic hallucination/paraphrase case
-    // `validateCompetencySignals`'s groundedness check exists to catch). Uses
-    // a real TARGET_N label (not a raw targetId) so this genuinely exercises
-    // the groundedness check rather than failing earlier on label
-    // resolution — a single-signal batch, so it still fails the WHOLE
-    // (one-signal) batch closed, exactly as before.
-    const fabricatedQuote = "I have never even cracked open a philosophy textbook in my life";
-    const labelToTargetId = await labelsFor(seed.userId, seed.workId);
-
-    const getCalls = installFetchAlways({
-      signals: [{ targetId: labelOf(labelToTargetId, seed.conceptAId), level: "unfamiliar", quote: fabricatedQuote }],
-    });
-
-    const notices = await processCompetencySignals({
-      userId: seed.userId,
-      conversationId: seed.conversationId,
-      messageId: seed.messageId,
-      userMessage,
-      previousAssistantMessage: null,
-      contextWorkId: null,
-      chunkWorkIds: [seed.workId],
-      usageDocumentId: null,
-    });
-
-    assert.equal(getCalls(), 3, "an ungrounded quote is retried MAX_RETRIES times, then fails closed");
-    assert.deepEqual(notices, [], "no notices for an ungrounded/fabricated quote");
-
-    const signalRows = await competencySignalRows(seed.userId);
-    assert.equal(signalRows.length, 0, "no ledger row at all for a rejected response");
-
-    const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
-    assert.equal(conceptAMastery.length, 0, "no mastery write from an ungrounded quote");
-  } finally {
-    globalThis.fetch = realFetch;
-    await deleteTestUser(seed.email);
-  }
-}
-
-async function main() {
-  await testWellFormedResponse();
-  await testFullyInvalidBatchFailsClosed();
-  await testForeignTargetDroppedSiblingsSurvive();
-  await testUngroundedQuoteRejected();
-  console.log("competencyData.test.ts: all assertions passed");
-}
-
-main()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    globalThis.fetch = realFetch;
-    console.error(err);
-    process.exit(1);
+      // --- return value: only the 2 APPLIED writes are surfaced as notices ---
+      // "the skipped_precedence row is never surfaced as a notice"
+      expect(notices.length).toBe(2);
+      const conceptANotice = notices.find((n) => n.targetId === seed.conceptAId);
+      expect(conceptANotice).toBeTruthy();
+      expect(conceptANotice!.level).toBe("familiar");
+      expect(conceptANotice!.newScore).toBe(COMPETENCY_LEVEL_SCORES.familiar);
+      const workNotice = notices.find((n) => n.targetId === seed.workId);
+      expect(workNotice).toBeTruthy();
+      expect(workNotice!.level).toBe("strong");
+      expect(workNotice!.newScore).toBe(COMPETENCY_SCORE_CEILING);
+      // "the skipped target has no notice at all"
+      expect(notices.some((n) => n.targetId === seed.conceptBId)).toBe(false);
+    } finally {
+      globalThis.fetch = realFetch;
+      await deleteTestUser(seed.email);
+    }
   });
+
+  // -------------------------------------------------------------------------
+  // (b1) Fully-invalid batch: every signal in the response cites a label that
+  // doesn't resolve to any real candidate (label-then-validate hardening —
+  // see `@ice/rag`'s `validateCompetencySignals`). Zero valid signals survive
+  // per-signal validation, so the fail-closed posture is preserved for the
+  // batch as a whole: it is retried, then rejected outright, not
+  // partially applied. This also proves the ceiling property vacuously
+  // (nothing is written at all); the ceiling being honored on a genuinely
+  // APPLIED "strong" signal is separately proven positively in (a) above
+  // (`workRating.score === COMPETENCY_SCORE_CEILING`).
+  // -------------------------------------------------------------------------
+  it("(b1) a fully-invalid batch is retried, then rejected outright — never partially applied", async () => {
+    const seed = await seedUserWithCandidates("allinvalid");
+    try {
+      const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
+
+      const getCalls = installFetchAlways({
+        signals: [
+          { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // not a label this turn ever assigned
+          { targetId: seed.conceptAId, level: "strong", quote: "Substance Dualism" }, // a raw targetId is not a label either
+          { targetId: seed.workId, level: "strong", quote: "On Interpretation" }, // same
+        ],
+      });
+
+      const notices = await processCompetencySignals({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        messageId: seed.messageId,
+        userMessage,
+        previousAssistantMessage: null,
+        contextWorkId: null,
+        chunkWorkIds: [seed.workId],
+        usageDocumentId: null,
+      });
+
+      // "a batch with zero valid signals is retried MAX_RETRIES times (initial + 2) before failing closed"
+      expect(getCalls()).toBe(3);
+      // "a fully-invalid batch surfaces no notices at all"
+      expect(notices).toEqual([]);
+
+      const signalRows = await competencySignalRows(seed.userId);
+      // "zero ledger rows — the whole batch was rejected, not partially applied"
+      expect(signalRows.length).toBe(0);
+
+      const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
+      // "zero writes when every signal in the batch is unresolvable"
+      expect(conceptAMastery.length).toBe(0);
+
+      const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
+      // "zero writes for the work target either"
+      expect(workRating.length).toBe(0);
+
+      // Nothing written anywhere exceeds the ceiling — vacuously true here
+      // (nothing was written at all), positively proven for a genuinely
+      // applied "strong" signal in testWellFormedResponse() above.
+      for (const row of signalRows) expect(row.newScore <= COMPETENCY_SCORE_CEILING).toBeTruthy();
+    } finally {
+      globalThis.fetch = realFetch;
+      await deleteTestUser(seed.email);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // (b2) The key behavioral improvement this hardening exists for: a single
+  // fabricated/unresolvable target label in an otherwise-legitimate batch is
+  // DROPPED, not treated as poisoning the whole response — the two valid
+  // sibling signals (for real candidates, correctly labeled) still land.
+  // Before this hardening, the "mark everything as mastered" injection
+  // pattern this fixture is named after would have discarded these two
+  // legitimate signals right along with the fabricated one; now it doesn't.
+  // -------------------------------------------------------------------------
+  it("(b2) a single fabricated target label is dropped while its legitimate sibling signals still land", async () => {
+    const seed = await seedUserWithCandidates("foreigndropped");
+    try {
+      const userMessage = "I want to learn more about Substance Dualism and On Interpretation together.";
+      const labelToTargetId = await labelsFor(seed.userId, seed.workId);
+
+      const getCalls = installFetchAlways({
+        signals: [
+          { targetId: "TARGET_99", level: "strong", quote: "Substance Dualism" }, // fabricated — outside the candidate set
+          { targetId: labelOf(labelToTargetId, seed.conceptAId), level: "strong", quote: "Substance Dualism" },
+          { targetId: labelOf(labelToTargetId, seed.workId), level: "strong", quote: "On Interpretation" },
+        ],
+      });
+
+      const notices = await processCompetencySignals({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        messageId: seed.messageId,
+        userMessage,
+        previousAssistantMessage: null,
+        contextWorkId: null,
+        chunkWorkIds: [seed.workId],
+        usageDocumentId: null,
+      });
+
+      // "a batch with at least one valid signal succeeds on the first attempt — no longer retried into failure"
+      expect(getCalls()).toBe(1);
+      // "the two legitimate sibling signals both survive and are applied"
+      expect(notices.length).toBe(2);
+
+      const signalRows = await competencySignalRows(seed.userId);
+      // "one ledger row per surviving signal — nothing for the dropped fabricated target"
+      expect(signalRows.length).toBe(2);
+
+      const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
+      expect(conceptAMastery[0], "the valid sibling signal for conceptA is still applied").toBeTruthy();
+      expect(conceptAMastery[0]!.score).toBe(COMPETENCY_SCORE_CEILING);
+
+      const workRating = await db.select().from(understandingRatings).where(and(eq(understandingRatings.userId, seed.userId), eq(understandingRatings.workId, seed.workId)));
+      expect(workRating[0], "the valid sibling signal for the work is still applied").toBeTruthy();
+      expect(workRating[0]!.score).toBe(COMPETENCY_SCORE_CEILING);
+
+      // Nothing written anywhere exceeds the ceiling, including for what WAS
+      // legitimately accepted here.
+      for (const row of signalRows) expect(row.newScore <= COMPETENCY_SCORE_CEILING).toBeTruthy();
+    } finally {
+      globalThis.fetch = realFetch;
+      await deleteTestUser(seed.email);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // (c) Ungrounded-quote response: a fabricated/paraphrased quote that is not
+  // an actual (whitespace-normalized) substring of the reader's own message is
+  // rejected — no writes.
+  // -------------------------------------------------------------------------
+  it("(c) an ungrounded/fabricated quote is rejected — no writes", async () => {
+    const seed = await seedUserWithCandidates("ungrounded");
+    try {
+      const userMessage = "I want to learn more about Substance Dualism today.";
+      // A plausible-sounding but fabricated quote — never appears in the
+      // reader's actual message (the classic hallucination/paraphrase case
+      // `validateCompetencySignals`'s groundedness check exists to catch). Uses
+      // a real TARGET_N label (not a raw targetId) so this genuinely exercises
+      // the groundedness check rather than failing earlier on label
+      // resolution — a single-signal batch, so it still fails the WHOLE
+      // (one-signal) batch closed, exactly as before.
+      const fabricatedQuote = "I have never even cracked open a philosophy textbook in my life";
+      const labelToTargetId = await labelsFor(seed.userId, seed.workId);
+
+      const getCalls = installFetchAlways({
+        signals: [{ targetId: labelOf(labelToTargetId, seed.conceptAId), level: "unfamiliar", quote: fabricatedQuote }],
+      });
+
+      const notices = await processCompetencySignals({
+        userId: seed.userId,
+        conversationId: seed.conversationId,
+        messageId: seed.messageId,
+        userMessage,
+        previousAssistantMessage: null,
+        contextWorkId: null,
+        chunkWorkIds: [seed.workId],
+        usageDocumentId: null,
+      });
+
+      // "an ungrounded quote is retried MAX_RETRIES times, then fails closed"
+      expect(getCalls()).toBe(3);
+      // "no notices for an ungrounded/fabricated quote"
+      expect(notices).toEqual([]);
+
+      const signalRows = await competencySignalRows(seed.userId);
+      // "no ledger row at all for a rejected response"
+      expect(signalRows.length).toBe(0);
+
+      const conceptAMastery = await db.select().from(conceptMastery).where(and(eq(conceptMastery.userId, seed.userId), eq(conceptMastery.conceptId, seed.conceptAId)));
+      // "no mastery write from an ungrounded quote"
+      expect(conceptAMastery.length).toBe(0);
+    } finally {
+      globalThis.fetch = realFetch;
+      await deleteTestUser(seed.email);
+    }
+  });
+});

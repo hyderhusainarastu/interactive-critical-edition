@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { CorrectionEditor, ResearchObjectType, StatusAction } from "./corrections";
 
 /**
@@ -34,17 +34,24 @@ void (0 as unknown as _NoSystemEditor); // referenced so the type isn't flagged 
 // ---------------------------------------------------------------------------
 
 const editors: CorrectionEditor[] = ["user", "editor"];
-assert.deepEqual(editors, ["user", "editor"]);
-
 const statusActions: StatusAction[] = ["verified", "disputed", "hidden", "restored"];
-assert.deepEqual(statusActions, ["verified", "disputed", "hidden", "restored"]);
-
 const objectTypes: ResearchObjectType[] = ["claim", "relationship", "cluster", "chamber", "hypothesis", "gap"];
-assert.equal(objectTypes.length, 6);
-// `evidence_chamber_position` is a real `research_revision.object_type`
-// enum value the DB accepts, but deliberately absent here — see
-// `corrections.ts`'s own class doc comment for why "position" has no
-// mutation surface in this module.
-assert.ok(!(objectTypes as string[]).includes("position"));
 
-console.log("corrections.test.ts: all assertions passed");
+describe("corrections type contract", () => {
+  it("keeps CorrectionEditor's real members from being accidentally `never`", () => {
+    expect(editors).toEqual(["user", "editor"]);
+  });
+
+  it("keeps StatusAction's real members from being accidentally `never`", () => {
+    expect(statusActions).toEqual(["verified", "disputed", "hidden", "restored"]);
+  });
+
+  // `evidence_chamber_position` is a real `research_revision.object_type`
+  // enum value the DB accepts, but deliberately absent here — see
+  // `corrections.ts`'s own class doc comment for why "position" has no
+  // mutation surface in this module.
+  it("covers exactly the six mutable object types, deliberately excluding position", () => {
+    expect(objectTypes.length).toBe(6);
+    expect(!(objectTypes as string[]).includes("position")).toBeTruthy();
+  });
+});

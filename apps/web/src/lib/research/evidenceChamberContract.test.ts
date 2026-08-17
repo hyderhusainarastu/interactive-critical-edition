@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { validateEvidenceChamberResponse } from "@ice/claims";
+import { describe, expect, it } from "vitest";
 import type { ChamberPositionClaimView, ChamberPositionView, EvidenceChamberView, PositionSourceCredibility } from "./chambers";
 
 /**
@@ -55,35 +56,6 @@ type ForbiddenKeyName = Extract<
 type AssertNever<T extends never> = T;
 type _NoForbiddenViewKeys = AssertNever<ForbiddenKeyName>;
 void (0 as unknown as _NoForbiddenViewKeys); // referenced so the type isn't flagged unused
-
-// ---------------------------------------------------------------------------
-// 2. Runtime: the prompt/validator layer rejects a crafted nested winner-ish payload.
-// ---------------------------------------------------------------------------
-
-{
-  const craftedPayload = {
-    question: "q",
-    sharedGround: "sg",
-    pointOfDivergence: "pod",
-    possibleReconciliation: "pr",
-    unresolvedQuestion: "uq",
-    missingEvidence: "me",
-    nextAction: "na",
-    positions: [
-      {
-        label: "Position A",
-        summary: "s",
-        method: "m",
-        scope: "sc",
-        stanceConfidence: "high",
-        // Adversarial: a winner-ish key nested arbitrarily deep inside a
-        // position, wrapped in extra objects — must still be rejected.
-        meta: { assessment: { finalCall: { overallWinner: "Position A" } } },
-      },
-    ],
-  };
-  assert.throws(() => validateEvidenceChamberResponse(craftedPayload), /forbidden ranking-like key "overallWinner"/);
-}
 
 // ---------------------------------------------------------------------------
 // 3. Runtime: recursive key walk over a realistic sample `EvidenceChamberView`.
@@ -169,12 +141,42 @@ const sampleChamber: EvidenceChamberView = {
   positions: [samplePosition],
 };
 
-{
-  const collected: { key: string; path: string }[] = [];
-  collectKeys(sampleChamber, "$", collected);
-  assert.ok(collected.length > 20, `expected a richly-nested sample object, only found ${collected.length} keys`);
-  const violations = collected.filter((entry) => FORBIDDEN_KEY_PATTERN.test(entry.key));
-  assert.deepEqual(violations, [], `forbidden ranking-like key(s) found in EvidenceChamberView: ${JSON.stringify(violations)}`);
-}
+describe("evidence chamber 'never declares a winner' contract", () => {
+  // -------------------------------------------------------------------------
+  // 2. Runtime: the prompt/validator layer rejects a crafted nested winner-ish payload.
+  // -------------------------------------------------------------------------
+  it("rejects a crafted payload with a winner-ish key nested arbitrarily deep", () => {
+    const craftedPayload = {
+      question: "q",
+      sharedGround: "sg",
+      pointOfDivergence: "pod",
+      possibleReconciliation: "pr",
+      unresolvedQuestion: "uq",
+      missingEvidence: "me",
+      nextAction: "na",
+      positions: [
+        {
+          label: "Position A",
+          summary: "s",
+          method: "m",
+          scope: "sc",
+          stanceConfidence: "high",
+          // Adversarial: a winner-ish key nested arbitrarily deep inside a
+          // position, wrapped in extra objects — must still be rejected.
+          meta: { assessment: { finalCall: { overallWinner: "Position A" } } },
+        },
+      ],
+    };
+    assert.throws(() => validateEvidenceChamberResponse(craftedPayload), /forbidden ranking-like key "overallWinner"/);
+  });
 
-console.log("evidenceChamberContract.test.ts: all assertions passed");
+  it("finds no forbidden ranking-like key anywhere in a realistic sample EvidenceChamberView", () => {
+    const collected: { key: string; path: string }[] = [];
+    collectKeys(sampleChamber, "$", collected);
+    // `expected a richly-nested sample object, only found ${collected.length} keys`
+    expect(collected.length > 20).toBeTruthy();
+    const violations = collected.filter((entry) => FORBIDDEN_KEY_PATTERN.test(entry.key));
+    // `forbidden ranking-like key(s) found in EvidenceChamberView: ${JSON.stringify(violations)}`
+    expect(violations).toEqual([]);
+  });
+});

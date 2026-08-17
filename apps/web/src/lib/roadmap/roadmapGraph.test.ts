@@ -1,6 +1,6 @@
-import assert from "node:assert/strict";
 import { stageForRelationship } from "@ice/curriculum";
 import type { RoadmapItem } from "@ice/roadmap";
+import { describe, expect, it } from "vitest";
 import type { GraphNode } from "@/components/graph/types";
 import { joinRoadmapAnnotations, type RoadmapJoinProvenance } from "@/lib/roadmap/roadmapGraph";
 
@@ -77,58 +77,68 @@ const items: RoadmapItem[] = [
 
 const result = joinRoadmapAnnotations(nodes, items, provenance);
 
-// (a) exact bib match, and provenance is threaded through unchanged.
-{
-  const a = result.get("external:bib:1");
-  assert.ok(a, "(a) exact external:bib:<bibId> must be annotated");
-  assert.equal(a!.stage, stageForRelationship("prerequisite"), "stage derives from the item category");
-  assert.deepEqual(a!.rootWorkIds, ["work:a", "work:b"], "rootWorkIds provenance is carried onto the annotation");
-  assert.ok(a!.checkpoint.length > 0, "a deterministic checkpoint is attached");
-}
+describe("joinRoadmapAnnotations", () => {
+  // (a) exact bib match, and provenance is threaded through unchanged.
+  it("(a) exact external:bib:<bibId> must be annotated", () => {
+    const a = result.get("external:bib:1");
+    expect(a).toBeTruthy();
+    // "stage derives from the item category"
+    expect(a!.stage).toBe(stageForRelationship("prerequisite"));
+    // "rootWorkIds provenance is carried onto the annotation"
+    expect(a!.rootWorkIds).toEqual(["work:a", "work:b"]);
+    // "a deterministic checkpoint is attached"
+    expect(a!.checkpoint.length > 0).toBeTruthy();
+  });
 
-// (b) collapsed-edition fallback: bibId 99 has no node, but mergedBibIds→2 does.
-{
-  const b = result.get("external:bib:2");
-  assert.ok(b, "(b) a collapsed bib id must resolve to the surviving node");
-  assert.equal(b!.stage, stageForRelationship("conceptual_influence"));
-}
+  // (b) collapsed-edition fallback: bibId 99 has no node, but mergedBibIds→2 does.
+  it("(b) a collapsed bib id must resolve to the surviving node", () => {
+    const b = result.get("external:bib:2");
+    expect(b).toBeTruthy();
+    expect(b!.stage).toBe(stageForRelationship("conceptual_influence"));
+  });
 
-// (c) matched-owned-work fallback.
-assert.ok(result.get("work:5"), "(c) item.workId must annotate the work:<id> node");
+  // (c) matched-owned-work fallback.
+  it("(c) item.workId must annotate the work:<id> node", () => {
+    expect(result.get("work:5")).toBeTruthy();
+  });
 
-// (d) normalized-title fallback.
-assert.ok(result.get("external:source:xyz"), "(d) title fallback must annotate the label-matched node");
+  // (d) normalized-title fallback.
+  it("(d) title fallback must annotate the label-matched node", () => {
+    expect(result.get("external:source:xyz")).toBeTruthy();
+  });
 
-// no-match: the ghost item annotates nothing; exactly four nodes annotated.
-assert.equal(result.size, 4, "an item that matches no node adds no annotation");
+  // no-match: the ghost item annotates nothing; exactly four nodes annotated.
+  it("an item that matches no node adds no annotation", () => {
+    expect(result.size).toBe(4);
+  });
 
-// --- precedence: exact bib beats a title that also matches another node ---
-{
-  const twoNodes: GraphNode[] = [
-    node({ id: "external:bib:7", type: "reference", label: "Shared Title" }),
-    node({ id: "external:source:other", type: "online_source", label: "Shared Title" }),
-  ];
-  const one = joinRoadmapAnnotations(
-    [twoNodes[0], twoNodes[1]],
-    [item({ bibId: "7", title: "Shared Title" })],
-    { mergedBibIdsByBib: new Map(), rootWorkIdsByBib: new Map() },
-  );
-  assert.ok(one.get("external:bib:7"), "exact bib match wins over the title fallback");
-  assert.equal(one.has("external:source:other"), false, "the title-fallback node is not also annotated");
-}
+  // --- precedence: exact bib beats a title that also matches another node ---
+  it("exact bib match wins over the title fallback", () => {
+    const twoNodes: GraphNode[] = [
+      node({ id: "external:bib:7", type: "reference", label: "Shared Title" }),
+      node({ id: "external:source:other", type: "online_source", label: "Shared Title" }),
+    ];
+    const one = joinRoadmapAnnotations(
+      [twoNodes[0], twoNodes[1]],
+      [item({ bibId: "7", title: "Shared Title" })],
+      { mergedBibIdsByBib: new Map(), rootWorkIdsByBib: new Map() },
+    );
+    expect(one.get("external:bib:7")).toBeTruthy();
+    // "the title-fallback node is not also annotated"
+    expect(one.has("external:source:other")).toBe(false);
+  });
 
-// --- contested node: the earlier (higher-priority) item wins ---
-{
-  const contested = joinRoadmapAnnotations(
-    [node({ id: "external:bib:8", type: "reference", label: "Contested" })],
-    [
-      item({ bibId: "8", title: "Contested", sequence: 1, category: "prerequisite" }),
-      item({ bibId: "8", title: "Contested", sequence: 2, category: "optional_extension" }),
-    ],
-    { mergedBibIdsByBib: new Map(), rootWorkIdsByBib: new Map() },
-  );
-  assert.equal(contested.get("external:bib:8")!.sequence, 1, "the earliest item claims a contested node");
-  assert.equal(contested.get("external:bib:8")!.stage, stageForRelationship("prerequisite"));
-}
-
-console.log("roadmapGraph.test.ts: all assertions passed");
+  // --- contested node: the earlier (higher-priority) item wins ---
+  it("the earliest item claims a contested node", () => {
+    const contested = joinRoadmapAnnotations(
+      [node({ id: "external:bib:8", type: "reference", label: "Contested" })],
+      [
+        item({ bibId: "8", title: "Contested", sequence: 1, category: "prerequisite" }),
+        item({ bibId: "8", title: "Contested", sequence: 2, category: "optional_extension" }),
+      ],
+      { mergedBibIdsByBib: new Map(), rootWorkIdsByBib: new Map() },
+    );
+    expect(contested.get("external:bib:8")!.sequence).toBe(1);
+    expect(contested.get("external:bib:8")!.stage).toBe(stageForRelationship("prerequisite"));
+  });
+});
