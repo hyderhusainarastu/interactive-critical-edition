@@ -2,13 +2,13 @@ import {
   boolean,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   primaryKey,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { readerLevelEnum } from "./enums";
 
 /**
  * Phase 1 scope only: auth tables. Shape follows the @auth/drizzle-adapter
@@ -21,19 +21,6 @@ import {
  * rolls in incrementally in later phases via their own migrations, not
  * all at once here.
  */
-
-/**
- * Phase 9 reader levels (plan §34.4). Four, replacing the three-level
- * `preferences.expertise` vocabulary rather than sitting beside it:
- * `intermediate` maps to `undergraduate`. Declared here because `users`
- * references it below and pgEnum values are read at table-definition time.
- */
-export const readerLevelEnum = pgEnum("reader_level", [
-  "beginner",
-  "undergraduate",
-  "advanced",
-  "research",
-]);
 
 export const users = pgTable("user", {
   id: uuid("id").primaryKey().defaultRandom(),

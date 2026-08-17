@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -14,6 +13,9 @@ import {
 import { users } from "./auth";
 import { processingRuns, textBlocks } from "./editionPipeline";
 import {
+  accessStatusEnum,
+  citationResolutionStateEnum,
+  citationSourceTypeEnum,
   edgeTypeEnum,
   provenanceEnum,
   relationshipCategoryEnum,
@@ -33,17 +35,6 @@ import { documents } from "./works";
  * roadmap traversal has data; it isn't read by anything in Phase 4.
  */
 
-// plan §11 §15: access state of a referenced work, so the UI can show
-// "not accessible; consider legitimate acquisition" rather than pretend
-// it has the text.
-export const accessStatusEnum = pgEnum("access_status", [
-  "open",
-  "subscription",
-  "metadata_only",
-  "user_uploaded",
-  "unavailable",
-]);
-
 export const bibliographicRecords = pgTable("bibliographic_record", {
   id: uuid("id").primaryKey().defaultRandom(),
   // "unresolved" when no external source matched — the citation is kept
@@ -59,10 +50,6 @@ export const bibliographicRecords = pgTable("bibliographic_record", {
   raw: jsonb("raw"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
-
-/** Where a work was cited in the uploaded source, never inferred from lookup metadata. */
-export const citationSourceTypeEnum = pgEnum("citation_source_type", ["bibliography", "footnote", "endnote", "inline"]);
-export const citationResolutionStateEnum = pgEnum("citation_resolution_state", ["pending", "resolved", "unresolved"]);
 
 export const citations = pgTable("citation", {
   id: uuid("id").primaryKey().defaultRandom(),

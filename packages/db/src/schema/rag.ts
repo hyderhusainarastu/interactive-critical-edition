@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -15,18 +14,15 @@ import {
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
 import { processingRuns, textBlocks } from "./editionPipeline";
+import {
+  authorApparatusKindEnum,
+  ragChunkSourceEnum,
+  ragConversationStatusEnum,
+  ragMessageRoleEnum,
+} from "./enums";
 import { researchClaims } from "./researchClaims";
 import { researchResourceContents } from "./researchResources";
 import { documents, works } from "./works";
-
-/**
- * Phase 18: owner-scoped retrieval chunks. Uploaded source blocks and
- * explicitly licensed open-access research content are deliberately kept in
- * one narrow index with a durable owner id, a stable source key, and a
- * source-location anchor. Neither provider metadata nor unlicensed text is
- * eligible for this table.
- */
-export const ragChunkSourceEnum = pgEnum("rag_chunk_source", ["uploaded", "open_access"]);
 
 export const ragChunks = pgTable(
   "rag_chunk",
@@ -73,9 +69,6 @@ export const ragChunks = pgTable(
     ),
   ],
 );
-
-export const ragConversationStatusEnum = pgEnum("rag_conversation_status", ["active", "archived"]);
-export const ragMessageRoleEnum = pgEnum("rag_message_role", ["user", "assistant"]);
 
 /** Persistent, owner-scoped conversations. Context work is optional guidance
  * for the UI only; retrieval remains explicitly scoped to the whole owner's
@@ -209,19 +202,6 @@ export const docFootnotes = pgTable(
   },
   (t) => [index("doc_footnote_run_idx").on(t.runId)],
 );
-
-/**
- * Phase 12.3: source-authored apparatus remains distinct from AI annotations.
- * It preserves the structural kind and real block/page scope so a reader can
- * filter footnotes, endnotes, bibliography entries, and citation blocks
- * independently without treating any of them as generated commentary.
- */
-export const authorApparatusKindEnum = pgEnum("author_apparatus_kind", [
-  "footnote",
-  "endnote",
-  "bibliography_entry",
-  "citation_block",
-]);
 
 export const documentApparatus = pgTable(
   "document_apparatus",

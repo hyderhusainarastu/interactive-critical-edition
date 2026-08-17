@@ -5,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   primaryKey,
   real,
@@ -16,6 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
+import { deletionCleanupStatusEnum, feedbackCategoryEnum, usageEventTypeEnum } from "./enums";
 
 /**
  * Fixed-window per-user API counters. Feature-gated routes use these as the
@@ -38,12 +38,6 @@ export const apiRateLimits = pgTable(
     check("api_rate_limit_count_valid", sql`${t.count} >= 0`),
   ],
 );
-
-export const deletionCleanupStatusEnum = pgEnum("deletion_cleanup_status", [
-  "in_progress",
-  "storage_failed",
-  "completed",
-]);
 
 /**
  * Phase 20.3: the durable record behind `@ice/deletion`'s permanent-deletion
@@ -119,26 +113,6 @@ export const userDeletionArchives = pgTable(
   ],
 );
 
-/**
- * Workstream H (v.5): content-free product-analytics events for the admin
- * dashboard. Bigint identity, not uuid — this is the highest-write table in
- * the schema (a page view per navigation), so a monotonically increasing
- * 8-byte key avoids the index-bloat/random-insert cost a uuid PK would add
- * at that volume. `userId` is NOT a foreign key so events survive account
- * deletion (the admin dashboard shows a deleted user's surviving event
- * series against the `user_deletion_archive` snapshot). No payload column
- * anywhere on this table by design — `path` is the only per-event detail,
- * and it is validated (see `api/usage-event/route.ts`) to rule out anyone
- * routing free-text content through it.
- */
-export const usageEventTypeEnum = pgEnum("usage_event_type", [
-  "page_view",
-  "session_start",
-  "upload",
-  "chat_message",
-  "feedback",
-]);
-
 export const usageEvents = pgTable(
   "usage_event",
   {
@@ -153,15 +127,6 @@ export const usageEvents = pgTable(
     index("usage_event_type_created_idx").on(t.eventType, t.createdAt),
   ],
 );
-
-/**
- * Workstream J (v.5): the feedback-modal inbox the admin dashboard reads
- * (`docs/admin` gate). `userId` is a real, nullable FK with `set null` —
- * unlike the two tables above, feedback is meant to stay attributable to a
- * still-existing account when possible, but must survive that account's
- * deletion as an anonymized row rather than being destroyed with it.
- */
-export const feedbackCategoryEnum = pgEnum("feedback_category", ["bug", "idea", "praise", "other"]);
 
 export const feedback = pgTable(
   "feedback",

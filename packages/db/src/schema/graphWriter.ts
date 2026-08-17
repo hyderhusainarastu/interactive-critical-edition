@@ -3,7 +3,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -13,16 +12,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
+import { graphExpansionStatusEnum } from "./enums";
 import { researchClaims } from "./researchClaims";
 import { works } from "./works";
-
-export const graphExpansionStatusEnum = pgEnum("graph_expansion_status", [
-  "planned",
-  "queued",
-  "running",
-  "complete",
-  "failed",
-]);
 
 /**
  * An auditable, idempotent graph-expansion request. Automatic upload work

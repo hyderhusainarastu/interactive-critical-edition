@@ -3,7 +3,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -13,34 +12,15 @@ import {
 } from "drizzle-orm/pg-core";
 import { bibliographicRecords } from "./citationsGraph";
 import { processingRuns } from "./editionPipeline";
-import { recordRoleEnum } from "./enums";
-
-// Source authority band (plan §33): A (peer-reviewed / canonical primary) …
-// E (anonymous / unverifiable). Popularity is never authority. A factual
-// claim needs an A/B source or two independent C sources.
-export const sourceAuthorityEnum = pgEnum("source_authority", ["A", "B", "C", "D", "E"]);
-
-// Deterministic agreement label across a claim's independent sources
-// (plan §33): strong (≥3 independent supporting, no credible contradiction),
-// contested (≥2 credible each side), mixed (support + contradiction below
-// that threshold), otherwise insufficient.
-export const agreementStateEnum = pgEnum("agreement_state", [
-  "strong",
-  "contested",
-  "mixed",
-  "insufficient",
-]);
-
-// Per-run outcome of querying one source provider (plan §33 §2.3). Every
-// enabled/disabled provider records exactly one attempt per run so the
-// admin dashboard and edition can prove what was and wasn't consulted.
-export const providerAttemptStatusEnum = pgEnum("provider_attempt_status", [
-  "queried",
-  "unavailable",
-  "rate_limited",
-  "failed",
-  "disabled",
-]);
+import {
+  agreementStateEnum,
+  candidateVerdictEnum,
+  providerAttemptStatusEnum,
+  queryLaneEnum,
+  recordRoleEnum,
+  researchResourceContentStatusEnum,
+  sourceAuthorityEnum,
+} from "./enums";
 
 /** Phase 8 research is scoped to a processing run, so reprocessing can
  * publish atomically without deleting the last good edition. */
@@ -88,21 +68,6 @@ export const researchResources = pgTable("research_resource", {
   // the same workKey in application code) — without this, that lookup is a
   // full table scan once history accumulates across runs.
   index("research_resource_normalized_key_idx").on(t.normalizedKey),
-]);
-
-/**
- * Phase 15's deliberately narrow full-text record. A discovered source stays
- * metadata-only unless the provider metadata contains a recognizable, explicit
- * open license; an accessible landing page by itself is not enough evidence to
- * copy or index its text. The text is separate from `research_resource.raw` so
- * provenance, deletion propagation, and future owner-scoped retrieval can be
- * reasoned about without treating provider metadata as content.
- */
-export const researchResourceContentStatusEnum = pgEnum("research_resource_content_status", [
-  "metadata_only",
-  "open_access_available",
-  "open_access_indexed",
-  "retrieval_failed",
 ]);
 
 export const researchResourceContents = pgTable("research_resource_content", {
@@ -278,40 +243,6 @@ export const researchCache = pgTable("research_cache", {
 // ---------------------------------------------------------------------------
 // Phase 8 relevance closeout — candidate verdicts
 // ---------------------------------------------------------------------------
-
-/**
- * The lane that produced a candidate. Discovery is run per-lane so a candidate
- * is always judged against the question that surfaced it — "did Irwin cite
- * this?" and "is this a useful lecture?" are different bars, and collapsing
- * them is how unrelated material reaches a reader.
- */
-export const queryLaneEnum = pgEnum("query_lane", [
-  "explicit_citation",
-  "primary_prerequisite",
-  "historical_background",
-  "concept_doctrine",
-  "scholarly_debate",
-  "author_corpus",
-  "reception_citation",
-  "parallel_literature",
-  "lecture_course",
-  "video_podcast",
-  "blog_newsletter",
-  "public_discussion",
-]);
-
-/**
- * Relevance verdict, assigned BEFORE any authority scoring. A DOI proves a
- * record exists; it never proves relevance, and popularity proves less still.
- *   accepted    — may project into annotations, Library, roadmap, and graph
- *   quarantined — research review only; never displayed to the reader
- *   rejected    — recorded with reasons, never projected anywhere
- */
-export const candidateVerdictEnum = pgEnum("candidate_verdict", [
-  "accepted",
-  "quarantined",
-  "rejected",
-]);
 
 /**
  * Every candidate discovery surfaced, with the evidence for its verdict. This

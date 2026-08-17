@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -14,13 +13,17 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { readerLevelEnum, users } from "./auth";
+import { users } from "./auth";
 import { bibliographicRecords, citations } from "./citationsGraph";
 import { processingRuns, textBlocks } from "./editionPipeline";
 import {
+  competencySignalStatusEnum,
+  conceptKindEnum,
   edgeTypeEnum,
   masterySourceEnum,
+  passageAnnotationTypeEnum,
   provenanceEnum,
+  readerLevelEnum,
   recordRoleEnum,
   relationshipCategoryEnum,
   verificationStatusEnum,
@@ -37,21 +40,6 @@ import { works } from "./works";
  * curriculum (9.6) can all be built against one set of canonical identities
  * instead of each inventing its own.
  * ------------------------------------------------------------------------ */
-
-/**
- * What a `concept` row IS. The graph the reader needs is not concepts alone —
- * a doctrine, the person who held it, the tradition it belongs to and the
- * debate it was argued in are all nodes a reader navigates between (plan
- * §34.4 9.7). One typed table beats five near-identical ones: the columns and
- * the mastery relationship are the same for all of them.
- */
-export const conceptKindEnum = pgEnum("concept_kind", [
-  "concept",
-  "doctrine",
-  "person",
-  "tradition",
-  "debate",
-]);
 
 /**
  * The shared vocabulary of things a reader can understand. Global and
@@ -90,25 +78,6 @@ export const conceptMastery = pgTable("concept_mastery", {
 }, (t) => [
   index("concept_mastery_user_idx").on(t.userId),
   uniqueIndex("concept_mastery_user_concept_unique").on(t.userId, t.conceptId),
-]);
-
-/**
- * Sub-phase 22.9b (plan §3.6): the Conversational Competency Designation
- * ledger. One row per applied write AND per precedence-skipped write
- * (`skipped_precedence`, kept honest but not surfaced) so the in-chat
- * notice, the undo route, and every provenance touch (Library slider
- * caption, diagnostic GET, graph inspector — the last deferred to 22.8)
- * share one source of truth. Mirrors the `understanding_rating`/
- * `reading_record` exactly-one-target CHECK precedent above, restricted to
- * the two target kinds chat can actually resolve a candidate for
- * (concept/work — bibliographic-record and learning-resource targets are
- * out of scope v1, plan §3.2).
- */
-export const competencySignalStatusEnum = pgEnum("competency_signal_status", [
-  "applied",
-  "undone",
-  "superseded",
-  "skipped_precedence",
 ]);
 
 export const competencySignals = pgTable("competency_signal", {
@@ -315,25 +284,6 @@ export const citationLibraryLinks = pgTable("citation_library_link", {
   learningResourceId: uuid("learning_resource_id").notNull().references(() => learningResources.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [index("citation_library_resource_idx").on(t.learningResourceId)]);
-
-/**
- * What KIND of note a passage annotation is making about the primary text —
- * distinct from `relationship`, which describes how a cited/related source
- * bears on the work. A passage annotation always has a type; it only
- * sometimes has a related source to relate to.
- */
-export const passageAnnotationTypeEnum = pgEnum("passage_annotation_type", [
-  "context",
-  "clarification",
-  "connection",
-  "critique",
-  "definition",
-  "key_term",
-  "concept",
-  "argument",
-  "evidence",
-  "relationship",
-]);
 
 /**
  * An explanatory note anchored to one block of the PRIMARY text (plan §34.4

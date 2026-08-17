@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -15,6 +14,13 @@ import { sql } from "drizzle-orm";
 import { users } from "./auth";
 import { workIdentities } from "./conceptsIdentity";
 import { textBlocks } from "./editionPipeline";
+import {
+  analysisStatusEnum,
+  jobStatusEnum,
+  processingStatusEnum,
+  termVerificationStatusEnum,
+  workTypeEnum,
+} from "./enums";
 
 /**
  * Phase 2 scope: upload and library. `works`/`editions` here are a
@@ -25,32 +31,6 @@ import { textBlocks } from "./editionPipeline";
  * dedup is out of scope until there's a real bibliographic source to
  * dedup against.
  */
-
-export const workTypeEnum = pgEnum("work_type", ["primary", "secondary"]);
-
-export const processingStatusEnum = pgEnum("processing_status", [
-  "uploaded",
-  "processing",
-  "needs_review",
-  "ready",
-  "failed",
-]);
-
-export const jobStatusEnum = pgEnum("job_status", [
-  "pending",
-  "running",
-  "succeeded",
-  "failed",
-]);
-
-// Phase 4: scholarly-analysis lifecycle, tracked separately from text
-// extraction so the reader stays usable while analysis runs (or fails).
-export const analysisStatusEnum = pgEnum("analysis_status", [
-  "not_started",
-  "analyzing",
-  "complete",
-  "failed",
-]);
 
 export const works = pgTable("work", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -247,9 +227,6 @@ export const noteHighlights = pgTable(
     index("note_highlight_highlight_idx").on(t.highlightId),
   ],
 );
-
-/** A suggested pair never changes reading text until a person verifies it. */
-export const termVerificationStatusEnum = pgEnum("term_verification_status", ["suggested", "verified"]);
 
 export const termVariants = pgTable(
   "term_variant",

@@ -4,7 +4,6 @@ import {
   check,
   index,
   integer,
-  pgEnum,
   pgTable,
   timestamp,
   uuid,
@@ -13,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { users } from "./auth";
 import { bibliographicRecords } from "./citationsGraph";
 import { learningResources } from "./conceptsIdentity";
-import { masterySourceEnum } from "./enums";
+import { masterySourceEnum, priorityTierEnum, readingStatusEnum } from "./enums";
 import { works } from "./works";
 
 /**
@@ -33,24 +32,6 @@ import { works } from "./works";
  * referenced `bibliographicRecord` (a recommended reading not necessarily
  * in the library) — exactly one of the two id columns is set on each row.
  */
-
-export const readingStatusEnum = pgEnum("reading_status", [
-  "planned",
-  "reading",
-  "completed",
-  "abandoned",
-]);
-
-// plan §13 priority tiers, in ranked order (essential highest).
-export const priorityTierEnum = pgEnum("priority_tier", [
-  "essential",
-  "high",
-  "strongly_recommended",
-  "contextual",
-  "interpretive_aid",
-  "comparative",
-  "optional",
-]);
 
 export const readingRecords = pgTable("reading_record", {
   id: uuid("id").primaryKey().defaultRandom(),

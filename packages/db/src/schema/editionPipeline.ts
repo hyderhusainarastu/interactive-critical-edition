@@ -4,7 +4,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -14,6 +13,18 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
+import {
+  foreignDirectionEnum,
+  foreignLanguageBasisEnum,
+  foreignScriptEnum,
+  foreignSpanDeferredReasonEnum,
+  foreignSpanProvenanceKindEnum,
+  foreignSpanStatusEnum,
+  foreignTranscriptionStatusEnum,
+  processingRunStatusEnum,
+  structureStateEnum,
+  textBlockKindEnum,
+} from "./enums";
 import { documents } from "./works";
 
 /**
@@ -27,32 +38,6 @@ import { documents } from "./works";
  * (`documents.extracted_text`, `annotations`, …) are untouched and remain
  * the fallback until a work has a published v2 run.
  */
-
-export const processingRunStatusEnum = pgEnum("processing_run_status", [
-  "pending",
-  "running",
-  "complete",
-  "failed",
-]);
-
-// Whether the run has structured TEI semantics or the deliberately honest
-// PDF.js fallback. This is distinct from success: a structure-limited run is
-// still safe to publish and render, it simply cannot claim GROBID-level
-// sections, references, or coordinates.
-export const structureStateEnum = pgEnum("structure_state", ["full", "limited"]);
-
-// Structural role of an extracted text block (from GROBID TEI / pdf.js).
-export const textBlockKindEnum = pgEnum("text_block_kind", [
-  "title",
-  "header",
-  "body",
-  "footer",
-  "footnote",
-  "endnote",
-  "caption",
-  "bibliography",
-  "reference",
-]);
 
 export const processingRuns = pgTable(
   "processing_run",
@@ -150,43 +135,6 @@ export const textBlocks = pgTable(
   },
   (t) => [index("text_block_page_idx").on(t.pageId, t.blockOrder)],
 );
-
-/**
- * Migration 0036 (Workstream D completion, `docs/handoffs/workstream-d.md`
- * L35-97). A foreign-script span is detected deterministically at
- * block-insert time (`apps/worker/src/foreignSpans.ts`, script-range
- * matching — never a model guess) and optionally translated/transliterated
- * by a cheap-tier model between analysis and publication
- * (`apps/worker/src/foreignText.ts`'s `processForeignText`). `sourceText` is
- * the exact stored block substring — mojibake bytes for a `recovered` row —
- * while `originalText` is the real original-script text, which differs from
- * `sourceText` only for a labelled PDF glyph-mapping recovery
- * (`packages/ingestion/src/pdfGlyphRecovery.ts`). A row never rewrites its
- * block's bytes; the reader recomputes untranscribable markers on read and
- * drops any that overlap a resolved `recovered` span here (else the
- * "untranscribable" chip would shadow the recovered Greek).
- */
-export const foreignScriptEnum = pgEnum("foreign_script", ["greek", "hebrew", "arabic", "cyrillic", "cjk"]);
-export const foreignLanguageBasisEnum = pgEnum("foreign_language_basis", [
-  "script_range",
-  "model_validated",
-  "human_verified",
-]);
-export const foreignDirectionEnum = pgEnum("foreign_direction", ["ltr", "rtl"]);
-export const foreignSpanProvenanceKindEnum = pgEnum("foreign_span_provenance_kind", [
-  "source_text",
-  "ocr_recovery",
-  "pdf_glyph_recovery",
-  "manual",
-]);
-export const foreignTranscriptionStatusEnum = pgEnum("foreign_transcription_status", ["legitimate", "recovered"]);
-export const foreignSpanStatusEnum = pgEnum("foreign_span_status", ["pending", "resolved", "deferred"]);
-export const foreignSpanDeferredReasonEnum = pgEnum("foreign_span_deferred_reason", [
-  "provider_unavailable",
-  "budget_exhausted",
-  "invalid_model_response",
-  "batch_limit",
-]);
 
 export const foreignSpans = pgTable(
   "foreign_span",

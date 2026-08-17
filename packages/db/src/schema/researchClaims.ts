@@ -5,7 +5,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   real,
   text,
@@ -18,7 +17,37 @@ import {
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
 import { processingRuns, textBlocks } from "./editionPipeline";
-import { provenanceEnum, verificationStatusEnum } from "./enums";
+import {
+  claimAnchorStateEnum,
+  claimEngagementEnum,
+  claimJudgeBranchEnum,
+  claimLocusOriginEnum,
+  claimNatureEnum,
+  claimRelationCategoryEnum,
+  claimRelationMechanismEnum,
+  claimRelationValenceEnum,
+  claimScoreDimensionEnum,
+  claimScoreLabelEnum,
+  claimSideEnum,
+  claimSourceScopeEnum,
+  corpusSourceEnum,
+  debateClusterStatusEnum,
+  evidenceChamberStanceConfidenceEnum,
+  provenanceEnum,
+  researchHypothesisGroundingEnum,
+  researchHypothesisNoveltyTierEnum,
+  researchJobCoverageEnum,
+  researchJobStatusEnum,
+  researchJobTypeEnum,
+  researchMemberRoleEnum,
+  researchMemberTypeEnum,
+  researchMonitorCadenceEnum,
+  researchMonitorTypeEnum,
+  researchObjectStatusEnum,
+  researchObjectTypeEnum,
+  researchRevisionActionEnum,
+  verificationStatusEnum,
+} from "./enums";
 import { writerProjects } from "./graphWriter";
 import { ragConversations } from "./rag";
 import { works } from "./works";
@@ -41,98 +70,6 @@ import { works } from "./works";
  * DB-enforced XOR CHECKs, and the reused `verification_status`/
  * `provenance_source` enums rather than a second vocabulary.
  * ------------------------------------------------------------------------- */
-
-/**
- * What a research project can contain. `corpus_item` is declared here in 0038
- * even though `research_corpus_item` does not exist until 0039 — a pgEnum value
- * cannot be added inside a transaction alongside its first use in older
- * Postgres, and staging the *value* now keeps 0039 additive (one column, one
- * FK, one widened CHECK). Until then the typed-target CHECK below has no
- * `corpus_item` branch, so a row claiming that type is rejected by the database
- * rather than being silently accepted with no target.
- */
-export const researchMemberTypeEnum = pgEnum("research_member_type", [
-  "work",
-  "corpus_item",
-  "writer_project",
-  "rag_conversation",
-]);
-
-/**
- * How central a member is to the project's question. This drives what claim
- * extraction is allowed to spend money on: `central`/`supporting` membership is
- * one of the three triggers for extraction (plan §Pipeline — extraction never
- * auto-fires on upload), `background` is context only.
- */
-export const researchMemberRoleEnum = pgEnum("research_member_role", [
-  "central",
-  "supporting",
-  "background",
-]);
-
-/** The seven research job kinds, one per pipeline stage the program ships. */
-export const researchJobTypeEnum = pgEnum("research_job_type", [
-  "extract_claims",
-  "detect_relationships",
-  "cluster_debates",
-  "synthesize_chamber",
-  "generate_hypotheses",
-  "import_corpus",
-  "run_monitor",
-]);
-
-/**
- * Deliberately a superset of `graph_expansion_status` (which this table is
- * modelled on) rather than a reuse of it: research jobs add `cancelled`, and
- * widening the shipped graph-expansion enum to get it would change the domain
- * of a table already in production for no benefit.
- */
-export const researchJobStatusEnum = pgEnum("research_job_status", [
-  "planned",
-  "queued",
-  "running",
-  "complete",
-  "failed",
-  "cancelled",
-]);
-
-/**
- * The honesty column's vocabulary. A job that hit a cap must say so: `partial`
- * (a soft cap stopped it, with the covered scope recorded in `note`) and
- * `sampled` (it deliberately looked at a subset) are both first-class outcomes,
- * never silently reported as `full`. Same discipline as the pipeline's
- * `structure-limited` labelling.
- */
-export const researchJobCoverageEnum = pgEnum("research_job_coverage", ["full", "partial", "sampled"]);
-
-/** Every generated research object that a user can correct, for `research_revision`. */
-export const researchObjectTypeEnum = pgEnum("research_object_type", [
-  "claim",
-  "relationship",
-  "cluster",
-  "chamber",
-  "position",
-  "hypothesis",
-  "gap",
-]);
-
-/**
- * The correction vocabulary. `generated` is the immutable revision-0 snapshot
- * the pipeline writes; every other action is a human decision. There is
- * deliberately no `endorsed`/`accepted` action and no system-authored variant
- * of one — see `research_revision_no_auto_endorsement` below.
- */
-export const researchRevisionActionEnum = pgEnum("research_revision_action", [
-  "generated",
-  "verified",
-  "disputed",
-  "edited",
-  "split",
-  "merged",
-  "hidden",
-  "restored",
-  "reclassified",
-]);
 
 /**
  * A research project: the scoping unit for every paid research job. Pair
@@ -481,77 +418,6 @@ export const researchRevisions = pgTable(
  * later migrations (0040-0043, plan §Schema) — not here.
  * ------------------------------------------------------------------------- */
 
-/** What a claim's own text asserts. Palimnote's corpus spans empirical
- *  papers AND philosophy/textual-scholarship works, where most claims are
- *  interpretive, historical, or conceptual rather than empirical — this axis
- *  keeps those honestly distinguished instead of forced into an
- *  empirical-shaped bucket. Mirrors `@ice/claims`'s `CLAIM_NATURES` exactly
- *  (that package is pure/dependency-free and does not import this schema, so
- *  the two lists are kept in lockstep by hand, not by a shared import). */
-export const claimNatureEnum = pgEnum("claim_nature", [
-  "empirical",
-  "textual",
-  "interpretive",
-  "historical",
-  "conceptual",
-  "normative",
-  "definitional",
-  "methodological",
-]);
-
-/**
- * Whether a claim's `text_block_id` anchor is currently trustworthy.
- * `anchored`: the claim was extracted from and still points at a real text
- * block of the run that produced it. `rebound`: a later reprocess
- * content-addressed the claim and `findQuoteOffset` (via `@ice/claims`'s
- * `anchoring.ts`) re-located exactly one match in the new published run's
- * blocks. `unanchored`: a reprocess found zero or multiple matches (or a
- * corpus-item-sourced claim was never anchored to any block at all) — the
- * claim is NEVER deleted for this, only marked, since the user may have
- * verified or cited it (plan §Pipeline "Reprocess supersession").
- */
-export const claimAnchorStateEnum = pgEnum("claim_anchor_state", ["anchored", "rebound", "unanchored"]);
-
-/** What portion of the source text a claim's `supporting_excerpt` was
- *  actually drawn from. `full_text`: the complete uploaded-work body was in
- *  scope for extraction (even if map-reduce chunked it). `abstract`: a
- *  corpus-item import, where only the provider's abstract is ever available
- *  — never the full paper body (no model writes to `research_corpus_item`,
- *  the bibliographic rule). `sampled`: extraction covered less than the full
- *  eligible text because a cost/chunk cap was hit (`@ice/claims`'s
- *  `ExtractionCoverage`, same honesty vocabulary as `research_job_request.coverage`). */
-export const claimSourceScopeEnum = pgEnum("claim_source_scope", ["full_text", "abstract", "sampled"]);
-
-/** Lifecycle for a research object that reprocessing can supersede.
- *  `superseded` rows are never deleted — same "never delete, always mark"
- *  discipline as `claim_anchor_state`'s `unanchored`, and as
- *  `processing_run.isPublished`'s own supersession pattern. */
-export const researchObjectStatusEnum = pgEnum("research_object_status", ["active", "superseded"]);
-
-/** Which of `@ice/claims`'s two parallel scorers produced a `claim_score`
- *  row — the empirical track (ported verbatim from ScholarLens) and the
- *  humanities/textual-support track (new, same architectural DNA). Mirrors
- *  `@ice/claims`'s `ClaimScoreDimension` exactly. */
-export const claimScoreDimensionEnum = pgEnum("claim_score_dimension", ["evidence_strength", "textual_support"]);
-
-/** Mirrors `@ice/claims`'s `ClaimScore.label` exactly. */
-export const claimScoreLabelEnum = pgEnum("claim_score_label", ["strong", "moderate", "weak"]);
-
-/** Where a `claim_locus` row's normalized locus key was harvested from: the
- *  claim's own verbatim excerpt, its full anchored text block, an authorial
- *  footnote/endnote near the claim, or a structurally resolved citation's
- *  raw text. Multiple origins can independently corroborate the same locus
- *  for the same claim (the `(claim_id, locus_key, origin)` unique below keeps
- *  those as distinct rows rather than colliding them). */
-export const claimLocusOriginEnum = pgEnum("claim_locus_origin", ["excerpt", "block", "footnote", "citation"]);
-
-/** The three corpus-import provider adapters `packages/research` gains for
- *  Phase 25.7/28.2 (Semantic Scholar, OpenAlex, and a new arXiv adapter —
- *  none exists today). Every `research_corpus_item` column is populated only
- *  from a real payload from one of these, never invented (the
- *  `bibliographic_record` anti-hallucination rule, applied to imports). */
-export const corpusSourceEnum = pgEnum("corpus_source", ["semanticscholar", "openalex", "arxiv"]);
-
 /**
  * An imported-not-uploaded work (plan §Schema): a research project member
  * the user added by reference to a real scholarly-database record, not by
@@ -826,77 +692,6 @@ export const researchClaimEmbeddings = pgTable(
  * ------------------------------------------------------------------------- */
 
 /**
- * FROZEN — do not add, remove, or rename a value here without bumping
- * `TAXONOMY_VERSION_RELATIONSHIPS` (`@ice/claims`'s `taxonomy.ts`) and
- * treating it as a new taxonomy version. Mirrors `CLAIM_RELATION_VALENCES`
- * exactly: this is the eval-certified axis (macro-F1 0.788, kappa 0.683 on
- * the ScholarLens-ported gold set) every downstream gate/gold-label file/
- * clustering rule is written against.
- */
-export const claimRelationValenceEnum = pgEnum("claim_relation_valence", [
-  "contradiction",
-  "support",
-  "nuance",
-  "unrelated",
-]);
-
-/** Mirrors `@ice/claims`'s `CLAIM_RELATION_CATEGORIES` exactly. */
-export const claimRelationCategoryEnum = pgEnum("claim_relation_category", [
-  "methodological",
-  "findings",
-  "theoretical",
-  "scope",
-]);
-
-/**
- * Stage 1: a single, honest placeholder (mirrors `@ice/claims`'s
- * `CLAIM_RELATION_MECHANISMS` exactly) — no stage of this pipeline yet
- * infers *why* two claims relate the way they do beyond the valence itself.
- * Stage 2 (the humanities judge gate, plan §Dual-track/§Program 27.3) adds
- * `different_definition`, `interprets_differently`, and
- * `different_scope_conditions` to this enum in migration 0046, ONLY once the
- * humanities gold-set eval clears its floors — until then those three
- * values do not exist in the Postgres type at all, so a misclassification
- * into them cannot be persisted even if a bug tried. Stage 3 (any further
- * mechanism refinement) would land in a still-later migration under the
- * same discipline.
- */
-export const claimRelationMechanismEnum = pgEnum("claim_relation_mechanism", ["unspecified"]);
-
-/**
- * Deterministic, $0 citation-graph context for a candidate/judged pair
- * (plan §Improvements "Citation-graph-aware disagreement judgment"):
- * resolved via `citation.resolved_bib_id` → `bibliographic_record` →
- * normalized-title match against the OTHER claim's own work (the
- * `roadmap.ts`/`graph.ts` owned-work-match precedent), never inferred by a
- * model. `direct_citation`: one work cites the other. `reciprocal_citation`:
- * both cite each other. `shared_citation`: neither cites the other directly,
- * but both cite some third, common bibliographic record. `none_detected`:
- * none of the above — a checked-and-empty result, distinguishable from
- * "never checked" by this column simply always being set.
- */
-export const claimEngagementEnum = pgEnum("claim_engagement", [
-  "direct_citation",
-  "reciprocal_citation",
-  "shared_citation",
-  "none_detected",
-]);
-
-/** Which of the dual-track judge prompts (plan §Dual-track) produced a
- *  `claim_relationship` row — routed by the pair's claims' `claim_nature`,
- *  never mixed within one judged pair. */
-export const claimJudgeBranchEnum = pgEnum("claim_judge_branch", ["empirical", "humanities"]);
-
-/** Which claim of an ordered (lo, hi) pair the judge found to carry the
- *  stronger evidence — `JudgeResult.strongerEvidence`'s `"paper_a"` maps to
- *  `lo`, `"paper_b"` to `hi`, `"neither"` to `neither`. Deliberately NOT a
- *  chamber "winner" (plan §Schema `evidence_chamber` "no winner/verdict/
- *  stronger column exists, ever") — this is a per-pair judge signal used to
- *  populate the Evidence Chamber's named-signal display, not a verdict on
- *  the underlying scholarly question. */
-export const claimSideEnum = pgEnum("claim_side", ["lo", "hi", "neither"]);
-
-/**
  * A cheap, disposable Stage-1 retrieval hit (plan §Pipeline "Three-channel
  * Stage 1"): two claims from DIFFERENT works that at least one of the dense
  * (pgvector cosine)/BM25/locus channels flagged as plausibly related. Zero
@@ -1035,23 +830,6 @@ export const claimRelationships = pgTable(
  * ------------------------------------------------------------------------- */
 
 /**
- * `active`: this is the CURRENT connected-component membership for its
- * `member_hash`. `stale`: a later `cluster_debates` run found this exact
- * cluster's membership has changed (an edge was added/removed/reclassified,
- * so the BFS produced a different component) — the row is NEVER deleted
- * (plan §Pipeline: "membership shifts mark old clusters `stale`, never
- * delete (user verifications survive)"), it just stops being the surfaced
- * membership. Deliberately a DEDICATED enum, not a reuse of
- * `research_object_status`'s `active|superseded` — `superseded` implies a
- * newer row replaced this one by identity (the `research_claim` rebind
- * precedent), whereas a stale cluster's membership simply changed; there is
- * no single "successor" row to point at (a stale cluster's members may now
- * be split across several new clusters, or folded into one that already
- * existed under a different `member_hash`).
- */
-export const debateClusterStatusEnum = pgEnum("debate_cluster_status", ["active", "stale"]);
-
-/**
  * A named debate/tension detected by `cluster_debates` (plan §Pipeline/
  * §Program 26.3): a BFS connected component over non-`unrelated`
  * `claim_relationship` edges, scoped to one project (same project-scoping
@@ -1153,20 +931,6 @@ export const debateClusterRelationships = pgTable(
  * order (`evidence_chamber_position.ordinal`), never sorted or ranked by
  * any derived score.
  * ------------------------------------------------------------------------- */
-
-/**
- * Mirrors `EvidenceChamberPosition.stanceConfidence` exactly — the model's
- * own self-reported confidence in how strongly the SOURCE TEXT states this
- * position (never the model's confidence in who is right, per the prompt's
- * own instruction). Kept alongside a derived numeric `stance_confidence`
- * column below (the `claim_score.score`/`label` precedent: a real column
- * for filtering/display alongside the label a reader actually reads).
- */
-export const evidenceChamberStanceConfidenceEnum = pgEnum("evidence_chamber_stance_confidence_label", [
-  "high",
-  "medium",
-  "low",
-]);
 
 /** Deterministic label -> [0,1] mapping for `evidence_chamber_position.stance_confidence`
  *  (worker-side, reused by `apps/web`'s read path for display-only rounding
@@ -1336,35 +1100,6 @@ export const evidenceChamberPositionClaims = pgTable(
  * an unresolved contradiction — same "no fabricated content" discipline as
  * `packages/curriculum`'s deterministic checkpoint sentences.
  * ------------------------------------------------------------------------- */
-
-/**
- * How a hypothesis was grounded. `detected_conflicts` is the only value this
- * lane's worker ever writes — every `research_hypothesis` row is required (by
- * the label-then-validate pattern: a hypothesis with zero validated
- * `research_hypothesis_source` rows is dropped, never inserted) to cite at
- * least one real conflict. `single_work_gaps` is a Stage-1 honest placeholder
- * (the `claim_relation_mechanism` precedent): when a project has zero
- * undisputed conflicts to hypothesize about, the worker skips hypothesis
- * generation entirely rather than inventing one, and derives `research_gap`
- * rows instead — this value is reserved for a future lane that generates a
- * hypothesis FROM a gap rather than a conflict, not written by this one.
- */
-export const researchHypothesisGroundingEnum = pgEnum("research_hypothesis_grounding", [
-  "detected_conflicts",
-  "single_work_gaps",
-]);
-
-/** Mirrors `@ice/claims`'s `NoveltyTier` exactly (`novelty.ts`). `unknown`
- *  means novelty WAS attempted (an embedder was configured) but the project's
- *  claim corpus had nothing to compare against yet — distinct from a fully
- *  NULL novelty (embedder unavailable, never attempted at all): see
- *  `research_hypothesis_novelty_provenance` below. */
-export const researchHypothesisNoveltyTierEnum = pgEnum("research_hypothesis_novelty_tier", [
-  "high",
-  "medium",
-  "low",
-  "unknown",
-]);
 
 /**
  * A generated research hypothesis (plan §Schema `research_hypothesis`): the
@@ -1562,34 +1297,6 @@ export const researchGaps = pgTable(
     check("research_gap_count_nonnegative", sql`${t.unresolvedContradictionCount} >= 0`),
   ],
 );
-
-/**
- * Phase 29.1: scheduled research monitoring (plan §Pipeline monitoring —
- * "in-app only" delivery per the owner's decision; no email digest surface).
- * Three monitor types share one table:
- *
- *  - `topic` — free-text keywords, scanned via `searchCorpusCandidates()`
- *    (Semantic Scholar + OpenAlex + arXiv fan-out, the same zero-AI-cost
- *    corpus-import search Phase 28.2 already ships).
- *  - `citation_alert` — a DOI-or-arXiv seed paper; new papers citing it, via
- *    Semantic Scholar's citations graph (`lookupCitations`).
- *  - `author_follow` — an author display name; their newest S2-indexed
- *    papers (`lookupAuthorRecentPapers`).
- *
- * Zero AI cost end-to-end: every hit is a real provider metadata record,
- * copied verbatim — never an LLM inference (the `research_corpus_item`
- * anti-hallucination precedent one table up literally, and several tables up
- * in this file's own history).
- *
- * `cadence` DEFAULTS `paused` (a monitor never scans until the user opts it
- * in) and the whole surface sits behind `phase25FeatureEnabled("monitoring")`,
- * which also DEFAULTS false (`packages/config/src/phase25.ts`) — two
- * independent off switches, not one, because a scheduled job is the one
- * Phase 25 surface that can act without a user present.
- */
-export const researchMonitorTypeEnum = pgEnum("research_monitor_type", ["topic", "citation_alert", "author_follow"]);
-
-export const researchMonitorCadenceEnum = pgEnum("research_monitor_cadence", ["daily", "weekly", "paused"]);
 
 export const researchMonitors = pgTable(
   "research_monitor",
