@@ -183,8 +183,8 @@ test.describe("Phase 12 workspace foundation", () => {
   // actual red→green proof: run this exact test (unchanged) against the
   // pre-fix tree — `git stash push -u -- apps/web/src/hooks/useReopenGuard.ts
   // apps/web/src/hooks/useOutsideMenuClose.ts apps/web/src/components/app/
-  // AppShell.tsx "apps/web/src/app/(app)/works/[workId]/reader/
-  // RagChatPanel.tsx"`, rebuild, and only the 400ms/600ms cases fail (the
+  // AppShell.tsx apps/web/src/components/reader/RagChatPanel.tsx`,
+  // rebuild, and only the 400ms/600ms cases fail (the
   // second click lands past the 250ms guard window and genuinely closes the
   // panel); `git stash pop`, rebuild, and all three pass.
   for (const gapMs of [75, 400, 600]) {

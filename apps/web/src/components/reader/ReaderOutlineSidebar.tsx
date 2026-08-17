@@ -8,7 +8,7 @@ import type { OutlineItem } from "./editionOutline";
  * Persistent left outline rail (D-23-51 — owner feedback: the outline
  * should be a left sidebar that stays visible while scrolling, not a
  * dropdown that requires scrolling back up). Items and their block ids come
- * from `computeOutline()` (`EditionReader.tsx`), the same computation the
+ * from `computeOutline()` (`editionOutline.ts`), the same computation the
  * reader itself uses for jump-to-block navigation, so the two can never
  * disagree about what the document's sections are.
  *

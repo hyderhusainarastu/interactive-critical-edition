@@ -30,7 +30,7 @@ export type Tab = "annotations" | "notes" | "apparatus" | "terms" | "sources" | 
 /**
  * Passage annotations carry a reader-correction state (D-22-1) at parity with
  * the legacy `annotation` table. The base `EditionPassageAnnotation` type
- * (defined in the wave-4-owned `EditionReader.tsx`) predates these columns;
+ * (defined in `editionTypes.ts`) predates these columns;
  * the server payload (`lib/edition.ts`) always populates them, so the sidebar
  * reads them through this narrow augmentation rather than editing that type.
  */
