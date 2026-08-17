@@ -1,7 +1,6 @@
-import { isClaimNature } from "@ice/claims";
+import { claimContentHash, isClaimNature } from "@ice/claims";
 import { db, researchClaims, researchCorpusItems, researchRevisions, textBlocks } from "@ice/db";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
 /**
  * The user correction workflow for every research object (Phase 29.2, plan
@@ -152,20 +151,6 @@ const CORRECTION_PROMPT_VERSION = {
   split: "research-correction-split-v1",
   merged: "research-correction-merged-v1",
 } as const;
-
-function normalizeClaimText(text: string): string {
-  return text.toLocaleLowerCase().replace(/\s+/g, " ").trim();
-}
-
-/** Mirrors `apps/worker/src/research/extractClaims.ts`'s `claimContentHash`
- *  exactly (duplicated rather than imported: that module lives in
- *  `apps/worker`, which `apps/web` does not depend on, and the function is
- *  two lines of pure `node:crypto`). Keeping the two in lockstep is the
- *  same hand-kept-in-sync discipline `claim_nature`'s schema doc comment
- *  already documents for `@ice/claims`'s `CLAIM_NATURES` vs the DB enum. */
-function claimContentHash(text: string): string {
-  return createHash("sha256").update(normalizeClaimText(text)).digest("hex");
-}
 
 function isUniqueViolation(err: unknown): boolean {
   const direct = err && typeof err === "object" && "code" in err ? (err as { code?: unknown }).code : undefined;

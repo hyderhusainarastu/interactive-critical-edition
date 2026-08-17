@@ -11,8 +11,10 @@ import {
   CLAIM_SCORER_VERSION,
   MAX_CLAIMS_FOR_ABSTRACT,
   buildClaimExtractionPrompt,
+  claimContentHash,
   isExtractClaimsWorkScope,
   isLegacyWorkIdsArrayScope,
+  normalizeClaimText,
   parseExtractClaimsScope,
   planExtractionChunks,
   rebindClaimAnchor,
@@ -24,7 +26,6 @@ import {
 } from "@ice/claims";
 import { canonicalLocusKey, recognizeClassicalReference } from "@ice/ingestion";
 import { canAfford, overSoftCap, type StructuredCaller } from "@ice/research";
-import { createHash } from "node:crypto";
 import * as repo from "./repository";
 import type { ResearchJobOutcome, ResearchJobRunContext } from "./jobRunner";
 
@@ -49,14 +50,6 @@ const MAX_OUTPUT_TOKENS = 4000;
 // anchors a short user selection; a model-extracted excerpt is longer, so a
 // wider window keeps `findQuoteOffset` well-disambiguated on relocation).
 const ANCHOR_CONTEXT_CHARS = 80;
-
-function normalizeClaimText(text: string): string {
-  return text.toLocaleLowerCase().replace(/\s+/g, " ").trim();
-}
-
-function claimContentHash(text: string): string {
-  return createHash("sha256").update(normalizeClaimText(text)).digest("hex");
-}
 
 /** The claim-extraction response schema, identical for both the uploaded-work
  *  map-reduce path (`extractOneChunk`) and the corpus-item single-abstract
