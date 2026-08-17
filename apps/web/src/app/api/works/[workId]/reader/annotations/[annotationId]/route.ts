@@ -2,7 +2,8 @@ import { annotations, db } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * The user correction workflow (plan §12): approve / reject / hide / edit
@@ -24,8 +25,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ annotationId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { annotationId } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
@@ -48,7 +49,7 @@ export async function PATCH(
     .returning({ id: annotations.id, verificationStatus: annotations.verificationStatus, hidden: annotations.hidden });
 
   if (updated.length === 0) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
   return NextResponse.json({ ok: true, ...updated[0] });
 }

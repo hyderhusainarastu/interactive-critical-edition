@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getDeletionCleanup, purgeWorkNow } from "@/lib/library/trash";
 import { getOwnedWork } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * "Delete permanently now" (plan §34.4 9.7, hardened in Phase 20.3) — an
@@ -21,8 +22,8 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const work = await getOwnedWork(workId, userId);
@@ -37,7 +38,7 @@ export async function POST(
     if (cleanup) {
       return NextResponse.json({ ok: false, outcome: cleanup.status, message: "Deletion has not finished; it will be retried." });
     }
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
   if (!work.deletedAt) return NextResponse.json({ error: "Not in trash" }, { status: 400 });
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { insertClaimEvidenceIntoDocument } from "@/lib/research/writerEvidence";
 import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Phase 28.5: the Evidence panel's "Insert" action. Appends a real
@@ -19,6 +20,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!parsed.success) return NextResponse.json({ error: "Invalid claim." }, { status: 400 });
   const { projectId, documentId } = await params;
   const result = await insertClaimEvidenceIntoDocument(userId, projectId, documentId, parsed.data.claimId);
-  if (result === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (result === "not_found") return notFound();
   return NextResponse.json(result, { status: 201 });
 }

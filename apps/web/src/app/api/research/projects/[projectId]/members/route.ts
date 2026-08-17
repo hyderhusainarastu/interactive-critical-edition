@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addResearchProjectWorkMember, removeResearchProjectMember } from "@/lib/research/projects";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Adds/removes a project member. Scoped to `memberType = "work"` this lane
@@ -21,7 +22,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!parsed.success) return NextResponse.json({ error: "Invalid member." }, { status: 400 });
   const { projectId } = await params;
   const result = await addResearchProjectWorkMember(userId, projectId, parsed.data.workId, parsed.data.role);
-  if (result === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (result === "not_found") return notFound();
   return NextResponse.json({ member: result }, { status: 201 });
 }
 
@@ -32,5 +33,5 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ p
   if (!memberId) return NextResponse.json({ error: "memberId is required." }, { status: 400 });
   const { projectId } = await params;
   const removed = await removeResearchProjectMember(userId, projectId, memberId);
-  return removed ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return removed ? NextResponse.json({ ok: true }) : notFound();
 }

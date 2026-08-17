@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addResearchProjectQuestion, deleteResearchProjectQuestion, updateResearchProjectQuestion } from "@/lib/research/projects";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const postSchema = z.object({ question: z.string().trim().min(1).max(2000) });
 const patchSchema = z
@@ -20,7 +21,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!parsed.success) return NextResponse.json({ error: "Invalid question." }, { status: 400 });
   const { projectId } = await params;
   const created = await addResearchProjectQuestion(userId, projectId, parsed.data.question);
-  return created ? NextResponse.json({ question: created }, { status: 201 }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return created ? NextResponse.json({ question: created }, { status: 201 }) : notFound();
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -30,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
   if (!parsed.success) return NextResponse.json({ error: "Invalid question update." }, { status: 400 });
   const { projectId } = await params;
   const updated = await updateResearchProjectQuestion(userId, projectId, parsed.data.id, { question: parsed.data.question, sortOrder: parsed.data.sortOrder });
-  return updated ? NextResponse.json({ question: updated }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return updated ? NextResponse.json({ question: updated }) : notFound();
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -40,5 +41,5 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ p
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const { projectId } = await params;
   const deleted = await deleteResearchProjectQuestion(userId, projectId, parsed.data.id);
-  return deleted ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return deleted ? NextResponse.json({ ok: true }) : notFound();
 }

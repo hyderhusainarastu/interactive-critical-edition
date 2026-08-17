@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
-import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { notFound, rateLimitResponse } from "@/lib/api/apiResponse";
 import { getGraphExpansionPreview, GRAPH_JOB_HARD_CAP_USD, MANUAL_GRAPH_CANDIDATE_CAP } from "@/lib/graph/graphExpansion";
 
 const requestSchema = z.object({
@@ -17,15 +17,15 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  if (!phase12FeatureEnabled("crossLibraryGraph")) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!phase12FeatureEnabled("crossLibraryGraph")) return notFound();
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const rate = await enforceUserRateLimit({ userId, scope: "graph-expansion", limit: 12, windowMs: 60 * 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
   const parsed = requestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid graph expansion request." }, { status: 400 });
   const preview = await getGraphExpansionPreview(userId, parsed.data.workId, parsed.data.candidates);
-  if (!preview) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!preview) return notFound();
   if (!preview.hasGroundedClaims || preview.manual.candidateCount === 0) {
     return NextResponse.json({ error: "This work needs grounded v4 claims and another comparable work before it can be expanded." }, { status: 409 });
   }

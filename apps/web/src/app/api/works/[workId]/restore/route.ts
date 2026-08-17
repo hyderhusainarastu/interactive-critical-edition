@@ -1,8 +1,9 @@
 import { db, deletionCleanups, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedWork } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Restores a trashed work (plan §34.4 9.7) — clears `deletedAt`. Idempotent:
@@ -21,12 +22,12 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const work = await getOwnedWork(workId, userId);
-  if (!work) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!work) return notFound();
 
   if (work.deletedAt) {
     await db.update(works).set({ deletedAt: null, updatedAt: new Date() }).where(eq(works.id, workId));

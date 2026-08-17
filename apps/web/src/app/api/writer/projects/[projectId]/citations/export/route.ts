@@ -4,6 +4,7 @@ import type { CslJson } from "@/lib/writer";
 import { CITATION_EXPORT_CONTENT_TYPE, CITATION_EXPORT_EXTENSION, formatCitationList } from "@/lib/writer/citationFormats";
 import { getWriterProjectWorkspace } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const querySchema = z.object({ format: z.enum(["bibtex", "ris", "apa", "chicago"]) });
 
@@ -22,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
   // caller's own projects, so an unowned or nonexistent project id is
   // indistinguishable to the client either way.
   const workspace = await getWriterProjectWorkspace(userId, projectId);
-  if (!workspace) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!workspace) return notFound();
   const citations = workspace.citations.map((citation) => citation.cslJson as CslJson);
   const body = formatCitationList(citations, format);
   const filename = `${safeFilename(workspace.project.title)}-citations.${CITATION_EXPORT_EXTENSION[format]}`;

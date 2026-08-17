@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -18,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   if (isWriterApiError(userId)) return userId;
   const { projectId } = await params;
   const workspace = await getWriterProjectWorkspace(userId, projectId);
-  return workspace ? NextResponse.json(workspace) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return workspace ? NextResponse.json(workspace) : notFound();
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -28,7 +29,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
   if (!parsed.success) return NextResponse.json({ error: "Invalid project update." }, { status: 400 });
   const { projectId } = await params;
   const project = await getOwnedWriterProject(userId, projectId, true);
-  if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!project) return notFound();
   const [updated] = await db.update(writerProjects).set({
     ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
     ...(parsed.data.sortOrder !== undefined ? { sortOrder: parsed.data.sortOrder } : {}),

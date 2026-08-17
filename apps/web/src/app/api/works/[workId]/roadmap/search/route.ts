@@ -1,8 +1,9 @@
 import { bibliographicRecords, db } from "@ice/db";
 import { asc, ilike } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Searches the shared bibliographic catalog so a reader can pull a
@@ -18,12 +19,12 @@ import { getOwnedDocument } from "@/lib/library/works";
  * anything user-specific.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ workId: string }> }) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return NextResponse.json({ results: [] });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { listTrashedWorks, purgeExpiredTrash, retryPendingCleanups } from "@/lib/library/trash";
 
 /**
@@ -10,8 +10,8 @@ import { listTrashedWorks, purgeExpiredTrash, retryPendingCleanups } from "@/lib
  * scheduled job).
  */
 export async function GET() {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   await retryPendingCleanups(userId);
   await purgeExpiredTrash(userId);

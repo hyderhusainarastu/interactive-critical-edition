@@ -3,6 +3,7 @@ import { competencySignals, conceptMastery, db, understandingRatings } from "@ic
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Sub-phase 22.9b (plan §3.4): undo one applied competency signal.
@@ -16,7 +17,7 @@ import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
 export async function POST(_request: Request, { params }: { params: Promise<{ signalId: string }> }) {
   const userId = await requireRagApiUser("rag-competency-undo");
   if (isRagApiError(userId)) return userId;
-  if (!phase22CompetencyEnabled()) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!phase22CompetencyEnabled()) return notFound();
 
   const { signalId } = await params;
   const [signal] = await db
@@ -24,7 +25,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ si
     .from(competencySignals)
     .where(and(eq(competencySignals.id, signalId), eq(competencySignals.userId, userId)))
     .limit(1);
-  if (!signal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!signal) return notFound();
 
   // Idempotent (§3.4): repeating undo on an already-undone signal is a
   // no-op success, not an error — the reader may click it twice, or a

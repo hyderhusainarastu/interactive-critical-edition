@@ -2,8 +2,9 @@ import { concepts, conceptMastery, db, graphEdges, readingRecords } from "@ice/d
 import { INFERRED_FROM_COMPLETION_SCORE, inferMasteryFromCompletedWorks, shouldOverwriteMastery, type MasterySource } from "@ice/research";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Phase 9.4 (plan §34.4): the optional, skippable per-work diagnostic —
@@ -39,12 +40,12 @@ async function workRelevantConcepts(workId: string) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ workId: string }> }) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const relevant = await workRelevantConcepts(workId);
   const conceptIds = relevant.map((c) => c.id);
@@ -113,12 +114,12 @@ interface AnswerInput {
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ workId: string }> }) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const body = (await request.json().catch(() => null)) as { answers?: unknown } | null;
   if (!body || !Array.isArray(body.answers)) {

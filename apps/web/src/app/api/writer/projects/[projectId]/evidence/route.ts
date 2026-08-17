@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWriterEvidenceView } from "@/lib/research/writerEvidence";
 import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Phase 28.5: the Evidence panel's read — the linked research project's
@@ -17,6 +18,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
   const workId = url.searchParams.get("workId") ?? undefined;
   const claimNature = url.searchParams.get("claimNature") ?? undefined;
   const view = await getWriterEvidenceView(userId, projectId, { workId, claimNature });
-  if (view === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (view === "not_found") return notFound();
   return NextResponse.json(view ?? { linked: null });
 }

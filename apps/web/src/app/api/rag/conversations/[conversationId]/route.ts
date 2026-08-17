@@ -6,6 +6,7 @@ import type { CompetencyNoticeView } from "@/lib/rag/competencyData";
 import { answerRagConversation, getRagConversationView } from "@/lib/rag/ragData";
 import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
 import { recordUsageEvent } from "@/lib/telemetry/usageEvents";
+import { notFound } from "@/lib/api/apiResponse";
 
 const messageSchema = z.object({
   message: z.string().trim().min(2).max(2_000),
@@ -64,7 +65,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ con
   if (isRagApiError(userId)) return userId;
   const { conversationId } = await params;
   const view = await getRagConversationView(userId, conversationId);
-  if (!view) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!view) return notFound();
   return NextResponse.json(view);
 }
 
@@ -91,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
     clusterId: parsed.data.clusterId,
     workIdB: parsed.data.workIdB,
   });
-  if (!answer) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!answer) return notFound();
   recordUsageEvent({ userId, eventType: "chat_message", path: "/ask-library" });
   return new Response(streamAnswer(answer), {
     headers: {

@@ -12,6 +12,7 @@ import {
   listResearchJobRequestsForProject,
 } from "@/lib/research/jobs";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const postSchema = z.discriminatedUnion("jobType", [
   z
@@ -82,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     const result = await dispatchSynthesizeChamberJob(userId, projectId, parsed.data.clusterId);
     switch (result.action) {
       case "not_found":
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return notFound();
       case "conflict":
         return NextResponse.json({ error: result.reason }, { status: 409 });
       case "reused":
@@ -98,7 +99,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       : await dispatchExtractClaimsJobForCorpusItem(userId, projectId, parsed.data.corpusItemId!, parsed.data.confirm);
     switch (result.action) {
       case "not_found":
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return notFound();
       case "not_member":
       case "no_published_edition":
       case "no_extractable_text":
@@ -117,7 +118,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     const result = await dispatchDetectRelationshipsJob(userId, projectId, parsed.data.confirm);
     switch (result.action) {
       case "not_found":
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return notFound();
       case "not_ready":
       case "conflict":
         return NextResponse.json({ error: result.reason }, { status: 409 });
@@ -134,7 +135,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     const result = await dispatchClusterDebatesJob(userId, projectId, parsed.data.confirm);
     switch (result.action) {
       case "not_found":
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return notFound();
       case "not_ready":
       case "conflict":
         return NextResponse.json({ error: result.reason }, { status: 409 });
@@ -155,7 +156,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
     const result = await dispatchImportCorpusJob(userId, projectId, items);
     switch (result.action) {
       case "not_found":
-        return NextResponse.json({ error: "Not found" }, { status: 404 });
+        return notFound();
       case "reused":
         return NextResponse.json({ requestId: result.requestId, reused: true }, { status: 202 });
       case "queued":
@@ -167,7 +168,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   const result = await dispatchGenerateHypothesesJob(userId, projectId, parsed.data.question ?? null, parsed.data.maxHypotheses, parsed.data.confirm);
   switch (result.action) {
     case "not_found":
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return notFound();
     case "conflict":
       return NextResponse.json({ error: result.reason }, { status: 409 });
     case "needs_confirmation":

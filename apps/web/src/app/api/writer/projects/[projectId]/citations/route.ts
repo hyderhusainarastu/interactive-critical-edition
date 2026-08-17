@@ -5,6 +5,7 @@ import { resolveCitation } from "@/lib/reader/citationResolver";
 import { addWriterCitation, getOwnedLibraryCitation, getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 import { reportWebError } from "@/lib/telemetry";
+import { notFound } from "@/lib/api/apiResponse";
 
 const schema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("library"), resourceId: z.string().uuid() }),
@@ -18,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   if (isWriterApiError(userId)) return userId;
   const { projectId } = await params;
   const workspace = await getWriterProjectWorkspace(userId, projectId);
-  return workspace ? NextResponse.json({ citations: workspace.citations }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return workspace ? NextResponse.json({ citations: workspace.citations }) : notFound();
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -27,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid citation input." }, { status: 400 });
   const { projectId } = await params;
-  if (!await getOwnedWriterProject(userId, projectId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!await getOwnedWriterProject(userId, projectId)) return notFound();
   try {
     const citations = parsed.data.kind === "library"
       ? (await getOwnedLibraryCitation(userId, parsed.data.resourceId) ?? null)

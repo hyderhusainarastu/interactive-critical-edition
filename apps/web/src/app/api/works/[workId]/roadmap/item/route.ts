@@ -2,8 +2,9 @@ import { db, readingRecords, roadmapOverrides, understandingRatings } from "@ice
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Upserts the user's roadmap-item state (plan §13 step 7): an
@@ -42,12 +43,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });

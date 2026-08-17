@@ -1,9 +1,9 @@
 import { db, documents, enqueueAnalyzeWork } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
-import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { notFound, rateLimitResponse } from "@/lib/api/apiResponse";
 import { getOwnedDocument } from "@/lib/library/works";
 
 /**
@@ -17,8 +17,8 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   // Each enqueue starts a paid worker run. The `analyzing`-status guard below
   // blocks a concurrent double-run, but not a scripted sequential loop that
   // re-triggers once the prior run completes — this per-user cap is the cost
@@ -28,7 +28,7 @@ export async function POST(
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
   if (doc.processingStatus !== "ready") {
     return NextResponse.json({ error: "This work isn't ready to analyze yet." }, { status: 409 });
   }

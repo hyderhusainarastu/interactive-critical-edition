@@ -5,6 +5,7 @@ import type { CslJson } from "@/lib/writer";
 import { createWriterDocx, createWriterPdf } from "@/lib/writer/writerExport";
 import { getOwnedWriterDocument, getWriterProjectWorkspace } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const querySchema = z.object({ documentId: z.string().uuid(), format: z.enum(["docx", "pdf"]) });
 
@@ -20,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
     getWriterProjectWorkspace(userId, projectId),
     getOwnedWriterDocument(userId, projectId, parsed.data.documentId),
   ]);
-  if (!workspace || !document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!workspace || !document) return notFound();
   const citations = workspace.citations.map((citation) => citation.cslJson as CslJson);
   const filename = safeFilename(document.document.title);
   const bytes = parsed.data.format === "docx"

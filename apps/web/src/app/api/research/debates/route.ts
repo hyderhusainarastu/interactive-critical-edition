@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDebateClusterById, listRecentDebateClusters } from "@/lib/research/debates";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Backs the Knowledge Map context chooser's "Debate" tab (spec §2.1/§2.3) —
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   const id = url.searchParams.get("id");
   if (id) {
     const cluster = await getDebateClusterById(userId, id);
-    return cluster ? NextResponse.json({ cluster }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+    return cluster ? NextResponse.json({ cluster }) : notFound();
   }
 
   const limitParam = url.searchParams.get("limit");

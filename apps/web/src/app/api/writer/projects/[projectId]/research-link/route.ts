@@ -4,6 +4,7 @@ import { listResearchProjects } from "@/lib/research/projects";
 import { getLinkedResearchProject, linkWriterProjectToResearchProject, unlinkWriterProjectFromResearchProject } from "@/lib/research/writerEvidence";
 import { getOwnedWriterProject } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Phase 28.5: links/unlinks this writer project to one of the caller's own
@@ -19,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   const userId = await requireWriterEvidenceApiUser();
   if (isWriterApiError(userId)) return userId;
   const { projectId } = await params;
-  if (!await getOwnedWriterProject(userId, projectId, true)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!await getOwnedWriterProject(userId, projectId, true)) return notFound();
   const [linked, options] = await Promise.all([
     getLinkedResearchProject(userId, projectId),
     listResearchProjects(userId),
@@ -34,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
   if (!parsed.success) return NextResponse.json({ error: "Invalid research project." }, { status: 400 });
   const { projectId } = await params;
   const linked = await linkWriterProjectToResearchProject(userId, projectId, parsed.data.researchProjectId);
-  if (linked === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (linked === "not_found") return notFound();
   return NextResponse.json({ linked }, { status: 201 });
 }
 
@@ -43,5 +44,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (isWriterApiError(userId)) return userId;
   const { projectId } = await params;
   const removed = await unlinkWriterProjectFromResearchProject(userId, projectId);
-  return removed ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return removed ? NextResponse.json({ ok: true }) : notFound();
 }

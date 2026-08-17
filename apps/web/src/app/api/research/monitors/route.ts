@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createMonitor, listMonitorsForUser } from "@/lib/research/monitors";
 import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const createSchema = z.object({
   projectId: z.string().uuid().optional(),
@@ -24,6 +25,6 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid monitor." }, { status: 400 });
 
   const result = await createMonitor(userId, parsed.data);
-  if (result.action === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (result.action === "not_found") return notFound();
   return NextResponse.json({ monitor: result.monitor }, { status: 201 });
 }

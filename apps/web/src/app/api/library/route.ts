@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getLibrary } from "@/lib/library";
 
 /**
@@ -16,8 +16,8 @@ import { getLibrary } from "@/lib/library";
  * active uploaded-work anchor is never hidden by an unrelated query.
  */
 export async function GET(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { searchParams } = new URL(request.url);
   const search = searchParams.get("q") ?? undefined;

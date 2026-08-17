@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { phase12FeatureEnabled } from "@ice/config";
 import { CURRICULUM_ROUTES, type CurriculumRoute } from "@ice/curriculum";
 import { READER_LEVELS, type ReaderLevelFilter } from "@ice/roadmap";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { computeCurriculum } from "@/lib/roadmap/curriculum";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Computes the curriculum/study guide for a work on demand (plan §34.4
@@ -18,12 +19,12 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const url = new URL(request.url);
   const routeParam = url.searchParams.get("route");
@@ -41,7 +42,7 @@ export async function GET(
     : {};
 
   const result = await computeCurriculum(userId, workId, route, levelOptions);
-  if (!result) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!result) return notFound();
 
   return NextResponse.json({ title: doc.title, ...result });
 }

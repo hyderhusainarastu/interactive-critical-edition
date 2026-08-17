@@ -10,9 +10,9 @@ import {
 } from "@ice/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
-import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { notFound, rateLimitResponse } from "@/lib/api/apiResponse";
 import { getOwnedDocument } from "@/lib/library/works";
 
 /**
@@ -39,8 +39,8 @@ import { getOwnedDocument } from "@/lib/library/works";
  * best-effort preview (surface the real run/version via the status endpoint).
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ workId: string }> }) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   // Each fresh run passes through the paid budget machinery. `planReprocess`
   // dedups a CONCURRENT duplicate, but a sequential loop (re-trigger once the
   // prior run finishes) would still start unbounded paid runs — this per-user
@@ -57,7 +57,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ wo
   }
   const { workId } = await params;
   const document = await getOwnedDocument(workId, userId);
-  if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!document) return notFound();
 
   const pendingJobs = await findPendingExtractJobs(document.documentId);
   const [latestRun] = await db

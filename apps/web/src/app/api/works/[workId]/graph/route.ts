@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { buildGraph } from "@/lib/graph";
 import {
   buildRoadmapGraph,
@@ -8,6 +8,7 @@ import {
   parseRoadmapRootParams,
 } from "@/lib/roadmap/roadmapGraph";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Work-scoped knowledge graph: the root work and everything it references,
@@ -24,12 +25,12 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const { searchParams } = new URL(request.url);
   if (isRoadmapLayoutRequested(searchParams)) {

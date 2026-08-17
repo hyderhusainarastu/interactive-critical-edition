@@ -3,6 +3,7 @@ import { z } from "zod";
 import { proseMirrorDocumentSchema } from "@/lib/writer";
 import { getOwnedWriterDocument, saveWriterDocumentIfCurrent } from "@/lib/writer/writerData";
 import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
@@ -23,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid document update." }, { status: 400 });
   const { projectId, documentId } = await params;
-  if (!await getOwnedWriterDocument(userId, projectId, documentId)) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!await getOwnedWriterDocument(userId, projectId, documentId)) return notFound();
   const result = await saveWriterDocumentIfCurrent(
     documentId,
     {
@@ -34,7 +35,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
     parsed.data.reason ?? "autosave",
     parsed.data.expectedUpdatedAt,
   );
-  if (result.status === "not_found") return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (result.status === "not_found") return notFound();
   if (result.status === "conflict") return NextResponse.json({ conflict: true, latest: result.latest }, { status: 409 });
   return NextResponse.json(result.document);
 }

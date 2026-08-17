@@ -2,7 +2,8 @@ import { db, documents, enqueueAnalyzeWork, processingRuns, works } from "@ice/d
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
+import { notFound } from "@/lib/api/apiResponse";
 
 const schema = z.object({
   title: z.string().min(1).max(500),
@@ -13,10 +14,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const { workId } = await params;
 
   const body = await request.json().catch(() => null);
@@ -31,7 +30,7 @@ export async function POST(
     .where(and(eq(works.id, workId), eq(works.userId, userId)))
     .limit(1);
   if (!work) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
 
   await db

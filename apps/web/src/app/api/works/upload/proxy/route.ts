@@ -2,7 +2,8 @@ import { db, documents } from "@ice/db";
 import { uploadDocumentFile } from "@ice/ingestion";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Same-origin upload fallback. The primary path is the browser's direct PUT to
@@ -21,8 +22,8 @@ const PROXY_MAX_BYTES = 4 * 1024 * 1024; // stay safely under Vercel's ~4.5MB bo
 const JSON_PROXY_MAX_BYTES = 3 * 1024 * 1024; // base64 expands to at most 4 MiB
 
 export async function POST(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const url = new URL(request.url);
   const documentId = url.searchParams.get("documentId") ?? "";
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     .from(documents)
     .where(and(eq(documents.id, documentId), eq(documents.workId, workId), eq(documents.userId, userId)))
     .limit(1);
-  if (!document) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!document) return notFound();
   if (document.processingStatus !== "uploaded") {
     return NextResponse.json({ error: "This upload has already been processed." }, { status: 409 });
   }

@@ -1,16 +1,15 @@
 import { db, documents, processingRuns, staleActiveExtractMs, works } from "@ice/db";
 import { and, desc, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
+import { notFound } from "@/lib/api/apiResponse";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const { workId } = await params;
 
   const [row] = await db
@@ -31,7 +30,7 @@ export async function GET(
 
   // 404, not 403 — don't reveal whether a work id exists for another user.
   if (!row) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
   const [run] = await db.select({
     version: processingRuns.version,

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createRagConversation, listRagConversations } from "@/lib/rag/ragData";
 import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 const createSchema = z.object({ contextWorkId: z.string().uuid().nullable().optional() });
 
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid conversation context." }, { status: 400 });
   if (parsed.data.contextWorkId && !await getOwnedDocument(parsed.data.contextWorkId, userId)) {
     // Keep the established 404 posture for a foreign work id.
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
   return NextResponse.json({ conversation: await createRagConversation(userId, parsed.data.contextWorkId) }, { status: 201 });
 }

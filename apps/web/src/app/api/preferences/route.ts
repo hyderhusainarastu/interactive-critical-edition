@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getWorkspacePreferences, updateWorkspacePreferences } from "@/lib/auth/preferences";
 
 const preferencesSchema = z.object({
@@ -14,14 +14,14 @@ const preferencesSchema = z.object({
 }).strict();
 
 export async function GET() {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   return NextResponse.json({ preferences: await getWorkspacePreferences(userId) });
 }
 
 export async function PUT(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const parsed = preferencesSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || Object.keys(parsed.data).length === 0) {

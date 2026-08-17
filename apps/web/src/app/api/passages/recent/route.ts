@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getPassageContextById, listRecentPassageContexts } from "@/lib/reader/passages";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Backs the Knowledge Map context chooser's "Passage" tab (spec §2.1/§2.3) —
@@ -14,14 +15,14 @@ import { getPassageContextById, listRecentPassageContexts } from "@/lib/reader/p
  * than the "recent" window this route's default listing caps at).
  */
 export async function GET(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
   if (id) {
     const passage = await getPassageContextById(userId, id);
-    return passage ? NextResponse.json({ passage }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+    return passage ? NextResponse.json({ passage }) : notFound();
   }
 
   const limitParam = url.searchParams.get("limit");

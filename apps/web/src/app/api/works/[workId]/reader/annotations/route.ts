@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getAnnotationsForDocument } from "@/lib/reader/annotations";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Lists a document's annotations plus current analysis status — used by
@@ -13,12 +14,12 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const annotations = await getAnnotationsForDocument(doc.documentId);
   return NextResponse.json({

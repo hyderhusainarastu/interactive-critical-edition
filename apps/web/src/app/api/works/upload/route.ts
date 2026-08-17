@@ -3,7 +3,7 @@ import { enqueueExtractText } from "@ice/db";
 import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { scanWithOptionalClamAv, uploadDocumentFile, validateUploadContent } from "@ice/ingestion";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
 import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
@@ -13,10 +13,8 @@ const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const rate = await enforceUserRateLimit({ userId, scope: "upload", limit: 20, windowMs: 60 * 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
 

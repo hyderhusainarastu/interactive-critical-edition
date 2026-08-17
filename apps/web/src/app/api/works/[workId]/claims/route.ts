@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { aiUsageLogs, claimScores, db, researchClaims } from "@ice/db";
 import { phase25FeatureEnabled } from "@ice/config";
 import { and, eq, inArray } from "drizzle-orm";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Lists a work's active, non-hidden `research_claim` rows plus their
@@ -19,15 +20,15 @@ export async function GET(
   { params }: { params: Promise<{ workId: string }> },
 ) {
   if (!phase25FeatureEnabled("readerClaimLayer")) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
 
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { workId } = await params;
   const doc = await getOwnedDocument(workId, userId);
-  if (!doc) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!doc) return notFound();
 
   const rows = await db
     .select()

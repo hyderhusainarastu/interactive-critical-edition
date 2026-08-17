@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { archiveResearchProject, getResearchProjectDetail, updateResearchProject } from "@/lib/research/projects";
 import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
+import { notFound } from "@/lib/api/apiResponse";
 
 const patchSchema = z
   .object({
@@ -17,7 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pro
   if (isResearchApiError(userId)) return userId;
   const { projectId } = await params;
   const detail = await getResearchProjectDetail(userId, projectId);
-  return detail ? NextResponse.json(detail) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return detail ? NextResponse.json(detail) : notFound();
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
@@ -27,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pr
   if (!parsed.success) return NextResponse.json({ error: "Invalid project update." }, { status: 400 });
   const { projectId } = await params;
   const updated = await updateResearchProject(userId, projectId, parsed.data);
-  return updated ? NextResponse.json({ project: updated }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return updated ? NextResponse.json({ project: updated }) : notFound();
 }
 
 /** Soft-archive only (see `archiveResearchProject`'s doc comment) — a
@@ -39,5 +40,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (isResearchApiError(userId)) return userId;
   const { projectId } = await params;
   const archived = await archiveResearchProject(userId, projectId);
-  return archived ? NextResponse.json({ project: archived }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+  return archived ? NextResponse.json({ project: archived }) : notFound();
 }

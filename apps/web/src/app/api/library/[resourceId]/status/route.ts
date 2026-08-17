@@ -2,7 +2,8 @@ import { db, learningResources, readingRecords, understandingRatings } from "@ic
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
+import { notFound } from "@/lib/api/apiResponse";
 
 /**
  * Upserts the caller's reading-state for one Library item (plan §34.4 9.5):
@@ -26,12 +27,12 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ resourceId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const { resourceId } = await params;
   const [resource] = await db.select({ id: learningResources.id }).from(learningResources).where(eq(learningResources.id, resourceId)).limit(1);
-  if (!resource) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!resource) return notFound();
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });

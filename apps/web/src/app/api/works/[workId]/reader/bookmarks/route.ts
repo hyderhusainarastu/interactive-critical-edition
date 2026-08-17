@@ -1,8 +1,9 @@
 import { bookmarks, db } from "@ice/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 const positionSchema = z.union([
   z.object({ kind: z.literal("pdf"), page: z.number().int().positive() }),
@@ -19,10 +20,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const { workId } = await params;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -32,7 +31,7 @@ export async function POST(
 
   const doc = await getOwnedDocument(workId, userId);
   if (!doc) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
 
   const [created] = await db

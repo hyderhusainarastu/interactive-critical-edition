@@ -4,7 +4,7 @@ import { createSignedUploadUrl } from "@ice/ingestion";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
 import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
@@ -29,8 +29,8 @@ const schema = z.object({
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const rate = await enforceUserRateLimit({ userId, scope: "upload-init", limit: 30, windowMs: 60 * 60_000 });
   if (!rate.allowed) return rateLimitResponse(rate);
   const input = schema.safeParse(await request.json().catch(() => null));

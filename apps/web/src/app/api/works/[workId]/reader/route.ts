@@ -4,22 +4,21 @@ import { phase12FeatureEnabled } from "@ice/config";
 import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getAnnotationsForDocument } from "@/lib/reader/annotations";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { getOwnedDocument } from "@/lib/library/works";
+import { notFound } from "@/lib/api/apiResponse";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workId: string }> },
 ) {
-  const userId = await getApiUserId();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
   const { workId } = await params;
 
   const doc = await getOwnedDocument(workId, userId);
   if (!doc) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFound();
   }
   if (doc.processingStatus !== "ready") {
     return NextResponse.json(

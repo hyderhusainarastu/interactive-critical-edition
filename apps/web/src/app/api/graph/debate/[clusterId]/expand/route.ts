@@ -1,8 +1,9 @@
 import { phase25FeatureEnabled } from "@ice/config";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiUserId } from "@/lib/auth";
+import { isApiAuthError, requireApiUser } from "@/lib/api/apiAuth";
 import { loadDebateClusterExpansion } from "@/lib/graph/graphDebate";
+import { notFound } from "@/lib/api/apiResponse";
 
 const paramsSchema = z.object({ clusterId: z.string().uuid() });
 
@@ -19,15 +20,15 @@ const paramsSchema = z.object({ clusterId: z.string().uuid() });
  * Zero LLM calls — `loadDebateClusterExpansion` is a pure DB read.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ clusterId: string }> }) {
-  if (!phase25FeatureEnabled("graphDebateLayer")) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  const userId = await getApiUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!phase25FeatureEnabled("graphDebateLayer")) return notFound();
+  const userId = await requireApiUser();
+  if (isApiAuthError(userId)) return userId;
 
   const parsed = paramsSchema.safeParse(await params);
-  if (!parsed.success) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!parsed.success) return notFound();
 
   const expansion = await loadDebateClusterExpansion(userId, parsed.data.clusterId);
-  if (!expansion) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!expansion) return notFound();
 
   return NextResponse.json(expansion);
 }
