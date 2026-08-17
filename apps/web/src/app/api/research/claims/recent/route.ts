@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listRecentResearchClaims } from "@/lib/research/claims";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /**
  * Backs the Knowledge Map context chooser's "Claim" tab (spec §2.1) — an

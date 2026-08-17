@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Sparkline } from "@/components/charts";
-import { requireAdminDash } from "@/lib/adminDash";
-import { getAdminUserDetail } from "@/lib/adminDashData";
+import { requireAdminDash } from "@/lib/admin/adminDash";
+import { getAdminUserDetail } from "@/lib/admin/adminDashData";
 
 function formatDateTime(d: Date | null): string {
   if (!d) return "—";

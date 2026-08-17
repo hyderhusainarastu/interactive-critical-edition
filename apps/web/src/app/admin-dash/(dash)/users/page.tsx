@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireAdminDash } from "@/lib/adminDash";
-import { ADMIN_USERS_SORT_KEYS, getAdminUsersPage, type AdminUsersSortKey } from "@/lib/adminDashData";
+import { requireAdminDash } from "@/lib/admin/adminDash";
+import { ADMIN_USERS_SORT_KEYS, getAdminUsersPage, type AdminUsersSortKey } from "@/lib/admin/adminDashData";
 
 const COLUMNS: Array<{ key: AdminUsersSortKey; label: string }> = [
   { key: "email", label: "Email" },

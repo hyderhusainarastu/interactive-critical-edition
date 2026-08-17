@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { putWithProgress, readFileAsBase64, sha256 } from "@/lib/uploadClient";
+import { putWithProgress, readFileAsBase64, sha256 } from "@/lib/library/uploadClient";
 
 const ACCEPTED_TYPES = ["application/pdf", "application/epub+zip", "text/plain", "text/markdown"];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;

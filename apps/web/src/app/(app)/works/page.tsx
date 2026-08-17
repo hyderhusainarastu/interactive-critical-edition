@@ -3,7 +3,7 @@ import { db, documents, processingRuns, staleActiveExtractMs, works } from "@ice
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getUserPreferences } from "@/lib/preferences";
+import { getUserPreferences } from "@/lib/auth/preferences";
 import { PageHeader } from "@/components/app/PageHeader";
 import { ReadingQueueView, type QueueWorkItem } from "./ReadingQueueView";
 

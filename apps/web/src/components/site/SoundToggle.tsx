@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_WORKSPACE_PREFERENCES, normalizeWorkspacePreferences, WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/workspacePreferences";
+import { DEFAULT_WORKSPACE_PREFERENCES, normalizeWorkspacePreferences, WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/auth/workspacePreferences";
 import { playSound } from "@/lib/sound";
 
 const SOUND_CHANGE_EVENT = "palimnote:sound-change";

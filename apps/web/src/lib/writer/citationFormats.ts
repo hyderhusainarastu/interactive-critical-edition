@@ -1,4 +1,4 @@
-import type { CslJson, CslName } from "../writer";
+import type { CslJson, CslName } from "@/lib/writer";
 
 /**
  * Phase 29.3 (reverse-direction ScholarLens port): BibTeX/RIS/APA/Chicago

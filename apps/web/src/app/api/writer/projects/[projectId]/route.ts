@@ -2,8 +2,8 @@ import { db, writerProjects } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),

@@ -1,5 +1,5 @@
-import { WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/workspacePreferences";
-import type { WorkspacePreferences } from "@/lib/workspacePreferences";
+import { WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/auth/workspacePreferences";
+import type { WorkspacePreferences } from "@/lib/auth/workspacePreferences";
 
 /** Applies locally persisted presentation preferences before React hydrates. */
 export function PreferenceBootstrap({ fallbackPreferences }: { fallbackPreferences?: WorkspacePreferences }) {

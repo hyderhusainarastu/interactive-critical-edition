@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listHitsForMonitor } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 export async function GET(request: Request, { params }: { params: Promise<{ monitorId: string }> }) {
   const userId = await requireMonitoringApiUser();

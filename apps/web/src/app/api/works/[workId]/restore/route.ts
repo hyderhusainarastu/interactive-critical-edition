@@ -2,7 +2,7 @@ import { db, deletionCleanups, works } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedWork } from "@/lib/works";
+import { getOwnedWork } from "@/lib/library/works";
 
 /**
  * Restores a trashed work (plan §34.4 9.7) — clears `deletedAt`. Idempotent:

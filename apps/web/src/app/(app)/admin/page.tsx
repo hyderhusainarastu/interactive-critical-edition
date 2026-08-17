@@ -1,7 +1,7 @@
 import { aiUsageLogs, bibliographicRecords, db, deletionCleanups, processingJobs, processingRuns, providerAttempts, researchCache, researchCandidates } from "@ice/db";
 import { desc, eq, ne, sql } from "drizzle-orm";
 import { requireAdmin } from "@/lib/admin";
-import { getV4BackfillForecast } from "@/lib/v4Backfill";
+import { getV4BackfillForecast } from "@/lib/admin/v4Backfill";
 
 /**
  * Admin dashboard (plan §20): platform counts, the AI cost/usage view over

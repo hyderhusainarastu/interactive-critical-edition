@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listHitsForUser } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 /** Every hit across every monitor the caller owns — the global
  *  `/research/monitors` view's feed (as opposed to

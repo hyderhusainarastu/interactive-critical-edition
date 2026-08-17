@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth";
-import { getAccountPlanCounts } from "@/lib/accountUsage";
+import { getAccountPlanCounts } from "@/lib/auth/accountUsage";
 
 /**
  * Decorative-only "usage meters" — the beta is free with no enforced caps,

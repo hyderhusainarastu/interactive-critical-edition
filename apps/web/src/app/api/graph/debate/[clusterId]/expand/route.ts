@@ -2,7 +2,7 @@ import { phase25FeatureEnabled } from "@ice/config";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { loadDebateClusterExpansion } from "@/lib/graphDebate";
+import { loadDebateClusterExpansion } from "@/lib/graph/graphDebate";
 
 const paramsSchema = z.object({ clusterId: z.string().uuid() });
 

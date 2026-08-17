@@ -13,7 +13,7 @@ import { CredibilityMeter } from "@/components/CredibilityMeter";
 import { PageHeader } from "@/components/app/PageHeader";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import type { LibraryItem, LibraryWork } from "@/lib/library";
-import { hasReaderLevelSignal, SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
+import { hasReaderLevelSignal, SOURCE_TYPE_LABEL } from "@/lib/library/librarySearch";
 
 /** Debounce delay (ms) before a typed search term triggers the
  *  server-authoritative `/api/library` fetch (plan §20.1). */

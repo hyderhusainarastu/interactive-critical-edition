@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { getWorkspacePreferences, updateWorkspacePreferences } from "@/lib/preferences";
+import { getWorkspacePreferences, updateWorkspacePreferences } from "@/lib/auth/preferences";
 
 const preferencesSchema = z.object({
   theme: z.enum(["system", "light", "dark"]).optional(),

@@ -2,7 +2,7 @@ import { phase12FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { WriterProjectsView } from "@/components/writer/WriterProjectsView";
 import { requireSession } from "@/lib/auth";
-import { listWriterProjects } from "@/lib/writerData";
+import { listWriterProjects } from "@/lib/writer/writerData";
 
 export default async function WriterPage() {
   if (!phase12FeatureEnabled("writer")) notFound();

@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Buffer } from "node:buffer";
 import type { CslJson } from "@/lib/writer";
-import { createWriterDocx, createWriterPdf } from "@/lib/writerExport";
-import { getOwnedWriterDocument, getWriterProjectWorkspace } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { createWriterDocx, createWriterPdf } from "@/lib/writer/writerExport";
+import { getOwnedWriterDocument, getWriterProjectWorkspace } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 const querySchema = z.object({ documentId: z.string().uuid(), format: z.enum(["docx", "pdf"]) });
 

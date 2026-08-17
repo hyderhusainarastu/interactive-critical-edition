@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { phase12FeatureEnabled, phase18RagEnabled, phase25FeatureEnabled } from "@ice/config";
 import { requireSession } from "@/lib/auth";
-import { getUserReaderLevel } from "@/lib/readerLevel";
-import { getOwnedDocument } from "@/lib/works";
+import { getUserReaderLevel } from "@/lib/reader/readerLevel";
+import { getOwnedDocument } from "@/lib/library/works";
 import { tabDisabledReason } from "@/components/read/workAttention";
 import { ReaderShell } from "@/components/reader/ReaderShell";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReaderLevel } from "@ice/roadmap";
-import type { WorkspacePreferences } from "@/lib/workspacePreferences";
+import type { WorkspacePreferences } from "@/lib/auth/workspacePreferences";
 import { AppShellRoot } from "@/components/shell/AppShellRoot";
 import { ToastProvider } from "./ToastProvider";
 import { WorkspacePreferencesProvider } from "./WorkspacePreferencesProvider";

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 import { DiagnosticView } from "./DiagnosticView";
 
 export default async function DiagnosticPage({

@@ -17,7 +17,7 @@ import {
   type ProseMirrorBlock,
   type ProseMirrorDocument,
 } from "@/lib/writer";
-import { addWriterCitation, getOwnedWriterDocument, getOwnedWriterProject, saveWriterDocument } from "@/lib/writerData";
+import { addWriterCitation, getOwnedWriterDocument, getOwnedWriterProject, saveWriterDocument } from "@/lib/writer/writerData";
 import { listDebateClustersForProject, type DebateClusterListRow } from "./debates";
 import { listEvidenceChambersForProject, type EvidenceChamberSummaryRow } from "./chambers";
 import { listResearchClaims, type ResearchClaimListRow } from "./claims";

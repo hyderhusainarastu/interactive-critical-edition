@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createWriterProject, listWriterProjects } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { createWriterProject, listWriterProjects } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 const createSchema = z.object({ title: z.string().trim().min(1).max(200) });
 

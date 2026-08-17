@@ -2,9 +2,9 @@ import { db, documents, enqueueAnalyzeWork } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
-import { getOwnedDocument } from "@/lib/works";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Manually (re-)trigger scholarly analysis for a ready work — used by the

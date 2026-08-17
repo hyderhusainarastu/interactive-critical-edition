@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Upserts the user's roadmap-item state (plan §13 step 7): an

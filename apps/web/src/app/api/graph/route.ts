@@ -6,7 +6,7 @@ import {
   isRoadmapLayoutRequested,
   parseRoadmapRankOptions,
   parseRoadmapRootParams,
-} from "@/lib/roadmapGraph";
+} from "@/lib/roadmap/roadmapGraph";
 
 /**
  * Global knowledge graph: the user's whole library — every work and every

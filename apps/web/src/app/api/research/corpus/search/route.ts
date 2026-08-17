@@ -1,7 +1,7 @@
 import { isCorpusProvider, normalizeCorpusItem, searchCorpusCandidates, type CorpusItemInsertShape } from "@ice/research";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /**
  * Corpus provider search (Phase 30 fix lane, plan §route-map's previously

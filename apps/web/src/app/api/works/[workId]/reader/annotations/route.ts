@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getAnnotationsForDocument } from "@/lib/annotations";
+import { getAnnotationsForDocument } from "@/lib/reader/annotations";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Lists a document's annotations plus current analysis status — used by

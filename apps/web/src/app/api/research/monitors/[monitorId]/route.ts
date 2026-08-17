@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { deleteMonitor, getOwnedMonitor, updateMonitor } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 const patchSchema = z
   .object({

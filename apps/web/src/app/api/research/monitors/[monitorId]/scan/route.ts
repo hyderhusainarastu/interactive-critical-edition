@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { dispatchScanMonitorJob } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 /** The "Scan now" action — dispatches a `run_monitor` job scoped to exactly
  *  this one monitor, regardless of whether its cadence says it's due yet

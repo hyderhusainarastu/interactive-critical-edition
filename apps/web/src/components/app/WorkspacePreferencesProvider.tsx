@@ -5,7 +5,7 @@ import {
   normalizeWorkspacePreferences,
   WORKSPACE_PREFERENCES_STORAGE_KEY,
   type WorkspacePreferences,
-} from "@/lib/workspacePreferences";
+} from "@/lib/auth/workspacePreferences";
 import { useToast } from "./ToastProvider";
 
 interface PreferencesContextValue {

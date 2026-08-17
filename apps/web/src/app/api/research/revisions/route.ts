@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listResearchRevisions } from "@/lib/research/corrections";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /** The revision-history drawer's read path — one object's chronological
  *  correction history, owner-scoped (see `listResearchRevisions`'s own doc

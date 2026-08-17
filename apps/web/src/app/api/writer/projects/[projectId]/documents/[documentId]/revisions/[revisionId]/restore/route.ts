@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getOwnedWriterDocument, restoreWriterDocumentRevision } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { getOwnedWriterDocument, restoreWriterDocumentRevision } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ projectId: string; documentId: string; revisionId: string }> }) {
   const userId = await requireWriterApiUser();

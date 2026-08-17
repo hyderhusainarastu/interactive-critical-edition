@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { PageHeader } from "@/components/app/PageHeader";
-import { SOURCE_TYPE_LABEL } from "@/lib/librarySearch";
+import { SOURCE_TYPE_LABEL } from "@/lib/library/librarySearch";
 import { LibrarySourceAttach } from "./LibrarySourceAttach";
 
 /**

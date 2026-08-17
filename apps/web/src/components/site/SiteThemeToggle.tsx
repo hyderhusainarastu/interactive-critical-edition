@@ -5,7 +5,7 @@ import {
   DEFAULT_WORKSPACE_PREFERENCES,
   WORKSPACE_PREFERENCES_STORAGE_KEY,
   normalizeWorkspacePreferences,
-} from "@/lib/workspacePreferences";
+} from "@/lib/auth/workspacePreferences";
 
 /**
  * Light/dark toggle for the public pages.

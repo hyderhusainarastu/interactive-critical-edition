@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { applyResearchCorrection } from "@/lib/research/corrections";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /**
  * ONE endpoint for every research-object correction (plan §Web surfaces

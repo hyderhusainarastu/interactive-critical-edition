@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getOwnedWriterProject, listOwnedLibrarySources } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { getOwnedWriterProject, listOwnedLibrarySources } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const userId = await requireWriterApiUser();

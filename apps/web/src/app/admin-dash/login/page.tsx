@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isAdminDashAuthed } from "@/lib/adminDash";
+import { isAdminDashAuthed } from "@/lib/admin/adminDash";
 
 /**
  * Workstream H (v.5): the ONE unguarded page in the `/admin-dash` tree —

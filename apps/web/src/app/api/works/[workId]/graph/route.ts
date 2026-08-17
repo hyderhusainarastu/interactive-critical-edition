@@ -6,8 +6,8 @@ import {
   isRoadmapLayoutRequested,
   parseRoadmapRankOptions,
   parseRoadmapRootParams,
-} from "@/lib/roadmapGraph";
-import { getOwnedDocument } from "@/lib/works";
+} from "@/lib/roadmap/roadmapGraph";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Work-scoped knowledge graph: the root work and everything it references,

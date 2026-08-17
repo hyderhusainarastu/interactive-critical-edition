@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requestPasswordReset } from "@/lib/auth-service";
-import { clientIdentity, preAuthRateLimit } from "@/lib/preAuthRateLimit";
+import { requestPasswordReset } from "@/lib/auth/auth-service";
+import { clientIdentity, preAuthRateLimit } from "@/lib/auth/preAuthRateLimit";
 
 const schema = z.object({ email: z.email() });
 

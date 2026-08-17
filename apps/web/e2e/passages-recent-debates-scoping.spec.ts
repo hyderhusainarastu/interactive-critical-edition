@@ -1,5 +1,5 @@
 import { expect, request as pwRequest, test } from "@playwright/test";
-import { listRecentPassageContexts } from "@/lib/passages";
+import { listRecentPassageContexts } from "@/lib/reader/passages";
 import { createVerifiedTestUser, deleteTestUser, seedDebateCluster, seedPublishedEdition } from "./helpers";
 
 /**

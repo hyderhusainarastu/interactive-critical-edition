@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getWriterEvidenceView } from "@/lib/research/writerEvidence";
-import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writerApi";
+import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
 
 /**
  * Phase 28.5: the Evidence panel's read — the linked research project's

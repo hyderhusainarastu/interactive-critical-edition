@@ -1,6 +1,6 @@
 import { BarChart, LineChart, RadarChart, Sparkline } from "@/components/charts";
 import { requireSession } from "@/lib/auth";
-import { getAccountUsageSnapshot } from "@/lib/accountUsage";
+import { getAccountUsageSnapshot } from "@/lib/auth/accountUsage";
 
 export default async function AccountUsagePage() {
   const session = await requireSession();

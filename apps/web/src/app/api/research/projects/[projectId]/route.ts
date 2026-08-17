@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { archiveResearchProject, getResearchProjectDetail, updateResearchProject } from "@/lib/research/projects";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 const patchSchema = z
   .object({

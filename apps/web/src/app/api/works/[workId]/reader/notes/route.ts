@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 const schema = z.object({
   body: z.string().min(1).max(10000),

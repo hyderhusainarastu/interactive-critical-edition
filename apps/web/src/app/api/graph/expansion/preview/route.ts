@@ -2,9 +2,9 @@ import { phase12FeatureEnabled } from "@ice/config";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
-import { getGraphExpansionPreview, MANUAL_GRAPH_CANDIDATE_CAP } from "@/lib/graphExpansion";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { getGraphExpansionPreview, MANUAL_GRAPH_CANDIDATE_CAP } from "@/lib/graph/graphExpansion";
 
 const querySchema = z.object({ workId: z.string().uuid(), candidates: z.coerce.number().int().min(1).max(MANUAL_GRAPH_CANDIDATE_CAP).optional() });
 

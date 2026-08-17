@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { STAGE_LABEL, stageSequenceForPipeline } from "@ice/config";
-import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
+import { STATUS_COLOR, STATUS_LABEL } from "@/lib/telemetry/status";
 
 type Status = "uploaded" | "processing" | "needs_review" | "ready" | "failed";
 

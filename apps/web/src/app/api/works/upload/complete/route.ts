@@ -4,10 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
-import { recordUsageEvent } from "@/lib/usageEvents";
+import { recordUsageEvent } from "@/lib/telemetry/usageEvents";
 
 const schema = z.object({ workId: z.string().uuid(), documentId: z.string().uuid() });
 const USER_STORAGE_QUOTA_BYTES = 500 * 1024 * 1024;

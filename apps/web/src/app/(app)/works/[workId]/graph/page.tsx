@@ -2,7 +2,7 @@ import { phase12FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { KnowledgeMapWorkspace } from "@/components/knowledge-map";
 import { requireSession } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * A work-scoped Knowledge Map (redesign Stage 3, spec §1.2: "Edited, not

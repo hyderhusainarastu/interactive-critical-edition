@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requestResetAction, resetPasswordAction } from "@/lib/actions";
+import { requestResetAction, resetPasswordAction } from "@/lib/auth/actions";
 
 export default async function ResetPasswordPage({
   searchParams,

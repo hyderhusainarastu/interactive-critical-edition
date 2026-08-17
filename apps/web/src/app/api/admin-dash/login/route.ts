@@ -1,8 +1,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
-import { createAdminDashCookie, readAdminDashCredentials } from "@/lib/adminDash";
-import { clientIdentity, preAuthRateLimit } from "@/lib/preAuthRateLimit";
+import { createAdminDashCookie, readAdminDashCredentials } from "@/lib/admin/adminDash";
+import { clientIdentity, preAuthRateLimit } from "@/lib/auth/preAuthRateLimit";
 
 /**
  * Workstream H (v.5) admin-dash login. A plain `<form method="POST">` (see

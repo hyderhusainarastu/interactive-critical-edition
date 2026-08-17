@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { listTrashedWorks, purgeExpiredTrash, retryPendingCleanups } from "@/lib/trash";
+import { listTrashedWorks, purgeExpiredTrash, retryPendingCleanups } from "@/lib/library/trash";
 
 /**
  * Lists the caller's trashed works. Opportunistically resumes any unfinished

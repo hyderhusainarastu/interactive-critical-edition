@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
 import { reportWebError } from "@/lib/telemetry";
-import { shouldRecordUsageEvent } from "@/lib/usageEventDedupe";
+import { shouldRecordUsageEvent } from "@/lib/telemetry/usageEventDedupe";
 
 const usageEventSchema = z.object({
   eventType: z.enum(["session_start", "page_view"]),

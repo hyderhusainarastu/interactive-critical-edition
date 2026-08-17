@@ -3,7 +3,7 @@ import { aiUsageLogs, claimScores, db, researchClaims } from "@ice/db";
 import { phase25FeatureEnabled } from "@ice/config";
 import { and, eq, inArray } from "drizzle-orm";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Lists a work's active, non-hidden `research_claim` rows plus their

@@ -4,9 +4,9 @@ import { phase12FeatureEnabled, phase25FeatureEnabled } from "@ice/config";
 import { and, count, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getUserPreferences } from "@/lib/preferences";
-import { getClaimAwaitingAttention, getResearchInsightCounts } from "@/lib/researchDashboard";
-import { getLatestWriterDraft } from "@/lib/writerData";
+import { getUserPreferences } from "@/lib/auth/preferences";
+import { getClaimAwaitingAttention, getResearchInsightCounts } from "@/lib/research/researchDashboard";
+import { getLatestWriterDraft } from "@/lib/writer/writerData";
 import { PageHeader } from "@/components/app/PageHeader";
 
 /**

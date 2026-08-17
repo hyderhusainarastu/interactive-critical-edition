@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdminDash } from "@/lib/adminDash";
+import { requireAdminDash } from "@/lib/admin/adminDash";
 
 /**
  * Workstream H (v.5): the guarded shell for every real admin-dash page.

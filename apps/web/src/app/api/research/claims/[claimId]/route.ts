@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getResearchClaimDetail } from "@/lib/research/claims";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ claimId: string }> }) {
   const userId = await requireResearchApiUser();

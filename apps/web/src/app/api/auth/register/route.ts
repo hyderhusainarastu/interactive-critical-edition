@@ -1,8 +1,8 @@
 import { isBetaTestingMode } from "@ice/config";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { registerUser } from "@/lib/auth-service";
-import { clientIdentity, preAuthRateLimit } from "@/lib/preAuthRateLimit";
+import { registerUser } from "@/lib/auth/auth-service";
+import { clientIdentity, preAuthRateLimit } from "@/lib/auth/preAuthRateLimit";
 
 const registerSchema = z.object({
   name: z.string().min(1).max(200),

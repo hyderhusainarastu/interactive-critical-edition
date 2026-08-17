@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listResearchProjects } from "@/lib/research/projects";
 import { getLinkedResearchProject, linkWriterProjectToResearchProject, unlinkWriterProjectFromResearchProject } from "@/lib/research/writerEvidence";
-import { getOwnedWriterProject } from "@/lib/writerData";
-import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writerApi";
+import { getOwnedWriterProject } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
 
 /**
  * Phase 28.5: links/unlinks this writer project to one of the caller's own

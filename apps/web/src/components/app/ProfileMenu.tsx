@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { InitialsAvatar } from "@/components/charts";
-import { logoutAction } from "@/lib/actions";
+import { logoutAction } from "@/lib/auth/actions";
 
 const PROFILE_LINKS = [
   { href: "/account/profile", label: "Profile" },

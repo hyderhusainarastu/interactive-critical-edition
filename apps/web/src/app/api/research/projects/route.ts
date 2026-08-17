@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createResearchProject, listResearchProjects } from "@/lib/research/projects";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 const createSchema = z.object({
   title: z.string().trim().min(1).max(200),

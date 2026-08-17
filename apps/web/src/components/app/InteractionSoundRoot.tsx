@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { playSound } from "@/lib/sound";
-import { DEFAULT_WORKSPACE_PREFERENCES, normalizeWorkspacePreferences, WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/workspacePreferences";
+import { DEFAULT_WORKSPACE_PREFERENCES, normalizeWorkspacePreferences, WORKSPACE_PREFERENCES_STORAGE_KEY } from "@/lib/auth/workspacePreferences";
 
 /** One capture listener prevents individual controls from accidentally layering sounds. */
 export function InteractionSoundRoot({ children }: { children: React.ReactNode }) {

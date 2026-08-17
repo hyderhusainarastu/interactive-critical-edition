@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseBibtex, parseRis } from "@/lib/writer";
-import { resolveCitation } from "@/lib/citationResolver";
-import { addWriterCitation, getOwnedLibraryCitation, getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { resolveCitation } from "@/lib/reader/citationResolver";
+import { addWriterCitation, getOwnedLibraryCitation, getOwnedWriterProject, getWriterProjectWorkspace } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 import { reportWebError } from "@/lib/telemetry";
 
 const schema = z.discriminatedUnion("kind", [

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { READER_LEVELS } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
-import { setUserReaderLevel } from "@/lib/readerLevel";
+import { setUserReaderLevel } from "@/lib/reader/readerLevel";
 
 /**
  * Accepts an explicit reader-level change (plan §35.2's suggested-level

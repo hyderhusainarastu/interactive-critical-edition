@@ -1,6 +1,6 @@
 import { AnimatedStat, LineChart, type AnimatedStatFormat } from "@/components/charts";
-import { requireAdminDash } from "@/lib/adminDash";
-import { getAdminOverview } from "@/lib/adminDashData";
+import { requireAdminDash } from "@/lib/admin/adminDash";
+import { getAdminOverview } from "@/lib/admin/adminDashData";
 
 // `AnimatedStat` is a Client Component; a Server Component page like this
 // one can only hand it a preset FORMAT NAME, never a format FUNCTION

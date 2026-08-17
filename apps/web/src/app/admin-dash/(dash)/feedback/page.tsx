@@ -1,6 +1,6 @@
-import { requireAdminDash } from "@/lib/adminDash";
-import { getAdminFeedback } from "@/lib/adminDashData";
-import { markFeedbackReadAction } from "@/lib/adminDashActions";
+import { requireAdminDash } from "@/lib/admin/adminDash";
+import { getAdminFeedback } from "@/lib/admin/adminDashData";
+import { markFeedbackReadAction } from "@/lib/admin/adminDashActions";
 
 const CATEGORY_LABEL: Record<string, string> = { bug: "Bug", idea: "Idea", praise: "Praise", other: "Other" };
 

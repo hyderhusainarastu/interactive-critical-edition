@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addResearchProjectQuestion, deleteResearchProjectQuestion, updateResearchProjectQuestion } from "@/lib/research/projects";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 const postSchema = z.object({ question: z.string().trim().min(1).max(2000) });
 const patchSchema = z

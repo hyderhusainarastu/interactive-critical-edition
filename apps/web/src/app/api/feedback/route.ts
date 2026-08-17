@@ -2,13 +2,13 @@ import { db, feedback } from "@ice/db";
 import { reportEvent } from "@ice/observability";
 import { after, NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { feedbackSchema, isHoneypotFilled } from "@/lib/feedback";
-import { feedbackEmailHtml, mailProvider } from "@/lib/mail";
-import { clientIdentity, preAuthRateLimit } from "@/lib/preAuthRateLimit";
+import { feedbackEmailHtml, mailProvider } from "@/lib/auth/mail";
+import { clientIdentity, preAuthRateLimit } from "@/lib/auth/preAuthRateLimit";
 import { reportWebError } from "@/lib/telemetry";
-import { recordUsageEvent } from "@/lib/usageEvents";
+import { recordUsageEvent } from "@/lib/telemetry/usageEvents";
 
 /**
  * Workstream J (v.5): accepts a `FeedbackModal` submission (see that

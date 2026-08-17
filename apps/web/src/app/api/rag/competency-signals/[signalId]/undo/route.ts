@@ -2,7 +2,7 @@ import { phase22CompetencyEnabled } from "@ice/config";
 import { competencySignals, conceptMastery, db, understandingRatings } from "@ice/db";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { isRagApiError, requireRagApiUser } from "@/lib/ragApi";
+import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
 
 /**
  * Sub-phase 22.9b (plan §3.4): undo one applied competency signal.

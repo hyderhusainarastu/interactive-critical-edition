@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReaderLevelFilter } from "@ice/roadmap";
 import { CredibilityMeter } from "@/components/CredibilityMeter";
-import { rolesHaveReaderLevelSignal } from "@/lib/librarySearch";
+import { rolesHaveReaderLevelSignal } from "@/lib/library/librarySearch";
 import { CategoryGlyph, EvidenceLine } from "@/components/shared/annotationPrimitives";
 import { CATEGORY_META, VERIFICATION_LABELS } from "./annotationMeta";
 import { AuthorityBadge, ClaimView } from "./EditionBadges";

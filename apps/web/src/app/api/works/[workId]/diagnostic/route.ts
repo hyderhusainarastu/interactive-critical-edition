@@ -3,7 +3,7 @@ import { INFERRED_FROM_COMPLETION_SCORE, inferMasteryFromCompletedWorks, shouldO
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Phase 9.4 (plan §34.4): the optional, skippable per-work diagnostic —

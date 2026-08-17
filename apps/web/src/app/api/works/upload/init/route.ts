@@ -5,8 +5,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
 
 const schema = z.object({

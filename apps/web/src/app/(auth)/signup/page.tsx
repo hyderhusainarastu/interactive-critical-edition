@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { isBetaTestingMode } from "@ice/config";
-import { registerAction } from "@/lib/actions";
+import { registerAction } from "@/lib/auth/actions";
 import { BetaBadge } from "@/components/shared/BetaBadge";
 import { BetaNotice } from "@/components/shared/BetaNotice";
 

@@ -2,7 +2,7 @@ import { bibliographicRecords, db } from "@ice/db";
 import { asc, ilike } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Searches the shared bibliographic catalog so a reader can pull a

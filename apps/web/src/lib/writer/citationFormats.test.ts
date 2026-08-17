@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { cslToAPA, cslToBibTeX, cslToChicago, cslToRIS, formatCitationList } from "./citationFormats";
-import type { CslJson } from "../writer";
+import type { CslJson } from "@/lib/writer";
 
 /**
  * Phase 29.3: BibTeX/RIS/APA/Chicago citation-export formatters. Pure

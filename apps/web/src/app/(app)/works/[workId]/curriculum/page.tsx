@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { phase12FeatureEnabled } from "@ice/config";
 import { defaultRouteForReaderLevel } from "@ice/curriculum";
 import { requireSession } from "@/lib/auth";
-import { getUserReaderLevel } from "@/lib/readerLevel";
-import { getOwnedDocument } from "@/lib/works";
+import { getUserReaderLevel } from "@/lib/reader/readerLevel";
+import { getOwnedDocument } from "@/lib/library/works";
 import { CurriculumView } from "./CurriculumView";
 
 export default async function CurriculumPage({

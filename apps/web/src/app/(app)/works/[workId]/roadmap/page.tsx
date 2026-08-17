@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getUserReaderLevel } from "@/lib/readerLevel";
-import { getOwnedDocument } from "@/lib/works";
+import { getUserReaderLevel } from "@/lib/reader/readerLevel";
+import { getOwnedDocument } from "@/lib/library/works";
 import { RoadmapView } from "./RoadmapView";
 
 export default async function RoadmapPage({

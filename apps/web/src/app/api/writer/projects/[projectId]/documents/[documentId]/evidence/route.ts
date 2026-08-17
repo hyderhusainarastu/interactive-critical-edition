@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { insertClaimEvidenceIntoDocument } from "@/lib/research/writerEvidence";
-import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writerApi";
+import { isWriterApiError, requireWriterEvidenceApiUser } from "@/lib/writer/writerApi";
 
 /**
  * Phase 28.5: the Evidence panel's "Insert" action. Appends a real

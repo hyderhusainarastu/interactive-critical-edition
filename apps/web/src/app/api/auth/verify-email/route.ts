@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { verifyEmailToken } from "@/lib/auth-service";
+import { verifyEmailToken } from "@/lib/auth/auth-service";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { deleteAccountAction, type DeleteAccountState } from "@/lib/accountActions";
+import { deleteAccountAction, type DeleteAccountState } from "@/lib/auth/accountActions";
 
 const INITIAL_STATE: DeleteAccountState = { status: "idle" };
 

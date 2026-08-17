@@ -4,8 +4,8 @@ import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { scanWithOptionalClamAv, uploadDocumentFile, validateUploadContent } from "@ice/ingestion";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
 import { reportWebError } from "@/lib/telemetry";
 
 const ACCEPTED_TYPES = new Set(["application/pdf", "application/epub+zip", "text/plain", "text/markdown"]);

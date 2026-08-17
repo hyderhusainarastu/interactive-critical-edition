@@ -1,6 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { getLibrary } from "@/lib/library";
-import { getUserReaderLevel } from "@/lib/readerLevel";
+import { getUserReaderLevel } from "@/lib/reader/readerLevel";
 import { LibraryView } from "./LibraryView";
 
 /**

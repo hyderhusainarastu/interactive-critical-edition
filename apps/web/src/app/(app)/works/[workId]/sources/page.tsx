@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 import { getLibrary } from "@/lib/library";
 import { tabDisabledReason } from "@/components/read/workAttention";
 import { SourcesView } from "./SourcesView";

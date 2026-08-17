@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createMonitor, listMonitorsForUser } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 const createSchema = z.object({
   projectId: z.string().uuid().optional(),

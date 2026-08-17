@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
-import { getUserPreferences } from "@/lib/preferences";
+import { getUserPreferences } from "@/lib/auth/preferences";
 import { TrashView } from "./TrashView";
 
 export default async function TrashPage() {

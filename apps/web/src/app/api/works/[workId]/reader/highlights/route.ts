@@ -2,7 +2,7 @@ import { db, highlights } from "@ice/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 const anchorSchema = z.union([
   z.object({

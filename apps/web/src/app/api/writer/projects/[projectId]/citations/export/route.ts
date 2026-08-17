@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { CslJson } from "@/lib/writer";
 import { CITATION_EXPORT_CONTENT_TYPE, CITATION_EXPORT_EXTENSION, formatCitationList } from "@/lib/writer/citationFormats";
-import { getWriterProjectWorkspace } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { getWriterProjectWorkspace } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 const querySchema = z.object({ format: z.enum(["bibtex", "ris", "apa", "chicago"]) });
 

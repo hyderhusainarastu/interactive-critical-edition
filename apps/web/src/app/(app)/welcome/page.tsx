@@ -1,4 +1,4 @@
-import { completeOnboardingAction } from "@/lib/actions";
+import { completeOnboardingAction } from "@/lib/auth/actions";
 import { requireSession } from "@/lib/auth";
 
 /**

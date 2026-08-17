@@ -6,7 +6,7 @@ import {
   DEFAULT_WORKSPACE_PREFERENCES,
   normalizeWorkspacePreferences,
   WORKSPACE_PREFERENCES_STORAGE_KEY,
-} from "@/lib/workspacePreferences";
+} from "@/lib/auth/workspacePreferences";
 import { FEEDBACK_BODY_MAX, FEEDBACK_CATEGORIES, type FeedbackCategory } from "@/lib/feedback";
 
 /**

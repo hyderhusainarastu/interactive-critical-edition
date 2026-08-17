@@ -3,9 +3,9 @@ import { getSignedDocumentUrl } from "@ice/ingestion";
 import { phase12FeatureEnabled } from "@ice/config";
 import { desc, eq, inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { getAnnotationsForDocument } from "@/lib/annotations";
+import { getAnnotationsForDocument } from "@/lib/reader/annotations";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 export async function GET(
   _request: Request,

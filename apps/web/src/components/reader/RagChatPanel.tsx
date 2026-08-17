@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useWorkspacePreferences } from "@/components/app/WorkspacePreferencesProvider";
-import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/ragConversationClient";
+import { loadOrCreateRagConversation, ragJsonFetch } from "@/lib/rag/ragConversationClient";
 import { canPlaySound, playSound } from "@/lib/sound";
 import { useOutsideMenuClose } from "@/hooks/useOutsideMenuClose";
 import { CLAIM_MARKER_COLOR_VAR, CLAIM_MARKER_GLYPH } from "./researchClaims";

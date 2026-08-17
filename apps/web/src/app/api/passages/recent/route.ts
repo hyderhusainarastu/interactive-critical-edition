@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getPassageContextById, listRecentPassageContexts } from "@/lib/passages";
+import { getPassageContextById, listRecentPassageContexts } from "@/lib/reader/passages";
 
 /**
  * Backs the Knowledge Map context chooser's "Passage" tab (spec §2.1/§2.3) —

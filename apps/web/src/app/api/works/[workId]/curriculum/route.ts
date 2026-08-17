@@ -3,8 +3,8 @@ import { phase12FeatureEnabled } from "@ice/config";
 import { CURRICULUM_ROUTES, type CurriculumRoute } from "@ice/curriculum";
 import { READER_LEVELS, type ReaderLevelFilter } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
-import { computeCurriculum } from "@/lib/curriculum";
-import { getOwnedDocument } from "@/lib/works";
+import { computeCurriculum } from "@/lib/roadmap/curriculum";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Computes the curriculum/study guide for a work on demand (plan §34.4

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { updateDataSharingAction } from "@/lib/accountActions";
+import { updateDataSharingAction } from "@/lib/auth/accountActions";
 import { useToast } from "@/components/app/ToastProvider";
 
 /**

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { proseMirrorDocumentSchema } from "@/lib/writer";
-import { getOwnedWriterDocument, saveWriterDocumentIfCurrent } from "@/lib/writerData";
-import { isWriterApiError, requireWriterApiUser } from "@/lib/writerApi";
+import { getOwnedWriterDocument, saveWriterDocumentIfCurrent } from "@/lib/writer/writerData";
+import { isWriterApiError, requireWriterApiUser } from "@/lib/writer/writerApi";
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),

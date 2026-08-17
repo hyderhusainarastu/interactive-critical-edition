@@ -2,7 +2,7 @@ import { db, works } from "@ice/db";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getOwnedWork } from "@/lib/works";
+import { getOwnedWork } from "@/lib/library/works";
 
 /**
  * Soft-deletes a work (plan §34.4 9.7: "30-day work trash"). Sets

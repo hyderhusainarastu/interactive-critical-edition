@@ -11,7 +11,7 @@ import {
   dispatchSynthesizeChamberJob,
   listResearchJobRequestsForProject,
 } from "@/lib/research/jobs";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 const postSchema = z.discriminatedUnion("jobType", [
   z

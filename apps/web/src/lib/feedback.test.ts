@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { FEEDBACK_BODY_MAX, feedbackSchema, isHoneypotFilled } from "./feedback";
+import { FEEDBACK_BODY_MAX, feedbackSchema, isHoneypotFilled } from "@/lib/feedback";
 
 /**
  * Workstream J (v.5): feedback zod schema + honeypot behavior. Run via

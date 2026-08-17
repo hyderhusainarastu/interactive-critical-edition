@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { READER_LEVELS, type ReaderLevelFilter, type RoadmapMode } from "@ice/roadmap";
 import { getApiUserId } from "@/lib/auth";
 import { computeRoadmap } from "@/lib/roadmap";
-import { getOwnedDocument } from "@/lib/works";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * Computes the reading roadmap for a work on demand (plan §13) — a graph

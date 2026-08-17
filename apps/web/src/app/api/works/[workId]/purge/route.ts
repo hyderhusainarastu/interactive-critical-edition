@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getDeletionCleanup, purgeWorkNow } from "@/lib/trash";
-import { getOwnedWork } from "@/lib/works";
+import { getDeletionCleanup, purgeWorkNow } from "@/lib/library/trash";
+import { getOwnedWork } from "@/lib/library/works";
 
 /**
  * "Delete permanently now" (plan §34.4 9.7, hardened in Phase 20.3) — an

@@ -2,10 +2,10 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 import { phase25FeatureEnabled } from "@ice/config";
 import { RESEARCH_MODES, isExplicitResearchMode, type ResearchMode } from "@ice/rag";
-import type { CompetencyNoticeView } from "@/lib/competencyData";
-import { answerRagConversation, getRagConversationView } from "@/lib/ragData";
-import { isRagApiError, requireRagApiUser } from "@/lib/ragApi";
-import { recordUsageEvent } from "@/lib/usageEvents";
+import type { CompetencyNoticeView } from "@/lib/rag/competencyData";
+import { answerRagConversation, getRagConversationView } from "@/lib/rag/ragData";
+import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
+import { recordUsageEvent } from "@/lib/telemetry/usageEvents";
 
 const messageSchema = z.object({
   message: z.string().trim().min(2).max(2_000),

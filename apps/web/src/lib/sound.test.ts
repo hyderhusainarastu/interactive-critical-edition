@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { canPlaySound, playSound } from "./sound";
+import { canPlaySound, playSound } from "@/lib/sound";
 
 // Server/test execution has no WebAudio; calls must stay safe and silent.
 assert.equal(canPlaySound(true), false);

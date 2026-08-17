@@ -11,9 +11,9 @@ import {
 import { desc, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { enforceUserRateLimit } from "@/lib/apiRateLimit";
-import { rateLimitResponse } from "@/lib/apiResponse";
-import { getOwnedDocument } from "@/lib/works";
+import { enforceUserRateLimit } from "@/lib/api/apiRateLimit";
+import { rateLimitResponse } from "@/lib/api/apiResponse";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /**
  * The single idempotent reprocess command (plan §20.5). Starts a fresh,

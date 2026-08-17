@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ResearchInsightCounts } from "@/lib/researchDashboard";
+import type { ResearchInsightCounts } from "@/lib/research/researchDashboard";
 
 /**
  * Compact, zero-LLM research insight-feed module for the signed-in

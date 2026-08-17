@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { addResearchProjectWorkMember, removeResearchProjectMember } from "@/lib/research/projects";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /**
  * Adds/removes a project member. Scoped to `memberType = "work"` this lane

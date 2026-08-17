@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { READER_LEVELS, type ReaderLevel } from "@ice/roadmap";
-import type { WorkspacePreferences } from "@/lib/workspacePreferences";
+import type { WorkspacePreferences } from "@/lib/auth/workspacePreferences";
 
 const READER_LEVEL_LABEL: Record<ReaderLevel, string> = {
   beginner: "Beginner",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { addMonitorHitToCorpus } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ hitId: string }> }) {
   const userId = await requireMonitoringApiUser();

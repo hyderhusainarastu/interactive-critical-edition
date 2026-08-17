@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiUserId } from "@/lib/auth";
-import { getPublishedEdition } from "@/lib/edition";
-import { getOwnedDocument } from "@/lib/works";
+import { getPublishedEdition } from "@/lib/reader/edition";
+import { getOwnedDocument } from "@/lib/library/works";
 
 /** The edition API intentionally reads only the published v2 run. Callers can
  * fall back to legacy reader endpoints when this returns `edition: null`. */

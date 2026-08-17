@@ -2,7 +2,7 @@ import { phase12FeatureEnabled, phase25FeatureEnabled } from "@ice/config";
 import { notFound } from "next/navigation";
 import { WriterEditor } from "@/components/writer/WriterEditor";
 import { requireSession } from "@/lib/auth";
-import { getWriterProjectWorkspace } from "@/lib/writerData";
+import { getWriterProjectWorkspace } from "@/lib/writer/writerData";
 
 export default async function WriterProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
   if (!phase12FeatureEnabled("writer")) notFound();

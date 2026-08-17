@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { STATUS_COLOR, STATUS_LABEL } from "@/lib/status";
+import { STATUS_COLOR, STATUS_LABEL } from "@/lib/telemetry/status";
 import { queueGroupFor, tabDisabledReason, type WorkProcessingStatus, type WorkQueueGroup } from "@/components/read/workAttention";
 
 export interface QueueWorkItem {

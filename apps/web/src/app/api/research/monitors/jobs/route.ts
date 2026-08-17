@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listResearchJobRequestsForUserMonitors } from "@/lib/research/monitors";
-import { isResearchApiError, requireMonitoringApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireMonitoringApiUser } from "@/lib/research/researchApi";
 
 /** Backs the Monitors view's job-status polling (Item 1(b)/3 of the
  *  Research-workspace fix lane) — `run_monitor` request rows for the

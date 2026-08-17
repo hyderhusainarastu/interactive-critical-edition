@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createRagConversation, listRagConversations } from "@/lib/ragData";
-import { isRagApiError, requireRagApiUser } from "@/lib/ragApi";
-import { getOwnedDocument } from "@/lib/works";
+import { createRagConversation, listRagConversations } from "@/lib/rag/ragData";
+import { isRagApiError, requireRagApiUser } from "@/lib/rag/ragApi";
+import { getOwnedDocument } from "@/lib/library/works";
 
 const createSchema = z.object({ contextWorkId: z.string().uuid().nullable().optional() });
 

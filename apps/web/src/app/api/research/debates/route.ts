@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDebateClusterById, listRecentDebateClusters } from "@/lib/research/debates";
-import { isResearchApiError, requireResearchApiUser } from "@/lib/researchApi";
+import { isResearchApiError, requireResearchApiUser } from "@/lib/research/researchApi";
 
 /**
  * Backs the Knowledge Map context chooser's "Debate" tab (spec §2.1/§2.3) —

@@ -2,8 +2,8 @@
 
 import { useActionState, useRef, useState } from "react";
 import { InitialsAvatar } from "@/components/charts";
-import { updateProfileAction, type UpdateProfileState } from "@/lib/accountActions";
-import { AVATAR_MAX_BYTES, AVATAR_MAX_DIMENSION, base64ByteLength, clampAvatarDimensions } from "@/lib/avatarUpload";
+import { updateProfileAction, type UpdateProfileState } from "@/lib/auth/accountActions";
+import { AVATAR_MAX_BYTES, AVATAR_MAX_DIMENSION, base64ByteLength, clampAvatarDimensions } from "@/lib/auth/avatarUpload";
 
 const INITIAL_STATE: UpdateProfileState = { status: "idle" };
 
