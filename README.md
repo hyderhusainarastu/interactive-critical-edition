@@ -1,4 +1,8 @@
-# Interactive Critical Edition
+# Palimnote
+
+**A text is never alone.** [Visit Palimnote](https://www.palimnote.com) · [Documentation](https://hyderhusainarastu.com/palimnote/)
+
+This repository (`interactive-critical-edition`) is the source for Palimnote, an interactive critical edition platform, currently in beta.
 
 A web application that helps readers understand difficult scholarly works — philosophy, monographs, research articles — by automatically generating an interactive "critical edition": an annotated reader that surfaces explicit citations, implicit intellectual context, and secondary literature, and turns that into a personalized, priority-ranked reading roadmap.
 
