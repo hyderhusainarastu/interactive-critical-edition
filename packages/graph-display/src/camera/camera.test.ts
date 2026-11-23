@@ -22,7 +22,7 @@ import {
   type Vec3,
 } from "./camera";
 
-// Ported verbatim from prototypes/graph-bakeoff/src/camera/cameraMath.test.ts
+// Ported verbatim from docs/internal/prototypes/graph-bakeoff/src/camera/cameraMath.test.ts
 // per the Stage 3 spec (docs/design/knowledge-map-spec.md §1.3), MINUS the
 // bakeoff's own "band Z assignment (charter §8)" describe block. That block
 // exercised computeBandGap/bandZ/maxBandJitter, which are deliberately NOT

@@ -1,6 +1,6 @@
 /**
  * Regression for the "floors2" production crash (see
- * `docs/incidents/`/the crash-analysis report folded into the register as
+ * `docs/internal/incidents/`/the crash-analysis report folded into the register as
  * D-23-xx): `analyzeEditionRun`'s main ranked-loop insert into
  * `research_resource` had no conflict guard, unlike the independent
  * citation-resolution bridge insert in the same file

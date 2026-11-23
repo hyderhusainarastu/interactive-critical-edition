@@ -32,5 +32,5 @@ This is not a full Cartesian product.  Browser-engine smoke, dark theme,
 reduced-motion, keyboard, long/empty/error and accessibility cases stay in the
 feature suites listed above, where their fixtures and assertions are specific.
 Before a release, final Stage 7 runs must record the exact commands/results in
-`docs/audits/ui-graph-redesign-verification.md`; manual VoiceOver walkthroughs
+`docs/internal/audits/ui-graph-redesign-verification.md`; manual VoiceOver walkthroughs
 remain a required human gate and cannot be claimed by these automated specs.

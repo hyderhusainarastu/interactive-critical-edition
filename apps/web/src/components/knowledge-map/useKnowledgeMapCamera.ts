@@ -4,7 +4,7 @@
  * `ForceGraphMethods` ref: `home()`, `fit()`, `focus(...)`,
  * `applyOrientationPreset(...)`, `getCameraPose()`.
  *
- * Structurally a direct port of `prototypes/graph-bakeoff/src/protoA/GraphScene.tsx`'s
+ * Structurally a direct port of `docs/internal/prototypes/graph-bakeoff/src/protoA/GraphScene.tsx`'s
  * inline `applyHome`/`applyFit`/`applyFocus`/`currentPoseVectors`/`currentFov`
  * (lines 268–345), extracted into a reusable hook per spec §1.1/§4.1 so
  * `KnowledgeMapScene.tsx` stays focused on scene/lifecycle/interaction

@@ -4,7 +4,7 @@
  * damaged/OCR'd source occasionally produces one, and it throws
  * "unsupported Unicode escape sequence" deep in pg-pool, crashing the whole
  * worker process rather than just failing one job (see
- * docs/incidents/render-server-failures-phase-19.md). Replace both with the
+ * docs/internal/incidents/render-server-failures-phase-19.md). Replace both with the
  * Unicode replacement character at the ingestion boundary, before any
  * extracted string reaches the database or a queue payload.
  */

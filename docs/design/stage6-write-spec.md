@@ -7,7 +7,7 @@ Nothing is left "TBD" within scope.
 Sources read before writing this spec: charter §5 "Writer" and "Ask Library"/"Account" capability-
 preservation bullets, charter §6 "Write" target-IA bullets, charter §15 Stage 6 implement/gate text, charter
 §16 journey 7 and the risk-based-matrix rules, charter §17 accessibility requirements
-(`docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`); `docs/design/redesign-shell-spec.md` (Stage 1,
+(`docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`); `docs/design/redesign-shell-spec.md` (Stage 1,
 already implemented — primitives, `ContextBar`/`ContextBarProvider`, immersive-route classification, the
 `SecondaryPanelProvider` singleton); direct reads of every current Writer file: both `(app)/writer` pages,
 `WriterEditor.tsx`, `WriterProjectsView.tsx`, all 11 `api/writer/**` routes' request/response shapes,

@@ -11,7 +11,7 @@ import { seedStage5Fixture, type Stage5Fixture } from "./stage5-verification-see
  * light/dark/reduced-motion screenshots. Runs against the dedicated
  * `palimnote-s5-pg` Postgres (port 5435) and a `next start` production
  * build already serving on PORT 3250 (both started manually for this
- * verification pass — see docs/audits/stage5-research-verification.md).
+ * verification pass — see docs/internal/audits/stage5-research-verification.md).
  * No worker process runs and no live provider is called anywhere in this
  * file: every dispatch exercised here is a plain DB insert + pg-boss
  * enqueue that nothing consumes, the same "verify the queued row, don't
@@ -44,7 +44,7 @@ async function scan(page: Page) {
   return new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
 }
 
-const SHOT_DIR = "docs/audits/stage5-research-verification";
+const SHOT_DIR = "docs/internal/audits/stage5-research-verification";
 
 test.describe("Stage 5 research verification — journeys 4/6, pipeline surface, permalinks, screenshots", () => {
   test.beforeAll(async () => {
@@ -334,7 +334,7 @@ test.describe("Stage 5 research verification — journeys 4/6, pipeline surface,
     }
   });
 
-  test("screenshots: 1440/375 widths, dark mode, and reduced motion — unmasked, into docs/audits", async ({ page }) => {
+  test("screenshots: 1440/375 widths, dark mode, and reduced motion — unmasked, into docs/internal/audits", async ({ page }) => {
     await login(page);
 
     await page.emulateMedia({ colorScheme: "light", reducedMotion: "no-preference" });

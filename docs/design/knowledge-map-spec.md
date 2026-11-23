@@ -1,13 +1,13 @@
 # Knowledge Map Rebuild — Stage 3 Spec
 
 Status: design spec for Stage 3 implementation. Written against the charter
-(`docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`, hereafter "the
+(`docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`, hereafter "the
 charter") §8–§14, the completed Stage 2 renderer bakeoff
-(`docs/audits/graph-renderer-bakeoff.md`, winner **Prototype A** —
+(`docs/internal/audits/graph-renderer-bakeoff.md`, winner **Prototype A** —
 `react-force-graph-3d@1.29.1`, chosen per the correction addendum §C.6/§C.7,
 final and binding over the original §7 verdict), the built-and-tested
 `@ice/graph-display` package, the Stage 0 baseline audit
-(`docs/audits/ui-graph-redesign-baseline.md`), and the Stage 1 shell
+(`docs/internal/audits/ui-graph-redesign-baseline.md`), and the Stage 1 shell
 (`apps/web/src/components/shell/`). No code is written by this document —
 it is the concrete plan Stage 3 implementation follows.
 
@@ -78,7 +78,7 @@ the naming discipline `packages/graph-display` already established.
 | `arrangeStore.ts` | `localStorage`-backed pinned-node-position persistence, scoped by `(userId, contextKind, contextId)` composite key — "Pinned positions are scoped to the current user/context and may be stored locally if no existing owner-scoped persistence exists... Do not add a database migration solely for saved layout." | — (new) | §11 "Arrange mode" |
 | `useGraphUrlState.ts` | React/Next-router binding hook. Reads/writes `URLSearchParams` via `useSearchParams`/`router.replace`, calling straight into `@ice/graph-display`'s `parseGraphUrlState`/`serializeGraphUrlState`/`reconstructGraphUrlState` — **no URL-schema or reconstruction logic of its own**, so the pure package stays the single source of truth and this hook cannot silently drift from it. | — (new, thin binding only) | §9 "Make the following URL state restorable" |
 | `useLegacyGraphUrlRedirect.ts` | On mount, calls `@ice/graph-display`'s `translateLegacyGraphUrl` against the current `URLSearchParams`; performs the `redirect` case via `router.replace`, seeds `state`/`chooser` cases into `useGraphUrlState`. One hook, one call site (`KnowledgeMapWorkspace.tsx`), so legacy translation runs exactly once per navigation. | — (new, thin binding only) | §9 "Legacy graph URL compatibility" |
-| `cameraMath.ts` | **Re-export only** — `export * from "@ice/graph-display/camera"` (see §1.3 for why this lands in `@ice/graph-display`, not a new copy here). | `prototypes/graph-bakeoff/src/camera/cameraMath.ts` | §11 |
+| `cameraMath.ts` | **Re-export only** — `export * from "@ice/graph-display/camera"` (see §1.3 for why this lands in `@ice/graph-display`, not a new copy here). | `docs/internal/prototypes/graph-bakeoff/src/camera/cameraMath.ts` | §11 |
 | `useKnowledgeMapCamera.ts` | React hook wrapping `cameraMath.ts`'s pure functions around a live `ForceGraphMethods` ref: `home()`, `fit()`, `focus(nodeId)`, `getCameraPose()`, reduced-motion detection, tween-vs-snap. Structurally the same shape as `GraphScene.tsx`'s inline `applyHome`/`applyFit`/`applyFocus`/`currentPoseVectors`, extracted into a reusable hook so `KnowledgeMapScene.tsx` isn't a 700-line single file the way `KnowledgeGraph3D.tsx` was. | `protoA/GraphScene.tsx`'s camera helpers (lines 268–345) | §11 |
 | `nodeVisuals.ts` | `NodeVisualFactory`/`NodeVisual` — Object3D construction per `DisplayKind`, geometry/material caching, picking volume, selection/hover rings. | `protoA/nodeVisuals.ts` (near-verbatim; swap `DisplayKind`'s type param for the real `NodeType` instantiation via `adapter.ts`) | §10 "Node geometry and color" |
 | `labelLayer.ts` | Capped screen-space HTML label overlay with greedy AABB collision avoidance. | `protoA/labelLayer.ts` (verbatim — zero product-specific logic, already generic over `LabelCandidate`) | §10 "Labels" |
@@ -128,7 +128,7 @@ existing repo convention (every current `graph/` file has a sibling
 
 ### 1.3 Where the camera-math module lands: `packages/graph-display`, not a new sibling package
 
-Decision: **port `prototypes/graph-bakeoff/src/camera/cameraMath.ts` into
+Decision: **port `docs/internal/prototypes/graph-bakeoff/src/camera/cameraMath.ts` into
 `packages/graph-display/src/camera.ts`**, re-exported from
 `packages/graph-display/src/index.ts`, with
 `apps/web/src/components/knowledge-map/cameraMath.ts` reduced to a one-line
@@ -304,7 +304,7 @@ Stage 0's own audit:
   synthesized only inside a debate expansion, from the same
   `claim_relationship`-judged data `graphDebate.ts` already loads (one
   claim "position" per distinct stance the judged relationships imply —
-  see `docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md` §8's
+  see `docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md` §8's
   `debate/question → positions → claims → decisive evidence` flow), not a
   new DB read.
 - **Learning-step display nodes**: deterministic projection of the
@@ -672,7 +672,7 @@ preserve the old 140/400/800 degradation tiers automatically") and the
 bakeoff's own explicit finding.
 
 New thresholds, derived directly from the bakeoff report
-(`docs/audits/graph-renderer-bakeoff.md` §8, "Derived LOD-threshold
+(`docs/internal/audits/graph-renderer-bakeoff.md` §8, "Derived LOD-threshold
 recommendations") plus the charter's own 120/60 disclosure caps
 (`@ice/graph-display/disclosure.ts`'s `VISIBLE_CAP`, already built:
 `{ desktop: 120, mobile: 60 }`):
@@ -708,7 +708,7 @@ Mapped against every charter §16 "Browser graph tests" item and the
 fixture-boundary list, each assigned to a spec file. Fixture generation
 reuses `@ice/graph-display`'s existing test fixtures
 (`testFixtures.ts`) plus the bakeoff's own fixture generator
-(`prototypes/graph-bakeoff/src/fixtures/`) where its shape already matches
+(`docs/internal/prototypes/graph-bakeoff/src/fixtures/`) where its shape already matches
 (both already model empty/one-node/disconnected/directed/self-link/
 parallel-link/duplicate-id/dangling-endpoint/long-label/dense-hub cases per
 the bakeoff's own charter §16 mandate — reused, not reinvented).
@@ -818,7 +818,7 @@ frustum/data assertions; pixel variance alone is insufficient."
 ### 7.4 Real-GPU performance measurements
 
 Run separately from headless CI, on the same machine/protocol the bakeoff
-report already established (`docs/audits/graph-renderer-bakeoff.md` §1) —
+report already established (`docs/internal/audits/graph-renderer-bakeoff.md` §1) —
 **not** re-measured from scratch, since Stage 3 is integrating the exact
 renderer/camera/node-visual code the bakeoff already measured, not writing
 new rendering logic. A short confirmation pass (one scripted orbit per

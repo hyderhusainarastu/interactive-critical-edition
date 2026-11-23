@@ -10,7 +10,7 @@ import { and, eq } from "drizzle-orm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Regression for D-21-6 (`docs/audits/phase-21-visualization-audit.md`):
+ * Regression for D-21-6 (`docs/internal/audits/phase-21-visualization-audit.md`):
  * `analyzeEditionRun`'s work→bibliographic_record classification edge insert
  * (the live production edition-pipeline path, unlike the legacy `analyzeWork`)
  * had no existence guard at all, so reprocessing the same document duplicated

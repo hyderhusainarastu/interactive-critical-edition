@@ -2,7 +2,7 @@
  * Phase 25.5 Spike A — embedding calibration for Stage-1 dense retrieval.
  *
  * Ports the honesty guards and sweep methodology of
- * /Users/hyderhusainarastu/Project/scholarlens_src/eval/stage1_separation.py
+ * <repo-root>/../<upstream-src>/eval/stage1_separation.py
  * to TypeScript, over Palimnote's own ported/drafted gold sets
  * (packages/claims/src/eval/gold/), using the real `embedMany` batching
  * seam from packages/ai-adapters instead of local sentence-transformers.

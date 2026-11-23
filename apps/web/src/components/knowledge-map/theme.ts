@@ -7,7 +7,7 @@
  * reading-state progress arc), the choice is a documented judgment call,
  * called out inline rather than left implicit.
  *
- * Ported from `prototypes/graph-bakeoff/src/protoA/theme.ts` per spec
+ * Ported from `docs/internal/prototypes/graph-bakeoff/src/protoA/theme.ts` per spec
  * §1.1, re-keyed from the bakeoff's standalone `DisplayKind` union to the
  * real `DisplayKind<NodeType>` (`@ice/graph-display` generic instantiated
  * against `../graph/types`'s `NodeType`), and extended with the

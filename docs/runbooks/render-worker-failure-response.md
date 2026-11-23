@@ -1,6 +1,6 @@
 # Runbook: Render Worker Failure Response
 
-Standing procedure for diagnosing a Render server-failure notification for `interactive-critical-edition-worker` (`srv-d9dgiamrnols73ccpa10`). Written from the Phase 19 incident diagnosis (`docs/incidents/render-server-failures-phase-19.md`); extends the Render-specific entries already in `docs/PROJECT-LOG.md` Known Problems rather than replacing them.
+Standing procedure for diagnosing a Render server-failure notification for `interactive-critical-edition-worker` (`srv-d9dgiamrnols73ccpa10`). Written from the Phase 19 incident diagnosis (`docs/internal/incidents/render-server-failures-phase-19.md`); extends the Render-specific entries already in `docs/PROJECT-LOG.md` Known Problems rather than replacing them.
 
 ## 1. Establish the failure class first — cheapest checks first
 
@@ -47,7 +47,7 @@ Look for, in order of how often they've actually occurred here:
 2. Add a regression test that fails on the old behavior.
 3. Ship the smallest correct repair.
 4. Verify via a fresh `render deploys create` (not `render restart` — restart does not re-read env vars or re-run the build, see `docs/PROJECT-LOG.md` Known Problems) and confirm the new instance's own startup log line, not just the API's 200 response.
-5. Record the incident in `docs/incidents/` following the R-19-1 table shape, and update this runbook if the failure class is new.
+5. Record the incident in `docs/internal/incidents/` following the R-19-1 table shape, and update this runbook if the failure class is new.
 
 ## 5. Do not
 

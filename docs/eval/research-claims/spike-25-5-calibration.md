@@ -4,7 +4,7 @@
 
 ## What this measures (and what it doesn't)
 
-This spike measures **Stage 1** of the claims pipeline — the cosine-similarity threshold that decides which claim pairs are worth sending to the (expensive) LLM judge at all. It does **not** measure judge quality; that's Spike B (`spike-25-5-judge.md`). Ports the honesty guards of `/Users/hyderhusainarastu/Project/scholarlens_src/eval/stage1_separation.py` to TypeScript over Palimnote's own gold sets, using the real `embedMany` batching seam (`packages/ai-adapters/src/embeddings.ts`) instead of local sentence-transformers.
+This spike measures **Stage 1** of the claims pipeline — the cosine-similarity threshold that decides which claim pairs are worth sending to the (expensive) LLM judge at all. It does **not** measure judge quality; that's Spike B (`spike-25-5-judge.md`). Ports the honesty guards of `<repo-root>/../<upstream-src>/eval/stage1_separation.py` to TypeScript over Palimnote's own gold sets, using the real `embedMany` batching seam (`packages/ai-adapters/src/embeddings.ts`) instead of local sentence-transformers.
 
 ## Data
 

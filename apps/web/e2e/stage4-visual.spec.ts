@@ -9,7 +9,7 @@ import { loginAs, markOnboarded, seedResumableWork } from "./stage4VerifyHelpers
  * checks (no horizontal scroll, 0 running animations under emulated
  * `reduced-motion`, light/dark both render) across every surface this lane
  * changed — Home, Reading Queue, Library, Upload, Reader, 2D Roadmap — at
- * 1440 and 375. Screenshots land in `docs/audits/stage4-read-verification/`
+ * 1440 and 375. Screenshots land in `docs/internal/audits/stage4-read-verification/`
  * (the report cites them by filename). This is a real, committed spec —
  * not a throwaway script — so a future round can re-run the exact same
  * capture rather than re-deriving it.

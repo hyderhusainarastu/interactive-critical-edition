@@ -1,33 +1,24 @@
-# Interactive Critical Edition
+# Interactive Critical Edition (Palimnote)
 
-A web application that helps readers understand difficult scholarly works — philosophy, monographs, research articles — by automatically generating an interactive "critical edition": an annotated reader that surfaces explicit citations, implicit intellectual context, and secondary literature, and turns that into a personalized, priority-ranked reading roadmap.
+Upload a difficult scholarly text and get a traceable critical edition: resolved citations, a reading route, quote-anchored annotations and a knowledge graph. Built for readers of dense philosophy, monographs and research articles.
 
-Upload a primary text (e.g. Heidegger's *Being and Time*) and the system helps answer the questions a reader is otherwise left to guess at: what background material is actually necessary, where to start, in what order, how much of each work to read, and which references are explicit versus scholarly inference. A personal knowledge profile means the system stops recommending what you already know.
-
-**Status:** Phases 0–9 are deployed. The web app runs on Vercel, its background worker on Render, and its database/private document storage on Supabase. Production uses an honest `structure-limited` fallback when private GROBID is unavailable; local GROBID provides the full structured-extraction acceptance path. See [docs/PROJECT-LOG.md](./docs/PROJECT-LOG.md) for current implementation status and the full build log.
+**Status:** beta, source-available. See [License](#license).
 
 ## What it does
 
-- **Upload & ingest** PDF / EPUB / text — parsed, footnotes detected, metadata confirmed by you.
-- **Scholarly analysis** — citations extracted and resolved against real bibliographic sources (Crossref / OpenAlex / Open Library), each reference classified into one of ten relationship categories with a confidence and full provenance. Bibliographic facts come only from real lookups, never invented; when no AI key is set a deterministic heuristic stands in (flagged as such).
-- **Annotated reader** — quote-anchored highlights, notes, bookmarks (survive re-render), footnotes, and AI annotations you can approve / dispute / reject / edit / hide. Light / dark / focus modes, adjustable typography, split-pane.
-- **Reading roadmap** — references ranked into dependency-ordered priority tiers, personalized by a knowledge profile (rate what you know and the plan re-sorts), with mode / expertise / time-budget filters.
-- **3D knowledge graph** — your works and the readings they reference, with read / unread / missing-link states, plus a mandatory accessible table fallback.
-- **Landing page, onboarding, privacy/terms, and an admin dashboard** (platform + AI-cost view).
+- **Ingest** PDF, EPUB or text; footnotes are detected and you confirm the metadata.
+- **Resolve citations** against Crossref, OpenAlex and Open Library. Each reference gets one of ten relationship categories, a confidence and its provenance. Bibliographic facts come only from real lookups. Without an LLM key a deterministic heuristic runs and is labelled as such.
+- **Read and annotate** with quote-anchored highlights, notes, bookmarks and LLM annotations you can approve, dispute, edit or hide.
+- **Reading roadmap** ranked into dependency-ordered tiers and re-sorted by what you already know.
+- **Knowledge graph** of your works and their references, with an accessible table fallback.
 
-Every AI-generated claim carries a confidence and its provenance — a research aid, not a substitute for the primary sources.
-
-## Project memory
-
-[`docs/PROJECT-LOG.md`](./docs/PROJECT-LOG.md) is the canonical, continuously-updated project memory: purpose, requirements, architecture, design decisions and rationale, current status, completed/remaining work, known issues, and exact commands to run/test/build/migrate/deploy. Read it first when resuming work on this project.
-
-The full implementation plan (requirements inventory, architecture, data model, phased roadmap) lives at [`docs/architecture/plan.md`](./docs/architecture/plan.md).
+Every generated claim carries a confidence and its provenance. It is a research aid, not a substitute for the primary sources.
 
 ## Stack
 
-TypeScript throughout — Next.js (App Router) on Vercel, a Node worker service on Render (pg-boss consumer for ingestion + AI analysis), PostgreSQL + `pgvector` + Storage via Supabase, Auth.js for authentication, OpenAI and Anthropic behind a provider-agnostic adapter (with a deterministic heuristic fallback), `react-force-graph-3d` for the 3D knowledge-graph visualizer. Monorepo packages: `db` (Drizzle schema/migrations), `ingestion`, `ai-adapters`, `bibliographic`, `roadmap`, `observability`. Full rationale and alternatives comparison in the architecture plan linked above.
+TypeScript monorepo. Next.js (App Router), a Node worker (pg-boss), PostgreSQL with pgvector, Auth.js, and provider-agnostic LLM adapters (OpenAI and Anthropic, plus the heuristic fallback). The citation resolution logic is also available as a standalone library: [scholarly-citation-resolver](https://github.com/hyderhusainarastu/scholarly-citation-resolver).
 
-## Getting started
+## Quick start
 
 Requires Node 24 (see `.node-version`), pnpm (via Corepack), and a container runtime for local Postgres (Colima recommended on macOS — no Docker Desktop needed; `brew install colima docker docker-compose`, then `colima start` once).
 
@@ -65,20 +56,17 @@ pnpm --filter web test:e2e
 
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests, a build, and the CI-safe E2E specs (landing/onboarding accessibility + the authorization matrix) against an ephemeral Postgres service on every push/PR — no external accounts required. The analysis/reader/roadmap E2E specs need the worker and live bibliographic APIs, so they run manually against the full local stack.
 
+Local GROBID setup for full structured extraction is in [docs/grobid.md](./docs/grobid.md).
+
+## Documentation
+
+- [docs/PROJECT-LOG.md](./docs/PROJECT-LOG.md): current status, decisions, commands.
+- [docs/architecture/plan.md](./docs/architecture/plan.md): architecture and data model.
+- [AGENTS.md](./AGENTS.md): instructions for AI coding assistants.
+- Historical audits, handoffs and prototypes live under [docs/internal/](./docs/internal/).
+
 ## License
 
-Not yet decided; treat as all-rights-reserved until a LICENSE file is added.
-# Phase 8 local structured extraction
+All rights reserved; the source is published for reading and review. No open-source license is granted.
 
-The app defaults to `ANALYSIS_PIPELINE=v1`. To exercise the additive v2
-edition pipeline locally, start the free local GROBID service and set the
-worker environment to `ANALYSIS_PIPELINE=v2` and `GROBID_URL=http://localhost:8070`:
-
-```sh
-docker compose --profile grobid up -d grobid
-curl -fsS http://localhost:8070/api/isalive
-```
-
-GROBID is deliberately local-only. If it is unset or unavailable, v2 publishes
-the clearly labelled `structure-limited` PDF.js page-block fallback; private
-uploads are never sent to a public GROBID endpoint.
+Part of the Palimnote project - more at https://github.com/hyderhusainarastu

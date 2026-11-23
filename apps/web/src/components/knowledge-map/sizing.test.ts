@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeNodeScale, computeVisibleDegrees, MAX_SCALE, MIN_SCALE, percentileOf, ROOT_SCALE } from "./sizing";
 
 /**
- * Ported from `prototypes/graph-bakeoff/src/protoA/sizing.test.ts`.
+ * Ported from `docs/internal/prototypes/graph-bakeoff/src/protoA/sizing.test.ts`.
  */
 
 describe("computeNodeScale", () => {

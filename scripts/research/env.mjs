@@ -7,7 +7,7 @@ import { readFileSync, existsSync } from "node:fs";
 // the worktree, so env vars are loaded at the Node runtime level instead —
 // the *value* of any key never appears in a shell command line or is ever
 // logged/printed by this module or any caller.
-const WORKER_ENV_PATH = "/Users/hyderhusainarastu/Project/AutoCriticalEditionProject/apps/worker/.env";
+const WORKER_ENV_PATH = process.env.WORKER_ENV_PATH ?? "<repo-root>/apps/worker/.env"; // set WORKER_ENV_PATH to your checkout
 
 export function loadWorkerEnv(path = WORKER_ENV_PATH) {
   if (!existsSync(path)) {

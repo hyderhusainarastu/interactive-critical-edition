@@ -5,8 +5,8 @@ is final for this stage; nothing is left "TBD." Where a decision touches a file 
 it is called out explicitly as deferred/out of scope (§9) rather than silently assumed.
 
 Sources read before writing this spec: charter §5 ("Research" capabilities), §6 ("Research" target IA), §15
-Stage 5, §16 journeys 4 and 6 (`docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`); baseline audit §3
-(`docs/audits/ui-graph-redesign-baseline.md`); the Stage 1 shell/design-system spec
+Stage 5, §16 journeys 4 and 6 (`docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`); baseline audit §3
+(`docs/internal/audits/ui-graph-redesign-baseline.md`); the Stage 1 shell/design-system spec
 (`docs/design/redesign-shell-spec.md`, for the dialog/primitive house style and token map this stage reuses
 unchanged); and direct reads of every `(app)/research/**` page, every `components/research/*.tsx` component,
 `hooks/useResearchJobPolling.ts`, `lib/research/pipelineSteps.ts`/`pipeline.ts`/`chambers.ts`, the research API

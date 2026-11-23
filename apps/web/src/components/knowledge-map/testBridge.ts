@@ -3,7 +3,7 @@
  * itself under (spec §7.3: "expose a window-level test hook from the scene
  * for node projected positions — production-safe, read-only"). Modeled on
  * the Stage 2 bakeoff's own `HarnessBridge`
- * (`prototypes/graph-bakeoff/src/bench/harnessBridge.ts`) — same idea
+ * (`docs/internal/prototypes/graph-bakeoff/src/bench/harnessBridge.ts`) — same idea
  * (Playwright talks to the page over CDP, not via module imports, so a
  * `window`-level contract is the only way for a Playwright spec to read
  * live renderer state), narrowed to exactly what the charter §16 browser

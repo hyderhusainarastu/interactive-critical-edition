@@ -2,7 +2,7 @@
  * Deterministic initial-position seeding and semantic-band Z assignment
  * (charter §8/§10/§14 "deterministic layout seed" / "band-constrained Z ...
  * applied as fixed fz"). Ported from
- * `prototypes/graph-bakeoff/src/protoA/layout.ts` per spec §1.1.
+ * `docs/internal/prototypes/graph-bakeoff/src/protoA/layout.ts` per spec §1.1.
  *
  * `react-force-graph-3d`'s underlying d3-force layout otherwise seeds
  * initial node positions from `Math.random()`, which is not reproducible

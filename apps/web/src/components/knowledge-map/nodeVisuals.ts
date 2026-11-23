@@ -7,7 +7,7 @@
  * everything this factory allocates is disposed together in one
  * `dispose()` call on unmount (charter §14).
  *
- * Ported from `prototypes/graph-bakeoff/src/protoA/nodeVisuals.ts` per
+ * Ported from `docs/internal/prototypes/graph-bakeoff/src/protoA/nodeVisuals.ts` per
  * spec §1.1, extended with the charter §10 treatments the bakeoff didn't
  * model (its fixtures carried no reading-state/credibility data):
  *   - Reading state: a small lower progress arc (`READING_STATE_ARC_*`).

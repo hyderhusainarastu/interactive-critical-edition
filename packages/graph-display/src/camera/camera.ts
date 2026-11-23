@@ -1,7 +1,7 @@
 /**
  * Shared, pure, renderer-agnostic camera math (charter §8/§9/§11/§13).
  *
- * Ported verbatim from `prototypes/graph-bakeoff/src/camera/cameraMath.ts`
+ * Ported verbatim from `docs/internal/prototypes/graph-bakeoff/src/camera/cameraMath.ts`
  * into this package per the Stage 3 spec (`docs/design/knowledge-map-spec.md`
  * §1.3): both bakeoff prototypes and the real Knowledge Map rebuild consume
  * exactly this module for camera pose so the renderer decision and the
@@ -19,7 +19,7 @@
  *
  * This module deliberately reproduces, as documented negative tests, the
  * exact defect classes the baseline audit confirmed in the current graph
- * code (docs/audits/ui-graph-redesign-baseline.md §2): deriving view
+ * code (docs/internal/audits/ui-graph-redesign-baseline.md §2): deriving view
  * direction from world-origin-relative camera position, sizing/zoom from
  * `camera.position.length()`, and fit/reset math that ignores the active
  * controls target.
@@ -381,7 +381,7 @@ export function validatePose(position: Vec3, target: Vec3): PoseValidation {
 /** The one correct distance measurement for zoom-dependent node/label
  * sizing: distance from the camera to the *current controls target*, not
  * `camera.position.length()` (distance from world origin) — the exact
- * baseline defect (docs/audits/ui-graph-redesign-baseline.md §2, item 4)
+ * baseline defect (docs/internal/audits/ui-graph-redesign-baseline.md §2, item 4)
  * this function exists to make impossible to accidentally reintroduce. */
 export function distanceToTarget(cameraPosition: Vec3, target: Vec3): number {
   return vecLength(vecSub(cameraPosition, target));

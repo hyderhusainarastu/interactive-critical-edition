@@ -692,7 +692,7 @@ export function ReaderShell({
             }}
           >
             {/* KNOWN ISSUE, not fixed here (2026-07-28, discovered during the
-                Stage 4 visual sweep — see docs/audits/stage4-read-verification.md):
+                Stage 4 visual sweep — see docs/internal/audits/stage4-read-verification.md):
                 on a narrow (~375px) viewport, the mobile fixed bottom nav
                 (`MobileBottomNav`, `apps/web/src/components/shell/**`) can
                 visually overlap the last visible line of a reader whose

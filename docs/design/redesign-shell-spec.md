@@ -5,9 +5,9 @@ below is final for this stage; nothing is left "TBD." Where a decision constrain
 graph, Reader/Research/Writer internals) that is called out explicitly in §8 (Stage boundary) rather than
 silently decided here.
 
-Sources read before writing this spec: charter §5–§7 (`docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`),
-baseline audit §3 (`docs/audits/ui-graph-redesign-baseline.md`) and the full Stage-0 inventory
-(`docs/audits/ui-graph-redesign-baseline/stage0-inventory.md`), plus direct reads of `AppShell.tsx` and its
+Sources read before writing this spec: charter §5–§7 (`docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`),
+baseline audit §3 (`docs/internal/audits/ui-graph-redesign-baseline.md`) and the full Stage-0 inventory
+(`docs/internal/audits/ui-graph-redesign-baseline/stage0-inventory.md`), plus direct reads of `AppShell.tsx` and its
 imports (`CommandPalette.tsx`, `GlobalRagSidebar.tsx`, `AppFooter.tsx`, `PreferenceBootstrap.tsx`,
 `ProfileMenu.tsx`, `WorkspacePreferencesProvider.tsx`), `apps/web/src/app/globals.css`, and
 `apps/web/src/app/(app)/layout.tsx`. All file:line references below are to the redesign worktree

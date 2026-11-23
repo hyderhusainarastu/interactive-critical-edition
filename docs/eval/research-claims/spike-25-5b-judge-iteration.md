@@ -4,7 +4,7 @@
 
 ## What this measures
 
-Iterates `packages/claims/src/prompts/judge.ts`'s `buildJudgePrompt` toward ScholarLens's own "Task 2c" treatment (macro-F1 0.788 on Sonnet-class Claude, per `/Users/hyderhusainarastu/Project/scholarlens_src/README.md` §5 — the actual 2c prompt text no longer exists in that repo snapshot, only the README's retrospective description, so this iteration is a fresh construction guided by that description, not a literal port). Starting point: Phase 25.5's baseline (`spike-25-5-judge.md`) — no rung passed gates, and the dominant failure mode across all three rungs was systematic over-prediction of "nuance" as a catch-all.
+Iterates `packages/claims/src/prompts/judge.ts`'s `buildJudgePrompt` toward the upstream project's own "Task 2c" treatment (macro-F1 0.788 on Sonnet-class Claude, per `<repo-root>/../<upstream-src>/README.md` §5 — the actual 2c prompt text no longer exists in that repo snapshot, only the README's retrospective description, so this iteration is a fresh construction guided by that description, not a literal port). Starting point: Phase 25.5's baseline (`spike-25-5-judge.md`) — no rung passed gates, and the dominant failure mode across all three rungs was systematic over-prediction of "nuance" as a catch-all.
 
 ## Prompt v2: three new blocks
 

@@ -10,7 +10,7 @@
  *   - Root/selected 16px semibold, priority 13px, secondary 12px, max two
  *     lines, dark translucent plate, 1px border, 6px padding.
  *
- * Ported verbatim from `prototypes/graph-bakeoff/src/protoA/labelLayer.ts`
+ * Ported verbatim from `docs/internal/prototypes/graph-bakeoff/src/protoA/labelLayer.ts`
  * per spec §1.1 — zero product-specific logic, already generic over
  * `LabelCandidate`.
  *

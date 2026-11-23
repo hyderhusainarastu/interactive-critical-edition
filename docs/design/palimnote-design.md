@@ -1,7 +1,7 @@
 # Palimnote Design Reference
 
 Repository-derived ground truth for the token/spacing/typography system, promised by
-`docs/audits/phase-19-frontend-tooling.md` (§"Stitch" substitution, "`docs/design/palimnote-design.md`
+`docs/internal/audits/phase-19-frontend-tooling.md` (§"Stitch" substitution, "`docs/design/palimnote-design.md`
 ... will still be built from the real repository tokens") but never written until this pass. Every
 value below is read directly from the code, cited `file:line`, as of this doc's commit — it is a
 reference sheet, not an aspirational spec. If a cited line moves, re-derive rather than trust this
@@ -250,4 +250,4 @@ codebase today, not aspirational.
 `apps/web/src/components/shared/{roadmapPrimitives,annotationMeta}.ts`,
 `apps/web/src/components/CredibilityMeter.tsx`, `apps/web/src/components/graph/{types,KnowledgeGraph3D}.tsx`,
 `apps/web/src/components/site/InteractiveGraph.tsx`, `apps/web/src/components/app/AppShell.tsx`,
-`docs/audits/phase-19-frontend-tooling.md`, `docs/CHANGELOG.md`.*
+`docs/internal/audits/phase-19-frontend-tooling.md`, `docs/CHANGELOG.md`.*

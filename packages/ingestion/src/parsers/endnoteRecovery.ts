@@ -6,7 +6,7 @@
  * the tail of the preceding body paragraph, or (b) drops an entire run of
  * entries out of the linearized reading order altogether. Confirmed directly
  * against the Roochnik `baseline-test` fixture (2026-07-23, see
- * `docs/audits/phase-19-product-audit.md` D-20-89): GROBID's own TEI has
+ * `docs/internal/audits/phase-19-product-audit.md` D-20-89): GROBID's own TEI has
  * `place="end"` occurring zero times, and the last body `<p>` reads (in
  * effect) "...illuminating.23 Boston University NOTES 1. ... 2. ... Cambridge
  * 21. It is equally difficult..." — endnotes 3 through 20 are not merely

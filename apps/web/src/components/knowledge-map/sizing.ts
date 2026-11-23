@@ -8,7 +8,7 @@
  *   clamp to 0.8–1.6
  *   root overridden to exactly 1.5
  *
- * Ported verbatim from `prototypes/graph-bakeoff/src/protoA/sizing.ts` per
+ * Ported verbatim from `docs/internal/prototypes/graph-bakeoff/src/protoA/sizing.ts` per
  * spec §1.1 — no product-specific logic, kept dependency-free and pure so
  * it's directly unit-testable without a renderer, same convention as
  * `@ice/graph-display/camera.ts`.

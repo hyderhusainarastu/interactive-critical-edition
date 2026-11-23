@@ -30,7 +30,7 @@ import {
  * external API call, so folding them into this always-seeded, zero-cost
  * spec would either be dishonest (faking the workload) or expensive to run
  * routinely. Budgets and manual run instructions for these are in
- * docs/audits/phase-23-6-performance-resilience.md instead:
+ * docs/internal/audits/phase-23-6-performance-resilience.md instead:
  *   - large PDF processing (needs GROBID + a real multi-page PDF)
  *   - reprocess (needs a real prior run to reprocess)
  *   - RAG first token / completion (needs a live AI provider call)

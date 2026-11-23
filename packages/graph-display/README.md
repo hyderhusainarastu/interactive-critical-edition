@@ -1,7 +1,7 @@
 # `@ice/graph-display`
 
 Pure, exhaustively-tested display/render contract for the Knowledge Map
-rebuild (charter `docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`
+rebuild (charter `docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md`
 §8/§9, "Stage 3 DISPLAY-ADAPTER lane"). Zero runtime dependencies, zero
 renderer code, zero React — every export is a plain function or type over
 plain data, mirroring `packages/roadmap`/`packages/curriculum`'s own

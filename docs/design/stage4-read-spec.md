@@ -7,10 +7,10 @@ workspace only — `/dashboard`, `/works` and `/works/[workId]/*`, `/library`,
 `redesign/stage4-read`, worktree `/private/tmp/palimnote-s4-read`.
 
 Sources read before writing this spec: charter
-`docs/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md` §5 (scope that must
+`docs/internal/handoffs/claude-code-ui-ux-graph-rebuild-prompt.md` §5 (scope that must
 not lose functionality), §6 "Read" (target IA), §15 Stage 4 (implement/gate
 list), §16 "Signed-in journey tests" items 1–3 (and 5–6, which touch Read at
-their edges); baseline audit `docs/audits/ui-graph-redesign-baseline.md` §3
+their edges); baseline audit `docs/internal/audits/ui-graph-redesign-baseline.md` §3
 (route/feature inventory); and the current code for `(app)/works/**`,
 `(app)/library/**`, `(app)/upload/**`, `(app)/dashboard/**`, the reader
 component tree, `packages/roadmap`, `packages/curriculum`, and the Stage 1

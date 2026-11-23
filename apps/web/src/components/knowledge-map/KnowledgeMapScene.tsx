@@ -5,7 +5,7 @@
  * context-loss listeners, the per-frame label/orbit `requestAnimationFrame`
  * loop, and full lifecycle disposal.
  *
- * Ported from `prototypes/graph-bakeoff/src/protoA/GraphScene.tsx`
+ * Ported from `docs/internal/prototypes/graph-bakeoff/src/protoA/GraphScene.tsx`
  * (748 lines, per spec §1.1) with camera math extracted into
  * `useKnowledgeMapCamera` (that extraction is exactly why this file isn't
  * also 748 lines) and every fixture-specific field (`FixtureNode.degree`/

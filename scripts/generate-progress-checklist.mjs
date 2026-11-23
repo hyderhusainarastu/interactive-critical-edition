@@ -6,7 +6,7 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourcePath = path.join(root, "docs/project-status.json");
-const outputPath = path.join(root, "progress-checklist.html");
+const outputPath = path.join(root, "docs", "internal", "progress-checklist.html");
 const validStates = new Set(["complete", "in_progress", "awaiting_confirmation", "planned"]);
 const validAuditStates = new Set(["operational", "release_gated", "incomplete"]);
 const validModels = new Set(["haiku", "sonnet", "opus"]);

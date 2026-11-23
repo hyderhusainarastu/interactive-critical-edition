@@ -194,7 +194,7 @@ export const textBlockKindEnum = pgEnum("text_block_kind", [
 ]);
 
 /**
- * Migration 0036 (Workstream D completion, `docs/handoffs/workstream-d.md`
+ * Migration 0036 (Workstream D completion, `docs/internal/handoffs/workstream-d.md`
  * L35-97). A foreign-script span is detected deterministically at
  * block-insert time (`apps/worker/src/foreignSpans.ts`, script-range
  * matching — never a model guess) and optionally translated/transliterated

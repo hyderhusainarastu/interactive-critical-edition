@@ -32,7 +32,7 @@
  * §3's product text says "Existing ordinary and research modes," but no
  * source-of-truth document available to this lane spells out the exact
  * wire-format string(s) Ask Library's own UI currently writes for `mode`
- * (`docs/audits/ui-graph-redesign-baseline.md` does not include an Ask
+ * (`docs/internal/audits/ui-graph-redesign-baseline.md` does not include an Ask
  * Library param table the way it does for `/graph`). Rather than guess at
  * and hard-code unverified literal values, `mode` is preserved as an
  * opaque, tolerant string — "preserve deep-link state" losslessly, without
